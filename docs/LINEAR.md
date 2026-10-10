@@ -64,23 +64,26 @@ Claude는 Linear 이슈를 만들거나 고칠 때, 이슈 작업을 시작할 �
 
 ## 작업 흐름
 
-1. **시작**: 이슈를 나에게 배정하고 In Progress로 바꾼다.
+1. **시작**: 이슈를 나에게 배정한다. 상태는 PR을 열면 In Progress로 바뀐다.
 2. **브랜치**: `<type>/PRO-<번호>-<짧은-설명>`. type은 커밋과 같은 Conventional Commits 종류다. 예: `feat/PRO-12-crew-invite-accept`
 3. **PR**: 제목은 커밋 규칙을 따르고, 본문에 `Closes PRO-12`를 넣는다.
 4. **끝**: PR이 머지되면 본문에 `Closes`로 적은 이슈가 Done으로 옮겨진다. PR이 없는 일(기획, 디자인)은 결과물 링크를 댓글로 남기고 직접 Done으로 바꾼다.
 
-### PR 자동 연결 (GitHub Actions)
+### PR 자동 연결 (`linear-sync` 워크플로)
 
-Linear 공식 GitHub 연동은 쓰지 않는다(저장소가 부트캠프 조직 소유라 앱 설치 승인을 받기 어렵다). 대신 `.github/workflows/linear-sync.yml`이 PR 이벤트마다 Linear API를 부른다.
+Linear 공식 GitHub 연동이 동작하지 않아, `linear-sync.yml`이 Linear API로 이슈를 직접 갱신한다.
+브랜치 이름, PR 제목·본문에 있는 `PRO-<번호>`로 이미 있는 이슈를 찾는다. 이슈를 새로 만들지는 않는다.
 
 | PR 상황 | 하는 일 |
 | --- | --- |
-| 열림, 본문 수정 | 브랜치 이름·제목·본문에 있는 `PRO-<번호>` 이슈에 PR 링크를 붙인다 |
-| 머지됨 | 본문에 `Closes`·`Fixes`·`Resolves` 뒤에 적은 이슈만 Done으로 옮긴다 |
+| PR 열림, 본문 수정, 초안 해제 | 이슈에 PR 링크를 붙이고, Backlog·Todo 이슈를 In Progress로 옮긴다 (초안 PR은 링크만) |
+| 머지됨 | 브랜치 이름·제목에 있는 이슈와 본문에 `Closes PRO-12`로 적은 이슈를 Done으로 옮긴다 |
+| 머지 없이 닫힘 | 아무것도 바꾸지 않는다 |
 
-- 공식 연동과 달리 PR을 열어도 In Progress로 바뀌지 않는다. 시작할 때 직접 바꾼다.
-- 머지하지 않고 닫은 PR은 이슈 상태를 바꾸지 않는다.
-- 저장소 Secrets의 `LINEAR_API_KEY`(저장소 관리자의 개인 키)로 동작하므로, Linear 기록에는 그 사람 이름이 남는다. 키가 없으면 아무것도 하지 않고 넘어간다.
+- Done으로 옮기지 않고 연결만 하려면 브랜치·제목에서 번호를 빼고 본문에 `Refs PRO-12`로 쓴다.
+- 저장소 시크릿 `LINEAR_API_KEY`(Linear 개인 API 키)가 필요하다. 없으면 워크플로가 아무것도 하지 않고 넘어간다.
+  Linear에는 키를 만든 사람이 바꾼 것으로 기록된다.
+- 실행 기록은 PR의 Checks 탭 `linear-sync`에서 본다. 이슈 갱신에 실패하면 이 체크가 빨간색이 된다(머지는 막지 않는다).
 
 ## Claude 작업 규칙
 
