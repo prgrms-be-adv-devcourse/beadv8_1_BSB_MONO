@@ -84,6 +84,7 @@ Linear 공식 GitHub 연동이 동작하지 않아, `linear-sync.yml`이 Linear 
 - 팀원마다 자기 Linear 개인 API 키를 저장소 시크릿 `LINEAR_API_KEY_<GitHub 아이디>`로 등록한다. 방법은 [LINEAR-API-KEY.md](LINEAR-API-KEY.md).
   이벤트를 일으킨 사람(머지한 사람 등)의 키를 쓰고, 없으면 PR 작성자 키를 쓴다. 둘 다 없으면 아무것도 하지 않고 넘어간다.
   Linear에는 그 키 주인이 바꾼 것으로 기록된다.
+- 워크플로는 PR의 base 브랜치(dev·main)에 있는 파일로 돈다. dev로 가는 PR도 동기화되려면 dev에 이 워크플로가 있어야 한다.
 - 실행 기록은 PR의 Checks 탭 `linear-sync`에서 본다. 이슈 갱신에 실패하면 이 체크가 빨간색이 된다(머지는 막지 않는다).
 
 ## Claude 작업 규칙
