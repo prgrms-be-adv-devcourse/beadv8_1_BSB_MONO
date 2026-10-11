@@ -1,0 +1,75 @@
+name: dev-main-sync
+
+# 매일 05:00(KST)에 dev를 main으로 자동 머지한다.
+# main은 ruleset으로 PR·승인 1명·필수 체크가 걸려 있어 직접 push할 수 없다. 그래서 dev→main PR을 만들고,
+# 돌아간 체크가 모두 통과하면 관리자 우회(--admin)로 승인 없이 머지한다.
+#
+# 시크릿 DEV_SYNC_TOKEN: 저장소 관리자의 GitHub 개인 토큰(PAT). GITHUB_TOKEN으로 만든 PR에서는
+# 다른 워크플로(필수 체크)가 돌지 않고, 관리자 우회도 할 수 없어서 따로 둔다.
+# schedule은 기본 브랜치(main)에 이 파일이 있어야 동작한다.
+on:
+  schedule:
+    - cron: '0 20 * * *' # UTC 20:00 = KST 05:00. GitHub 사정으로 수십 분 늦게 돌 수 있다.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.DEV_SYNC_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: 반영할 커밋 확인
+        id: diff
+        run: |
+          ahead=$(gh api "repos/$GH_REPO/compare/main...dev" --jq '.ahead_by')
+          echo "dev가 main보다 앞선 커밋: $ahead개"
+          echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
+
+      - name: dev→main PR 준비
+        id: pr
+        if: steps.diff.outputs.ahead != '0'
+        run: |
+          number=$(gh pr list --base main --head dev --state open --json number --jq '.[0].number')
+          if [ -z "$number" ]; then
+            url=$(gh pr create --base main --head dev \
+              --title "chore: dev를 main에 동기화 ($(TZ=Asia/Seoul date +%F))" \
+              --body "dev-main-sync 워크플로가 매일 05:00(KST)에 만드는 자동 동기화 PR입니다. 체크가 통과하면 자동으로 머지됩니다." \
+              --label no-issue)
+            number=${url##*/}
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      # 필수 체크만 본다(linear-sync 등은 실패해도 머지를 막지 않는다).
+      # 경로 필터 때문에 backend·frontend는 변경이 있을 때만 돈다. 돌아간 것만 기다린다.
+      - name: 체크 통과 대기
+        if: steps.pr.outputs.number != ''
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          sleep 60
+          for _ in $(seq 1 120); do
+            buckets=$(gh pr checks "$PR" --required --json bucket --jq '[.[].bucket] | join(" ")' || true)
+            echo "체크 상태: ${buckets:-없음}"
+            if echo "$buckets" | grep -qwE 'fail|cancel'; then
+              echo "::error::실패한 체크가 있어 머지하지 않습니다. PR #$PR을 확인하세요."
+              exit 1
+            fi
+            if [ -n "$buckets" ] && ! echo "$buckets" | grep -qw pending; then
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::error::체크가 60분 안에 끝나지 않았습니다."
+          exit 1
+
+      # 머지 커밋으로 합친다. main에만 있는 커밋이 있어도 dev 이력을 덮어쓰지 않는다.
+      - name: 머지
+        if: steps.pr.outputs.number != ''
+        run: gh pr merge "${{ steps.pr.outputs.number }}" --merge --admin
