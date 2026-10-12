@@ -118,6 +118,12 @@
   --color-bg-hero: var(--color-navy-950);
   --color-bg-hero-raised: var(--color-navy-800);
   --color-bg-track-on-hero: var(--color-navy-700);
+  /* 뱃지 바탕 (10/10 색 규칙: 상태는 바탕색으로 나누고 글자는 text-primary 하나로 통일) */
+  --color-bg-badge-brand: var(--color-brand-100);
+  --color-bg-badge-success: var(--color-green-100);
+  --color-bg-badge-warning: var(--color-amber-100);
+  --color-bg-badge-danger: var(--color-red-100);
+  --color-bg-badge-info: var(--color-neutral-100);
 
   --color-text-primary: var(--color-navy-900);
   --color-text-secondary: var(--color-navy-700);
@@ -275,6 +281,11 @@
     --color-bg-hero: var(--color-navy-800);
     --color-bg-hero-raised: var(--color-navy-700);
     --color-bg-track-on-hero: var(--color-navy-600);
+    --color-bg-badge-brand: var(--color-brand-900);
+    --color-bg-badge-success: var(--color-green-900);
+    --color-bg-badge-warning: var(--color-amber-900);
+    --color-bg-badge-danger: var(--color-red-900);
+    --color-bg-badge-info: var(--color-navy-800);
 
     --color-text-primary: var(--color-neutral-25);
     --color-text-secondary: var(--color-navy-200);
@@ -370,6 +381,40 @@
       --text-label-tag: 12px;
       --text-label-tag--line-height: 16px;
     }
+  }
+
+  /*
+   * 회원 화면은 PC에서도 가운데 480 기둥 안에 모바일 UI를 그린다(피그마 Header 설명의 App 방식).
+   * 기둥 안에서는 화면 폭과 상관없이 Typography·Layout 컬렉션의 Mobile 모드 값을 쓴다.
+   */
+  .app-mobile {
+    --layout-page-margin: 16px;
+    --layout-gutter: 16px;
+    --layout-header-height: 56px;
+    --layout-form-max-width: none;
+
+    --text-display-l: 48px;
+    --text-display-l--line-height: 52px;
+    --text-display-m: 32px;
+    --text-display-m--line-height: 36px;
+    --text-display-s: 24px;
+    --text-display-s--line-height: 28px;
+    --text-heading-xl: 28px;
+    --text-heading-xl--line-height: 36px;
+    --text-heading-l: 22px;
+    --text-heading-l--line-height: 30px;
+    --text-heading-m: 20px;
+    --text-heading-m--line-height: 28px;
+    --text-heading-s: 16px;
+    --text-heading-s--line-height: 24px;
+    --text-body-l: 14px;
+    --text-body-l--line-height: 22px;
+    --text-body-m: 14px;
+    --text-body-m--line-height: 22px;
+    --text-body-s: 14px;
+    --text-body-s--line-height: 22px;
+    --text-label-tag: 12px;
+    --text-label-tag--line-height: 16px;
   }
 
   body {
