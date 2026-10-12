@@ -17,7 +17,6 @@ import {
   Icon,
   IconButton,
   KeyValue,
-  ProgressBar,
   Section,
   Segmented,
   StatTile,
@@ -27,7 +26,6 @@ import {
 const ANCHORS = [
   { value: 'options', label: '종목' },
   { value: 'schedule', label: '일정' },
-  { value: 'status', label: '모집 현황' },
   { value: 'refund', label: '환불' },
   { value: 'info', label: '상세' },
 ] as const
@@ -175,20 +173,6 @@ export function RaceDetailPage({
             ))}
             <p className="text-caption text-text-tertiary">
               정원이 차면 접수가 일찍 끝날 수 있어요.
-            </p>
-          </div>
-        </Section>
-
-        <Section title="모집 현황" aside={<Badge tone="neutral">공개 중</Badge>}>
-          <div id="race-status" className="flex scroll-mt-32 flex-col gap-4">
-            <ProgressBar
-              size="m"
-              label="참가 신청"
-              value={Math.round((race.applied / race.capacity) * 100)}
-              valueText={`${formatNumber(race.applied)} / ${formatNumber(race.capacity)}명`}
-            />
-            <p className="text-caption text-text-tertiary">
-              취소로 풀린 자리는 바로 다시 신청할 수 있어요.
             </p>
           </div>
         </Section>
