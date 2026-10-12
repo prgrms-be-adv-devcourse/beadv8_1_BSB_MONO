@@ -66,8 +66,9 @@ Claude는 Linear 이슈를 만들거나 고칠 때, 이슈 작업을 시작할 �
 
 1. **시작**: 이슈를 나에게 배정한다. 상태는 PR을 열면 In Progress로 바뀐다.
 2. **브랜치**: `<type>/PRO-<번호>-<짧은-설명>`. type은 커밋과 같은 Conventional Commits 종류다. 예: `feat/PRO-12-crew-invite-accept`
+   이슈에서 `Cmd+Shift+.`로 브랜치 이름을 복사할 수 있지만, 앞의 `<type>/`은 직접 붙인다.
 3. **PR**: 제목은 커밋 규칙을 따르고, 본문에 `Closes PRO-12`를 넣는다.
-4. **끝**: PR이 머지되면 본문에 `Closes`로 적은 이슈가 Done으로 옮겨진다. PR이 없는 일(기획, 디자인)은 결과물 링크를 댓글로 남기고 직접 Done으로 바꾼다.
+4. **끝**: PR이 머지되면 연결된 이슈가 Done으로 옮겨진다. PR이 없는 일(기획, 디자인)은 결과물 링크를 댓글로 남기고 직접 Done으로 바꾼다.
 
 ### PR 자동 연결 (`linear-sync` 워크플로)
 
@@ -86,6 +87,32 @@ Linear 공식 GitHub 연동이 동작하지 않아, `linear-sync.yml`이 Linear 
   Linear에는 그 키 주인이 바꾼 것으로 기록된다.
 - 워크플로는 PR의 base 브랜치(dev·main)에 있는 파일로 돈다. dev로 가는 PR도 동기화되려면 dev에 이 워크플로가 있어야 한다.
 - 실행 기록은 PR의 Checks 탭 `linear-sync`에서 본다. 이슈 갱신에 실패하면 이 체크가 빨간색이 된다(머지는 막지 않는다).
+
+## GitHub 활용
+
+할 일의 원본은 Linear 하나다. **GitHub 이슈는 쓰지 않는다**(양쪽에 적으면 금방 어긋난다). GitHub에서는 PR·CI·마일스톤만 쓴다.
+Wiki와 Projects 탭은 팀 작업용이 아니라 외부 공개용이다. Projects는 프로젝트 진행 상황을, Wiki는 팀 규칙(브랜치·커밋·코드 컨벤션)을 밖에서 볼 수 있게 보여 준다.
+
+### main에 머지하려면 (브랜치 보호)
+
+main에는 직접 푸시할 수 없고 PR로만 들어간다. 팀원 1명의 승인을 받고 아래 필수 체크가 모두 통과해야 머지 버튼이 열린다.
+저장소 관리자는 PR에서만 이 조건을 건너뛰고 머지할 수 있다(main 직접 푸시는 관리자도 막힌다).
+
+| 필수 체크 | 워크플로 | 검사 내용 |
+| --- | --- | --- |
+| `backend` | `backend-ci.yml` | `./gradlew build` (backend/ 변경이 없으면 건너뛰고 통과) |
+| `frontend` | `frontend-ci.yml` | lint, format, typecheck, test, build (frontend/ 변경이 없으면 건너뛰고 통과) |
+| `pr-title` | `pr-rules.yml` | PR 제목이 커밋 규칙(commitlint)에 맞는지 |
+| `pr-branch` | `pr-rules.yml` | 브랜치 이름이 `<type>/PRO-<번호>-<짧은-설명>`인지 |
+
+- Linear 이슈가 없는 작업(설정 정리 등)은 PR에 `no-issue` 라벨을 붙이면 브랜치 이름 검사를 건너뛴다.
+- 제목 설명을 영어 대문자로 시작하면 commitlint가 막는다(`subject-case`). `ci: GitHub 설정 추가` ✗ → `ci: 저장소 설정 추가` ✓
+- 필수 체크 이름은 job 이름이다. job 이름을 바꾸면 브랜치 보호 규칙도 같이 바꾼다.
+
+### 마일스톤
+
+GitHub 마일스톤은 Linear 마일스톤과 같은 이름·날짜로 둔다: 세미 제출(10/22), 세미 발표(10/23), 최종 발표(11/23).
+`pr-milestone.yml`이 머지된 PR에 **머지 날짜(한국 시간) 이후로 마감이 가장 가까운 마일스톤**을 자동으로 붙인다. 직접 붙여 둔 PR은 건드리지 않는다.
 
 ## Claude 작업 규칙
 

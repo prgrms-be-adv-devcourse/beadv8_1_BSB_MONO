@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 
+import { ConsoleSidebar } from '@/widgets/console-sidebar'
+
 export default function SellerLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-full flex-1 flex-col md:flex-row">
-      <aside className="border-b border-neutral-200 px-4 py-3 text-sm font-bold md:w-56 md:border-r md:border-b-0">
-        판매자 센터
-      </aside>
-      <div className="flex-1">{children}</div>
+    <div className="flex min-h-dvh flex-1">
+      <ConsoleSidebar role="seller" />
+      {children}
     </div>
   )
 }
