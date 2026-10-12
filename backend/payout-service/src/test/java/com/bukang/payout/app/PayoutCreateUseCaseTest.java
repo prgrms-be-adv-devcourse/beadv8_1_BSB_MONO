@@ -22,10 +22,10 @@ import com.bukang.payout.domain.PayoutItem;
 import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
-import com.bukang.payout.out.PayoutSourcePort;
 import com.bukang.payout.out.RacePort;
 import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
+import com.bukang.payout.out.SoldEntryPort;
 
 @DataJpaTest
 @ActiveProfiles("test")
@@ -48,7 +48,7 @@ class PayoutCreateUseCaseTest {
 	private PayoutHoldRepository payoutHoldRepository;
 
 	// 정산 대상일의 대회일(9/25)로 물어볼 때만 판매된 참가권을 돌려주는 가짜 포트
-	private PayoutSourcePort sourceReturning(List<SoldEntry> entries) {
+	private SoldEntryPort soldEntriesReturning(List<SoldEntry> entries) {
 		return raceDate -> raceDate.equals(RACE_DATE) ? entries : List.of();
 	}
 
@@ -58,7 +58,7 @@ class PayoutCreateUseCaseTest {
 	}
 
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
-		return new PayoutCreateUseCase(payoutRepository, payoutHoldRepository, sourceReturning(entries),
+		return new PayoutCreateUseCase(payoutRepository, payoutHoldRepository, soldEntriesReturning(entries),
 			sellerAccountPort, RACE_NAMES, new BusinessDayCalendar());
 	}
 

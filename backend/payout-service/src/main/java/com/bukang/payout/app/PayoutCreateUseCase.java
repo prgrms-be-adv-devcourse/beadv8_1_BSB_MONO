@@ -19,10 +19,10 @@ import com.bukang.payout.domain.PayoutHoldReason;
 import com.bukang.payout.domain.PayoutTargetDate;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
-import com.bukang.payout.out.PayoutSourcePort;
 import com.bukang.payout.out.RacePort;
 import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
+import com.bukang.payout.out.SoldEntryPort;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +44,7 @@ public class PayoutCreateUseCase {
 
 	private final PayoutRepository payoutRepository;
 	private final PayoutHoldRepository payoutHoldRepository;
-	private final PayoutSourcePort payoutSourcePort;
+	private final SoldEntryPort soldEntryPort;
 	private final SellerAccountPort sellerAccountPort;
 	private final RacePort racePort;
 	private final BusinessDayCalendar businessDayCalendar;
@@ -54,7 +54,7 @@ public class PayoutCreateUseCase {
 		LocalDate raceDate = PayoutTargetDate.raceDateFor(targetDate);
 		YearMonth payoutMonth = YearMonth.from(targetDate);
 
-		Map<List<Integer>, List<SoldEntry>> bySellerAndRace = payoutSourcePort.findSoldEntries(raceDate).stream()
+		Map<List<Integer>, List<SoldEntry>> bySellerAndRace = soldEntryPort.findSoldEntries(raceDate).stream()
 			.collect(groupingBy(entry -> List.of(entry.sellerId(), entry.raceId())));
 
 		bySellerAndRace.forEach((key, entries) -> {
