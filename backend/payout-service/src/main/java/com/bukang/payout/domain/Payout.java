@@ -165,9 +165,10 @@ public class Payout extends BaseIdAndTime {
 		this.scheduledPayDate = nextPayDateAfter(releasedAt.toLocalDate(), calendar);
 	}
 
-	// 해제일 "뒤"의 지급일: 이번 달 지급일이 해제일보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일
+	// date "뒤"의 지급일: 이번 달 지급일이 date보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일
 	// 20일이 주말이면 지급일이 밀리므로, 20일이 아니라 밀린 날과 비교한다 (12/20 일 해제 → 12/21 월)
-	private static LocalDate nextPayDateAfter(LocalDate date, BusinessDayCalendar calendar) {
+	// 보류 해제와 판매자 요약(지급 예정 정산 내역이 없을 때의 다음 정산일)이 같은 규칙을 쓴다
+	public static LocalDate nextPayDateAfter(LocalDate date, BusinessDayCalendar calendar) {
 		YearMonth month = YearMonth.from(date);
 		LocalDate thisMonthPayDay = payDayOf(month, calendar);
 		if (thisMonthPayDay.isAfter(date)) {
