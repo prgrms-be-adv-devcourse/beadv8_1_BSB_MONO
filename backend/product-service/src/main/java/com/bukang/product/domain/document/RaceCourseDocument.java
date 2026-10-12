@@ -35,15 +35,29 @@ import lombok.NoArgsConstructor;
 @Document(indexName = "race_courses")
 @Setting(settingPath = "/elasticsearch/race-settings.json")
 public class RaceCourseDocument extends BaseDocument {
+	// 분석기 3개 (race-settings.json). 모두 html_strip → nori 토크나이저 → 조사·어미 제거 → 한자를 한글로 → 소문자 순서다
+	// 사용자 사전(키로, 풀코스, 하프마라톤, 트레일러닝, 트레일런, 울트라마라톤)은 쪼개지 않는다
+	// (사전이 없으면 "10키로"가 10, 키, 로로 잘린다)
+
+	// 색인: 원래 단어와 쪼갠 조각을 함께 넣는다 (decompound_mode mixed)
+	//   "계룡산 트레일런 10K" → 계룡산, 계룡, 산, 트레일런, 10, k
+	//   "충청남도 공주시"     → 충청남도, 충청, 남도, 공주시, 공주, 시
+	//   원래 단어(계룡산, 충청남도)는 검색이 조각만 만들어서 실제 검색에서는 맞지 않는다
 	private static final String INDEX_ANALYZER = "race_index_analyzer";
+	// 검색: 쪼갠 조각만 만들고(discard) 동의어를 펼친다. 동의어 규칙은 토큰이 겹치는 mixed로는 만들 수 없다
+	//   "충남 트레일" → 충청, 충남, 남도, 트레일, 트레일런, 트레일러닝 → 색인의 충청·남도·트레일런과 맞는다
+	//   "10키로"      → 10, k, km, 키로, 킬로                         → 색인의 10·k와 맞는다
+	//   동의어는 색인에 넣지 않으므로, 바꿔도 인덱스를 다시 만들지 않는다 (updateable)
 	private static final String SEARCH_ANALYZER = "race_search_analyzer";
-	// 자동완성(search_as_you_type)은 토큰이 같은 위치에 겹치면 색인에 실패하므로 겹치지 않는 분석기를 쓴다
+	// 자동완성: 검색과 같은 discard에 동의어는 없다. search_as_you_type은 토큰이 같은 위치에 겹치면 색인에 실패한다
+	//   "계룡산 트레일런" → 계룡, 산, 트레일런 (mixed로 넣으면 계룡산·계룡이 겹쳐 400 오류)
 	private static final String AUTOCOMPLETE_ANALYZER = "race_autocomplete_analyzer";
 
 	@Field(type = FieldType.Keyword)
 	private String raceId;
 
 	// 대회 연관검색어는 raceTitle.auto_complete로 찾는다
+	//   "서울 하" 입력 → 대회 "2026 JTBC 서울마라톤" (종목 문서마다 같은 대회가 있으므로 raceId로 중복을 없앤다)
 	@MultiField(
 		mainField = @Field(type = FieldType.Text, analyzer = INDEX_ANALYZER, searchAnalyzer = SEARCH_ANALYZER),
 		otherFields = @InnerField(suffix = "auto_complete", type = FieldType.Search_As_You_Type,
@@ -51,10 +65,14 @@ public class RaceCourseDocument extends BaseDocument {
 	)
 	private String raceTitle;
 
+	// "하프마라톤"으로 검색해도 종목명 "하프"가 맞는다 (동의어: 하프, 하프코스, 하프마라톤)
 	@Field(type = FieldType.Text, analyzer = INDEX_ANALYZER, searchAnalyzer = SEARCH_ANALYZER)
 	private String courseName;
 
 	// 종목 연관검색어는 courseLabel.auto_complete로 찾는다 ("대회명 종목명")
+	//   "서울 하" 입력 → 종목 "2026 JTBC 서울마라톤 하프", "계룡산 트" 입력 → 종목 "계룡산 트레일런 10K"
+	//   한 요청에서 두 auto_complete 필드에 이름표(_name: race, course)를 붙여 찾고,
+	//   결과의 matched_queries로 대회 연관검색어와 종목 연관검색어를 나눈다
 	@MultiField(
 		mainField = @Field(type = FieldType.Text, analyzer = INDEX_ANALYZER, searchAnalyzer = SEARCH_ANALYZER),
 		otherFields = @InnerField(suffix = "auto_complete", type = FieldType.Search_As_You_Type,
@@ -63,6 +81,8 @@ public class RaceCourseDocument extends BaseDocument {
 	private String courseLabel;
 
 	// 지역·장소는 검색창으로 찾고(text), 지역 필터는 keyword 하위 필드로 거른다
+	//   검색 "충남" → regionSido "충청남도"와 맞는다 (동의어), 필터는 regionSido.keyword = "충청남도"
+	//   "서울특별시"는 nori가 서울, 특별시로 쪼개서 "서울"만으로도 맞는다
 	@MultiField(
 		mainField = @Field(type = FieldType.Text, analyzer = INDEX_ANALYZER, searchAnalyzer = SEARCH_ANALYZER),
 		otherFields = @InnerField(suffix = "keyword", type = FieldType.Keyword)
@@ -112,6 +132,7 @@ public class RaceCourseDocument extends BaseDocument {
 	private double distanceKm;
 
 	// 필요 페이스(분/km, 소수점 버림). '페이스 n분대' 검색에 쓴다
+	//   제한 시간 360분 ÷ 42.195km = 8.53 → 8 (8분대)
 	@Field(type = FieldType.Integer)
 	private int paceMinutes;
 
