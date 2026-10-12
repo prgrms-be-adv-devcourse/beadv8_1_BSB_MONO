@@ -62,7 +62,8 @@ public class OrderCancelUseCase {
 			throw new RefundNotAllowedException("정산이 시작된 참가권이라 취소할 수 없습니다.");
 		}
 
-		Participation participation = participationRepository.findById(item.getParticipationId())
+		// 참가 신청도 잠근다. 참가자 정보 수정과 겹쳐도 CANCELED가 옛 상태로 덮이지 않는다 (잠금 순서: 주문 → 참가 신청)
+		Participation participation = participationRepository.findByIdForUpdate(item.getParticipationId())
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
 		order.cancelItem(item, now);
 		participation.markCanceled(now);

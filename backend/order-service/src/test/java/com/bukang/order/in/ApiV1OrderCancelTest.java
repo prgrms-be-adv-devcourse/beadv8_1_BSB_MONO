@@ -3,11 +3,19 @@ package com.bukang.order.in;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -175,6 +183,48 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
+	@DisplayName("취소와 참가자 정보 수정이 동시에 들어와도 CANCELED와 고친 정보가 서로 덮이지 않는다")
+	void cancelWhileChangingParticipant() throws Exception {
+		int rounds = 5;
+		for (int memberId = 1; memberId <= rounds; memberId++) {
+			Paid paid = paidOrder(memberId);
+			int finalMemberId = memberId;
+
+			CountDownLatch start = new CountDownLatch(1);
+			List<Callable<Integer>> requests = List.of(
+				() -> {
+					start.await();
+					return cancel(finalMemberId, paid.orderId(), paid.orderItemId())
+						.andReturn().getResponse().getStatus();
+				},
+				() -> {
+					start.await();
+					return changeParticipantName(finalMemberId, paid.participationId(), "박러너")
+						.andReturn().getResponse().getStatus();
+				});
+			List<Integer> statuses = new ArrayList<>();
+			try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+				List<Future<Integer>> futures = requests.stream().map(executor::submit).toList();
+				start.countDown();
+				for (Future<Integer> future : futures) {
+					statuses.add(future.get());
+				}
+			}
+
+			// 취소는 늘 성공한다. 정보 수정은 취소보다 먼저 끝났으면 200, 뒤면 끝난 신청이라 409다
+			assertThat(statuses.getFirst()).isEqualTo(200);
+			assertThat(statuses.get(1)).isIn(200, 409);
+			Participation participation = participationRepository.findById(paid.participationId()).orElseThrow();
+			assertThat(participation.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
+			assertThat(participation.getActiveFlag()).isNull();
+			// 정보 수정이 성공했으면 고친 이름도 남아 있어야 한다 (취소가 옛 값으로 덮지 않음)
+			if (statuses.get(1) == 200) {
+				assertThat(participation.getParticipant().getName()).isEqualTo("박러너");
+			}
+		}
+	}
+
+	@Test
 	@DisplayName("다른 회원의 주문은 403, 없는 주문·주문에 없는 상품은 404다")
 	void cancelNotOwnerOrMissing() throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);
@@ -207,6 +257,16 @@ class ApiV1OrderCancelTest {
 	private ResultActions cancel(int memberId, int orderId, int orderItemId) throws Exception {
 		return mockMvc.perform(post(BASE_URL + "/" + orderId + "/items/" + orderItemId + "/cancel")
 			.header("X-Member-Id", memberId));
+	}
+
+	private ResultActions changeParticipantName(int memberId, int participationId, String name) throws Exception {
+		return mockMvc.perform(put("/api/v1/order/participations/" + participationId + "/participant")
+			.header("X-Member-Id", memberId)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{ "name": "%s", "birth": "1994-06-25", "gender": "MALE", "phone": "010-1234-5678",
+					"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" }
+				""".formatted(name)));
 	}
 
 	private record Paid(int orderId, int orderItemId, int participationId) {
