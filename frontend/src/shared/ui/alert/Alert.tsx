@@ -7,12 +7,12 @@ import { Icon, type IconName } from '../icon/icons'
 
 export type AlertTone = 'info' | 'success' | 'warning' | 'danger'
 
-// 글자색은 하나로 두고 톤은 앞쪽 아이콘 모양으로만 나눈다(10/10 색 규칙)
-const ICON: Record<AlertTone, IconName> = {
-  info: 'Info',
-  success: 'CircleCheck',
-  warning: 'TriangleAlert',
-  danger: 'CircleAlert',
+// 글자색은 하나로 두고 톤은 앞쪽 아이콘(모양·색)으로만 나눈다(10/10 색 규칙)
+const ICON: Record<AlertTone, { name: IconName; color: string }> = {
+  info: { name: 'Info', color: 'text-text-primary' },
+  success: { name: 'CircleCheck', color: 'text-text-success' },
+  warning: { name: 'TriangleAlert', color: 'text-text-warning' },
+  danger: { name: 'CircleAlert', color: 'text-text-danger' },
 }
 
 export type AlertProps = {
@@ -36,7 +36,7 @@ export function Alert({ tone = 'info', title, description, onClose, className }:
         className,
       )}
     >
-      <Icon name={ICON[tone]} className="size-5 text-text-primary" />
+      <Icon name={ICON[tone].name} className={cn('size-5', ICON[tone].color)} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="text-label-strong text-text-primary">{title}</p>
         {description && (

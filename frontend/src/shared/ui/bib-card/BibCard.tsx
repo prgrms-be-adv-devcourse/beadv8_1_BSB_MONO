@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import type { ReactNode } from 'react'
 
 import { cn } from '@/shared/lib'
@@ -15,6 +16,10 @@ export type BibCardProps = {
   meta?: ReactNode
   /** crew에서 제목 아래 진행 막대(ProgressBar S) */
   progress?: ReactNode
+  /** 띠에 깔 대회 이미지(Image=On). 어두운 그라데이션을 덮어 흰 글자를 읽기 쉽게 한다. */
+  image?: string
+  /** 띠 높이에 맞춰 이미지의 어느 부분을 보일지 (object-position 값, 예: 50% 12%) */
+  imagePosition?: string
   className?: string
 }
 
@@ -33,7 +38,7 @@ const BAND = {
   },
 }
 
-// 배번표 모양 카드. 띠와 본문 사이에 절취선 구멍 20개가 있다.
+// 배번표 모양 카드. 색 띠는 띠와 본문 사이에 절취선 구멍 20개가 있다.
 export function BibCard({
   type = 'ticket',
   eyebrow,
@@ -43,6 +48,8 @@ export function BibCard({
   title,
   meta,
   progress,
+  image,
+  imagePosition,
   className,
 }: BibCardProps) {
   const colors = BAND[type]
@@ -54,22 +61,38 @@ export function BibCard({
         className,
       )}
     >
-      <div className={cn('flex flex-col gap-1.5 px-5 py-4', colors.band)}>
-        <div className="flex items-center justify-between">
+      <div className={cn('relative flex flex-col gap-1.5 overflow-hidden px-5 py-4', colors.band)}>
+        {image && (
+          <>
+            <Image
+              src={image}
+              alt=""
+              fill
+              sizes="480px"
+              className="object-cover"
+              style={{ objectPosition: imagePosition }}
+            />
+            <div className="absolute inset-0 bg-linear-to-b from-[rgb(0_0_0/0.35)] to-[rgb(0_0_0/0.65)]" />
+          </>
+        )}
+        <div className="relative flex items-center justify-between">
           <span className={cn('font-display text-eyebrow', colors.eyebrow)}>{eyebrow}</span>
           {status}
         </div>
-        <p className="flex items-baseline gap-1.5">
+        <p className="relative flex items-baseline gap-1.5">
           {type === 'ticket' && unitNode}
           <span className={cn('font-display text-display-xl', colors.number)}>{number}</span>
           {type === 'crew' && unitNode}
         </p>
       </div>
-      <div aria-hidden className="flex h-3 items-center justify-between px-3">
-        {Array.from({ length: 20 }, (_, i) => (
-          <span key={i} className="size-1.25 rounded-full bg-bg-subtle" />
-        ))}
-      </div>
+      {/* 이미지 띠(Image=On)에는 절취선이 없다 */}
+      {!image && (
+        <div aria-hidden className="flex h-3 items-center justify-between px-3">
+          {Array.from({ length: 20 }, (_, i) => (
+            <span key={i} className="size-1.25 rounded-full bg-bg-subtle" />
+          ))}
+        </div>
+      )}
       <div className="flex flex-col gap-1.5 px-5 pt-2 pb-5">
         <p className="text-heading-s text-text-primary">{title}</p>
         {progress}

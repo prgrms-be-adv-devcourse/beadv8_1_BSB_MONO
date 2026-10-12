@@ -20,6 +20,8 @@ type SubProps = {
   title: string
   /** 뒤로 가기 대상. 없으면 브라우저 뒤로 가기 */
   backHref?: Route
+  /** 흐름을 끝내는 화면(결제 결과 등)은 뒤로 가기 대신 닫기(X)를 쓴다 */
+  close?: boolean
   /** 오른쪽 아이콘 버튼 자리 (공유 등) */
   action?: ReactNode
 }
@@ -36,7 +38,7 @@ export function AppHeader(props: AppHeaderProps) {
   if (props.type === 'sub') {
     return (
       <header className={cn(base, 'px-1')}>
-        <BackButton href={props.backHref} />
+        <BackButton href={props.backHref} close={props.close} />
         <h1 className="min-w-0 flex-1 truncate text-heading-s">{props.title}</h1>
         {props.action}
       </header>
@@ -61,18 +63,20 @@ export function AppHeader(props: AppHeaderProps) {
   )
 }
 
-function BackButton({ href }: { href?: Route }) {
+function BackButton({ href, close }: { href?: Route; close?: boolean }) {
   const router = useRouter()
+  const label = close ? '닫기' : '뒤로 가기'
+  const icon = <Icon name={close ? 'X' : 'ChevronLeft'} />
   if (href) {
     return (
-      <Link href={href} aria-label="뒤로 가기" className={ICON_LINK}>
-        <Icon name="ChevronLeft" />
+      <Link href={href} aria-label={label} className={ICON_LINK}>
+        {icon}
       </Link>
     )
   }
   return (
-    <IconButton aria-label="뒤로 가기" onClick={() => router.back()}>
-      <Icon name="ChevronLeft" />
+    <IconButton aria-label={label} onClick={() => router.back()}>
+      {icon}
     </IconButton>
   )
 }
