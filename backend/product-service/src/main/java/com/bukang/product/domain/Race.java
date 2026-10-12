@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 import org.hibernate.annotations.ColumnDefault;
 
@@ -115,12 +116,39 @@ public class Race extends BaseIdAndTime {
 		apply(request);
 	}
 
-	// 판매 시작 뒤에는 환불 기준일을 늦추는 변경만 된다 (구매자에게 유리한 변경만, ERD refund_deadline 주석)
-	public void update(RaceSaveRequestDto request, boolean saleStarted) {
+	public void update(RaceSaveRequestDto request, boolean saleStarted, LocalDateTime now) {
+		// 판매 시작 뒤에는 환불 기준일을 늦추는 변경만 된다 (구매자에게 유리한 변경만, ERD refund_deadline 주석)
 		if (saleStarted && request.getRefundDeadline().isBefore(refundDeadline)) {
 			throw new RaceChangeNotAllowedException("판매가 시작된 대회는 환불 기준일을 앞당길 수 없습니다.");
 		}
+		// 판매 시작을 누른 뒤에는 판매 일정을 마음대로 바꾸지 못한다 (대기열, 크루 마감 다음 날 06:00 배치, 확보 기한이 이 일정을 따른다)
+		// 판매 시작 일시는 크루 예매 시작·개인 예매 오픈으로 계산하므로, 이 검사로 판매 시작 일시도 지난 뒤에는 바뀌지 않는다
+		if (saleStatus != RaceSaleStatus.DRAFT) {
+			checkScheduleChange("크루 예매 시작", crewSaleStartAt, request.getCrewSaleStartAt(), now);
+			checkScheduleChange("크루 예매 마감", crewSaleEndAt, request.getCrewSaleEndAt(), now);
+			checkScheduleChange("개인 예매 오픈", individualOpenAt, request.getIndividualOpenAt(), now);
+			checkScheduleChange("접수 마감", applicationCloseAt, request.getApplicationCloseAt(), now);
+			// 접수 마감은 참가자 정보 수정 기한이기도 해서, 앞당기면 구매자가 정보를 고칠 시간이 줄어든다
+			if (request.getApplicationCloseAt().isBefore(applicationCloseAt)) {
+				throw new RaceChangeNotAllowedException("판매를 시작한 대회는 접수 마감 일시를 앞당길 수 없습니다.");
+			}
+		}
 		apply(request);
+	}
+
+	// 이미 지난 일정은 바꿀 수 없고, 아직 오지 않은 일정도 지난 시각으로 옮길 수 없다
+	//   예: 지금 10/16, 크루 예매 시작 10/13(지남) → 바꿀 수 없음 / 개인 예매 오픈 10/20 → 10/22로는 되고 10/15로는 안 됨
+	private static void checkScheduleChange(String name, LocalDateTime current, LocalDateTime requested,
+		LocalDateTime now) {
+		if (Objects.equals(current, requested)) {
+			return;
+		}
+		if (current != null && !current.isAfter(now)) {
+			throw new RaceChangeNotAllowedException("이미 지난 %s 일시는 바꿀 수 없습니다.".formatted(name));
+		}
+		if (requested != null && !requested.isAfter(now)) {
+			throw new RaceChangeNotAllowedException("%s 일시를 지난 시각으로 바꿀 수 없습니다.".formatted(name));
+		}
 	}
 
 	// 판매자가 입력하는 칸을 요청 값으로 채운다

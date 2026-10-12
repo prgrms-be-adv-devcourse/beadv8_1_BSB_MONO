@@ -47,8 +47,9 @@ public class RaceUpdateUseCase {
 		raceRequestValidator.validate(request);
 
 		// 판매 시작 일시가 요청 값으로 바뀌기 전에, 지금 판매가 시작됐는지 먼저 판단한다
-		boolean saleStarted = race.isSaleStarted(LocalDateTime.now());
-		race.update(request, saleStarted);
+		LocalDateTime now = LocalDateTime.now();
+		boolean saleStarted = race.isSaleStarted(now);
+		race.update(request, saleStarted, now);
 
 		// 요청의 종목과 짝을 맞춘 기존 종목은 지워 나가고, 끝까지 남은 종목이 요청에 없는(뺄) 종목이다
 		Map<Integer, RaceCourse> remainingCourses = new LinkedHashMap<>();
