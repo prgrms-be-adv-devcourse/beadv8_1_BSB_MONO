@@ -7,6 +7,8 @@ const optional = <T extends z.ZodType>(schema: T) =>
 const serverSchema = z.object({
   /** 서버(RSC·rewrites)가 API를 보낼 곳. AWS에서는 백엔드 내부 주소. */
   BACKEND_URL: z.url().default('http://localhost:8080'),
+  /** 공유 카드(og:image 등)의 절대 주소를 만들 사이트 주소. 비우면 Vercel 운영 주소 → localhost 순. */
+  SITE_URL: optional(z.url()),
   /** on이면 /api 요청을 MSW 핸들러가 응답한다. 빌드 시점에 고정된다. */
   API_MOCKING: z.enum(['on', 'off']).default('off'),
   /** next/image가 최적화를 허용할 이미지 호스트(쉼표 구분). 예: S3 버킷 도메인 */
