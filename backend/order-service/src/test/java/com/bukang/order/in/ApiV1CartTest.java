@@ -1,0 +1,225 @@
+package com.bukang.order.in;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+
+import com.bukang.order.out.CartItemRepository;
+import com.bukang.order.out.CartRepository;
+import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.support.StubRaceCoursePort;
+import com.bukang.order.support.StubRaceCoursePortConfig;
+import com.jayway.jsonpath.JsonPath;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+@Import(StubRaceCoursePortConfig.class)
+class ApiV1CartTest {
+	private static final String BASE_URL = "/api/v1/order/cart";
+	private static final int MEMBER_ID = 1;
+	private static final int OTHER_MEMBER_ID = 2;
+	private static final int COURSE_ID = 10;
+	private static final int OTHER_COURSE_ID = 11;
+	private static final int CLOSED_COURSE_ID = 12;
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Autowired
+	private CartRepository cartRepository;
+
+	@Autowired
+	private CartItemRepository cartItemRepository;
+
+	@Autowired
+	private ParticipationRepository participationRepository;
+
+	@Autowired
+	private StubRaceCoursePort raceCoursePort;
+
+	@BeforeEach
+	void setUp() {
+		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, 100, 14, null));
+		raceCoursePort.put(StubRaceCoursePort.openCourse(OTHER_COURSE_ID, 101, 14, null));
+		raceCoursePort.put(StubRaceCoursePort.closedCourse(CLOSED_COURSE_ID, 102));
+	}
+
+	@AfterEach
+	void tearDown() {
+		cartRepository.deleteAll();
+		raceCoursePort.clear();
+	}
+
+	@Test
+	@DisplayName("담은 장바구니는 서버에 저장되어, 다른 요청(다른 기기)에서 조회해도 같고 최근에 담은 항목이 먼저 보인다")
+	void sameCartAcrossRequests() throws Exception {
+		add(MEMBER_ID, COURSE_ID)
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.status").value(201))
+			.andExpect(jsonPath("$.message").value("장바구니에 담았습니다."))
+			.andExpect(jsonPath("$.data.raceCourseId").value(COURSE_ID));
+		add(MEMBER_ID, OTHER_COURSE_ID).andExpect(status().isCreated());
+
+		find(MEMBER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("장바구니를 조회했습니다."))
+			.andExpect(jsonPath("$.data.memberId").value(MEMBER_ID))
+			.andExpect(jsonPath("$.data.items.length()").value(2))
+			.andExpect(jsonPath("$.data.items[0].raceCourseId").value(OTHER_COURSE_ID))
+			.andExpect(jsonPath("$.data.items[1].raceCourseId").value(COURSE_ID));
+
+		// 다른 회원의 장바구니에는 보이지 않는다
+		find(OTHER_MEMBER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.items.length()").value(0));
+	}
+
+	@Test
+	@DisplayName("담은 적이 없으면 빈 장바구니를 돌려주고, 조회만으로는 장바구니를 만들지 않는다")
+	void findEmptyCart() throws Exception {
+		find(MEMBER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.items.length()").value(0));
+
+		assertThat(cartRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("같은 참가권을 다시 담으면 200으로 기존 항목을 돌려주고 수량은 1이다")
+	void addSameCourseTwice() throws Exception {
+		int itemId = addAndGetId(MEMBER_ID, COURSE_ID);
+
+		add(MEMBER_ID, COURSE_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value(200))
+			.andExpect(jsonPath("$.message").value("이미 장바구니에 담긴 참가권입니다."))
+			.andExpect(jsonPath("$.data.id").value(itemId));
+
+		find(MEMBER_ID).andExpect(jsonPath("$.data.items.length()").value(1));
+		assertThat(cartItemRepository.count()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("담기만으로는 참가 신청·자리 확보가 생기지 않는다")
+	void addDoesNotHoldSeat() throws Exception {
+		add(MEMBER_ID, COURSE_ID).andExpect(status().isCreated());
+
+		// 자리 확보는 [결제하기]에서 참가 신청을 APPLIED로 바꿀 때 일어난다 (PRO-41). 담기는 참가 신청을 만들지 않는다
+		assertThat(participationRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("담은 항목을 빼면 남은 장바구니를 돌려준다")
+	void removeItem() throws Exception {
+		int itemId = addAndGetId(MEMBER_ID, COURSE_ID);
+		add(MEMBER_ID, OTHER_COURSE_ID).andExpect(status().isCreated());
+
+		remove(MEMBER_ID, itemId)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("장바구니에서 뺐습니다."))
+			.andExpect(jsonPath("$.data.items.length()").value(1))
+			.andExpect(jsonPath("$.data.items[0].raceCourseId").value(OTHER_COURSE_ID));
+
+		assertThat(cartItemRepository.existsById(itemId)).isFalse();
+	}
+
+	@Test
+	@DisplayName("뺀 참가권은 다시 담을 수 있다")
+	void addAgainAfterRemove() throws Exception {
+		int itemId = addAndGetId(MEMBER_ID, COURSE_ID);
+		remove(MEMBER_ID, itemId).andExpect(status().isOk());
+
+		add(MEMBER_ID, COURSE_ID).andExpect(status().isCreated());
+	}
+
+	@Test
+	@DisplayName("다른 회원의 장바구니 항목은 뺄 수 없다")
+	void removeOthersItem() throws Exception {
+		int itemId = addAndGetId(MEMBER_ID, COURSE_ID);
+
+		remove(OTHER_MEMBER_ID, itemId)
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.message").value("본인의 장바구니 항목만 뺄 수 있습니다."));
+
+		assertThat(cartItemRepository.existsById(itemId)).isTrue();
+	}
+
+	@Test
+	@DisplayName("없는 장바구니 항목을 빼면 404")
+	void removeMissingItem() throws Exception {
+		remove(MEMBER_ID, 999)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("장바구니에 없는 항목입니다."));
+	}
+
+	@Test
+	@DisplayName("없는 종목은 404, 접수가 마감된 종목은 409로 담지 않는다")
+	void addInvalidCourse() throws Exception {
+		add(MEMBER_ID, 999)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."));
+		add(MEMBER_ID, CLOSED_COURSE_ID)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("접수가 마감된 종목은 담을 수 없습니다."));
+
+		assertThat(cartItemRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("종목 ID가 없으면 400")
+	void addWithoutCourseId() throws Exception {
+		mockMvc.perform(post(BASE_URL + "/items")
+				.header("X-Member-Id", MEMBER_ID)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("담을 종목을 선택해주세요."));
+	}
+
+	@Test
+	@DisplayName("회원 ID 헤더가 없으면 401")
+	void findWithoutMemberId() throws Exception {
+		mockMvc.perform(get(BASE_URL))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	private ResultActions find(int memberId) throws Exception {
+		return mockMvc.perform(get(BASE_URL).header("X-Member-Id", memberId));
+	}
+
+	private ResultActions add(int memberId, int raceCourseId) throws Exception {
+		return mockMvc.perform(post(BASE_URL + "/items")
+			.header("X-Member-Id", memberId)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"raceCourseId\": %d}".formatted(raceCourseId)));
+	}
+
+	private ResultActions remove(int memberId, int cartItemId) throws Exception {
+		return mockMvc.perform(delete(BASE_URL + "/items/" + cartItemId).header("X-Member-Id", memberId));
+	}
+
+	private int addAndGetId(int memberId, int raceCourseId) throws Exception {
+		String body = add(memberId, raceCourseId)
+			.andExpect(status().isCreated())
+			.andReturn().getResponse().getContentAsString();
+		return JsonPath.read(body, "$.data.id");
+	}
+}
