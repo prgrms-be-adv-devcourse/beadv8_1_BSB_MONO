@@ -125,13 +125,6 @@ export function RaceDetailPage({
             <StatTile
               size="s"
               className="inset-ring inset-ring-border-default"
-              label="남은 자리"
-              value={formatNumber(race.remaining)}
-              unit="자리"
-            />
-            <StatTile
-              size="s"
-              className="inset-ring inset-ring-border-default"
               label="정원"
               value={formatNumber(race.capacity)}
               unit="명"
