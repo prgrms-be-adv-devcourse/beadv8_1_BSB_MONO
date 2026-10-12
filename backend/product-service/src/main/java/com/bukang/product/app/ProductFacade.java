@@ -24,6 +24,7 @@ public class ProductFacade {
 	private final ProductSyncSellerUseCase productSyncSellerUseCase;
 	private final RaceRegisterUseCase raceRegisterUseCase;
 	private final RaceUpdateUseCase raceUpdateUseCase;
+	private final RaceSaleStartUseCase raceSaleStartUseCase;
 
 	@Transactional
 	public ProductMember syncMember(MemberJoinedEvent event) {
@@ -43,6 +44,11 @@ public class ProductFacade {
 	@Transactional
 	public RaceSaveDto updateRace(int memberId, int raceId, RaceSaveRequestDto request) {
 		return toSaveDto(raceUpdateUseCase.update(memberId, raceId, request));
+	}
+
+	@Transactional
+	public RaceSaveDto startRaceSale(int memberId, int raceId) {
+		return toSaveDto(raceSaleStartUseCase.startSale(memberId, raceId));
 	}
 
 	private RaceSaveDto toSaveDto(Race race) {

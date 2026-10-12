@@ -30,6 +30,32 @@ final class RaceApiExamples {
 		}
 		""";
 
+	static final String SALE_SCHEDULED = """
+		{
+			"status": 200,
+			"message": "2026-10-13 10:00에 판매가 시작됩니다.",
+			"data": {
+				"raceId": 1,
+				"saleStatus": "SCHEDULED",
+				"saleOpenAt": "2026-10-13T10:00:00",
+				"courseIds": [1]
+			}
+		}
+		""";
+
+	static final String SALE_STARTED = """
+		{
+			"status": 200,
+			"message": "판매를 시작했습니다.",
+			"data": {
+				"raceId": 1,
+				"saleStatus": "ON_SALE",
+				"saleOpenAt": "2026-10-13T10:00:00",
+				"courseIds": [1]
+			}
+		}
+		""";
+
 	static final String REGISTER_INVALID_INPUT = """
 		{ "status": 400, "message": "참가비는 0원보다 커야 합니다.", "data": null }
 		""";
@@ -84,6 +110,10 @@ final class RaceApiExamples {
 
 	static final String QUOTA_BELOW_TAKEN = """
 		{ "status": 409, "message": "정원을 확보·판매된 자리 수보다 줄일 수 없습니다. (종목: 10K)", "data": null }
+		""";
+
+	static final String NOT_DRAFT = """
+		{ "status": 409, "message": "작성 중인 대회만 판매를 시작할 수 있습니다.", "data": null }
 		""";
 
 	static final String COURSE_HAS_PARTICIPANTS = """

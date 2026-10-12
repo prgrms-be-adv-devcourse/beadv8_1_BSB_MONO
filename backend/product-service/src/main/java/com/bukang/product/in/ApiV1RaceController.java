@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.product.app.ProductFacade;
+import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.dto.RaceSaveDto;
 import com.bukang.product.dto.RaceSaveRequestDto;
 
@@ -30,7 +31,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 // 게이트웨이가 경로 앞부분을 자르지 않으므로(StripPrefix 금지, PRO-17) 서비스 이름(/product)부터 쓴다
-@Tag(name = "Race", description = "대회 등록, 수정 API")
+@Tag(name = "Race", description = "대회 등록, 수정, 판매 시작 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/product/races")
@@ -129,5 +130,46 @@ public class ApiV1RaceController {
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "대회를 수정했습니다.", productFacade.updateRace(memberId, raceId, request)));
+	}
+
+	@PostMapping("/{raceId}/sale")
+	@Operation(summary = "대회 판매 시작",
+		description = "본인이 등록한 작성 중 대회의 판매를 시작한다. 판매 예정이 되어 판매 시작 일시부터 판매되고, "
+			+ "판매 시작 일시가 이미 지났으면 바로 판매 중이 된다. 대회 검수는 없다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "판매 시작 성공",
+			content = @Content(examples = {
+				@ExampleObject(name = "판매 예정", value = RaceApiExamples.SALE_SCHEDULED),
+				@ExampleObject(name = "판매 시작 일시가 지나 바로 판매 중", value = RaceApiExamples.SALE_STARTED)
+			})),
+		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "승인된 판매자가 아님 또는 다른 판매자의 대회",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "승인된 판매자가 아님", value = RaceApiExamples.SELLER_NOT_APPROVED),
+				@ExampleObject(name = "다른 판매자의 대회", value = RaceApiExamples.NOT_OWNER)
+			})),
+		@ApiResponse(responseCode = "404", description = "없는 대회",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND))),
+		@ApiResponse(responseCode = "409", description = "작성 중이 아닌 대회",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.NOT_DRAFT)))
+	})
+	public ResponseEntity<RsData<RaceSaveDto>> startSale(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
+		@RequestHeader("X-Member-Id") int memberId,
+		@Parameter(description = "대회 ID", example = "1")
+		@PathVariable int raceId
+	) {
+		RaceSaveDto race = productFacade.startRaceSale(memberId, raceId);
+		String message = race.getSaleStatus() == RaceSaleStatus.ON_SALE
+			? "판매를 시작했습니다."
+			: "%s에 판매가 시작됩니다.".formatted(race.getSaleOpenAt().format(MESSAGE_DATE_TIME));
+		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, message, race));
 	}
 }

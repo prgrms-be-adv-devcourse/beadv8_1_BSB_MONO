@@ -169,6 +169,15 @@ public class Race extends BaseIdAndTime {
 		return this.seller.getId() == seller.getId();
 	}
 
+	// 판매자가 판매 시작을 누르면 판매 예정이 되고, 판매 시작 일시가 이미 지났으면 바로 판매 중이 된다
+	// 대회 검수는 없다 (ERD race.sale_status 주석: 판매자가 직접 판매 시작)
+	public void startSale(LocalDateTime now) {
+		if (saleStatus != RaceSaleStatus.DRAFT) {
+			throw new RaceChangeNotAllowedException("작성 중인 대회만 판매를 시작할 수 있습니다.");
+		}
+		this.saleStatus = now.isBefore(saleOpenAt) ? RaceSaleStatus.SCHEDULED : RaceSaleStatus.ON_SALE;
+	}
+
 	// 판매자가 판매를 시작했고(작성 중이 아님) 판매 시작 일시가 지났으면, 구매자가 있을 수 있는 대회다
 	public boolean isSaleStarted(LocalDateTime now) {
 		return saleStatus != RaceSaleStatus.DRAFT && !now.isBefore(saleOpenAt);
