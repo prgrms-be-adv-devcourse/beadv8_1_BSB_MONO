@@ -3,7 +3,6 @@ package com.bukang.product.app;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import com.bukang.common.shared.seller.domain.SellerStatus;
@@ -26,9 +25,8 @@ import lombok.RequiredArgsConstructor;
 public class RaceSaleStartUseCase {
 	private final ProductSellerRepository productSellerRepository;
 	private final RaceRepository raceRepository;
-	private final ApplicationEventPublisher eventPublisher;
 
-	public Race startSale(int memberId, int raceId) {
+	public RaceSaveResult startSale(int memberId, int raceId) {
 		ProductSeller seller = productSellerRepository.findByMemberIdAndStatus(memberId, SellerStatus.APPROVED)
 			.orElseThrow(SellerNotApprovedException::new);
 		Race race = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new);
@@ -37,8 +35,7 @@ public class RaceSaleStartUseCase {
 		}
 		race.startSale(LocalDateTime.now());
 
-		// 검색 문서의 판매 상태를 맞춘다. 이미지는 바뀌지 않으므로 파일 연결 메시지는 보내지 않는다
-		eventPublisher.publishEvent(RaceSavedEvent.of(race, List.of(), null));
-		return race;
+		// 검색 문서의 판매 상태만 다시 색인한다. 이미지는 바뀌지 않으므로 파일 연결 메시지는 없다(null)
+		return RaceSaveResult.of(race, List.of(), null);
 	}
 }

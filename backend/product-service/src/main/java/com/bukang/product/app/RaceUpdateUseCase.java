@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import com.bukang.common.shared.file.domain.FileRef;
@@ -37,9 +36,8 @@ public class RaceUpdateUseCase {
 	private final ProductSellerRepository productSellerRepository;
 	private final RaceRepository raceRepository;
 	private final RaceRequestValidator raceRequestValidator;
-	private final ApplicationEventPublisher eventPublisher;
 
-	public Race update(int memberId, int raceId, RaceSaveRequestDto request) {
+	public RaceSaveResult update(int memberId, int raceId, RaceSaveRequestDto request) {
 		ProductSeller seller = productSellerRepository.findByMemberIdAndStatus(memberId, SellerStatus.APPROVED)
 			.orElseThrow(SellerNotApprovedException::new);
 		Race race = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new);
@@ -89,8 +87,6 @@ public class RaceUpdateUseCase {
 		removedCourses.forEach(course -> refs.add(FileLinkRequestedEvent.Ref.of(FileRef.of(course), List.of())));
 
 		List<Integer> removedCourseIds = removedCourses.stream().map(RaceCourse::getId).toList();
-		eventPublisher.publishEvent(
-			RaceSavedEvent.of(race, removedCourseIds, new FileLinkRequestedEvent(memberId, refs)));
-		return race;
+		return RaceSaveResult.of(race, removedCourseIds, new FileLinkRequestedEvent(memberId, refs));
 	}
 }
