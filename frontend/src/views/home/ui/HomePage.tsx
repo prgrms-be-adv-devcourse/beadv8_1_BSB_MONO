@@ -49,7 +49,7 @@ export function HomePage({ state }: { state?: 'loading' | 'offline' }) {
           <SectionHead title="곧 마감돼요" />
           <div className="flex [scrollbar-width:none] gap-4 overflow-x-auto px-(--layout-page-margin)">
             {CLOSING_SOON_RACES.map((race) => (
-              <RaceCard key={race.id} race={race} className="w-54 shrink-0" />
+              <RaceCard key={`${race.id}-${race.option}`} race={race} className="w-54 shrink-0" />
             ))}
           </div>
         </section>

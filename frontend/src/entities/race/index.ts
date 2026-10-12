@@ -2,6 +2,7 @@ export {
   CLOSING_SOON_RACES,
   OPEN_RACES,
   RACE_BANNERS,
+  getRaceDetail,
   RACE_DETAIL,
   RACE_LIST,
   type RaceListItem,

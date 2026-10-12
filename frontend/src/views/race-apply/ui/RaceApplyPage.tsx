@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { RACE_DETAIL, RaceTicketCard } from '@/entities/race'
+import { RaceTicketCard, type RaceDetail } from '@/entities/race'
 import { cn, formatWon } from '@/shared/lib'
 import {
   BottomCta,
@@ -32,9 +32,9 @@ const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 
 // 피그마 V2 · M05 참가 신청 · 참가자 정보 (+ M05-1 장바구니 바꾸기 확인)
 // TODO(api): 회원 정보·지난 신청 값으로 채우고, 제출은 react-hook-form + zod로 묶는다.
-export function RaceApplyPage({ optionId }: { optionId?: string }) {
+export function RaceApplyPage({ race, optionId }: { race: RaceDetail; optionId?: string }) {
   const router = useRouter()
-  const race = RACE_DETAIL
+  const refundDeadline = race.schedule.find((row) => row.label === '전액 환불 기한')?.value
   const option = race.options.find((o) => o.id === optionId) ?? race.options[0]
   // 필수 동의는 사용자가 직접 체크해야 버튼이 켜진다.
   const [agreed, setAgreed] = useState(false)
@@ -52,7 +52,7 @@ export function RaceApplyPage({ optionId }: { optionId?: string }) {
           <RaceTicketCard
             image={race.images[0]}
             title={race.title}
-            meta="11/1 (일) 08:00 · 서울숲 일대"
+            meta={`${race.startsAt} · ${race.place}`}
             ticket={`${option.name} · ${formatWon(option.price)}`}
             action={
               <Link href={`/races/${race.id}`} className={LINK}>
@@ -92,7 +92,7 @@ export function RaceApplyPage({ optionId }: { optionId?: string }) {
           />
           <TextField
             label="키트 배송 주소"
-            helper="환불 기한(10/31)이 지난 뒤 이 주소로 키트를 보내요."
+            helper={`환불 기한(${refundDeadline})이 지난 뒤 이 주소로 키트를 보내요.`}
             defaultValue="서울 성동구 왕십리로 00, 101동 1001호"
           />
         </Section>
@@ -105,7 +105,7 @@ export function RaceApplyPage({ optionId }: { optionId?: string }) {
               label={<span className="font-bold">[필수] 개인정보 제3자 제공 동의</span>}
             />
             <div className="flex flex-col gap-2">
-              <KeyValue label="받는 곳" value="(주)데브시스터즈러닝 (판매자)" />
+              <KeyValue label="받는 곳" value={`${race.seller.company} (판매자)`} />
               <KeyValue label="목적" value="대회 운영 · 보험 가입" />
               <KeyValue
                 label="항목"

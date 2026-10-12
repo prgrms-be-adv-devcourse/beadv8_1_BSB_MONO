@@ -12,7 +12,7 @@ export type RaceCardProps = { race: RaceSummary; className?: string }
 export function RaceCard({ race, className }: RaceCardProps) {
   return (
     <Link
-      href={`/races/${race.id}`}
+      href={race.option ? `/races/${race.id}?option=${race.option}` : `/races/${race.id}`}
       className={cn('flex flex-col gap-2 rounded-md', FOCUS_RING, className)}
     >
       <Image

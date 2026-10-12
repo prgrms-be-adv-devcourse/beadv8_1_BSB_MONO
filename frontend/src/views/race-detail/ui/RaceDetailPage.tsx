@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { RACE_DETAIL, type RaceOption } from '@/entities/race'
+import { type RaceDetail, type RaceOption } from '@/entities/race'
 import { cn, formatNumber, formatWon } from '@/shared/lib'
 import {
   Alert,
@@ -34,17 +34,24 @@ const ANCHORS = [
 type Anchor = (typeof ANCHORS)[number]['value']
 
 export type RaceDetailPageProps = {
-  raceId: string
+  race: RaceDetail
+  /** 처음 골라 둘 종목. 없거나 맞지 않으면 첫 종목 */
+  optionId?: string
   /** M02-1: 이 대회에 이미 신청한 회원 (한 사람은 한 대회에 1건만) */
   alreadyApplied?: boolean
 }
 
 // 피그마 V2 · M02 대회 상세 (+ M02-1 이미 신청함, 링크 복사 완료 토스트)
 // TODO(api): raceId로 대회를 불러온다. 지금은 시안 예시 값.
-export function RaceDetailPage({ alreadyApplied = false }: RaceDetailPageProps) {
-  const race = RACE_DETAIL
+export function RaceDetailPage({
+  race,
+  optionId: initialOptionId,
+  alreadyApplied = false,
+}: RaceDetailPageProps) {
   const toast = useToast()
-  const [optionId, setOptionId] = useState(race.options[0].id)
+  const [optionId, setOptionId] = useState(
+    race.options.find((o) => o.id === initialOptionId)?.id ?? race.options[0].id,
+  )
   const [anchor, setAnchor] = useState<Anchor>('options')
   const [infoTab, setInfoTab] = useState<'detail' | 'faq'>('detail')
   const minPrice = Math.min(...race.options.map((o) => o.price))
