@@ -2,7 +2,7 @@
 
 Spring Boot 4.1 / Java 25 백엔드입니다. 명령은 이 폴더(`backend/`)에서 실행합니다.
 
-Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080), `cash-service`(8081), `payout-service`(8082), `file-service`(8083), `product-service`(8085)가 있습니다. 구조는 [`CLAUDE.md`](CLAUDE.md)를 참고합니다.
+Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080), `cash-service`(8081), `payout-service`(8082), `file-service`(8083), `order-service`(8084), `product-service`(8085)가 있습니다. 구조는 [`CLAUDE.md`](CLAUDE.md)를 참고합니다.
 
 ## 실행 환경
 
@@ -21,16 +21,17 @@ Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080)
 | `cash-service` | 캐시 서비스 (prod 프로파일) | http://localhost:8081 |
 | `payout-service` | 정산 서비스 (prod 프로파일) | http://localhost:8082 |
 | `file-service` | 파일 서비스 (prod 프로파일) | http://localhost:8083 |
+| `order-service` | 주문 서비스 (prod 프로파일) | http://localhost:8084 |
 | `product-service` | 상품 서비스 (prod 프로파일) | http://localhost:8085 |
 
-앱 서비스(`member-service`, `cash-service`, `payout-service`, `file-service`, `product-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
+앱 서비스(`member-service`, `cash-service`, `payout-service`, `file-service`, `order-service`, `product-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
 
 ### 개발 실행 (앱 컨테이너 제외)
 
-IDE나 `./gradlew :member-service:bootRun`(또는 `:cash-service:bootRun`, `:payout-service:bootRun`, `:file-service:bootRun`, `:product-service:bootRun`)으로 서비스를 실행하면 Spring Boot가 `compose.yml`의 인프라 컨테이너를 자동으로 띄웁니다. 이미 실행 중이면 그대로 사용합니다.
+IDE나 `./gradlew :member-service:bootRun`(또는 `:cash-service:bootRun`, `:payout-service:bootRun`, `:file-service:bootRun`, `:order-service:bootRun`, `:product-service:bootRun`)으로 서비스를 실행하면 Spring Boot가 `compose.yml`의 인프라 컨테이너를 자동으로 띄웁니다. 이미 실행 중이면 그대로 사용합니다.
 여러 서비스가 같은 인프라를 쓰므로 서비스를 종료해도 컨테이너는 멈추지 않습니다(`lifecycle-management: start-only`). 정리할 때는 `docker compose down`을 실행합니다.
 
-IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `FileApplication`, `ProductApplication`을 바로 실행하면 됩니다. 실행 위치(working directory)가 저장소 루트, `backend/`, 모듈 폴더 중 어디여도
+IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `FileApplication`, `OrderApplication`, `ProductApplication`을 바로 실행하면 됩니다. 실행 위치(working directory)가 저장소 루트, `backend/`, 모듈 폴더 중 어디여도
 `common`의 `global/config/LocalDevEnvironmentPostProcessor`가 `backend/compose.yml`과 `backend/.env`를 찾아 적용합니다.
 
 `docker/elasticsearch/Dockerfile`을 수정했다면 `docker compose up -d --build`로 이미지를 다시 만듭니다.
@@ -53,7 +54,7 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `
    | `MYSQL_USER` / `MYSQL_PASS` / `MYSQL_DB` | `compose.yml`의 `bukang-db` 값과 동일 |
    | `JWT_SECRET` | 32자 이상의 임의 문자열 |
 
-2. IDE나 `bootRun`으로 실행 중인 서비스가 있으면 종료합니다. 같은 포트(8080, 8081, 8082, 8083, 8085)를 사용합니다.
+2. IDE나 `bootRun`으로 실행 중인 서비스가 있으면 종료합니다. 같은 포트(8080, 8081, 8082, 8083, 8084, 8085)를 사용합니다.
 
 3. 앱 이미지를 빌드하고 전체 컨테이너를 실행합니다.
 
@@ -290,6 +291,7 @@ Kafka에는 메시지를 **JSON 문자열**로 보냅니다. Kafka 직렬화기�
 | http://localhost:8081/swagger-ui.html | 캐시 서비스 Swagger UI |
 | http://localhost:8082/swagger-ui.html | 정산 서비스 Swagger UI |
 | http://localhost:8083/swagger-ui.html | 파일 서비스 Swagger UI |
+| http://localhost:8084/swagger-ui.html | 주문 서비스 Swagger UI |
 | http://localhost:8085/swagger-ui.html | 상품 서비스 Swagger UI |
 | http://localhost:8080/v3/api-docs | OpenAPI 문서 원본(JSON) |
 
