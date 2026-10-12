@@ -216,6 +216,21 @@ class ApiV1OrderTest {
 	}
 
 	@Test
+	@DisplayName("매진으로 끝난 신청서로 같은 키를 다시 보내도 처음과 같은 매진 응답을 받는다")
+	void soldOutRetryWithSameKey() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		seatHoldPort.setRemainingSeats(COURSE_ID, 0);
+		String key = newKey();
+		create(MEMBER_ID, participationId, key).andExpect(status().isConflict());
+
+		create(MEMBER_ID, participationId, key)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message")
+				.value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."));
+		assertThat(seatHoldPort.holdCalls()).isEqualTo(1);
+	}
+
+	@Test
 	@DisplayName("마지막 1석에 두 명이 동시에 [결제하기]하면 한 명만 자리를 확보한다")
 	void lastSeatRace() throws Exception {
 		int first = applyAndGetId(MEMBER_ID);
@@ -397,6 +412,22 @@ class ApiV1OrderTest {
 		extend(MEMBER_ID, orderId)
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("결제 대기 중인 주문만 결제 기한을 늘릴 수 있습니다(현재 상태: 기한 만료)."));
+		assertThat(seatHoldPort.extendCalls()).isZero();
+	}
+
+	@Test
+	@DisplayName("참가 신청이 결제 대기가 아니면 상품 서비스에 연장을 요청하지 않고 409다")
+	void extendDeadlineWhenParticipationNotApplied() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		int orderId = createAndGetId(MEMBER_ID, participationId, newKey());
+		Participation participation = participationRepository.findById(participationId).orElseThrow();
+		ReflectionTestUtils.setField(participation, "status", ParticipationStatus.RELEASED);
+		participationRepository.save(participation);
+
+		extend(MEMBER_ID, orderId)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message")
+				.value("결제 대기 중인 신청만 결제 기한을 늘릴 수 있습니다(현재 상태: 미결제 해제)."));
 		assertThat(seatHoldPort.extendCalls()).isZero();
 	}
 

@@ -1,0 +1,75 @@
+package com.bukang.product.in;
+
+import org.springframework.kafka.annotation.BackOff;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.stereotype.Component;
+
+import com.bukang.common.global.json.JsonConverter;
+import com.bukang.common.shared.kafka.KafkaTopics;
+import com.bukang.common.shared.member.event.MemberJoinedEvent;
+import com.bukang.common.shared.seller.event.SellerChangedEvent;
+import com.bukang.product.app.ProductFacade;
+
+import lombok.RequiredArgsConstructor;
+
+/**
+ * 회원·판매자 이벤트를 받아 복제본(ProductMember, ProductSeller)에 저장한다
+ * 메시지는 JSON 문자열로 받아 JsonConverter로 바꾼다.
+ * 처리 중 예외가 나면 재시도 토픽으로 보내 간격을 늘려 가며 다시 시도하고, 그래도 실패하면 <토픽>.dlt로 보낸다.
+ * DLT 메시지는 ProductKafkaDltConsumer가 받는다.
+ */
+@Component
+@RequiredArgsConstructor
+public class ProductKafkaConsumer {
+	// application.yaml에 group-id가 없으므로 리스너마다 적는다
+	private static final String GROUP_ID = "product";
+	// 토픽 파티션 수 (KafkaTopicConfig.PARTITIONS와 맞춘다). 재시도·DLT 토픽도 같은 수로 만든다 (기본값은 1개)
+	private static final String PARTITIONS = "1";
+	// 동시에 처리할 쓰레드 수 (재시도·DLT 리스너도 같은 수). 지금은 메시지가 적어 1개로 충분하다
+	// 파티션 수까지만 효과가 있으므로, 늘릴 때는 PARTITIONS(KafkaTopicConfig 포함)와 함께 올린다
+	private static final String CONCURRENCY = "1";
+	// 처음 시도를 포함한 시도 횟수. 실패하면 1초 → 2초 간격(2배수)으로 2번 다시 시도한다
+	private static final String RETRY_ATTEMPTS = "3";
+	private static final long RETRY_DELAY_MILLIS = 1000L;
+	private static final double RETRY_MULTIPLIER = 2.0;
+	// 마지막까지 실패한 메시지를 보낼 토픽 접미사 (예: product.member.joined.dlt, 기본값은 -dlt)
+	// ProductKafkaDltConsumer가 DLT 토픽 이름을 만들 때 같은 값을 쓴다
+	static final String DLT_TOPIC_SUFFIX = ".dlt";
+	// DLT는 ProductKafkaDltConsumer가 받으므로, @RetryableTopic이 기본으로 띄우는 DLT 리스너는 시작하지 않는다
+	// (켜 두면 같은 DLT 메시지를 두 곳에서 받는다)
+	private static final String AUTO_START_DEFAULT_DLT_HANDLER = "false";
+
+	private final ProductFacade productFacade;
+	private final JsonConverter jsonConverter;
+
+	@KafkaListener(topics = KafkaTopics.PRODUCT_MEMBER_JOINED, groupId = GROUP_ID, concurrency = CONCURRENCY)
+	@RetryableTopic(
+		attempts = RETRY_ATTEMPTS,
+		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
+		// 깨진 JSON, 모르는 Enum 값은 다시 해도 실패하므로 재시도 없이 바로 DLT로 보낸다
+		// (JsonConverter가 파싱 실패를 IllegalArgumentException으로 바꾼다)
+		exclude = IllegalArgumentException.class,
+		numPartitions = PARTITIONS,
+		dltTopicSuffix = DLT_TOPIC_SUFFIX,
+		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
+	)
+	public void handleMemberJoined(String payload) {
+		productFacade.syncMember(jsonConverter.fromJson(payload, MemberJoinedEvent.class));
+	}
+
+	@KafkaListener(topics = KafkaTopics.PRODUCT_SELLER_CHANGED, groupId = GROUP_ID, concurrency = CONCURRENCY)
+	@RetryableTopic(
+		attempts = RETRY_ATTEMPTS,
+		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
+		// 깨진 JSON, 모르는 Enum 값은 다시 해도 실패하므로 재시도 없이 바로 DLT로 보낸다
+		// (JsonConverter가 파싱 실패를 IllegalArgumentException으로 바꾼다)
+		exclude = IllegalArgumentException.class,
+		numPartitions = PARTITIONS,
+		dltTopicSuffix = DLT_TOPIC_SUFFIX,
+		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
+	)
+	public void handleSellerChanged(String payload) {
+		productFacade.syncSeller(jsonConverter.fromJson(payload, SellerChangedEvent.class));
+	}
+}

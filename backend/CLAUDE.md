@@ -17,11 +17,12 @@
 | `payout-service` | Spring Boot 앱 | 8082 | 정산 내역(`Payout`), 정산 항목, 지급보류 (엔티티만 있음) |
 | `file-service` | Spring Boot 앱 | 8083 | 대회 이미지 등 파일 저장 (S3, presigned URL) |
 | `order-service` | Spring Boot 앱 | 8084 | 참가 신청, 장바구니, 바로 결제 예매(자리 확보·결제 기한 10분), 주문 |
+| `product-service` | Spring Boot 앱 | 8085 | 대회(상품), 종목(참가권), 정원 (뼈대만 있음) |
 
 인프라(`compose.yml`: MySQL, Kafka, Elasticsearch, Redis, 로컬 S3 대체재 S3Mock)는 모든 서비스가 공용으로 씁니다.
 
 - Java 25 (Gradle toolchain), Spring Boot 4.1.1, Gradle 9.7.1 (Kotlin DSL)
-- 루트 패키지: `com.bukang` (`group`은 `com`). 모듈별 패키지는 `com.bukang.common`, `com.bukang.member`, `com.bukang.cash`, `com.bukang.payout`, `com.bukang.file`, `com.bukang.order`
+- 루트 패키지: `com.bukang` (`group`은 `com`). 모듈별 패키지는 `com.bukang.common`, `com.bukang.member`, `com.bukang.cash`, `com.bukang.payout`, `com.bukang.file`, `com.bukang.order`, `com.bukang.product`
   (모듈 폴더 이름은 케밥 케이스 `<도메인>-service`, Java 패키지는 하이픈을 쓸 수 없으므로 도메인 한 단어)
 - 공통 빌드 설정(Java 버전, Spring Boot BOM, Lombok, Checkstyle)은 루트 `build.gradle.kts`, 모듈별 의존성은 각 모듈의 `build.gradle.kts`에 있습니다.
 - 운영에서는 Nginx가 HTTP 요청을 받아 `/api`를 `gateway`(8000)로, 나머지를 프론트(`web`, Next.js 3000)로 넘기고, 게이트웨이가 경로를 보고 각 서비스로 보냅니다.
@@ -41,6 +42,7 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 ./gradlew :payout-service:bootRun        # 정산 서비스 실행 (8082)
 ./gradlew :file-service:bootRun          # 파일 서비스 실행 (8083)
 ./gradlew :order-service:bootRun         # 주문 서비스 실행 (8084)
+./gradlew :product-service:bootRun       # 상품 서비스 실행 (8085)
 ./gradlew test                           # 전체 테스트 (test 프로파일, H2)
 ./gradlew :member-service:test           # 한 모듈만 테스트
 ./gradlew :member-service:test --tests "com.bukang.member.MemberApplicationTests"              # 단일 테스트 클래스
@@ -53,7 +55,7 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 
 ```
 backend/
-├── settings.gradle.kts        include("common", "jwt", "gateway", "member-service", "cash-service", "payout-service", "file-service", "order-service")
+├── settings.gradle.kts        include("common", "jwt", "gateway", "member-service", "cash-service", "payout-service", "file-service", "order-service", "product-service")
 ├── build.gradle.kts           모든 모듈 공통 설정
 ├── compose.yml                공용 인프라 (MySQL, Kafka, Elasticsearch, Redis) + 서비스별 앱 컨테이너 + nginx·web(프론트)
 ├── docker/nginx/default.conf  Nginx 라우팅 (/api → gateway, 나머지 → web)
@@ -92,17 +94,22 @@ backend/
 │   ├── domain/                StoredFile(FILE_FILE), FileStatus, FileFormat, exception/
 │   ├── config/                S3Properties(file.storage.s3), S3Config(S3Client, S3Presigner)
 │   └── out/                   StoredFileRepository, storage/(FileStorage, S3FileStorage)
-└── order-service/   com.bukang.order
-    ├── in/                    ApiV1ParticipationController, ApiV1CartController, ApiV1OrderController,
-    │                          OrderExpiryScheduler(1분마다 결제 기한 지난 건 정리, test 프로파일 제외),
-    │                          OrderExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
-    ├── app/                   ParticipationFacade·ParticipationApplyUseCase, CartFacade·CartUseCase,
-    │                          OrderFacade·OrderCreateUseCase·OrderExpiryUseCase·OrderDeadlineExtendUseCase·OrderQueryUseCase
-    ├── domain/                Participation(BOOKING_PARTICIPATION), Cart·CartItem(ORDER_CART·_ITEM),
-    │                          Order·OrderItem(ORDER_ORDER·_ITEM), 상태 enum, exception/
-    └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
-                               race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보)
-                               상품 서비스(B)가 없어 Fake*Adapter가 가짜 응답을 준다
+├── order-service/   com.bukang.order
+│   ├── in/                    ApiV1ParticipationController, ApiV1CartController, ApiV1OrderController,
+│   │                          InternalV1OrderController(정산용 판매 내역, 내부 전용 /internal/v1/order),
+│   │                          OrderExpiryScheduler(1분마다 결제 기한 지난 건 정리, test 프로파일 제외),
+│   │                          OrderExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
+│   ├── app/                   ParticipationFacade·ParticipationApplyUseCase, CartFacade·CartUseCase,
+│   │                          OrderFacade·OrderCreateUseCase·OrderPayUseCase·OrderCancelUseCase·OrderExpiryUseCase·
+│   │                          OrderDeadlineExtendUseCase·OrderQueryUseCase, SoldEntryQueryUseCase
+│   ├── domain/                Participation(BOOKING_PARTICIPATION), Cart·CartItem(ORDER_CART·_ITEM),
+│   │                          Order·OrderItem(ORDER_ORDER·_ITEM), 상태 enum, exception/
+│   └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
+│                              race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보·연장·판매),
+│                              wallet/(WalletPort 예치금 결제·환원·환불), payout/(RefundEligibilityPort 환불 가능 여부)
+│                              상품(B)·예치금(D)·정산(E) 서비스와 연결 전이라 Fake*Adapter가 가짜 응답을 준다
+└── product-service/ com.bukang.product
+    └── ProductApplication     (뼈대만 있음)
 ```
 
 - 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).

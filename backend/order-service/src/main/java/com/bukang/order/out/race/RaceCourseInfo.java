@@ -19,6 +19,7 @@ import java.time.Period;
  * @param courseName         주문 상품명으로 남길 이름 (예: "2026 서울 하프 마라톤 10K")
  * @param price              참가비 (원)
  * @param kitPrice           참가권에 포함된 키트 금액 (원). 키트가 없으면 0
+ * @param refundDeadline     환불 기한 (날짜). 이날 23:59:59까지 취소하면 전액 환불한다 (정책 5장, ERD v4 race.refund_deadline)
  */
 public record RaceCourseInfo(
 	int raceCourseId,
@@ -31,8 +32,14 @@ public record RaceCourseInfo(
 	int sellerId,
 	String courseName,
 	int price,
-	int kitPrice
+	int kitPrice,
+	LocalDate refundDeadline
 ) {
+	// 환불 기한 날짜까지(그날 23:59:59 포함) 개인 사정으로 취소할 수 있다 (10/12 결정)
+	public boolean isRefundableOn(LocalDate today) {
+		return !today.isAfter(refundDeadline);
+	}
+
 	// 구매자가 내는 참가권 한 장 값. 키트는 참가권과 함께 팔고 함께 취소한다 (ERD race_course.kit_price)
 	public int ticketPrice() {
 		return price + kitPrice;

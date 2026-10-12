@@ -12,7 +12,9 @@ import java.util.List;
 import org.hibernate.annotations.BatchSize;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.exception.OrderItemNotFoundException;
 import com.bukang.order.domain.exception.OrderNotExtendableException;
+import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.dto.OrderDto;
 import com.bukang.order.dto.OrderSummaryDto;
 import com.bukang.order.out.race.RaceCourseInfo;
@@ -114,6 +116,47 @@ public class Order extends BaseIdAndTime {
 	// 이 주문이 해당 참가 신청으로 만든 주문인지 (같은 Idempotency-Key를 다른 신청서에 다시 쓴 요청 가려내기)
 	public boolean isFor(int participationId) {
 		return items.stream().anyMatch(item -> item.getParticipationId() == participationId);
+	}
+
+	// 결제할 수 있는지: 결제 대기 중이고 결제 기한(사본) 전이어야 한다. 최종 판정은 상품 서비스의 자리 판매가 한다
+	public void checkPayable(LocalDateTime now) {
+		if (status != OrderStatus.CREATED) {
+			throw new OrderNotPayableException(
+				"결제할 수 없는 주문입니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+		if (!now.isBefore(paymentDueAt)) {
+			throw new OrderNotPayableException("결제 기한이 지났습니다.");
+		}
+	}
+
+	public boolean isPaid() {
+		return status == OrderStatus.PAID;
+	}
+
+	// 예치금 차감과 자리 판매가 끝났다. 주문과 주문 상품을 함께 결제 완료로 바꾼다
+	public void markPaid(LocalDateTime paidAt) {
+		if (status != OrderStatus.CREATED) {
+			throw new OrderNotPayableException(
+				"결제할 수 없는 주문입니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+		this.status = OrderStatus.PAID;
+		this.paidAt = paidAt;
+		items.forEach(OrderItem::markPaid);
+	}
+
+	public OrderItem findItem(int orderItemId) {
+		return items.stream()
+			.filter(item -> item.getId() == orderItemId)
+			.findFirst()
+			.orElseThrow(() -> new OrderItemNotFoundException("주문에 없는 상품입니다."));
+	}
+
+	// 주문 상품 하나를 취소한다. 모두 취소되면 CANCELED, 일부만이면 PARTIAL_CANCELED (정책 5장, ERD D3)
+	public void cancelItem(OrderItem item, LocalDateTime canceledAt) {
+		item.cancel(canceledAt);
+		this.canceledAmount += item.getAmount();
+		boolean allCanceled = items.stream().allMatch(each -> each.getStatus() == OrderItemStatus.CANCELED);
+		this.status = allCanceled ? OrderStatus.CANCELED : OrderStatus.PARTIAL_CANCELED;
 	}
 
 	// 개인 예매 주문은 참가 신청 1건짜리다 (결제 1건 = 참가 신청 1건)

@@ -1,13 +1,17 @@
 package com.bukang.order.support;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.bukang.order.out.seat.SeatExtendResult;
 import com.bukang.order.out.seat.SeatHoldPort;
 import com.bukang.order.out.seat.SeatHoldResult;
+import com.bukang.order.out.seat.SeatSellResult;
 
 /**
  * 테스트용 자리 확보. 종목별 남은 자리를 정할 수 있고(정하지 않으면 무제한), 결제 기한은 지금부터 10분이다
@@ -20,8 +24,10 @@ public class StubSeatHoldPort implements SeatHoldPort {
 	private final Map<Integer, Integer> remainingSeats = new ConcurrentHashMap<>();
 	private final AtomicInteger holdCalls = new AtomicInteger();
 	private final AtomicInteger extendCalls = new AtomicInteger();
+	private final List<Integer> restoredParticipations = new CopyOnWriteArrayList<>();
 	private final Map<Integer, LocalDateTime> expiresAt = new ConcurrentHashMap<>();
 	private final Map<Integer, Boolean> extended = new ConcurrentHashMap<>();
+	private final Set<Integer> sold = ConcurrentHashMap.newKeySet();
 
 	@Override
 	public SeatHoldResult hold(int raceCourseId, int participationId, int memberId) {
@@ -57,6 +63,34 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		return SeatExtendResult.extended(newDue);
 	}
 
+	@Override
+	public SeatSellResult sell(int participationId) {
+		// 이미 판매한 자리는 기한과 상관없이 SOLD (SeatHoldPort.sell의 멱등 계약)
+		if (sold.contains(participationId)) {
+			return SeatSellResult.SOLD;
+		}
+		LocalDateTime due = expiresAt.get(participationId);
+		if (due == null || !LocalDateTime.now().isBefore(due)) {
+			return SeatSellResult.EXPIRED;
+		}
+		sold.add(participationId);
+		return SeatSellResult.SOLD;
+	}
+
+	// 상품 서비스 쪽 기한만 지나게 만든다 (주문 쪽 사본은 그대로). 결제 직전 만료 상황을 재현할 때 쓴다
+	public void expire(int participationId) {
+		expiresAt.put(participationId, LocalDateTime.now().minusSeconds(1));
+	}
+
+	@Override
+	public void restore(int participationId) {
+		restoredParticipations.add(participationId);
+	}
+
+	public List<Integer> restoredParticipations() {
+		return restoredParticipations;
+	}
+
 	public int extendCalls() {
 		return extendCalls.get();
 	}
@@ -73,7 +107,9 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		remainingSeats.clear();
 		holdCalls.set(0);
 		extendCalls.set(0);
+		restoredParticipations.clear();
 		expiresAt.clear();
 		extended.clear();
+		sold.clear();
 	}
 }

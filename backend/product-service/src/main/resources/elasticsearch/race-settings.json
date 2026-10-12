@@ -1,0 +1,59 @@
+{
+  "index": {
+    "number_of_replicas": 0
+  },
+  "analysis": {
+    "tokenizer": {
+      "race_nori_tokenizer": {
+        "type": "nori_tokenizer",
+        "decompound_mode": "mixed",
+        "user_dictionary_rules": ["키로", "풀코스", "하프마라톤", "트레일러닝", "트레일런", "울트라마라톤"]
+      },
+      "race_nori_discard_tokenizer": {
+        "type": "nori_tokenizer",
+        "decompound_mode": "discard",
+        "user_dictionary_rules": ["키로", "풀코스", "하프마라톤", "트레일러닝", "트레일런", "울트라마라톤"]
+      }
+    },
+    "filter": {
+      "race_synonym_filter": {
+        "type": "synonym_graph",
+        "updateable": true,
+        "synonyms": [
+          "풀, 풀코스, 풀마라톤",
+          "하프, 하프코스, 하프마라톤",
+          "울트라, 울트라마라톤",
+          "트레일, 트레일러닝, 트레일런",
+          "로드, 로드런",
+          "k, km, 키로, 킬로",
+          "마라톤, 러닝, 달리기",
+          "충남, 충청남도",
+          "충북, 충청북도",
+          "경남, 경상남도",
+          "경북, 경상북도",
+          "전남, 전라남도",
+          "전북, 전북특별자치도",
+          "강원, 강원특별자치도",
+          "제주, 제주도, 제주특별자치도"
+        ]
+      }
+    },
+    "analyzer": {
+      "race_index_analyzer": {
+        "char_filter": ["html_strip"],
+        "tokenizer": "race_nori_tokenizer",
+        "filter": ["nori_part_of_speech", "nori_readingform", "lowercase"]
+      },
+      "race_search_analyzer": {
+        "char_filter": ["html_strip"],
+        "tokenizer": "race_nori_discard_tokenizer",
+        "filter": ["nori_part_of_speech", "nori_readingform", "lowercase", "race_synonym_filter"]
+      },
+      "race_autocomplete_analyzer": {
+        "char_filter": ["html_strip"],
+        "tokenizer": "race_nori_discard_tokenizer",
+        "filter": ["nori_part_of_speech", "nori_readingform", "lowercase"]
+      }
+    }
+  }
+}

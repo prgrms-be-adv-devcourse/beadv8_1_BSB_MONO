@@ -128,12 +128,42 @@ public class Participation extends BaseIdAndTime {
 		this.paymentDueAt = paymentDueAt;
 	}
 
-	// 결제 기한을 늘렸다 (PG 충전창 진입 때 2분, 한 번). 결제 대기(APPLIED) 신청만 늘린다
-	public void extendPaymentDue(LocalDateTime newPaymentDueAt) {
+	// 참가를 확정할 수 있는지: 결제 대기(APPLIED)여야 한다. 결제는 예치금을 차감하기 전에 이것부터 확인한다
+	public void checkConfirmable() {
+		if (status != ParticipationStatus.APPLIED) {
+			throw new ParticipationNotPayableException(
+				"결제 대기 중인 신청만 참가를 확정할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+	}
+
+	// 결제를 마쳐 참가가 확정됐다 (정책 3장 "결제한 사람만 참가 확정")
+	public void markConfirmed(LocalDateTime confirmedAt) {
+		checkConfirmable();
+		changeStatus(ParticipationStatus.CONFIRMED);
+		this.confirmedAt = confirmedAt;
+	}
+
+	// 결제한 참가권을 취소했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다 (정책 5장)
+	public void markCanceled(LocalDateTime canceledAt) {
+		if (status != ParticipationStatus.CONFIRMED) {
+			throw new ParticipationNotPayableException(
+				"참가 확정된 신청만 취소할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+		changeStatus(ParticipationStatus.CANCELED);
+		this.canceledAt = canceledAt;
+	}
+
+	// 결제 기한을 늘릴 수 있는지: 결제 대기(APPLIED)여야 한다. 상품 서비스에 연장을 요청하기 전에 확인한다
+	public void checkExtendable() {
 		if (status != ParticipationStatus.APPLIED) {
 			throw new ParticipationNotPayableException(
 				"결제 대기 중인 신청만 결제 기한을 늘릴 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
 		}
+	}
+
+	// 결제 기한을 늘렸다 (PG 충전창 진입 때 2분, 한 번). 결제 대기(APPLIED) 신청만 늘린다
+	public void extendPaymentDue(LocalDateTime newPaymentDueAt) {
+		checkExtendable();
 		this.paymentDueAt = newPaymentDueAt;
 	}
 
@@ -141,6 +171,10 @@ public class Participation extends BaseIdAndTime {
 	public void markHoldFailed() {
 		checkPayable();
 		changeStatus(ParticipationStatus.FAILED);
+	}
+
+	public boolean isHoldFailed() {
+		return status == ParticipationStatus.FAILED;
 	}
 
 	// [결제하기]는 자리 확보 전(PENDING) 신청만 할 수 있다. 상품 서비스를 부르기 전에 먼저 확인한다

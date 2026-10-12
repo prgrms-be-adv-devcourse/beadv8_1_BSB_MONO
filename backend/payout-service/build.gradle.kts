@@ -3,7 +3,11 @@ plugins {
 	java
 	id("org.springframework.boot")
 	id("io.spring.dependency-management")
+	id("org.asciidoctor.jvm.convert") // REST Docs: 테스트가 만든 스니펫을 HTML 문서로 묶는다
 }
+
+// Asciidoctor가 REST Docs 스니펫 매크로(operation::[])를 읽도록 쓰는 확장 전용 설정
+val asciidoctorExt: Configuration by configurations.creating
 
 dependencies {
 	implementation(project(":common"))
@@ -23,6 +27,11 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 
+	// Spring REST Docs: 컨트롤러 테스트가 통과할 때만 API 문서 스니펫이 만들어진다
+	testImplementation("org.springframework.boot:spring-boot-restdocs") // @AutoConfigureRestDocs (Boot 4에서 분리된 모듈)
+	testImplementation("org.springframework.restdocs:spring-restdocs-mockmvc")
+	asciidoctorExt("org.springframework.restdocs:spring-restdocs-asciidoctor")
+
 	// QueryDSL (Jakarta 버전, 버전은 Spring Boot BOM의 querydsl.version 사용)
 	val querydslVersion = dependencyManagement.importedProperties["querydsl.version"]
 	implementation("com.querydsl:querydsl-jpa:${querydslVersion}:jakarta")
@@ -40,4 +49,44 @@ tasks.compileJava {
 
 tasks.clean {
 	delete(querydslDir)
+}
+
+// REST Docs: test → asciidoctor(src/docs/asciidoc → HTML) 순서로 이어지고, -PwithDocs를 주면 bootJar가 HTML을 static/docs로 넣는다
+val snippetsDir = layout.buildDirectory.dir("generated-snippets")
+
+tasks.test {
+	outputs.dir(snippetsDir)
+}
+
+// 플러그인 기본값(AsciidoctorJ 2.x)은 REST Docs 4의 확장과 메서드 모양이 달라 AbstractMethodError가 난다
+// REST Docs 4는 AsciidoctorJ 3.x 기준으로 만들어졌으므로 엔진 버전을 맞춘다
+asciidoctorj {
+	setVersion("3.0.0")
+}
+
+tasks.asciidoctor {
+	inputs.dir(snippetsDir)
+	configurations(asciidoctorExt.name)
+	dependsOn(tasks.test)
+	baseDirFollowsSourceFile()
+}
+
+// CI의 build는 테스트를 이미 돌리므로 문서도 함께 만들어, 깨진 문서를 CI에서 잡는다 (Docker가 부르는 bootJar와는 상관없다)
+tasks.build {
+	dependsOn(tasks.asciidoctor)
+}
+
+// 문서는 -PwithDocs를 줄 때만 jar에 넣는다 (예: ./gradlew :payout-service:bootJar -PwithDocs)
+// 늘 넣으면 bootJar → asciidoctor → test로 이어져 Docker 이미지를 만들 때마다 테스트가 다시 돈다
+// from(tasks.asciidoctor...)도 asciidoctor 의존을 자동으로 만들므로 dependsOn과 함께 조건 안에 둔다
+val withDocs = providers.gradleProperty("withDocs").isPresent
+
+tasks.bootJar {
+	if (withDocs) {
+		// 실행 중인 앱의 /docs/index.html에서 문서를 볼 수 있다
+		dependsOn(tasks.asciidoctor)
+		from(tasks.asciidoctor.map { it.outputDir }) {
+			into("static/docs")
+		}
+	}
 }
