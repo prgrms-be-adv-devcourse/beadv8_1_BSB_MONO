@@ -9,6 +9,7 @@
 !common/
 !member-service/
 !cash-service/
+!payout-service/
 !file-service/
 !order-service/
 
