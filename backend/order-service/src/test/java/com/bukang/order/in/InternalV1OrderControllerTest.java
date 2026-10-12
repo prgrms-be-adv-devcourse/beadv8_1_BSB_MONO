@@ -147,7 +147,7 @@ class InternalV1OrderControllerTest {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, raceDate, now.minusDays(1), now.plusDays(30), 14, null,
 			StubRaceCoursePort.SELLER_ID, "테스트 대회 종목 " + raceCourseId, StubRaceCoursePort.PRICE,
-			StubRaceCoursePort.KIT_PRICE);
+			StubRaceCoursePort.KIT_PRICE, raceDate.toLocalDate().minusDays(10));
 	}
 
 	private void markCanceled(int orderItemId) {

@@ -18,6 +18,8 @@ public class StubWalletPort implements WalletPort {
 	private final Set<Integer> paidOrders = new HashSet<>();
 	private final List<Integer> payCalls = new CopyOnWriteArrayList<>();
 	private final List<Integer> canceledOrders = new CopyOnWriteArrayList<>();
+	private final List<Integer> refundedOrderItems = new CopyOnWriteArrayList<>();
+	private final List<Integer> refundedAmounts = new CopyOnWriteArrayList<>();
 
 	@Override
 	public synchronized WalletPayResult pay(int orderId, int memberId, int amount) {
@@ -36,6 +38,21 @@ public class StubWalletPort implements WalletPort {
 	@Override
 	public synchronized void cancelPayment(int orderId) {
 		canceledOrders.add(orderId);
+	}
+
+	@Override
+	public synchronized void refund(int orderId, int orderItemId, int amount) {
+		refundedOrderItems.add(orderItemId);
+		refundedAmounts.add(amount);
+		balance += amount;
+	}
+
+	public List<Integer> refundedOrderItems() {
+		return refundedOrderItems;
+	}
+
+	public List<Integer> refundedAmounts() {
+		return refundedAmounts;
 	}
 
 	public synchronized void setBalance(int balance) {
@@ -59,5 +76,7 @@ public class StubWalletPort implements WalletPort {
 		paidOrders.clear();
 		payCalls.clear();
 		canceledOrders.clear();
+		refundedOrderItems.clear();
+		refundedAmounts.clear();
 	}
 }

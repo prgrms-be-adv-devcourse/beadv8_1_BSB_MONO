@@ -7,6 +7,7 @@ import static lombok.AccessLevel.PROTECTED;
 import java.time.LocalDateTime;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.exception.OrderItemNotCancelableException;
 import com.bukang.order.dto.OrderItemDto;
 import com.bukang.order.out.race.RaceCourseInfo;
 
@@ -104,6 +105,24 @@ public class OrderItem extends BaseIdAndTime {
 
 	void markPaid() {
 		this.status = OrderItemStatus.PAID;
+	}
+
+	// 결제한 상품만 취소할 수 있다. 같은 취소가 두 번 오면 두 번째는 여기서 막혀 환불도 한 번만 일어난다
+	public void checkCancelable() {
+		if (status == OrderItemStatus.CANCELED) {
+			throw new OrderItemNotCancelableException("이미 취소한 상품입니다.");
+		}
+		if (status != OrderItemStatus.PAID) {
+			throw new OrderItemNotCancelableException(
+				"결제한 상품만 취소할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+	}
+
+	void cancel(LocalDateTime canceledAt) {
+		checkCancelable();
+		this.status = OrderItemStatus.CANCELED;
+		this.canceledAmount = amount;
+		this.canceledAt = canceledAt;
 	}
 
 	public OrderItemDto toDto() {

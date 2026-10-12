@@ -12,6 +12,7 @@ class RaceCourseInfoTest {
 	private static final LocalDateTime RACE_DATE = LocalDateTime.of(2026, 11, 15, 8, 0);
 	private static final LocalDateTime OPEN_AT = LocalDateTime.of(2026, 10, 1, 10, 0);
 	private static final LocalDateTime CLOSE_AT = LocalDateTime.of(2026, 10, 31, 23, 59);
+	private static final LocalDate REFUND_DEADLINE = LocalDate.of(2026, 11, 5);
 
 	@Test
 	@DisplayName("나이는 대회 당일의 만 나이로 따진다. 대회 날이 생일이면 그날 한 살 많다")
@@ -50,7 +51,18 @@ class RaceCourseInfoTest {
 		assertThat(course.isBeforeClose(CLOSE_AT)).isFalse();
 	}
 
+	@Test
+	@DisplayName("환불 기한 날짜까지(그날 포함) 환불할 수 있고 다음 날부터는 안 된다")
+	void refundable() {
+		RaceCourseInfo course = course(14, null);
+
+		assertThat(course.isRefundableOn(REFUND_DEADLINE.minusDays(1))).isTrue();
+		assertThat(course.isRefundableOn(REFUND_DEADLINE)).isTrue();
+		assertThat(course.isRefundableOn(REFUND_DEADLINE.plusDays(1))).isFalse();
+	}
+
 	private RaceCourseInfo course(int minAge, Integer maxAge) {
-		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, minAge, maxAge, 1, "종목", 50_000, 10_000);
+		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, minAge, maxAge, 1, "종목", 50_000, 10_000,
+			REFUND_DEADLINE);
 	}
 }

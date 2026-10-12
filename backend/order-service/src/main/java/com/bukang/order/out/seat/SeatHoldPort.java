@@ -12,4 +12,7 @@ public interface SeatHoldPort {
 
 	// 결제 뒤 자리를 판매 완료로 바꾼다. 기한이 지났으면 B가 거절한다 (결제·만료 판정 원본은 B의 expires_at)
 	SeatSellResult sell(int participationId);
+
+	// 결제한 참가권을 취소하면 자리를 판매 가능 정원으로 되돌린다 (SOLD → RESTORED). 여러 번 불러도 한 번만 되돌린다
+	void restore(int participationId);
 }

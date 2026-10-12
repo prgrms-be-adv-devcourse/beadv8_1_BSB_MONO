@@ -319,6 +319,62 @@ final class OrderApiExamples {
 		{ "status": 409, "message": "결제할 수 없는 주문입니다(현재 상태: 기한 만료).", "data": null }
 		""";
 
+	static final String CANCEL_SUCCESS = """
+		{
+			"status": 200,
+			"message": "취소했습니다. 예치금 60,000원을 돌려드렸습니다.",
+			"data": {
+				"id": 1,
+				"createDate": "2026-10-12T10:00:00",
+				"orderNo": "OD-20261012-0001",
+				"buyerId": 1,
+				"raceId": 1,
+				"status": "CANCELED",
+				"totalAmount": 60000,
+				"canceledAmount": 60000,
+				"paymentDueAt": "2026-10-12T10:10:00",
+				"paidAt": "2026-10-12T10:04:12",
+				"items": [
+					{
+						"id": 1,
+						"participationId": 1,
+						"raceCourseId": 1,
+						"sellerId": 1,
+						"itemName": "2026 서울 하프 마라톤 10K",
+						"unitPrice": 60000,
+						"quantity": 1,
+						"amount": 60000,
+						"status": "CANCELED"
+					}
+				]
+			}
+		}
+		""";
+
+	static final String CANCEL_NOT_OWNER = """
+		{ "status": 403, "message": "본인의 주문만 취소할 수 있습니다.", "data": null }
+		""";
+
+	static final String ORDER_ITEM_NOT_FOUND = """
+		{ "status": 404, "message": "주문에 없는 상품입니다.", "data": null }
+		""";
+
+	static final String ALREADY_CANCELED = """
+		{ "status": 409, "message": "이미 취소한 상품입니다.", "data": null }
+		""";
+
+	static final String NOT_PAID_ITEM = """
+		{ "status": 409, "message": "결제한 상품만 취소할 수 있습니다(현재 상태: 결제 대기).", "data": null }
+		""";
+
+	static final String REFUND_PERIOD_PASSED = """
+		{ "status": 409, "message": "환불 기한(2026-07-15)이 지나 취소할 수 없습니다.", "data": null }
+		""";
+
+	static final String PAYOUT_STARTED = """
+		{ "status": 409, "message": "정산이 시작된 참가권이라 취소할 수 없습니다.", "data": null }
+		""";
+
 	private OrderApiExamples() {
 	}
 }

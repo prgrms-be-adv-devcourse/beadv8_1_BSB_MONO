@@ -77,6 +77,11 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 		return SeatSellResult.SOLD;
 	}
 
+	@Override
+	public void restore(int participationId) {
+		log.debug("가짜 정원 복구 participationId={}", participationId);
+	}
+
 	private record Hold(LocalDateTime expiresAt, boolean extended) {
 	}
 }

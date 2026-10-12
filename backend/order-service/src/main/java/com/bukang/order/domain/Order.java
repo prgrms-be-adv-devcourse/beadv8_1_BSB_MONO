@@ -12,6 +12,7 @@ import java.util.List;
 import org.hibernate.annotations.BatchSize;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.exception.OrderItemNotFoundException;
 import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.dto.OrderDto;
@@ -141,6 +142,21 @@ public class Order extends BaseIdAndTime {
 		this.status = OrderStatus.PAID;
 		this.paidAt = paidAt;
 		items.forEach(OrderItem::markPaid);
+	}
+
+	public OrderItem findItem(int orderItemId) {
+		return items.stream()
+			.filter(item -> item.getId() == orderItemId)
+			.findFirst()
+			.orElseThrow(() -> new OrderItemNotFoundException("주문에 없는 상품입니다."));
+	}
+
+	// 주문 상품 하나를 취소한다. 모두 취소되면 CANCELED, 일부만이면 PARTIAL_CANCELED (정책 5장, ERD D3)
+	public void cancelItem(OrderItem item, LocalDateTime canceledAt) {
+		item.cancel(canceledAt);
+		this.canceledAmount += item.getAmount();
+		boolean allCanceled = items.stream().allMatch(each -> each.getStatus() == OrderItemStatus.CANCELED);
+		this.status = allCanceled ? OrderStatus.CANCELED : OrderStatus.PARTIAL_CANCELED;
 	}
 
 	// 개인 예매 주문은 참가 신청 1건짜리다 (결제 1건 = 참가 신청 1건)

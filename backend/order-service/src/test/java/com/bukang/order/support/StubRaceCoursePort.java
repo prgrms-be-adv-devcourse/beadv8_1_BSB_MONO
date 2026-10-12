@@ -1,5 +1,6 @@
 package com.bukang.order.support;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,17 +32,23 @@ public class StubRaceCoursePort implements RaceCoursePort {
 		courses.clear();
 	}
 
-	// 지금 접수 중이고 대회는 60일 뒤인 종목
+	// 지금 접수 중이고 대회는 60일 뒤, 환불 기한은 40일 뒤인 종목
 	public static RaceCourseInfo openCourse(int raceCourseId, int raceId, int minAge, Integer maxAge) {
+		return openCourse(raceCourseId, raceId, minAge, maxAge, LocalDate.now().plusDays(40));
+	}
+
+	// 환불 기한을 정한 접수 중 종목 (취소 테스트에서 기한 경계를 맞출 때 쓴다)
+	public static RaceCourseInfo openCourse(int raceCourseId, int raceId, int minAge, Integer maxAge,
+		LocalDate refundDeadline) {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(60), now.minusDays(1), now.plusDays(30),
-			minAge, maxAge, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE);
+			minAge, maxAge, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE, refundDeadline);
 	}
 
 	// 접수가 이미 마감된 종목
 	public static RaceCourseInfo closedCourse(int raceCourseId, int raceId) {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(10), now.minusDays(30), now.minusDays(1),
-			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE);
+			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE, now.toLocalDate().plusDays(5));
 	}
 }
