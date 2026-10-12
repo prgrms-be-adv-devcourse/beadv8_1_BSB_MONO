@@ -1,0 +1,12 @@
+# 서비스를 bootRun/IDE로 호스트에서 실행할 때의 주소
+gateway:
+  services:
+    member: http://localhost:8080
+    cash: http://localhost:8081
+    payout: http://localhost:8082
+    file: http://localhost:8083
+    order: http://localhost:8084
+
+logging:
+  level:
+    com.bukang: debug
