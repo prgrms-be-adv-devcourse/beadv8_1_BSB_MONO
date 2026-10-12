@@ -14,7 +14,7 @@
 | `cash-service` | Spring Boot 앱 | 8081 | 회원 복제본(`CashMember`), 캐시 (뼈대만 있음) |
 | `payout-service` | Spring Boot 앱 | 8082 | 정산 내역(`Payout`), 정산 항목, 지급보류 (엔티티만 있음) |
 | `file-service` | Spring Boot 앱 | 8083 | 대회 이미지 등 파일 저장 (S3, presigned URL) |
-| `order-service` | Spring Boot 앱 | 8084 | 참가 신청, 예매(임시 확보·결제 기한), 장바구니, 주문 (뼈대만 있음) |
+| `order-service` | Spring Boot 앱 | 8084 | 참가 신청, 장바구니, 바로 결제 예매(자리 확보·결제 기한 10분), 주문 |
 
 인프라(`compose.yml`: MySQL, Kafka, Elasticsearch, Redis, 로컬 S3 대체재 S3Mock)는 모든 서비스가 공용으로 씁니다.
 
@@ -84,7 +84,13 @@ backend/
 │   ├── config/                S3Properties(file.storage.s3), S3Config(S3Client, S3Presigner)
 │   └── out/                   StoredFileRepository, storage/(FileStorage, S3FileStorage)
 └── order-service/   com.bukang.order
-    └── in/                    OrderExceptionHandler (회원 ID 헤더 누락·형식 오류를 RsData로 응답)
+    ├── in/                    ApiV1ParticipationController, ApiV1CartController, ApiV1OrderController,
+    │                          OrderExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
+    ├── app/                   ParticipationFacade·ParticipationApplyUseCase, CartFacade·CartUseCase, OrderFacade·OrderCreateUseCase
+    ├── domain/                Participation(BOOKING_PARTICIPATION), Cart·CartItem(ORDER_CART·_ITEM),
+    │                          Order·OrderItem(ORDER_ORDER·_ITEM), 상태 enum, exception/
+    └── out/                   Repository, race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보)
+                               상품 서비스(B)가 없어 Fake*Adapter가 가짜 응답을 준다
 ```
 
 - 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).

@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 import com.bukang.order.domain.exception.ParticipationNotEditableException;
+import com.bukang.order.domain.exception.ParticipationNotPayableException;
 import com.bukang.order.dto.ParticipantInfoDto;
 import com.bukang.order.dto.ParticipationDto;
 
@@ -93,8 +94,7 @@ public class Participation extends BaseIdAndTime {
 		this.raceId = raceId;
 		this.raceCourseId = raceCourseId;
 		this.participationType = ParticipationType.INDIVIDUAL;
-		this.status = ParticipationStatus.PENDING;
-		this.activeFlag = Boolean.TRUE;
+		changeStatus(ParticipationStatus.PENDING);
 		this.participant = participant;
 		this.thirdPartyConsent = Boolean.TRUE;
 		this.consentedAt = consentedAt;
@@ -117,6 +117,33 @@ public class Participation extends BaseIdAndTime {
 				"참가자 정보를 고칠 수 없는 신청입니다(현재 상태: %s).".formatted(status.getLabel()));
 		}
 		this.participant = newParticipant;
+	}
+
+	// [결제하기]에서 자리를 확보했다. 결제 기한은 상품 서비스가 정한 값의 사본이다
+	public void markApplied(LocalDateTime paymentDueAt) {
+		checkPayable();
+		changeStatus(ParticipationStatus.APPLIED);
+		this.paymentDueAt = paymentDueAt;
+	}
+
+	// 남은 자리가 없어 확보하지 못했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다
+	public void markHoldFailed() {
+		checkPayable();
+		changeStatus(ParticipationStatus.FAILED);
+	}
+
+	// [결제하기]는 자리 확보 전(PENDING) 신청만 할 수 있다. 상품 서비스를 부르기 전에 먼저 확인한다
+	public void checkPayable() {
+		if (status != ParticipationStatus.PENDING) {
+			throw new ParticipationNotPayableException(
+				"결제를 시작할 수 없는 신청입니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+	}
+
+	// 상태와 active_flag는 늘 이 메서드로 함께 바꾼다. 끝난 상태면 active_flag를 비워 한 대회 1건 제약에서 빠진다
+	private void changeStatus(ParticipationStatus newStatus) {
+		this.status = newStatus;
+		this.activeFlag = newStatus.isActive() ? Boolean.TRUE : null;
 	}
 
 	public ParticipationDto toDto() {

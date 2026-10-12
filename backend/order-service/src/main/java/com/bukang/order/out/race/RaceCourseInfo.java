@@ -15,6 +15,10 @@ import java.time.Period;
  * @param applicationCloseAt 접수 마감 일시 = 참가자 정보 수정 기한 (정책 2장 1-6 · 3장 1-5)
  * @param minAge             참가 가능 최소 나이 (만 14세 이상)
  * @param maxAge             참가 가능 최대 나이. null이면 제한 없음
+ * @param sellerId           판매자 ID (정산이 주문 상품에서 읽는다)
+ * @param courseName         주문 상품명으로 남길 이름 (예: "2026 서울 하프 마라톤 10K")
+ * @param price              참가비 (원)
+ * @param kitPrice           참가권에 포함된 키트 금액 (원). 키트가 없으면 0
  */
 public record RaceCourseInfo(
 	int raceCourseId,
@@ -23,8 +27,17 @@ public record RaceCourseInfo(
 	LocalDateTime applicationOpenAt,
 	LocalDateTime applicationCloseAt,
 	int minAge,
-	Integer maxAge
+	Integer maxAge,
+	int sellerId,
+	String courseName,
+	int price,
+	int kitPrice
 ) {
+	// 구매자가 내는 참가권 한 장 값. 키트는 참가권과 함께 팔고 함께 취소한다 (ERD race_course.kit_price)
+	public int ticketPrice() {
+		return price + kitPrice;
+	}
+
 	// 접수 기간 안인지 (오픈 시각 이상, 마감 시각 전)
 	public boolean isAccepting(LocalDateTime now) {
 		return !now.isBefore(applicationOpenAt) && now.isBefore(applicationCloseAt);
