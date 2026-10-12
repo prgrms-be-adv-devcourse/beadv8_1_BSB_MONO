@@ -1,6 +1,8 @@
 package com.bukang.order.in;
 
 import org.springframework.context.MessageSourceResolvable;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -15,7 +17,10 @@ import com.bukang.common.global.rsdata.RsData;
 /**
  * 주문 서비스 전용 요청 예외 처리
  * 처리하지 않으면 /error로 넘어가 공통 응답 형식(RsData)이 아닌 기본 에러 응답이 나간다.
+ * common의 GlobalExceptionHandler와 함께 등록되므로, 나중에 그쪽에 포괄 핸들러(Exception 등)가 생겨도
+ * 여기서 정한 401/400 응답이 먼저 쓰이도록 순서를 가장 앞에 둔다
  */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice
 public class OrderExceptionHandler {
 	// 회원 ID 헤더는 게이트웨이가 토큰을 검사해 넣어 줄 예정이다(PRO-20)
@@ -47,14 +52,15 @@ public class OrderExceptionHandler {
 			.body(RsData.of(HttpStatus.BAD_REQUEST, message, null));
 	}
 
-	// 필수 쿼리 파라미터 누락
+	// 필수 쿼리 파라미터 누락. 헤더 누락처럼 이름을 넣어 어떤 값이 빠졌는지 알 수 있게 한다
 	@ExceptionHandler(MissingServletRequestParameterException.class)
 	public ResponseEntity<RsData<Void>> missingServletRequestParameterException(
 		MissingServletRequestParameterException exception
 	) {
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
-			.body(RsData.of(HttpStatus.BAD_REQUEST, "필수 요청 값이 없습니다.", null));
+			.body(RsData.of(HttpStatus.BAD_REQUEST,
+				"필수 요청 값(%s)이 없습니다.".formatted(exception.getParameterName()), null));
 	}
 
 	// 경로 변수·헤더·쿼리 파라미터의 숫자 형식 오류 (예: 회원 ID에 문자)
