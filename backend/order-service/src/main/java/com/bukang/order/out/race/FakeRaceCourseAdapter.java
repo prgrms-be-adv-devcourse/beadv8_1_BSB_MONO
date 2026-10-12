@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
  * 임시 어댑터: 상품 서비스(B)가 아직 없어, 어떤 종목 ID든 지금 접수 중인 종목으로 돌려준다
  * - 대회 ID는 종목 ID와 같게 둔다 (종목 하나 = 대회 하나)
  * - 대회는 60일 뒤, 접수는 하루 전에 열려 30일 뒤에 마감, 만 14세 이상
- * - 판매자 ID 1, 참가비 50,000원 + 키트 10,000원
+ * - 판매자 ID 1, 참가비 50,000원 + 키트 10,000원, 환불 기한은 40일 뒤
  * 상품 서비스와 연결할 때(HTTP 호출) 이 클래스를 진짜 어댑터로 바꾼다
  */
 @Slf4j
@@ -40,7 +40,8 @@ public class FakeRaceCourseAdapter implements RaceCoursePort {
 			1,
 			"가짜 대회 %d 종목".formatted(raceCourseId),
 			50_000,
-			10_000
+			10_000,
+			now.plusDays(40).toLocalDate()
 		));
 	}
 }

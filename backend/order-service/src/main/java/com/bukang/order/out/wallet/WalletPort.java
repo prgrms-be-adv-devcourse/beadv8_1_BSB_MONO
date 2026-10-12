@@ -9,4 +9,7 @@ public interface WalletPort {
 
 	// 차감한 뒤 자리 판매가 실패(기한 지남)하면 돌려준다. 같은 주문으로 여러 번 불러도 한 번만 돌려준다
 	void cancelPayment(int orderId);
+
+	// 결제한 참가권을 취소하면 그 주문 상품 금액을 예치금으로 돌려준다. 같은 주문 상품은 한 번만 환불한다 (D PRO-83)
+	void refund(int orderId, int orderItemId, int amount);
 }

@@ -1,9 +1,11 @@
 package com.bukang.order.support;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.bukang.order.out.seat.SeatExtendResult;
@@ -22,6 +24,7 @@ public class StubSeatHoldPort implements SeatHoldPort {
 	private final Map<Integer, Integer> remainingSeats = new ConcurrentHashMap<>();
 	private final AtomicInteger holdCalls = new AtomicInteger();
 	private final AtomicInteger extendCalls = new AtomicInteger();
+	private final List<Integer> restoredParticipations = new CopyOnWriteArrayList<>();
 	private final Map<Integer, LocalDateTime> expiresAt = new ConcurrentHashMap<>();
 	private final Map<Integer, Boolean> extended = new ConcurrentHashMap<>();
 	private final Set<Integer> sold = ConcurrentHashMap.newKeySet();
@@ -79,6 +82,15 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		expiresAt.put(participationId, LocalDateTime.now().minusSeconds(1));
 	}
 
+	@Override
+	public void restore(int participationId) {
+		restoredParticipations.add(participationId);
+	}
+
+	public List<Integer> restoredParticipations() {
+		return restoredParticipations;
+	}
+
 	public int extendCalls() {
 		return extendCalls.get();
 	}
@@ -95,6 +107,7 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		remainingSeats.clear();
 		holdCalls.set(0);
 		extendCalls.set(0);
+		restoredParticipations.clear();
 		expiresAt.clear();
 		extended.clear();
 		sold.clear();

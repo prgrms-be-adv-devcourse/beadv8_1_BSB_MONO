@@ -143,6 +143,16 @@ public class Participation extends BaseIdAndTime {
 		this.confirmedAt = confirmedAt;
 	}
 
+	// 결제한 참가권을 취소했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다 (정책 5장)
+	public void markCanceled(LocalDateTime canceledAt) {
+		if (status != ParticipationStatus.CONFIRMED) {
+			throw new ParticipationNotPayableException(
+				"참가 확정된 신청만 취소할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+		changeStatus(ParticipationStatus.CANCELED);
+		this.canceledAt = canceledAt;
+	}
+
 	// 결제 기한을 늘릴 수 있는지: 결제 대기(APPLIED)여야 한다. 상품 서비스에 연장을 요청하기 전에 확인한다
 	public void checkExtendable() {
 		if (status != ParticipationStatus.APPLIED) {
