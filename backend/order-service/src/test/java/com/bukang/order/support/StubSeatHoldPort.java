@@ -2,6 +2,7 @@ package com.bukang.order.support;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -23,6 +24,7 @@ public class StubSeatHoldPort implements SeatHoldPort {
 	private final AtomicInteger extendCalls = new AtomicInteger();
 	private final Map<Integer, LocalDateTime> expiresAt = new ConcurrentHashMap<>();
 	private final Map<Integer, Boolean> extended = new ConcurrentHashMap<>();
+	private final Set<Integer> sold = ConcurrentHashMap.newKeySet();
 
 	@Override
 	public SeatHoldResult hold(int raceCourseId, int participationId, int memberId) {
@@ -60,10 +62,15 @@ public class StubSeatHoldPort implements SeatHoldPort {
 
 	@Override
 	public SeatSellResult sell(int participationId) {
+		// 이미 판매한 자리는 기한과 상관없이 SOLD (SeatHoldPort.sell의 멱등 계약)
+		if (sold.contains(participationId)) {
+			return SeatSellResult.SOLD;
+		}
 		LocalDateTime due = expiresAt.get(participationId);
 		if (due == null || !LocalDateTime.now().isBefore(due)) {
 			return SeatSellResult.EXPIRED;
 		}
+		sold.add(participationId);
 		return SeatSellResult.SOLD;
 	}
 
@@ -90,5 +97,6 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		extendCalls.set(0);
 		expiresAt.clear();
 		extended.clear();
+		sold.clear();
 	}
 }

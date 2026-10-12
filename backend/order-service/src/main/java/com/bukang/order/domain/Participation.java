@@ -128,12 +128,17 @@ public class Participation extends BaseIdAndTime {
 		this.paymentDueAt = paymentDueAt;
 	}
 
-	// 결제를 마쳐 참가가 확정됐다 (정책 3장 "결제한 사람만 참가 확정")
-	public void markConfirmed(LocalDateTime confirmedAt) {
+	// 참가를 확정할 수 있는지: 결제 대기(APPLIED)여야 한다. 결제는 예치금을 차감하기 전에 이것부터 확인한다
+	public void checkConfirmable() {
 		if (status != ParticipationStatus.APPLIED) {
 			throw new ParticipationNotPayableException(
 				"결제 대기 중인 신청만 참가를 확정할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
 		}
+	}
+
+	// 결제를 마쳐 참가가 확정됐다 (정책 3장 "결제한 사람만 참가 확정")
+	public void markConfirmed(LocalDateTime confirmedAt) {
+		checkConfirmable();
 		changeStatus(ParticipationStatus.CONFIRMED);
 		this.confirmedAt = confirmedAt;
 	}
