@@ -1,11 +1,13 @@
 package com.bukang.order.in;
 
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.bukang.common.global.rsdata.RsData;
@@ -30,6 +32,19 @@ public class OrderExceptionHandler {
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
 			.body(RsData.of(HttpStatus.BAD_REQUEST, "필수 요청 헤더(%s)가 없습니다.".formatted(exception.getHeaderName()), null));
+	}
+
+	// 컨트롤러 파라미터에 직접 붙인 검증(예: 회원 ID @Positive) 실패. 첫 번째 오류 메시지를 응답한다
+	// 이런 검증이 있는 메서드는 @Valid 요청 본문 오류도 이 예외로 오므로 같은 형식으로 맞춘다
+	@ExceptionHandler(HandlerMethodValidationException.class)
+	public ResponseEntity<RsData<Void>> handlerMethodValidationException(HandlerMethodValidationException exception) {
+		String message = exception.getAllErrors().stream()
+			.findFirst()
+			.map(MessageSourceResolvable::getDefaultMessage)
+			.orElse("요청 값이 올바르지 않습니다.");
+		return ResponseEntity
+			.status(HttpStatus.BAD_REQUEST)
+			.body(RsData.of(HttpStatus.BAD_REQUEST, message, null));
 	}
 
 	// 필수 쿼리 파라미터 누락
