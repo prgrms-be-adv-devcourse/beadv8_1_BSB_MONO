@@ -6,4 +6,5 @@ export {
 } from './ui/FindAccountPages'
 export { LoginPage } from './ui/LoginPage'
 export { SignupAccountPage, SignupProfilePage } from './ui/SignupPages'
-export { TERMS_SLUGS, TermsPage, type TermsSlug } from './ui/TermsPage'
+export { TERMS_SLUGS, type TermsSlug } from './model/terms'
+export { TermsPage } from './ui/TermsPage'
