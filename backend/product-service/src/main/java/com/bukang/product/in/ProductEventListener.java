@@ -24,12 +24,12 @@ public class ProductEventListener {
 	private final ProductFacade productFacade;
 	private final JsonConverter jsonConverter;
 
-	@KafkaListener(topics = KafkaTopics.MEMBER_JOINED, groupId = GROUP_ID)
+	@KafkaListener(topics = KafkaTopics.PRODUCT_MEMBER_JOINED, groupId = GROUP_ID)
 	public void handleMemberJoined(String payload) {
 		productFacade.syncMember(jsonConverter.fromJson(payload, MemberJoinedEvent.class));
 	}
 
-	@KafkaListener(topics = KafkaTopics.SELLER_CHANGED, groupId = GROUP_ID)
+	@KafkaListener(topics = KafkaTopics.PRODUCT_SELLER_CHANGED, groupId = GROUP_ID)
 	public void handleSellerChanged(String payload) {
 		productFacade.syncSeller(jsonConverter.fromJson(payload, SellerChangedEvent.class));
 	}
