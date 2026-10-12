@@ -28,6 +28,7 @@ public class PayoutItemDto {
 	private final int payoutId;
 	private final String payoutCode;
 	private final int raceId;
+	private final String raceName;
 	private final PayoutStatus payoutStatus;
 	private final LocalDate scheduledPayDate;
 
@@ -45,6 +46,7 @@ public class PayoutItemDto {
 			payout.getId(),
 			payout.getPayoutCode(),
 			payout.getRaceId(),
+			payout.getRaceName(),
 			payout.getStatus(),
 			payout.getScheduledPayDate()
 		);

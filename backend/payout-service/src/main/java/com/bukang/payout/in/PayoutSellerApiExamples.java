@@ -25,6 +25,7 @@ final class PayoutSellerApiExamples {
 					"id": 1,
 					"payoutCode": "ST-20260926-0001",
 					"raceId": 10,
+					"raceName": "2026 한강 나이트런",
 					"payoutMonth": "2026-09",
 					"salesAmount": 100000,
 					"refundAmount": 0,
@@ -56,6 +57,7 @@ final class PayoutSellerApiExamples {
 						"payoutId": 1,
 						"payoutCode": "ST-20260926-0001",
 						"raceId": 10,
+						"raceName": "2026 한강 나이트런",
 						"payoutStatus": "CALCULATED",
 						"scheduledPayDate": "2026-10-20"
 					}
@@ -87,6 +89,7 @@ final class PayoutSellerApiExamples {
 					"payoutId": 1,
 					"payoutCode": "ST-20260926-0001",
 					"raceId": 10,
+					"raceName": "2026 한강 나이트런",
 					"payoutAmount": 94500,
 					"reasonType": "ACCOUNT_NOT_REGISTERED",
 					"reason": "정산 계좌 등록 요청 중",

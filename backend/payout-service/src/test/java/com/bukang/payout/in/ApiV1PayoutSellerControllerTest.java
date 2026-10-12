@@ -114,7 +114,8 @@ class ApiV1PayoutSellerControllerTest {
 	}
 
 	private Payout savePayout(int sellerId, int raceId, YearMonth month, LocalDate targetDate) {
-		Payout payout = new Payout(sellerId, raceId, month, targetDate.atTime(3, 0), CALENDAR);
+		Payout payout = new Payout(sellerId, raceId, "대회 %d".formatted(raceId), month, targetDate.atTime(3, 0),
+			CALENDAR);
 		entityManager.persist(payout);
 		entityManager.flush();
 		payout.assignPayoutCode();
@@ -162,6 +163,7 @@ class ApiV1PayoutSellerControllerTest {
 			.andExpect(jsonPath("$.data[0].feeAmount").value(5_500))
 			.andExpect(jsonPath("$.data[0].payoutAmount").value(94_500))
 			.andExpect(jsonPath("$.data[0].scheduledPayDate").value("2026-10-20"))
+			.andExpect(jsonPath("$.data[0].raceName").value("대회 10"))
 			.andExpect(jsonPath("$.data[1].status").value("HELD"))
 			.andDo(document("payout-seller-payouts",
 				requestHeaders(MEMBER_ID_HEADER),
@@ -174,7 +176,8 @@ class ApiV1PayoutSellerControllerTest {
 					fieldWithPath("message").description("결과 메시지"),
 					fieldWithPath("data[].id").description("정산 내역 ID"),
 					fieldWithPath("data[].payoutCode").description("정산 ID 표기 (ST-정산 내역을 만든 날-16진수 4자리)"),
-					fieldWithPath("data[].raceId").description("대회 ID (대회 이름은 대회 서비스에서 붙인다)"),
+					fieldWithPath("data[].raceId").description("대회 ID"),
+					fieldWithPath("data[].raceName").description("대회 이름 (정산 내역을 만들 때 저장한 값)"),
 					fieldWithPath("data[].payoutMonth").description("정산 월 (정산 대상일이 속한 달, yyyy-MM)"),
 					fieldWithPath("data[].salesAmount").description("판매액"),
 					fieldWithPath("data[].refundAmount").description("환불액 (세미는 항상 0)"),
@@ -198,6 +201,7 @@ class ApiV1PayoutSellerControllerTest {
 			.andExpect(jsonPath("$.data.content[*].orderItemId", contains(101, 100)))
 			.andExpect(jsonPath("$.data.content[0].feeAmount").value(2_750))
 			.andExpect(jsonPath("$.data.content[0].payoutStatus").value("CALCULATED"))
+			.andExpect(jsonPath("$.data.content[0].raceName").value("대회 10"))
 			.andExpect(jsonPath("$.data.totalElements").value(2))
 			.andDo(document("payout-seller-items",
 				requestHeaders(MEMBER_ID_HEADER),
@@ -220,6 +224,7 @@ class ApiV1PayoutSellerControllerTest {
 					fieldWithPath("data.content[].payoutId").description("묶인 정산 내역 ID"),
 					fieldWithPath("data.content[].payoutCode").description("묶인 정산 내역의 정산 ID 표기"),
 					fieldWithPath("data.content[].raceId").description("대회 ID"),
+					fieldWithPath("data.content[].raceName").description("대회 이름"),
 					fieldWithPath("data.content[].payoutStatus").description("묶인 정산 내역의 상태"),
 					fieldWithPath("data.content[].scheduledPayDate").description("묶인 정산 내역의 지급 예정일"),
 					fieldWithPath("data.page").description("현재 페이지 번호 (0부터)"),
@@ -273,6 +278,7 @@ class ApiV1PayoutSellerControllerTest {
 			.andExpect(jsonPath("$.data[0].reasonType").value("ACCOUNT_NOT_REGISTERED"))
 			.andExpect(jsonPath("$.data[0].status").value("HELD"))
 			.andExpect(jsonPath("$.data[0].payoutAmount").value(28_350))
+			.andExpect(jsonPath("$.data[0].raceName").value("대회 11"))
 			.andDo(document("payout-seller-holds",
 				requestHeaders(MEMBER_ID_HEADER),
 				queryParameters(
@@ -287,6 +293,7 @@ class ApiV1PayoutSellerControllerTest {
 					fieldWithPath("data[].payoutId").description("보류된 정산 내역 ID"),
 					fieldWithPath("data[].payoutCode").description("보류된 정산 내역의 정산 ID 표기"),
 					fieldWithPath("data[].raceId").description("대회 ID"),
+					fieldWithPath("data[].raceName").description("대회 이름"),
 					fieldWithPath("data[].payoutAmount").description("보류된 정산 내역의 지급액"),
 					fieldWithPath("data[].reasonType").description(
 						"보류 사유 (ACCOUNT_NOT_REGISTERED: 정산 계좌 미등록, RACE_CANCELED: 대회 취소 처리)"),

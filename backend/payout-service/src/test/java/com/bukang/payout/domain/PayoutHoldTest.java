@@ -21,7 +21,7 @@ class PayoutHoldTest {
 
 	// 2026-09: 지급 예정일 10/20
 	private Payout newPayout() {
-		return new Payout(1, 10, YearMonth.of(2026, 9), LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
+		return new Payout(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
 	}
 
 	private PayoutHold hold(Payout payout) {

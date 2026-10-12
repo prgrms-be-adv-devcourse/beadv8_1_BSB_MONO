@@ -11,7 +11,7 @@ import lombok.Getter;
 
 /**
  * 판매자에게 보여 주는 정산 내역 (월별 정산 탭의 한 줄)
- * 대회 이름은 정산 서비스에 없어 raceId만 내려준다. 화면이 대회 서비스에서 이름을 붙인다
+ * 대회 이름은 정산 내역을 만들 때 저장한 값이다 (정산한 때의 이름)
  */
 @AllArgsConstructor
 @Getter
@@ -19,6 +19,7 @@ public class PayoutDto {
 	private final int id;
 	private final String payoutCode;
 	private final int raceId;
+	private final String raceName;
 	private final String payoutMonth;
 	private final long salesAmount;
 	private final long refundAmount;
@@ -36,6 +37,7 @@ public class PayoutDto {
 			payout.getId(),
 			payout.getPayoutCode(),
 			payout.getRaceId(),
+			payout.getRaceName(),
 			payout.getPayoutMonth(),
 			payout.getSalesAmount(),
 			payout.getRefundAmount(),

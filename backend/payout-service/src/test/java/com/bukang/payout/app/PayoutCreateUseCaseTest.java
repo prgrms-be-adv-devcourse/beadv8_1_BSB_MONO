@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
 import com.bukang.payout.out.PayoutSourcePort;
+import com.bukang.payout.out.RacePort;
 import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
 
@@ -31,6 +33,13 @@ class PayoutCreateUseCaseTest {
 	private static final LocalDate RACE_DATE = LocalDate.of(2026, 9, 25);
 	private static final LocalDate TARGET_DATE = LocalDate.of(2026, 9, 26);
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 26, 3, 0);
+
+	// 상품 서비스에 대회 10, 20만 있다
+	private static final RacePort RACE_NAMES = raceId -> switch (raceId) {
+		case 10 -> Optional.of("2026 한강 나이트런");
+		case 20 -> Optional.of("2026 가을 하프마라톤");
+		default -> Optional.empty();
+	};
 
 	@Autowired
 	private PayoutRepository payoutRepository;
@@ -50,7 +59,22 @@ class PayoutCreateUseCaseTest {
 
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
 		return new PayoutCreateUseCase(payoutRepository, payoutHoldRepository, sourceReturning(entries),
-			sellerAccountPort, new BusinessDayCalendar());
+			sellerAccountPort, RACE_NAMES, new BusinessDayCalendar());
+	}
+
+	@Test
+	@DisplayName("정산 내역을 만들 때 상품 서비스에서 받은 대회 이름을 저장하고, 대회를 못 찾아도 정산은 만든다")
+	void savesRaceName() {
+		PayoutCreateUseCase useCase = useCaseSelling(List.of(
+			new SoldEntry(100, 1, 10, 50_000L),
+			new SoldEntry(300, 3, 30, 40_000L)
+		));
+
+		useCase.run(TARGET_DATE, NOW);
+
+		assertThat(payoutOf(1).getRaceName()).isEqualTo("2026 한강 나이트런");
+		assertThat(payoutOf(3).getRaceName()).isEqualTo("알 수 없는 대회 (ID 30)");
+		assertThat(payoutOf(3).getStatus()).isEqualTo(PayoutStatus.CALCULATED);
 	}
 
 	private Payout payoutOf(int sellerId) {

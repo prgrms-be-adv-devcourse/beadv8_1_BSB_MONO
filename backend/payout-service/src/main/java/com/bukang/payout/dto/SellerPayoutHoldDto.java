@@ -23,6 +23,7 @@ public class SellerPayoutHoldDto {
 	private final int payoutId;
 	private final String payoutCode;
 	private final int raceId;
+	private final String raceName;
 	private final long payoutAmount;
 	// 판매자 화면에 사유를 보여 준다 (payout.md 1장 지급보류 2번)
 	private final PayoutHoldReason reasonType;
@@ -41,6 +42,7 @@ public class SellerPayoutHoldDto {
 			payout.getId(),
 			payout.getPayoutCode(),
 			payout.getRaceId(),
+			payout.getRaceName(),
 			payout.getPayoutAmount(),
 			hold.getReasonType(),
 			hold.getReason(),

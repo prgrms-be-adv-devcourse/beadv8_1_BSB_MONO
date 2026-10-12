@@ -43,7 +43,8 @@ class PayoutPayUseCaseTest {
 	// 9월분(2026-09)은 10/20, 10월분(2026-10)은 11/20이 지급 예정일이다
 	private Payout savePayout(int sellerId, YearMonth payoutMonth) {
 		LocalDateTime settledAt = payoutMonth.atDay(29).atTime(3, 0);
-		return payoutRepository.save(new Payout(sellerId, 10, payoutMonth, settledAt, new BusinessDayCalendar()));
+		return payoutRepository.save(new Payout(sellerId, 10, "테스트 대회", payoutMonth, settledAt,
+			new BusinessDayCalendar()));
 	}
 
 	@Test
