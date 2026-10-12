@@ -9,4 +9,7 @@ public interface SeatHoldPort {
 
 	// PG 충전창에 들어가면 결제 기한을 2분 늘린다. 자리마다 한 번만 된다 (정책 4장 결제)
 	SeatExtendResult extend(int participationId);
+
+	// 결제 뒤 자리를 판매 완료로 바꾼다. 기한이 지났으면 B가 거절한다 (결제·만료 판정 원본은 B의 expires_at)
+	SeatSellResult sell(int participationId);
 }

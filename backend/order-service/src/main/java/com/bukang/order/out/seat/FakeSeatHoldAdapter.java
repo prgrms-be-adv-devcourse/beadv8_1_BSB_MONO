@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 임시 어댑터: 상품 서비스(B)가 아직 없어, 종목마다 정원 100석을 메모리에 두고 지금부터 10분짜리 자리를 내준다
- * 확보한 자리의 기한을 기억해 2분 연장(한 번)까지 흉내 낸다. 자리를 되돌려 놓지는 않는다
+ * 확보한 자리의 기한을 기억해 2분 연장(한 번)과 기한 안 판매까지 흉내 낸다. 자리를 되돌려 놓지는 않는다
  * 앱을 다시 켜면 처음으로 돌아간다. 상품 서비스와 연결할 때(HTTP 호출, PRO-99) 이 클래스를 진짜 어댑터로 바꾼다
  */
 @Slf4j
@@ -65,6 +65,16 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 			return extended;
 		});
 		return result[0];
+	}
+
+	@Override
+	public SeatSellResult sell(int participationId) {
+		Hold hold = holds.get(participationId);
+		if (hold == null || !LocalDateTime.now().isBefore(hold.expiresAt())) {
+			return SeatSellResult.EXPIRED;
+		}
+		holds.remove(participationId);
+		return SeatSellResult.SOLD;
 	}
 
 	private record Hold(LocalDateTime expiresAt, boolean extended) {

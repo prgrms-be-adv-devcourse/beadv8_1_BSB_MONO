@@ -128,6 +128,16 @@ public class Participation extends BaseIdAndTime {
 		this.paymentDueAt = paymentDueAt;
 	}
 
+	// 결제를 마쳐 참가가 확정됐다 (정책 3장 "결제한 사람만 참가 확정")
+	public void markConfirmed(LocalDateTime confirmedAt) {
+		if (status != ParticipationStatus.APPLIED) {
+			throw new ParticipationNotPayableException(
+				"결제 대기 중인 신청만 참가를 확정할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+		changeStatus(ParticipationStatus.CONFIRMED);
+		this.confirmedAt = confirmedAt;
+	}
+
 	// 결제 기한을 늘렸다 (PG 충전창 진입 때 2분, 한 번). 결제 대기(APPLIED) 신청만 늘린다
 	public void extendPaymentDue(LocalDateTime newPaymentDueAt) {
 		if (status != ParticipationStatus.APPLIED) {
@@ -141,6 +151,10 @@ public class Participation extends BaseIdAndTime {
 	public void markHoldFailed() {
 		checkPayable();
 		changeStatus(ParticipationStatus.FAILED);
+	}
+
+	public boolean isHoldFailed() {
+		return status == ParticipationStatus.FAILED;
 	}
 
 	// [결제하기]는 자리 확보 전(PENDING) 신청만 할 수 있다. 상품 서비스를 부르기 전에 먼저 확인한다

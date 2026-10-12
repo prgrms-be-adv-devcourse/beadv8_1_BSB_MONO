@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.bukang.order.out.seat.SeatExtendResult;
 import com.bukang.order.out.seat.SeatHoldPort;
 import com.bukang.order.out.seat.SeatHoldResult;
+import com.bukang.order.out.seat.SeatSellResult;
 
 /**
  * 테스트용 자리 확보. 종목별 남은 자리를 정할 수 있고(정하지 않으면 무제한), 결제 기한은 지금부터 10분이다
@@ -55,6 +56,20 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		LocalDateTime newDue = due.plusMinutes(EXTEND_MINUTES);
 		expiresAt.put(participationId, newDue);
 		return SeatExtendResult.extended(newDue);
+	}
+
+	@Override
+	public SeatSellResult sell(int participationId) {
+		LocalDateTime due = expiresAt.get(participationId);
+		if (due == null || !LocalDateTime.now().isBefore(due)) {
+			return SeatSellResult.EXPIRED;
+		}
+		return SeatSellResult.SOLD;
+	}
+
+	// 상품 서비스 쪽 기한만 지나게 만든다 (주문 쪽 사본은 그대로). 결제 직전 만료 상황을 재현할 때 쓴다
+	public void expire(int participationId) {
+		expiresAt.put(participationId, LocalDateTime.now().minusSeconds(1));
 	}
 
 	public int extendCalls() {

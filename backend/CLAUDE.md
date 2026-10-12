@@ -90,12 +90,14 @@ backend/
     │                          OrderExpiryScheduler(1분마다 결제 기한 지난 건 정리, test 프로파일 제외),
     │                          OrderExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
     ├── app/                   ParticipationFacade·ParticipationApplyUseCase, CartFacade·CartUseCase,
-    │                          OrderFacade·OrderCreateUseCase·OrderExpiryUseCase·OrderDeadlineExtendUseCase·OrderQueryUseCase
+    │                          OrderFacade·OrderCreateUseCase·OrderPayUseCase·OrderExpiryUseCase·
+    │                          OrderDeadlineExtendUseCase·OrderQueryUseCase
     ├── domain/                Participation(BOOKING_PARTICIPATION), Cart·CartItem(ORDER_CART·_ITEM),
     │                          Order·OrderItem(ORDER_ORDER·_ITEM), 상태 enum, exception/
     └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
-                               race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보)
-                               상품 서비스(B)가 없어 Fake*Adapter가 가짜 응답을 준다
+                               race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보·연장·판매),
+                               wallet/(WalletPort 예치금 결제·환원)
+                               상품(B)·예치금(D) 서비스와 연결 전이라 Fake*Adapter가 가짜 응답을 준다
 ```
 
 - 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).

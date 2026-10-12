@@ -19,6 +19,7 @@ public class OrderFacade {
 	private final OrderCreateUseCase orderCreateUseCase;
 	private final OrderDeadlineExtendUseCase orderDeadlineExtendUseCase;
 	private final OrderQueryUseCase orderQueryUseCase;
+	private final OrderPayUseCase orderPayUseCase;
 
 	@Transactional
 	public OrderCreateResult create(OrderCreateRequestDto request, String idempotencyKey, int memberId) {
@@ -37,5 +38,10 @@ public class OrderFacade {
 
 	public OrderDto findById(int orderId, int memberId) {
 		return orderQueryUseCase.findOwned(memberId, orderId);
+	}
+
+	@Transactional
+	public OrderPayResult pay(int orderId, int memberId) {
+		return orderPayUseCase.pay(memberId, orderId, LocalDateTime.now());
 	}
 }
