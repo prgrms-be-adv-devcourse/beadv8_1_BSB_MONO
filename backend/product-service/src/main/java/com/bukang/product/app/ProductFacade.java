@@ -1,5 +1,7 @@
 package com.bukang.product.app;
 
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +25,7 @@ public class ProductFacade {
 	}
 
 	@Transactional
-	public ProductSeller syncSeller(SellerChangedEvent event) {
+	public Optional<ProductSeller> syncSeller(SellerChangedEvent event) {
 		return productSyncSellerUseCase.syncSeller(event);
 	}
 }

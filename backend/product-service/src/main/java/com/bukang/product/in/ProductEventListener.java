@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 회원·판매자 이벤트를 받아 복제본(ProductMember, ProductSeller)에 저장한다
- * 메시지는 JSON 문자열로 받아 JsonConverter로 바꾼다. 파싱에 실패하면 KafkaConfig의 에러 핸들러가 건너뛴다.
+ * 메시지는 JSON 문자열로 받아 JsonConverter로 바꾼다. 파싱에 실패하면 Spring Kafka 기본 에러 핸들러가 10번 시도한 뒤 건너뛴다.
  */
 @Component
 @RequiredArgsConstructor

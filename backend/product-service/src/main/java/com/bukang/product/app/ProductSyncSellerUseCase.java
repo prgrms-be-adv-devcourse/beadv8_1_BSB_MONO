@@ -1,5 +1,7 @@
 package com.bukang.product.app;
 
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
@@ -9,7 +11,9 @@ import com.bukang.product.out.ProductMemberRepository;
 import com.bukang.product.out.ProductSellerRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductSyncSellerUseCase {
@@ -17,10 +21,17 @@ public class ProductSyncSellerUseCase {
 	private final ProductMemberRepository productMemberRepository;
 
 	// 원본 값으로 덮어쓴다 (등록 신청, 승인·반려 모두 같은 방식). 같은 메시지가 다시 와도 결과가 같다
-	public ProductSeller syncSeller(SellerChangedEvent event) {
-		// 회원은 조회하지 않고 참조만 건다. 회원 복제본이 아직 없으면 저장할 때 외래 키 오류가 난다
+	public Optional<ProductSeller> syncSeller(SellerChangedEvent event) {
+		// 회원가입을 해야 판매자 등록을 할 수 있으므로, 회원 복제본이 없는 판매자 메시지는 잘못된 메시지다
+		// 다시 시도하지 않고 에러 로그만 남긴 뒤 건너뛴다
+		if (!productMemberRepository.existsById(event.memberId())) {
+			log.error("회원 복제본이 없는 판매자 메시지를 건너뜁니다. sellerId={}, memberId={}",
+				event.id(), event.memberId());
+			return Optional.empty();
+		}
+
 		ProductMember member = productMemberRepository.getReferenceById(event.memberId());
-		return productSellerRepository.save(
+		return Optional.of(productSellerRepository.save(
 			new ProductSeller(
 				event.id(),
 				member,
@@ -32,6 +43,6 @@ public class ProductSyncSellerUseCase {
 				event.requestedAt(),
 				event.reviewedAt()
 			)
-		);
+		));
 	}
 }
