@@ -16,7 +16,9 @@ final class OrderApiExamples {
 				"raceId": 1,
 				"status": "CREATED",
 				"totalAmount": 60000,
+				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
+				"paidAt": null,
 				"items": [
 					{
 						"id": 1,
@@ -46,7 +48,9 @@ final class OrderApiExamples {
 				"raceId": 1,
 				"status": "CREATED",
 				"totalAmount": 60000,
+				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
+				"paidAt": null,
 				"items": [
 					{
 						"id": 1,
@@ -122,6 +126,137 @@ final class OrderApiExamples {
 
 	static final String KEY_REUSED = """
 		{ "status": 409, "message": "이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요.", "data": null }
+		""";
+
+	static final String EXTEND_SUCCESS = """
+		{
+			"status": 200,
+			"message": "결제 기한을 2분 늘렸습니다.",
+			"data": {
+				"id": 1,
+				"createDate": "2026-10-12T10:00:00",
+				"orderNo": "OD-20261012-0001",
+				"buyerId": 1,
+				"raceId": 1,
+				"status": "CREATED",
+				"totalAmount": 60000,
+				"canceledAmount": 0,
+				"paymentDueAt": "2026-10-12T10:12:00",
+				"paidAt": null,
+				"items": [
+					{
+						"id": 1,
+						"participationId": 1,
+						"raceCourseId": 1,
+						"sellerId": 1,
+						"itemName": "2026 서울 하프 마라톤 10K",
+						"unitPrice": 60000,
+						"quantity": 1,
+						"amount": 60000,
+						"status": "ORDERED"
+					}
+				]
+			}
+		}
+		""";
+
+	static final String ORDER_NOT_OWNER = """
+		{ "status": 403, "message": "본인의 주문만 결제 기한을 늘릴 수 있습니다.", "data": null }
+		""";
+
+	static final String ORDER_NOT_FOUND = """
+		{ "status": 404, "message": "존재하지 않는 주문입니다.", "data": null }
+		""";
+
+	static final String ALREADY_EXTENDED = """
+		{ "status": 409, "message": "결제 기한은 한 번만 늘릴 수 있습니다.", "data": null }
+		""";
+
+	static final String DEADLINE_PASSED = """
+		{ "status": 409, "message": "결제 기한이 지났습니다.", "data": null }
+		""";
+
+	static final String NOT_WAITING_PAYMENT = """
+		{ "status": 409, "message": "결제 대기 중인 주문만 결제 기한을 늘릴 수 있습니다(현재 상태: 기한 만료).", "data": null }
+		""";
+
+	static final String FIND_SUCCESS = """
+		{
+			"status": 200,
+			"message": "주문을 조회했습니다.",
+			"data": {
+				"id": 1,
+				"createDate": "2026-10-12T10:00:00",
+				"orderNo": "OD-20261012-0001",
+				"buyerId": 1,
+				"raceId": 1,
+				"status": "PAID",
+				"totalAmount": 60000,
+				"canceledAmount": 0,
+				"paymentDueAt": "2026-10-12T10:10:00",
+				"paidAt": "2026-10-12T10:04:12",
+				"items": [
+					{
+						"id": 1,
+						"participationId": 1,
+						"raceCourseId": 1,
+						"sellerId": 1,
+						"itemName": "2026 서울 하프 마라톤 10K",
+						"unitPrice": 60000,
+						"quantity": 1,
+						"amount": 60000,
+						"status": "PAID"
+					}
+				]
+			}
+		}
+		""";
+
+	static final String LIST_SUCCESS = """
+		{
+			"status": 200,
+			"message": "주문 내역을 조회했습니다.",
+			"data": {
+				"orders": [
+					{
+						"id": 2,
+						"createDate": "2026-10-12T10:00:00",
+						"orderNo": "OD-20261012-0002",
+						"status": "CREATED",
+						"totalAmount": 60000,
+						"paymentDueAt": "2026-10-12T10:10:00",
+						"itemName": "2026 서울 하프 마라톤 10K",
+						"itemCount": 1
+					},
+					{
+						"id": 1,
+						"createDate": "2026-10-10T09:00:00",
+						"orderNo": "OD-20261010-0001",
+						"status": "EXPIRED",
+						"totalAmount": 45000,
+						"paymentDueAt": "2026-10-10T09:10:00",
+						"itemName": "2026 부산 바다 마라톤 5K",
+						"itemCount": 1
+					}
+				],
+				"page": 0,
+				"size": 20,
+				"totalElements": 2,
+				"totalPages": 1
+			}
+		}
+		""";
+
+	static final String INVALID_PERIOD = """
+		{ "status": 400, "message": "조회 시작일이 종료일보다 늦습니다.", "data": null }
+		""";
+
+	static final String INVALID_PAGE = """
+		{ "status": 400, "message": "한 번에 100개까지 조회할 수 있습니다.", "data": null }
+		""";
+
+	static final String VIEW_NOT_OWNER = """
+		{ "status": 403, "message": "본인의 주문만 볼 수 있습니다.", "data": null }
 		""";
 
 	private OrderApiExamples() {

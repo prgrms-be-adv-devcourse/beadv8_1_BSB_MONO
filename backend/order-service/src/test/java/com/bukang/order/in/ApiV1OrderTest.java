@@ -28,12 +28,15 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.bukang.order.app.OrderExpiryUseCase;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItem;
+import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.out.OrderRepository;
@@ -73,6 +76,9 @@ class ApiV1OrderTest {
 
 	@Autowired
 	private TransactionTemplate transactionTemplate;
+
+	@Autowired
+	private OrderExpiryUseCase orderExpiryUseCase;
 
 	@BeforeEach
 	void setUp() {
@@ -289,6 +295,123 @@ class ApiV1OrderTest {
 				.content("{}"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."));
+	}
+
+	@Test
+	@DisplayName("만료 정리: 기한 1초 전에는 그대로, 기한이 되면 참가 신청 RELEASED·주문 EXPIRED가 되고 다시 신청할 수 있다")
+	void expireOverdue() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		int orderId = createAndGetId(MEMBER_ID, participationId, newKey());
+		LocalDateTime due = orderRepository.findById(orderId).orElseThrow().getPaymentDueAt();
+
+		OrderExpiryUseCase.ExpiryResult early = orderExpiryUseCase.expireOverdue(due.minusSeconds(1));
+		assertThat(early.releasedParticipations()).isZero();
+		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
+
+		OrderExpiryUseCase.ExpiryResult onTime = orderExpiryUseCase.expireOverdue(due);
+		assertThat(onTime.releasedParticipations()).isEqualTo(1);
+		assertThat(onTime.expiredOrders()).isEqualTo(1);
+		Participation released = participationRepository.findById(participationId).orElseThrow();
+		assertThat(released.getStatus()).isEqualTo(ParticipationStatus.RELEASED);
+		assertThat(released.getActiveFlag()).isNull();
+		assertThat(released.getReleasedAt()).isEqualTo(due);
+		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.EXPIRED);
+
+		// 같은 사람이 같은 대회에 새 신청서를 쓸 수 있다
+		applyAndGetId(MEMBER_ID);
+	}
+
+	@Test
+	@DisplayName("만료 정리를 두 번 돌려도 결과가 같고, 해제 시각도 바뀌지 않는다")
+	void expireOverdueTwice() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		createAndGetId(MEMBER_ID, participationId, newKey());
+		// DB는 마이크로초까지만 저장하므로, 저장된 해제 시각과 비교할 수 있게 잘라서 넣는다
+		LocalDateTime later = LocalDateTime.now().plusMinutes(30).truncatedTo(ChronoUnit.MICROS);
+
+		orderExpiryUseCase.expireOverdue(later);
+		OrderExpiryUseCase.ExpiryResult second = orderExpiryUseCase.expireOverdue(later.plusMinutes(1));
+
+		assertThat(second.releasedParticipations()).isZero();
+		assertThat(second.expiredOrders()).isZero();
+		assertThat(participationRepository.findById(participationId).orElseThrow().getReleasedAt()).isEqualTo(later);
+	}
+
+	@Test
+	@DisplayName("만료 정리는 결제 대기 건만 건드리고, 자리 확보 전(PENDING) 신청은 그대로 둔다")
+	void expireOverdueSkipsPending() throws Exception {
+		int pending = applyAndGetId(MEMBER_ID);
+
+		orderExpiryUseCase.expireOverdue(LocalDateTime.now().plusDays(1));
+
+		Participation participation = participationRepository.findById(pending).orElseThrow();
+		assertThat(participation.getStatus()).isEqualTo(ParticipationStatus.PENDING);
+		assertThat(participation.getActiveFlag()).isTrue();
+	}
+
+	@Test
+	@DisplayName("결제 기한을 늘리면 주문·참가 신청의 기한이 함께 2분 늘고, 두 번째 요청은 409다")
+	void extendDeadline() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		int orderId = createAndGetId(MEMBER_ID, participationId, newKey());
+		LocalDateTime due = orderRepository.findById(orderId).orElseThrow().getPaymentDueAt();
+		LocalDateTime extendedDue = due.plusMinutes(StubSeatHoldPort.EXTEND_MINUTES);
+
+		extend(MEMBER_ID, orderId)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("결제 기한을 2분 늘렸습니다."))
+			.andExpect(jsonPath("$.data.status").value("CREATED"));
+
+		Order order = orderRepository.findById(orderId).orElseThrow();
+		assertThat(order.getPaymentDueAt()).isEqualTo(extendedDue);
+		assertThat(order.getDeadlineExtendedAt()).isNotNull();
+		assertThat(participationRepository.findById(participationId).orElseThrow().getPaymentDueAt())
+			.isEqualTo(extendedDue);
+
+		extend(MEMBER_ID, orderId)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("결제 기한은 한 번만 늘릴 수 있습니다."));
+		assertThat(seatHoldPort.extendCalls()).isEqualTo(1);
+
+		// 늘린 기한 전에는 정리되지 않는다
+		orderExpiryUseCase.expireOverdue(due);
+		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
+	}
+
+	@Test
+	@DisplayName("기한이 지났거나 이미 만료된 주문은 늘리지 않고 상품 서비스도 부르지 않는다")
+	void extendDeadlineAfterDue() throws Exception {
+		int orderId = createAndGetId(MEMBER_ID, applyAndGetId(MEMBER_ID), newKey());
+		Order order = orderRepository.findById(orderId).orElseThrow();
+		ReflectionTestUtils.setField(order, "paymentDueAt", LocalDateTime.now().minusSeconds(1));
+		orderRepository.save(order);
+
+		extend(MEMBER_ID, orderId)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("결제 기한이 지났습니다."));
+
+		orderExpiryUseCase.expireOverdue(LocalDateTime.now());
+		extend(MEMBER_ID, orderId)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("결제 대기 중인 주문만 결제 기한을 늘릴 수 있습니다(현재 상태: 기한 만료)."));
+		assertThat(seatHoldPort.extendCalls()).isZero();
+	}
+
+	@Test
+	@DisplayName("다른 회원의 주문은 403, 없는 주문은 404다")
+	void extendDeadlineNotOwnerOrMissing() throws Exception {
+		int orderId = createAndGetId(MEMBER_ID, applyAndGetId(MEMBER_ID), newKey());
+
+		extend(OTHER_MEMBER_ID, orderId)
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.message").value("본인의 주문만 결제 기한을 늘릴 수 있습니다."));
+		extend(MEMBER_ID, 999999)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."));
+	}
+
+	private ResultActions extend(int memberId, int orderId) throws Exception {
+		return mockMvc.perform(post(BASE_URL + "/" + orderId + "/deadline-extension").header("X-Member-Id", memberId));
 	}
 
 	private Integer createStatusAfter(CountDownLatch start, int memberId, int participationId) throws Exception {

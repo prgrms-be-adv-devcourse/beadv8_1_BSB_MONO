@@ -6,4 +6,7 @@ package com.bukang.order.out.seat;
  */
 public interface SeatHoldPort {
 	SeatHoldResult hold(int raceCourseId, int participationId, int memberId);
+
+	// PG 충전창에 들어가면 결제 기한을 2분 늘린다. 자리마다 한 번만 된다 (정책 4장 결제)
+	SeatExtendResult extend(int participationId);
 }

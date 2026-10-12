@@ -10,15 +10,18 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 임시 어댑터: 상품 서비스(B)가 아직 없어, 종목마다 정원 100석을 메모리에 두고 지금부터 10분짜리 자리를 내준다
- * 앱을 다시 켜면 남은 자리가 처음으로 돌아간다. 상품 서비스와 연결할 때(HTTP 호출) 이 클래스를 진짜 어댑터로 바꾼다
+ * 확보한 자리의 기한을 기억해 2분 연장(한 번)까지 흉내 낸다. 자리를 되돌려 놓지는 않는다
+ * 앱을 다시 켜면 처음으로 돌아간다. 상품 서비스와 연결할 때(HTTP 호출, PRO-99) 이 클래스를 진짜 어댑터로 바꾼다
  */
 @Slf4j
 @Component
 public class FakeSeatHoldAdapter implements SeatHoldPort {
 	private static final int SEATS_PER_COURSE = 100;
 	private static final long PAYMENT_MINUTES = 10;
+	private static final long EXTEND_MINUTES = 2;
 
 	private final Map<Integer, Integer> remainingSeats = new ConcurrentHashMap<>();
+	private final Map<Integer, Hold> holds = new ConcurrentHashMap<>();
 
 	// 호출마다 경고를 남기면 로그가 묻히므로, 앱을 켤 때 한 번만 알린다
 	public FakeSeatHoldAdapter() {
@@ -41,6 +44,29 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 		if (!held[0]) {
 			return SeatHoldResult.soldOut();
 		}
-		return SeatHoldResult.held(LocalDateTime.now().plusMinutes(PAYMENT_MINUTES));
+		LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(PAYMENT_MINUTES);
+		holds.put(participationId, new Hold(expiresAt, false));
+		return SeatHoldResult.held(expiresAt);
+	}
+
+	@Override
+	public SeatExtendResult extend(int participationId) {
+		SeatExtendResult[] result = {SeatExtendResult.expired()};
+		holds.computeIfPresent(participationId, (id, hold) -> {
+			if (hold.extended()) {
+				result[0] = SeatExtendResult.alreadyExtended();
+				return hold;
+			}
+			if (!LocalDateTime.now().isBefore(hold.expiresAt())) {
+				return hold;
+			}
+			Hold extended = new Hold(hold.expiresAt().plusMinutes(EXTEND_MINUTES), true);
+			result[0] = SeatExtendResult.extended(extended.expiresAt());
+			return extended;
+		});
+		return result[0];
+	}
+
+	private record Hold(LocalDateTime expiresAt, boolean extended) {
 	}
 }

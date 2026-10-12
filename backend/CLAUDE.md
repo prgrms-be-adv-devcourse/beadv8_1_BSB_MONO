@@ -87,11 +87,14 @@ backend/
 │   └── out/                   StoredFileRepository, storage/(FileStorage, S3FileStorage)
 └── order-service/   com.bukang.order
     ├── in/                    ApiV1ParticipationController, ApiV1CartController, ApiV1OrderController,
+    │                          OrderExpiryScheduler(1분마다 결제 기한 지난 건 정리, test 프로파일 제외),
     │                          OrderExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
-    ├── app/                   ParticipationFacade·ParticipationApplyUseCase, CartFacade·CartUseCase, OrderFacade·OrderCreateUseCase
+    ├── app/                   ParticipationFacade·ParticipationApplyUseCase, CartFacade·CartUseCase,
+    │                          OrderFacade·OrderCreateUseCase·OrderExpiryUseCase·OrderDeadlineExtendUseCase·OrderQueryUseCase
     ├── domain/                Participation(BOOKING_PARTICIPATION), Cart·CartItem(ORDER_CART·_ITEM),
     │                          Order·OrderItem(ORDER_ORDER·_ITEM), 상태 enum, exception/
-    └── out/                   Repository, race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보)
+    └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
+                               race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보)
                                상품 서비스(B)가 없어 Fake*Adapter가 가짜 응답을 준다
 ```
 

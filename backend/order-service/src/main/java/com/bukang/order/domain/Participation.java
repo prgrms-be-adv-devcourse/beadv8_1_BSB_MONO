@@ -36,7 +36,9 @@ import lombok.NoArgsConstructor;
 	},
 	indexes = {
 		// 내 신청 목록, 다음 신청 때 채울 최근 신청 찾기
-		@Index(name = "idx_participation_member", columnList = "member_id, id")
+		@Index(name = "idx_participation_member", columnList = "member_id, id"),
+		// 결제 기한이 지난 결제 대기 신청 찾기 (만료 정리 배치, PRO-42)
+		@Index(name = "idx_participation_due", columnList = "status, payment_due_at")
 	}
 )
 public class Participation extends BaseIdAndTime {
@@ -124,6 +126,15 @@ public class Participation extends BaseIdAndTime {
 		checkPayable();
 		changeStatus(ParticipationStatus.APPLIED);
 		this.paymentDueAt = paymentDueAt;
+	}
+
+	// 결제 기한을 늘렸다 (PG 충전창 진입 때 2분, 한 번). 결제 대기(APPLIED) 신청만 늘린다
+	public void extendPaymentDue(LocalDateTime newPaymentDueAt) {
+		if (status != ParticipationStatus.APPLIED) {
+			throw new ParticipationNotPayableException(
+				"결제 대기 중인 신청만 결제 기한을 늘릴 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+		this.paymentDueAt = newPaymentDueAt;
 	}
 
 	// 남은 자리가 없어 확보하지 못했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다
