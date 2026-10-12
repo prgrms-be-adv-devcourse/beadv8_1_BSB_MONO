@@ -11,7 +11,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # frontend
 
 러닝 대회 참가권·굿즈 마켓플레이스의 프론트엔드. 핵심 차별점은 크루 단체 접수(크루원별 개별 결제).
-기획·정책 문서는 저장소 루트 `docs/`(`../docs/`)에 있다. 최종 인프라는 Nginx(HTTP 처리, 라우팅) → Next.js / Spring Boot 백엔드(AWS EC2 Docker Compose). 인증을 한곳에서 처리해야 할 때 별도 API 게이트웨이를 둘 수 있다.
+기획·정책 문서는 저장소 루트 `docs/`(`../docs/`)에 있다. 최종 인프라는 Nginx(HTTP 처리, 라우팅) → Next.js / 백엔드 API 게이트웨이(Spring Cloud Gateway, 8000) → 서비스별 Spring Boot 앱(AWS EC2 Docker Compose). Nginx 설정과 compose는 `../backend/`(`docker/nginx/default.conf`, `compose.yml`)에 있다.
 
 모노레포의 `frontend/` 폴더다. 명령은 이 폴더에서 실행한다. 백엔드는 `../backend/`.
 
@@ -53,7 +53,7 @@ src/
 ## API
 
 - 코드에서는 항상 상대 경로 `/api/...`로 부른다. 모든 호출은 `shared/api`의 `customFetch`를 지난다.
-  - 브라우저: 로컬·Vercel은 next.config rewrites → `BACKEND_URL`, AWS는 Nginx → 백엔드
+  - 브라우저: 로컬·Vercel은 next.config rewrites → `BACKEND_URL`(게이트웨이, 로컬 8000), AWS는 Nginx → 게이트웨이
   - 서버 컴포넌트: `BACKEND_URL`을 붙여 직접 호출. `API_MOCKING=on`이면 MSW 핸들러에서 바로 응답
 - API 타입·훅은 orval로 생성해 `shared/api/generated/`에 둔다. 생성 파일은 직접 고치지 않는다.
 - 생성된 MSW 목은 `shared/mocks/handlers.ts`에 등록한다. 테스트도 같은 핸들러를 쓴다.
