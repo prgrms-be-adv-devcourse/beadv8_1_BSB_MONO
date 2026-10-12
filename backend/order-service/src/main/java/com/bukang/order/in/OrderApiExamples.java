@@ -124,6 +124,56 @@ final class OrderApiExamples {
 		{ "status": 409, "message": "이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요.", "data": null }
 		""";
 
+	static final String EXTEND_SUCCESS = """
+		{
+			"status": 200,
+			"message": "결제 기한을 2분 늘렸습니다.",
+			"data": {
+				"id": 1,
+				"createDate": "2026-10-12T10:00:00",
+				"orderNo": "OD-20261012-0001",
+				"buyerId": 1,
+				"raceId": 1,
+				"status": "CREATED",
+				"totalAmount": 60000,
+				"paymentDueAt": "2026-10-12T10:12:00",
+				"items": [
+					{
+						"id": 1,
+						"participationId": 1,
+						"raceCourseId": 1,
+						"sellerId": 1,
+						"itemName": "2026 서울 하프 마라톤 10K",
+						"unitPrice": 60000,
+						"quantity": 1,
+						"amount": 60000,
+						"status": "ORDERED"
+					}
+				]
+			}
+		}
+		""";
+
+	static final String ORDER_NOT_OWNER = """
+		{ "status": 403, "message": "본인의 주문만 결제 기한을 늘릴 수 있습니다.", "data": null }
+		""";
+
+	static final String ORDER_NOT_FOUND = """
+		{ "status": 404, "message": "존재하지 않는 주문입니다.", "data": null }
+		""";
+
+	static final String ALREADY_EXTENDED = """
+		{ "status": 409, "message": "결제 기한은 한 번만 늘릴 수 있습니다.", "data": null }
+		""";
+
+	static final String DEADLINE_PASSED = """
+		{ "status": 409, "message": "결제 기한이 지났습니다.", "data": null }
+		""";
+
+	static final String NOT_WAITING_PAYMENT = """
+		{ "status": 409, "message": "결제 대기 중인 주문만 결제 기한을 늘릴 수 있습니다(현재 상태: 기한 만료).", "data": null }
+		""";
+
 	private OrderApiExamples() {
 	}
 }

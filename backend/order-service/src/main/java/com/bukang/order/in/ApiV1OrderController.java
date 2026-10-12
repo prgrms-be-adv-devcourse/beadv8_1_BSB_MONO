@@ -4,6 +4,7 @@ import java.net.URI;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -29,7 +30,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Order", description = "바로 결제 예매(주문 생성·자리 임시 확보) API")
+@Tag(name = "Order", description = "바로 결제 예매(주문 생성·자리 임시 확보), 결제 기한 연장 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/order/orders")
@@ -97,5 +98,43 @@ public class ApiV1OrderController {
 			case SOLD_OUT -> ResponseEntity.status(HttpStatus.CONFLICT)
 				.body(RsData.of(HttpStatus.CONFLICT, "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.", null));
 		};
+	}
+
+	@PostMapping("/{orderId}/deadline-extension")
+	@Operation(summary = "결제 기한 2분 늘리기",
+		description = "PG 충전창에 들어갈 때 프론트가 부른다. 결제 대기(CREATED) 주문의 결제 기한을 2분 늘리고, 주문당 한 번만 된다. "
+			+ "상품 서비스의 자리 기한을 먼저 늘린 뒤 주문·참가 신청의 결제 기한을 함께 바꾼다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "기한 연장",
+			content = @Content(examples = @ExampleObject(value = OrderApiExamples.EXTEND_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "주문 ID·회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "주문 ID·회원 ID 형식 오류", value = OrderApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = OrderApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "다른 회원의 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.ORDER_NOT_OWNER))),
+		@ApiResponse(responseCode = "404", description = "없는 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.ORDER_NOT_FOUND))),
+		@ApiResponse(responseCode = "409", description = "이미 한 번 늘림, 기한 지남, 결제 대기가 아닌 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "이미 한 번 늘림", value = OrderApiExamples.ALREADY_EXTENDED),
+				@ExampleObject(name = "기한 지남", value = OrderApiExamples.DEADLINE_PASSED),
+				@ExampleObject(name = "결제 대기가 아님", value = OrderApiExamples.NOT_WAITING_PAYMENT)
+			}))
+	})
+	public ResponseEntity<RsData<OrderDto>> extendDeadline(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "주문 ID", example = "1")
+		@PathVariable int orderId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "결제 기한을 2분 늘렸습니다.", orderFacade.extendDeadline(orderId, memberId)));
 	}
 }

@@ -1,9 +1,11 @@
 package com.bukang.order.out;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,4 +24,17 @@ public interface ParticipationRepository extends JpaRepository<Participation, In
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select p from Participation p where p.id = :id")
 	Optional<Participation> findByIdForUpdate(@Param("id") int id);
+
+	/**
+	 * 결제 기한이 지난 결제 대기 신청을 미결제 해제(RELEASED)로 끝낸다 (만료 정리 배치, PRO-42)
+	 * 결제와 겹쳐도 한쪽만 반영되도록 "지금도 APPLIED인 행"만 바꾸는 조건부 UPDATE다. 여러 번 돌아도 결과가 같다
+	 * active_flag도 함께 비워 같은 대회에 다시 신청할 수 있게 한다 (Participation.changeStatus와 같은 규칙)
+	 */
+	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	@Query("""
+		update Participation p
+		set p.status = com.bukang.order.domain.ParticipationStatus.RELEASED, p.activeFlag = null, p.releasedAt = :now
+		where p.status = com.bukang.order.domain.ParticipationStatus.APPLIED and p.paymentDueAt <= :now
+		""")
+	int releaseOverdue(@Param("now") LocalDateTime now);
 }
