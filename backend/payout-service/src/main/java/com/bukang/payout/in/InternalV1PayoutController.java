@@ -37,7 +37,8 @@ public class InternalV1PayoutController {
 	@GetMapping("/refund-eligibility")
 	@Operation(summary = "참가권 환불 가능 여부 조회",
 		description = "대회일로 정산 대상일(대회 다음 날)을 구해, 오늘(한국 날짜)이 정산 대상일 전이면 환불 가능으로 돌려준다. "
-			+ "정산 대상일 당일부터는 판매자 승인 환불도 할 수 없다. 주문 서비스가 환불 요청을 받을 때 동기 호출로 부른다.")
+			+ "정산 대상일 당일부터는 사유와 상관없이(대회 취소·일정 변경 포함) 환불할 수 없다. "
+			+ "환불 기한 판단은 주문 서비스가 하고, 환불 요청을 받을 때 이 API를 동기 호출로 부른다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공 (환불 가능 여부는 data.refundable)",
 			content = @Content(examples = {

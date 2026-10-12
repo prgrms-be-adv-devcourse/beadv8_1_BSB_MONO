@@ -82,7 +82,8 @@ include::{snippets}/payout-hold-release-conflict/http-response.adoc[]
 === 참가권 환불 가능 여부 조회
 
 대회일로 정산 대상일(대회 다음 날)을 구해, 오늘(한국 날짜)이 정산 대상일 전이면 환불 가능으로 돌려준다.
-정산 대상일 당일부터는 판매자 승인 환불도 할 수 없다 (예: 대회 9/25 → 9/26부터 환불 불가).
+정산 대상일 당일부터는 사유와 상관없이(대회 취소·일정 변경 포함) 환불할 수 없다 (예: 대회 9/25 → 9/26부터 환불 불가).
+환불 기한(판매자 지정) 판단은 주문 서비스가 하고, 이 API는 그 위의 상한선만 알려 준다.
 주문 서비스가 환불 요청을 받을 때 동기 호출로 부르고, `data.refundable`이 `false`면 환불을 거절한다.
 
 operation::payout-refund-eligibility[snippets='http-request,query-parameters,http-response,response-fields']
