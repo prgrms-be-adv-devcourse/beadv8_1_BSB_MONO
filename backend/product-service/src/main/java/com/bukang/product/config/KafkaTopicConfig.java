@@ -16,7 +16,8 @@ import com.bukang.common.shared.kafka.KafkaTopics;
 public class KafkaTopicConfig {
 	// ProductKafkaConsumer의 PARTITIONS(재시도·DLT 토픽 파티션 수)와 맞춘다
 	// 동시 처리 쓰레드 수(ProductKafkaConsumer.CONCURRENCY)는 이 수까지만 효과가 있다
-	private static final int PARTITIONS = 3;
+	// 지금은 메시지가 적어 1개로 둔다. 늘리면 앱이 뜰 때 기존 토픽의 파티션이 늘어난다
+	private static final int PARTITIONS = 1;
 
 	// 복제 수는 정하지 않아 브로커 기본값을 따른다 (로컬 Redpanda는 1)
 	@Bean
