@@ -9,6 +9,7 @@ import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.cash.event.CashMemberCreatedEvent;
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
 import com.bukang.common.shared.member.event.MemberModifiedEvent;
+import com.bukang.common.shared.member.event.MemberTopics;
 
 import lombok.RequiredArgsConstructor;
 
@@ -18,13 +19,13 @@ public class CashEventListener {
 	private final JsonConverter jsonConverter;
 	private final CashFacade cashFacade;
 
-	@KafkaListener(topics = "queuing.member.joined", groupId = "CashEventListener__handleMemberJoined__1")
+	@KafkaListener(topics = MemberTopics.MEMBER_JOINED, groupId = "CashEventListener__handleMemberJoined__1")
 	public void handleMemberJoined(String message) {
 		MemberJoinedEvent event = jsonConverter.fromJson(message, MemberJoinedEvent.class);
 		cashFacade.syncMember(event.id(), event.createDate(), event.modifyDate(), event.nickname());
 	}
 
-	@KafkaListener(topics = "queuing.member.modified", groupId = "CashEventListener__handleMemberModified__1")
+	@KafkaListener(topics = MemberTopics.MEMBER_MODIFIED, groupId = "CashEventListener__handleMemberModified__1")
 	public void handleMemberModified(String message) {
 		MemberModifiedEvent event = jsonConverter.fromJson(message, MemberModifiedEvent.class);
 		cashFacade.syncMember(event.id(), event.createDate(), event.modifyDate(), event.nickname());
