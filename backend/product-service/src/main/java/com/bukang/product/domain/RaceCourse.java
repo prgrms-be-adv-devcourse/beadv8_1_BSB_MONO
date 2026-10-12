@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import org.hibernate.annotations.ColumnDefault;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
 import com.bukang.product.dto.RaceCourseSaveRequestDto;
 
 import jakarta.persistence.AttributeOverride;
@@ -118,6 +119,32 @@ public class RaceCourse extends BaseIdAndTime {
 	public RaceCourse(RaceCourseSaveRequestDto request) {
 		this.status = CourseStatus.OPEN;
 		apply(request);
+	}
+
+	public void update(RaceCourseSaveRequestDto request, boolean saleStarted) {
+		// 판매 시작 뒤에는 구매자에게 유리한 변경만 된다 (ERD price 주석). 키트 금액은 참가비에 포함된 금액이다
+		if (saleStarted && request.getPrice() > price) {
+			throw new RaceChangeNotAllowedException(withName("판매가 시작된 종목은 참가비를 올릴 수 없습니다."));
+		}
+		// 정원은 확보·판매된 자리보다 줄이지 못한다. 몫별로 남은 자리 식이 0 이상이어야 한다 (크루 예매 ERD v5)
+		//   개인: individualQuota + movedQuota >= individualReserved + individualSold
+		//   크루: crewQuota − movedQuota >= crewReserved + crewSold
+		if (request.getIndividualQuota() + movedQuota < individualReserved + individualSold
+			|| request.getCrewQuota() - movedQuota < crewReserved + crewSold) {
+			throw new RaceChangeNotAllowedException(withName("정원을 확보·판매된 자리 수보다 줄일 수 없습니다."));
+		}
+		apply(request);
+	}
+
+	// 확보·판매된 자리가 있으면 구매자가 있으므로 종목을 뺄 수 없다
+	public void checkRemovable() {
+		if (crewReserved + crewSold + individualReserved + individualSold > 0) {
+			throw new RaceChangeNotAllowedException(withName("확보·판매된 자리가 있는 종목은 뺄 수 없습니다."));
+		}
+	}
+
+	private String withName(String message) {
+		return "%s (종목: %s)".formatted(message, name);
 	}
 
 	// 판매자가 입력하는 칸을 요청 값으로 채운다. 확보·판매 수와 상태는 정원 변경 API(⑧-3)가 바꾼다

@@ -9,11 +9,13 @@ import static lombok.AccessLevel.PROTECTED;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.hibernate.annotations.ColumnDefault;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
 import com.bukang.product.dto.RaceSaveRequestDto;
 
 import jakarta.persistence.AttributeOverride;
@@ -113,6 +115,14 @@ public class Race extends BaseIdAndTime {
 		apply(request);
 	}
 
+	// 판매 시작 뒤에는 환불 기준일을 늦추는 변경만 된다 (구매자에게 유리한 변경만, ERD refund_deadline 주석)
+	public void update(RaceSaveRequestDto request, boolean saleStarted) {
+		if (saleStarted && request.getRefundDeadline().isBefore(refundDeadline)) {
+			throw new RaceChangeNotAllowedException("판매가 시작된 대회는 환불 기준일을 앞당길 수 없습니다.");
+		}
+		apply(request);
+	}
+
 	// 판매자가 입력하는 칸을 요청 값으로 채운다
 	private void apply(RaceSaveRequestDto request) {
 		this.title = request.getTitle();
@@ -143,5 +153,24 @@ public class Race extends BaseIdAndTime {
 	public void addRaceCourse(RaceCourse raceCourse) {
 		courses.add(raceCourse);
 		raceCourse.addRace(this);
+	}
+
+	// 목록에서 빼면 orphanRemoval로 종목 행이 지워진다
+	public void removeRaceCourse(RaceCourse raceCourse) {
+		courses.remove(raceCourse);
+	}
+
+	// 종목 목록을 요청 순서에 맞춘다 (응답의 종목 ID 순서). 순서 컬럼이 없어 DB에는 영향이 없다
+	public void sortCourses(List<RaceCourse> requestOrder) {
+		courses.sort(Comparator.comparingInt(requestOrder::indexOf));
+	}
+
+	public boolean isOwnedBy(ProductSeller seller) {
+		return this.seller.getId() == seller.getId();
+	}
+
+	// 판매자가 판매를 시작했고(작성 중이 아님) 판매 시작 일시가 지났으면, 구매자가 있을 수 있는 대회다
+	public boolean isSaleStarted(LocalDateTime now) {
+		return saleStatus != RaceSaleStatus.DRAFT && !now.isBefore(saleOpenAt);
 	}
 }
