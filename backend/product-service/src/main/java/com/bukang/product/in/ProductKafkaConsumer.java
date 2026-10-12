@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
  * 회원·판매자 이벤트를 받아 복제본(ProductMember, ProductSeller)에 저장한다
  * 메시지는 JSON 문자열로 받아 JsonConverter로 바꾼다.
  * 처리 중 예외가 나면 재시도 토픽으로 보내 간격을 늘려 가며 다시 시도하고, 그래도 실패하면 <토픽>.dlt로 보낸다.
+ * DLT 메시지는 ProductKafkaDltConsumer가 받는다.
  */
 @Component
 @RequiredArgsConstructor
@@ -33,7 +34,11 @@ public class ProductKafkaConsumer {
 	private static final long RETRY_DELAY_MILLIS = 1000L;
 	private static final double RETRY_MULTIPLIER = 2.0;
 	// 마지막까지 실패한 메시지를 보낼 토픽 접미사 (예: product.member.joined.dlt, 기본값은 -dlt)
-	private static final String DLT_TOPIC_SUFFIX = ".dlt";
+	// ProductKafkaDltConsumer가 DLT 토픽 이름을 만들 때 같은 값을 쓴다
+	static final String DLT_TOPIC_SUFFIX = ".dlt";
+	// DLT는 ProductKafkaDltConsumer가 받으므로, @RetryableTopic이 기본으로 띄우는 DLT 리스너는 시작하지 않는다
+	// (켜 두면 같은 DLT 메시지를 두 곳에서 받는다)
+	private static final String AUTO_START_DEFAULT_DLT_HANDLER = "false";
 
 	private final ProductFacade productFacade;
 	private final JsonConverter jsonConverter;
@@ -43,7 +48,8 @@ public class ProductKafkaConsumer {
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
 		numPartitions = PARTITIONS,
-		dltTopicSuffix = DLT_TOPIC_SUFFIX
+		dltTopicSuffix = DLT_TOPIC_SUFFIX,
+		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
 	)
 	public void handleMemberJoined(String payload) {
 		productFacade.syncMember(jsonConverter.fromJson(payload, MemberJoinedEvent.class));
@@ -54,7 +60,8 @@ public class ProductKafkaConsumer {
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
 		numPartitions = PARTITIONS,
-		dltTopicSuffix = DLT_TOPIC_SUFFIX
+		dltTopicSuffix = DLT_TOPIC_SUFFIX,
+		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
 	)
 	public void handleSellerChanged(String payload) {
 		productFacade.syncSeller(jsonConverter.fromJson(payload, SellerChangedEvent.class));
