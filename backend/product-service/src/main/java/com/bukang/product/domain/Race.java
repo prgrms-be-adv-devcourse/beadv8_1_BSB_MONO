@@ -104,4 +104,9 @@ public class Race extends BaseIdAndTime {
 
 	@OneToMany(mappedBy = "race", cascade = {PERSIST, REMOVE}, orphanRemoval = true)
 	private List<RaceCourse> courses = new ArrayList<>();
+
+	public void addRaceCourse(RaceCourse raceCourse) {
+		courses.add(raceCourse);
+		raceCourse.addRace(this);
+	}
 }

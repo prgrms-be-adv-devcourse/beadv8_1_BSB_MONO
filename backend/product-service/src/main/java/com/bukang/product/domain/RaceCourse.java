@@ -113,4 +113,8 @@ public class RaceCourse extends BaseIdAndTime {
 	@ColumnDefault("'OPEN'")
 	@Column(name = "status", nullable = false, columnDefinition = "varchar(20)")
 	private CourseStatus status;
+
+	public void addRace(Race race) {
+		this.race = race;
+	}
 }
