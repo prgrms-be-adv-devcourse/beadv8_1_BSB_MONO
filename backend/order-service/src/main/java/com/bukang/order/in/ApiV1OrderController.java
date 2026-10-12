@@ -1,14 +1,18 @@
 package com.bukang.order.in;
 
 import java.net.URI;
+import java.time.LocalDate;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
@@ -16,6 +20,7 @@ import com.bukang.order.app.OrderCreateResult;
 import com.bukang.order.app.OrderFacade;
 import com.bukang.order.dto.OrderCreateRequestDto;
 import com.bukang.order.dto.OrderDto;
+import com.bukang.order.dto.OrderPageDto;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,16 +31,19 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Order", description = "바로 결제 예매(주문 생성·자리 임시 확보), 결제 기한 연장 API")
+@Tag(name = "Order", description = "바로 결제 예매(주문 생성·자리 임시 확보), 결제 기한 연장, 주문 내역 조회 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/order/orders")
 public class ApiV1OrderController {
 	private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+	private static final int MAX_PAGE_SIZE = 100;
 
 	private final OrderFacade orderFacade;
 
@@ -136,5 +144,70 @@ public class ApiV1OrderController {
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "결제 기한을 2분 늘렸습니다.", orderFacade.extendDeadline(orderId, memberId)));
+	}
+
+	@GetMapping
+	@Operation(summary = "내 주문 목록",
+		description = "내 주문을 최신순으로 돌려준다. 조회 기간(from·to, 주문 일자 기준)은 각각 생략할 수 있고, to 날짜의 주문까지 포함한다. "
+			+ "상품은 대표 상품명과 개수만 담는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공 (주문이 없으면 빈 목록)",
+			content = @Content(examples = @ExampleObject(value = OrderApiExamples.LIST_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "조회 기간·페이지·회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "시작일이 종료일보다 늦음", value = OrderApiExamples.INVALID_PERIOD),
+				@ExampleObject(name = "페이지 크기 초과", value = OrderApiExamples.INVALID_PAGE),
+				@ExampleObject(name = "날짜·숫자 형식 오류", value = OrderApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = OrderApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED)))
+	})
+	public ResponseEntity<RsData<OrderPageDto>> findMine(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "조회 시작일 (주문 일자, 생략 가능)", example = "2026-10-01")
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+		@Parameter(description = "조회 종료일 (이날 주문까지 포함, 생략 가능)", example = "2026-10-31")
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+		@Parameter(description = "페이지 번호 (0부터)", example = "0")
+		@RequestParam(defaultValue = "0") @Min(value = 0, message = "페이지 번호는 0 이상이어야 합니다.") int page,
+		@Parameter(description = "페이지 크기 (1~100)", example = "20")
+		@RequestParam(defaultValue = "20") @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다.")
+		@Max(value = MAX_PAGE_SIZE, message = "한 번에 100개까지 조회할 수 있습니다.") int size
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "주문 내역을 조회했습니다.", orderFacade.findMine(memberId, from, to, page, size)));
+	}
+
+	@GetMapping("/{orderId}")
+	@Operation(summary = "주문 상세", description = "본인 주문의 상품·상태·금액·결제 기한을 돌려준다. 상품명·단가는 주문 당시 값이다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공",
+			content = @Content(examples = @ExampleObject(value = OrderApiExamples.FIND_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "주문 ID·회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "주문 ID·회원 ID 형식 오류", value = OrderApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = OrderApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "다른 회원의 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.VIEW_NOT_OWNER))),
+		@ApiResponse(responseCode = "404", description = "없는 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.ORDER_NOT_FOUND)))
+	})
+	public ResponseEntity<RsData<OrderDto>> findById(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "주문 ID", example = "1")
+		@PathVariable int orderId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "주문을 조회했습니다.", orderFacade.findById(orderId, memberId)));
 	}
 }

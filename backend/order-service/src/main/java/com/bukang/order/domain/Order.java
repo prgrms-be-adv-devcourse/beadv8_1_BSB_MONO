@@ -9,9 +9,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.annotations.BatchSize;
+
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.dto.OrderDto;
+import com.bukang.order.dto.OrderSummaryDto;
 import com.bukang.order.out.race.RaceCourseInfo;
 
 import jakarta.persistence.Column;
@@ -81,6 +84,8 @@ public class Order extends BaseIdAndTime {
 	@Column(name = "deadline_extended_at")
 	private LocalDateTime deadlineExtendedAt;
 
+	// 주문 목록(PRO-43)에서 주문마다 상품을 따로 읽지 않도록 여러 주문의 상품을 한 번에 읽는다
+	@BatchSize(size = 100)
 	@OneToMany(mappedBy = "order", cascade = ALL)
 	private List<OrderItem> items = new ArrayList<>();
 
@@ -149,8 +154,15 @@ public class Order extends BaseIdAndTime {
 			raceId,
 			status,
 			totalAmount,
+			canceledAmount,
 			paymentDueAt,
+			paidAt,
 			items.stream().map(OrderItem::toDto).toList()
 		);
+	}
+
+	public OrderSummaryDto toSummaryDto() {
+		return new OrderSummaryDto(getId(), getCreateDate(), orderNo, status, totalAmount, paymentDueAt,
+			items.getFirst().getItemName(), items.size());
 	}
 }
