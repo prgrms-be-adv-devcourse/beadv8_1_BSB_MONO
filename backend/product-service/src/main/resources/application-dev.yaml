@@ -11,16 +11,11 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
-        show_sql: false
         format_sql: true
         highlight_sql: true
-        default_batch_fetch_size: 100
-
-    open-in-view: false
 
   kafka:
-    bootstrap-servers:
-      - localhost:9092
+    bootstrap-servers: localhost:9092
 
   elasticsearch:
     uris: http://localhost:9200

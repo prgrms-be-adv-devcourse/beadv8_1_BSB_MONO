@@ -8,16 +8,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    properties:
-      hibernate:
-        show_sql: false
-        format_sql: false
-        default_batch_fetch_size: 100
-    open-in-view: false
 
   kafka:
-    bootstrap-servers:
-      - ${KAFKA_BOOTSTRAP_SERVERS}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
 
   elasticsearch:
     uris: ${ELASTICSEARCH_URIS}
@@ -33,5 +26,4 @@ springdoc:
 
 logging:
   level:
-    com:
-      bukang: info
+    com.bukang: info

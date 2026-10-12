@@ -12,10 +12,7 @@ spring:
       ddl-auto: create-drop
     properties:
       hibernate:
-        show_sql: false
         format_sql: true
-        default_batch_fetch_size: 100
-    open-in-view: false
 
   kafka:
     bootstrap-servers: localhost:9092
