@@ -20,8 +20,8 @@ export type DataTableProps<Row> = {
   rowKey: (row: Row) => string
   /** 표 이름 (화면 낭독기용) */
   label: string
-  /** 고른 줄 (옅은 브랜드 바탕) */
-  selectedKey?: string
+  /** 고른 줄 (옅은 브랜드 바탕). 여러 줄을 고를 땐 배열 */
+  selected?: string | string[]
   /** 넘기면 줄을 눌러 고를 수 있다 */
   onRowClick?: (row: Row) => void
   className?: string
@@ -33,7 +33,7 @@ export function DataTable<Row>({
   rows,
   rowKey,
   label,
-  selectedKey,
+  selected: selectedKeys,
   onRowClick,
   className,
 }: DataTableProps<Row>) {
@@ -59,7 +59,9 @@ export function DataTable<Row>({
         <tbody>
           {rows.map((row) => {
             const key = rowKey(row)
-            const selected = key === selectedKey
+            const selected = Array.isArray(selectedKeys)
+              ? selectedKeys.includes(key)
+              : key === selectedKeys
             return (
               <tr
                 key={key}
