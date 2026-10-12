@@ -146,3 +146,52 @@ export const RACE_DETAIL: RaceDetail = {
     mailOrderNo: '크루런은 통신판매중개자이며 거래 당사자가 아니에요.',
   },
 }
+
+export type RaceListItem = {
+  id: string
+  title: string
+  image: string
+  badge: { label: string; tone: 'brand' | 'warning' }
+  meta: string
+  price: string
+  remaining: string
+}
+
+export const RACE_LIST: RaceListItem[] = [
+  {
+    id: 'cookierun',
+    title: '2026 용감한 쿠키RUN in 서울',
+    image: '/mock/races/cookierun.png',
+    badge: { label: '접수중', tone: 'brand' },
+    meta: '11/1 (일) · 서울숲 일대',
+    price: '₩35,000~',
+    remaining: '590자리 남음',
+  },
+  {
+    id: 'jtbc',
+    title: '2026 JTBC 서울마라톤',
+    image: '/mock/races/jtbc.png',
+    badge: { label: '마감 임박', tone: 'warning' },
+    meta: '11/2 (일) · 광화문 → 잠실',
+    price: '₩80,000~',
+    remaining: '86자리 남음',
+  },
+  {
+    id: 'youth10k',
+    title: '2026 긍정 하프 마라톤 YOUTH 10K',
+    image: '/mock/races/youth10k.png',
+    badge: { label: '접수중', tone: 'brand' },
+    meta: '10/25 (일) · 청년 부문',
+    price: '₩30,000~',
+    remaining: '420자리 남음',
+  },
+  {
+    id: 'daligi',
+    title: 'POSITIVE DALIGI',
+    image: '/mock/races/daligi.png',
+    badge: { label: '접수중', tone: 'brand' },
+    meta: '11/8 (일) · 굿러너 하우스 1F',
+    price: '₩15,000~',
+    remaining: '40자리 남음',
+  },
+]

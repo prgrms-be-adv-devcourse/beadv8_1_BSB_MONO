@@ -3,6 +3,8 @@ export {
   OPEN_RACES,
   RACE_BANNERS,
   RACE_DETAIL,
+  RACE_LIST,
+  type RaceListItem,
   type RaceDetail,
   type RaceOption,
   type RaceBanner,

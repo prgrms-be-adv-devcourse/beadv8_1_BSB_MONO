@@ -1,4 +1,7 @@
-// TODO(screen): 시안 화면으로 바꾼다
-export default function Page() {
-  return null
+import { NotificationsPage } from '@/views/notifications'
+
+// ?preview=empty 로 알림 없음 화면을 볼 수 있다
+export default async function Page({ searchParams }: PageProps<'/notifications'>) {
+  const { preview } = await searchParams
+  return <NotificationsPage empty={preview === 'empty'} />
 }

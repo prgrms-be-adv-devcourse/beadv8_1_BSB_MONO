@@ -3,12 +3,23 @@ import Link from 'next/link'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
+import { OfflineBody } from '@/widgets/status-screens'
 import { CLOSING_SOON_RACES, OPEN_RACES, RACE_BANNERS, RaceCard } from '@/entities/race'
 import { cn } from '@/shared/lib'
-import { buttonClassName, Carousel, CarouselSlide, FOCUS_RING } from '@/shared/ui'
+import { buttonClassName, Carousel, CarouselSlide, FOCUS_RING, Skeleton } from '@/shared/ui'
 
 // 피그마 V2 · M01 홈: ① 배너 → ② 곧 마감(가로 넘김) → ③ 지금 접수 중(2열, 4개만)
-export function HomePage() {
+// (+ 홈 로딩, 공통 연결 끊김)
+export function HomePage({ state }: { state?: 'loading' | 'offline' }) {
+  if (state) {
+    return (
+      <>
+        <AppHeader />
+        {state === 'loading' ? <HomeSkeleton /> : <OfflineBody />}
+        <BottomNav />
+      </>
+    )
+  }
   return (
     <>
       <AppHeader />
@@ -73,5 +84,35 @@ function SectionHead({ title }: { title: string }) {
         전체 보기
       </Link>
     </div>
+  )
+}
+
+// 피그마 V2 · M01 홈 · 로딩: 배너 · 가로 카드 2장 · 2열 카드 4장 자리
+function HomeSkeleton() {
+  return (
+    <main role="status" aria-label="불러오는 중" className="flex flex-1 flex-col">
+      <div className="flex gap-2.5 overflow-hidden pt-4 pb-2 pl-4">
+        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-[20px]" />
+        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-[20px]" />
+      </div>
+      {[2, 4].map((count) => (
+        <div key={count} className="flex flex-col gap-4 px-4 pt-8 pb-2">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="w-12" />
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6">
+            {Array.from({ length: count }, (_, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <Skeleton shape="rect" className="aspect-square w-full rounded-[12px]" />
+                <Skeleton className="w-11/12" />
+                <Skeleton className="w-2/3" />
+                <Skeleton className="w-1/2" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </main>
   )
 }
