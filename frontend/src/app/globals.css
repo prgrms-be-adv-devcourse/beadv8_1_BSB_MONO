@@ -425,4 +425,10 @@
     color: var(--color-text-primary);
     font-family: var(--font-sans);
   }
+
+  /* Tailwind v4는 버튼 커서를 default로 바꿔서, 눌리는 요소에 손가락 커서를 되돌린다. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
 }
