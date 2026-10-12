@@ -4,8 +4,8 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.product.domain.ProductSeller;
-import com.bukang.product.domain.SellerStatus;
 
 public interface ProductSellerRepository extends JpaRepository<ProductSeller, Integer> {
 	// 회원의 승인된 판매자 (idx_product_seller_member 인덱스). memberId는 member.id로 풀린다

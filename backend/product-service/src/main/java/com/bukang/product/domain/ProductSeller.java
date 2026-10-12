@@ -7,6 +7,8 @@ import static lombok.AccessLevel.PROTECTED;
 import java.time.LocalDateTime;
 
 import com.bukang.common.global.jpa.entity.BaseEntity;
+import com.bukang.common.shared.seller.domain.SellerStatus;
+import com.bukang.common.shared.seller.domain.SellerType;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -91,12 +93,6 @@ public class ProductSeller extends BaseEntity {
 
 	public boolean isApproved() {
 		return status == SellerStatus.APPROVED;
-	}
-
-	// 원본 판매자의 심사 결과(승인·반려)를 반영한다
-	public void review(SellerStatus reviewedStatus, LocalDateTime reviewedTime) {
-		this.status = reviewedStatus;
-		this.reviewedAt = reviewedTime;
 	}
 
 	@Override

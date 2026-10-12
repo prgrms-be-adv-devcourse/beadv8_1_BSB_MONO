@@ -1,4 +1,4 @@
-package com.bukang.product.domain;
+package com.bukang.common.shared.seller.domain;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
