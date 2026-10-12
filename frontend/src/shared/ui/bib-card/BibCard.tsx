@@ -38,7 +38,7 @@ const BAND = {
   },
 }
 
-// 배번표 모양 카드. 색 띠는 띠와 본문 사이에 절취선 구멍 20개가 있다.
+// 배번표 모양 카드. 위 띠(색 또는 대회 이미지) + 아래 본문.
 export function BibCard({
   type = 'ticket',
   eyebrow,
@@ -85,14 +85,6 @@ export function BibCard({
           {type === 'crew' && unitNode}
         </p>
       </div>
-      {/* 이미지 띠(Image=On)에는 절취선이 없다 */}
-      {!image && (
-        <div aria-hidden className="flex h-3 items-center justify-between px-3">
-          {Array.from({ length: 20 }, (_, i) => (
-            <span key={i} className="size-1.25 rounded-full bg-bg-subtle" />
-          ))}
-        </div>
-      )}
       <div className="flex flex-col gap-1.5 px-5 pt-2 pb-5">
         <p className="text-heading-s text-text-primary">{title}</p>
         {progress}

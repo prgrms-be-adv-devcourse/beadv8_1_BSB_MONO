@@ -13,6 +13,8 @@ export type SegmentedProps<T extends string> = {
   label: string
   /** fill: 칸이 너비를 똑같이 나눔(모바일) · hug: 글자만큼(데스크톱 탭) */
   layout?: 'fill' | 'hug'
+  /** 칸 높이 m 40 · l 48 */
+  size?: 'm' | 'l'
   className?: string
 }
 
@@ -23,6 +25,7 @@ export function Segmented<T extends string>({
   onChange,
   label,
   layout = 'fill',
+  size = 'm',
   className,
 }: SegmentedProps<T>) {
   return (
@@ -41,7 +44,8 @@ export function Segmented<T extends string>({
             aria-selected={selected}
             onClick={() => onChange(item.value)}
             className={cn(
-              'flex h-10 min-w-0 items-center justify-center gap-1 truncate rounded-[8px] text-label-l',
+              'flex min-w-0 items-center justify-center gap-1 truncate rounded-[8px] text-label-l',
+              size === 'm' ? 'h-10' : 'h-12',
               layout === 'fill' ? 'flex-1 px-2' : 'px-4',
               selected
                 ? 'bg-bg-surface font-bold text-text-primary shadow-sm'
