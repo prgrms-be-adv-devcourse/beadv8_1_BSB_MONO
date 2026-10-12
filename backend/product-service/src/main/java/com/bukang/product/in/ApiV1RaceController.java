@@ -87,7 +87,8 @@ public class ApiV1RaceController {
 			+ "요청에 없는 기존 종목은 뺀다. 이미지 목록도 통째로 바뀌어, 수정이 커밋된 뒤 file-service에 다시 연결을 요청한다. "
 			+ "판매가 시작된 뒤에는 참가비를 올리거나 환불 기준일을 앞당길 수 없고, 정원을 줄이거나 종목을 뺄 수 없다(정원은 늘리기만). "
 			+ "판매 시작을 누른 뒤에는 이미 지난 판매 일정(크루 예매 시작·마감, 개인 예매 오픈, 접수 마감)을 바꾸거나 "
-			+ "일정을 지난 시각으로 옮길 수 없고, 접수 마감은 늦추기만 할 수 있다.")
+			+ "일정을 지난 시각으로 옮길 수 없고, 접수 마감은 늦추기만 할 수 있다. "
+			+ "판매가 시작된 뒤 대회 일시를 바꾸면 일정 변경 안내 일시를 기록한다(이날부터 7일 동안 전액 환불).")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "수정 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.UPDATE_SUCCESS))),

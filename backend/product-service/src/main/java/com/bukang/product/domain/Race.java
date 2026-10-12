@@ -133,6 +133,13 @@ public class Race extends BaseIdAndTime {
 				throw new RaceChangeNotAllowedException("판매를 시작한 대회는 접수 마감 일시를 앞당길 수 없습니다.");
 			}
 		}
+		// 판매 시작 뒤 대회 일시가 바뀌면(앞당기기·늦추기 모두) 일정 변경 안내 일시를 기록한다
+		// 이날부터 7일 동안은 환불 기준일과 상관없이 전액 환불된다 (ERD schedule_changed_at, 환불 판정은 주문 쪽)
+		// 다시 바꾸면 마지막으로 바꾼 일시로 다시 7일을 센다
+		// 환불 기준일은 앞당길 수 없고 대회 날짜보다 늦을 수 없으므로, 대회일은 환불 기준일보다 앞으로는 당길 수 없다
+		if (saleStarted && !request.getRaceDate().equals(raceDate)) {
+			this.scheduleChangedAt = now;
+		}
 		apply(request);
 	}
 
