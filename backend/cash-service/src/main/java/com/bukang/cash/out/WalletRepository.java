@@ -4,9 +4,8 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.bukang.cash.domain.CashMember;
 import com.bukang.cash.domain.Wallet;
 
 public interface WalletRepository extends JpaRepository<Wallet, Integer> {
-	Optional<Wallet> findByHolder(CashMember holder);
+	Optional<Wallet> findByHolderId(int cashMemberId);
 }
