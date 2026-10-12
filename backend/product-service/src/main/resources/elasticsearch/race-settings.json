@@ -40,14 +40,17 @@
     },
     "analyzer": {
       "race_index_analyzer": {
+        "char_filter": ["html_strip"],
         "tokenizer": "race_nori_tokenizer",
         "filter": ["nori_part_of_speech", "nori_readingform", "lowercase"]
       },
       "race_search_analyzer": {
+        "char_filter": ["html_strip"],
         "tokenizer": "race_nori_discard_tokenizer",
         "filter": ["nori_part_of_speech", "nori_readingform", "lowercase", "race_synonym_filter"]
       },
       "race_autocomplete_analyzer": {
+        "char_filter": ["html_strip"],
         "tokenizer": "race_nori_discard_tokenizer",
         "filter": ["nori_part_of_speech", "nori_readingform", "lowercase"]
       }
