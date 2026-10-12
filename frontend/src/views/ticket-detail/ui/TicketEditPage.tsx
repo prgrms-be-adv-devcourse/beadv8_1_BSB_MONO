@@ -30,7 +30,7 @@ export function TicketEditPage({ ticketId }: { ticketId: string }) {
   return (
     <>
       <AppHeader type="sub" title="참가자 정보 수정" />
-      <main className="flex flex-1 flex-col gap-2 bg-bg-subtle">
+      <main className="flex flex-1 flex-col gap-2 bg-bg-surface">
         <Section>
           <div className="flex flex-col gap-1">
             <p className="text-heading-s">2026 용감한 쿠키RUN in 서울 · 10K</p>

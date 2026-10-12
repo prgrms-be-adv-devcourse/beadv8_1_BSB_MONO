@@ -109,7 +109,7 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
                 <Link
                   href={`/races/${race.id}`}
                   className={cn(
-                    'flex gap-3 rounded-lg bg-bg-surface p-4 pr-12 shadow-sm',
+                    'flex gap-3 rounded-lg bg-bg-surface p-4 pr-12 shadow-sm inset-ring inset-ring-border-default',
                     FOCUS_RING,
                   )}
                 >
@@ -196,7 +196,10 @@ function ListSkeleton() {
   return (
     <div role="status" aria-label="불러오는 중" className="flex flex-col gap-3">
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="flex gap-3 rounded-lg bg-bg-surface p-4 shadow-sm">
+        <div
+          key={i}
+          className="flex gap-3 rounded-lg bg-bg-surface p-4 shadow-sm inset-ring inset-ring-border-default"
+        >
           <Skeleton shape="rect" className="size-20 shrink-0" />
           <div className="flex flex-1 flex-col gap-3 pt-1">
             <Skeleton shape="rect" className="h-4 w-12" />

@@ -32,7 +32,7 @@ export function WithdrawPage() {
           <h2 className="text-heading-l">탈퇴하기 전에 남은 일이 있어요</h2>
           <p className="text-body-s text-text-secondary">아래 2가지를 마치면 탈퇴할 수 있어요.</p>
         </div>
-        <section className="flex flex-col rounded-lg bg-bg-surface px-5 py-2 shadow-sm">
+        <section className="flex flex-col rounded-lg bg-bg-surface px-5 py-2 shadow-sm inset-ring inset-ring-border-default">
           <div className="flex gap-3 border-b border-border-default py-4">
             <Badge tone="info">안내</Badge>
             <div className="flex flex-col items-start gap-1">

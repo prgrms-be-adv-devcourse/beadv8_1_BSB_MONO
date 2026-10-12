@@ -51,7 +51,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
     <>
       <AppHeader type="sub" title="가입하기" />
       {agreed && (
-        <div className="bg-bg-default px-4 pt-3 pb-1">
+        <div className="bg-bg-surface px-4 pt-3 pb-1">
           <Stepper steps={STEPS} current={1} />
         </div>
       )}
@@ -159,7 +159,7 @@ export function SignupProfilePage() {
   return (
     <>
       <AppHeader type="sub" title="가입하기" />
-      <div className="bg-bg-default px-4 pt-3 pb-1">
+      <div className="bg-bg-surface px-4 pt-3 pb-1">
         <Stepper steps={STEPS} current={2} />
       </div>
       <CenterBody center={false}>

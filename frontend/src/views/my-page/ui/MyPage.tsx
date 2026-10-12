@@ -54,7 +54,7 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
         </MenuCard>
 
         <h2 className="pt-2 text-label-strong">알림 설정</h2>
-        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface px-4 py-4 shadow-sm">
+        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface px-4 py-4 shadow-sm inset-ring inset-ring-border-default">
           <SwitchRow
             label="마케팅 정보 받기"
             description="2025.3.2 동의 · 2년마다 다시 여쭤봐요"
@@ -100,7 +100,7 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
 
 function MenuCard({ children }: { children: ReactNode }) {
   return (
-    <section className="flex flex-col rounded-lg bg-bg-surface px-4 py-2 shadow-sm">
+    <section className="flex flex-col rounded-lg bg-bg-surface px-4 py-2 shadow-sm inset-ring inset-ring-border-default">
       {children}
     </section>
   )

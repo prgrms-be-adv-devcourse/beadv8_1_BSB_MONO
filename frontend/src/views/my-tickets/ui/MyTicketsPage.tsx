@@ -146,7 +146,10 @@ function TicketSkeletons() {
   return (
     <div role="status" aria-label="불러오는 중" className="flex flex-col gap-3">
       {[0, 1].map((i) => (
-        <div key={i} className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-md">
+        <div
+          key={i}
+          className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-md inset-ring inset-ring-border-default"
+        >
           <div className="flex justify-between">
             <Skeleton className="w-24" />
             <Skeleton shape="rect" className="h-4 w-16 rounded-full" />

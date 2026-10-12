@@ -26,7 +26,7 @@ export function DepositRefundPage() {
     <>
       <AppHeader type="sub" title="예치금 돌려받기" />
       <main className="flex flex-1 flex-col gap-4 px-4 py-6">
-        <section className="flex flex-col gap-1 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-1 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <p className="text-label-m text-text-secondary">돌려받을 금액</p>
           <p className="font-display text-display-l">₩5,000</p>
           <p className="text-body-s text-text-secondary">
@@ -35,7 +35,7 @@ export function DepositRefundPage() {
             관리자가 확인한 뒤 보내요.
           </p>
         </section>
-        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <h2 className="text-heading-s">환급 계좌</h2>
           <Select label="은행" items={BANKS} defaultValue="국민은행" />
           <TextField label="계좌번호" inputMode="numeric" defaultValue="123456-01-234567" />
@@ -64,14 +64,14 @@ export function DepositRefundDonePage() {
           <h2 className="text-heading-l">돌려받기를 신청했어요</h2>
           <p className="text-body-m text-text-secondary">관리자가 확인한 뒤 아래 계좌로 보내요.</p>
         </div>
-        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <h3 className="text-heading-s">진행 단계</h3>
           <Stepper steps={['신청', '처리 중', '환급 완료']} current={1} />
           <p className="text-caption text-text-tertiary">
             관리자가 보내면 &apos;환급 완료&apos;로 바뀌고 알림이 가요.
           </p>
         </section>
-        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <KeyValue label="신청 금액" value="₩5,000" />
           <KeyValue label="받을 계좌" value="국민은행 123456-**-***567" />
           <KeyValue label="예금주" value="김러너" />

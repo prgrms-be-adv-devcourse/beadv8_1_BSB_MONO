@@ -26,7 +26,7 @@ export function CheckoutCompletePage() {
           title="김러너 · 10K"
           meta="11/1 (일) 08:00 · 서울숲 일대"
         />
-        <div className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <div className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <KeyValue label="주문번호" value="R-20261005-0012" />
           <KeyValue label="참가자" value="김러너" />
           <KeyValue label="결제" value="₩45,000 (예치금)" />

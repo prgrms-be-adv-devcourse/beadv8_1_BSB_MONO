@@ -21,7 +21,7 @@ export function RaceChangeNoticePage({ ticketId }: { ticketId: string }) {
           </p>
         </div>
 
-        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <div className="flex items-center gap-4">
             <div className="flex flex-1 flex-col gap-1">
               <span className="text-caption text-text-secondary">이전</span>
@@ -40,7 +40,7 @@ export function RaceChangeNoticePage({ ticketId }: { ticketId: string }) {
           <KeyValue label="장소" value="의암호 일대 (그대로)" />
         </section>
 
-        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <p className="text-label-m">전액 환불받을 수 있는 기간</p>
           <p className="flex items-baseline gap-2">
             <span className="font-display text-display-l">6</span>
@@ -52,7 +52,7 @@ export function RaceChangeNoticePage({ ticketId }: { ticketId: string }) {
           </p>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <h3 className="text-heading-s">내 참가권</h3>
           <KeyValue label="종목" value="10K" />
           <KeyValue label="참가자" value="김러너" />

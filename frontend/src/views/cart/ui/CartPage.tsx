@@ -47,7 +47,7 @@ export function CartPage({ empty = false }: { empty?: boolean }) {
           title="담기만 해서는 자리가 잡히지 않아요"
           description="결제할 때 가격 · 정원 · 기한을 다시 확인해요."
         />
-        <div className="flex gap-4 rounded-lg bg-bg-surface px-5 py-4 shadow-sm">
+        <div className="flex gap-4 rounded-lg bg-bg-surface px-5 py-4 shadow-sm inset-ring inset-ring-border-default">
           <Image
             src={race.images[0]}
             alt=""

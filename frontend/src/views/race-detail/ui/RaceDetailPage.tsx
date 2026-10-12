@@ -77,8 +77,8 @@ export function RaceDetailPage({
           </IconButton>
         }
       />
-      <main className="flex flex-1 flex-col gap-2 bg-bg-subtle">
-        <div className="bg-bg-default">
+      <main className="flex flex-1 flex-col gap-2 bg-bg-surface">
+        <div className="bg-bg-surface">
           <div className="relative h-84 overflow-hidden">
             <Image
               src={race.images[0]}
@@ -118,14 +118,31 @@ export function RaceDetailPage({
           </div>
 
           <div className="flex gap-2 px-4 pb-5">
-            <StatTile size="s" label="접수 마감" value={race.dDay} />
-            <StatTile size="s" label="남은 자리" value={formatNumber(race.remaining)} unit="자리" />
-            <StatTile size="s" label="정원" value={formatNumber(race.capacity)} unit="명" />
+            <StatTile
+              size="s"
+              className="inset-ring inset-ring-border-default"
+              label="접수 마감"
+              value={race.dDay}
+            />
+            <StatTile
+              size="s"
+              className="inset-ring inset-ring-border-default"
+              label="남은 자리"
+              value={formatNumber(race.remaining)}
+              unit="자리"
+            />
+            <StatTile
+              size="s"
+              className="inset-ring inset-ring-border-default"
+              label="정원"
+              value={formatNumber(race.capacity)}
+              unit="명"
+            />
           </div>
         </div>
 
         {alreadyApplied && (
-          <div className="bg-bg-default px-4 py-5">
+          <div className="bg-bg-surface px-4 py-5">
             <Alert
               title="이 대회에 이미 신청했어요"
               description="한 사람은 한 대회에 1건만 가질 수 있어요. 내 참가 대회에서 확인해 주세요."
@@ -133,7 +150,7 @@ export function RaceDetailPage({
           </div>
         )}
 
-        <div className="sticky top-(--layout-header-height) z-[5] bg-bg-subtle">
+        <div className="sticky top-(--layout-header-height) z-[5] bg-bg-surface">
           <Segmented label="바로 가기" items={[...ANCHORS]} value={anchor} onChange={jumpTo} />
         </div>
 
@@ -216,7 +233,7 @@ export function RaceDetailPage({
           </div>
         </Section>
 
-        <section className="flex flex-col gap-2 bg-bg-default px-4 py-6">
+        <section className="flex flex-col gap-2 bg-bg-surface px-4 py-6">
           <p className="text-label-m">{race.seller.name}</p>
           <p className="text-caption text-text-tertiary">{race.seller.businessNo}</p>
           <p className="text-caption text-text-tertiary">{race.seller.mailOrderNo}</p>
@@ -264,7 +281,7 @@ function OptionCard({
         'flex h-27 items-center gap-4 rounded-lg p-4 text-left',
         selected
           ? 'bg-bg-brand-subtle inset-ring-2 inset-ring-border-brand'
-          : 'bg-bg-default inset-ring inset-ring-border-default',
+          : 'bg-bg-surface inset-ring inset-ring-border-default',
         FOCUS_RING,
       )}
     >

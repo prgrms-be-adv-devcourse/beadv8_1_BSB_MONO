@@ -43,8 +43,8 @@ export function RaceApplyPage({ race, optionId }: { race: RaceDetail; optionId?:
   return (
     <>
       <AppHeader type="sub" title="참가 신청" />
-      <main className="flex flex-1 flex-col gap-2 bg-bg-subtle">
-        <div className="bg-bg-default px-4 py-5">
+      <main className="flex flex-1 flex-col gap-2 bg-bg-surface">
+        <div className="bg-bg-surface px-4 py-5">
           <Stepper steps={['종목 선택', '참가자 정보', '결제']} current={1} />
         </div>
 
@@ -98,7 +98,7 @@ export function RaceApplyPage({ race, optionId }: { race: RaceDetail; optionId?:
         </Section>
 
         <Section>
-          <div className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm">
+          <div className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
             <Checkbox
               checked={agreed}
               onCheckedChange={setAgreed}

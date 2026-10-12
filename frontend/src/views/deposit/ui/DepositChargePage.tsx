@@ -24,7 +24,7 @@ export function DepositChargePage() {
           title="결제에 ₩40,000이 부족해요"
           description="부족한 만큼 충전하면 바로 결제로 돌아가요. 1만 원보다 적게 모자라면 1만 원을 충전해요."
         />
-        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <label htmlFor="charge-amount" className="text-label-m">
             충전할 금액
           </label>
@@ -59,7 +59,7 @@ export function DepositChargePage() {
             </div>
           </div>
         </section>
-        <section className="flex flex-col gap-2 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-2 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <KeyValue label="충전 방법" value="토스페이먼츠 (카드 · 계좌이체)" />
           <p className="text-caption text-text-tertiary">
             쓰지 않은 예치금은 언제든 전부 돌려받을 수 있어요.

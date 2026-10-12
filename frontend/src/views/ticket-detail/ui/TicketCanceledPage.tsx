@@ -13,7 +13,7 @@ export function TicketCanceledPage({ ticketId }: { ticketId: string }) {
           <h2 className="text-heading-l">참가를 취소했어요</h2>
           <p className="text-body-m text-text-secondary">2026 용감한 쿠키RUN in 서울 · 10K</p>
         </div>
-        <div className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <div className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <KeyValue label="주문번호" value={ticketId} />
           <KeyValue label="돌려받은 금액" value="₩45,000 (예치금)" />
           <KeyValue label="지금 예치금" value="₩50,000" />

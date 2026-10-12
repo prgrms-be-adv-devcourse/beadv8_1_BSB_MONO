@@ -39,7 +39,7 @@ export function TicketDetailPage({
           meta={`주문번호 ${ticket.id} · 11/1 (일) 08:00`}
         />
 
-        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <div className="flex items-center justify-between">
             <h2 className="text-[18px] leading-6.5 font-bold tracking-[-0.015em]">참가자 정보</h2>
             <Link href={`/tickets/${ticket.id}/edit`} className={LINK}>
@@ -56,7 +56,7 @@ export function TicketDetailPage({
           </div>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <h2 className="text-[18px] leading-6.5 font-bold tracking-[-0.015em]">환불 기준</h2>
           <div className="flex flex-col gap-2">
             <KeyValue label="~ 10/31 (토) 23:59 (지금)" value="전액 환불" />

@@ -43,7 +43,7 @@ export function DepositPage({ refunding = false }: { refunding?: boolean }) {
     <>
       <AppHeader type="sub" title="예치금" />
       <main className="flex flex-1 flex-col gap-6 px-4 py-6">
-        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm">
+        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <div className="flex flex-col gap-1">
             <p className="text-label-m text-text-secondary">보유 예치금</p>
             <p className="font-display text-display-m">{refunding ? '₩0' : '₩5,000'}</p>
