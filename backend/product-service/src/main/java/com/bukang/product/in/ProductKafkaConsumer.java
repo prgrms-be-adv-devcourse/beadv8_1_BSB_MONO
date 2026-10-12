@@ -47,6 +47,9 @@ public class ProductKafkaConsumer {
 	@RetryableTopic(
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
+		// 깨진 JSON, 모르는 Enum 값은 다시 해도 실패하므로 재시도 없이 바로 DLT로 보낸다
+		// (JsonConverter가 파싱 실패를 IllegalArgumentException으로 바꾼다)
+		exclude = IllegalArgumentException.class,
 		numPartitions = PARTITIONS,
 		dltTopicSuffix = DLT_TOPIC_SUFFIX,
 		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
@@ -59,6 +62,9 @@ public class ProductKafkaConsumer {
 	@RetryableTopic(
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
+		// 깨진 JSON, 모르는 Enum 값은 다시 해도 실패하므로 재시도 없이 바로 DLT로 보낸다
+		// (JsonConverter가 파싱 실패를 IllegalArgumentException으로 바꾼다)
+		exclude = IllegalArgumentException.class,
 		numPartitions = PARTITIONS,
 		dltTopicSuffix = DLT_TOPIC_SUFFIX,
 		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
