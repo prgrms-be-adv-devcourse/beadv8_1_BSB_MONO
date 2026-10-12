@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { cn } from '@/shared/lib'
 import {
   Alert,
   BottomCta,
@@ -13,7 +12,6 @@ import {
   buttonClassName,
   Checkbox,
   EmptyState,
-  Icon,
   KeyValue,
   Radio,
   RadioGroup,
@@ -64,8 +62,8 @@ const HOLD_SECONDS = 10 * 60
 // TODO(api): 주문 생성·예치금 계산·토스페이먼츠 충전을 붙인다. 금액은 시안 예시 값.
 export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
   const router = useRouter()
-  const [agreed, setAgreed] = useState(true)
-  const [refundOpen, setRefundOpen] = useState(false)
+  // 필수 동의는 사용자가 직접 체크한다. 연결 끊김은 이미 동의하고 결제를 누른 뒤라 체크된 채로 둔다.
+  const [agreed, setAgreed] = useState(state === 'offline')
   const remaining = useCountdown(state === 'offline' ? 310 : 522)
 
   if (state === 'timeout' || state === 'soldout' || state === 'failed') {
@@ -141,26 +139,13 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
           </fieldset>
 
           <div className="flex flex-col gap-3">
-            <div className="rounded-[12px] inset-ring inset-ring-border-default">
-              <button
-                type="button"
-                aria-expanded={refundOpen}
-                onClick={() => setRefundOpen((open) => !open)}
-                className="flex w-full items-center justify-between py-3 pr-3 pl-4 text-left text-body-s text-text-secondary"
-              >
+            <div className="flex flex-col gap-2 rounded-[12px] px-4 pt-3 pb-4 inset-ring inset-ring-border-default">
+              <p className="text-body-s text-text-secondary">
                 환불 규정 · 10/31 (토) 23:59까지 전액 환불
-                <Icon
-                  name="ChevronDown"
-                  className={cn('transition-transform', refundOpen && 'rotate-180')}
-                />
-              </button>
-              {refundOpen && (
-                <div className="flex flex-col gap-2 px-4 pb-4">
-                  <KeyValue label="환불 기한 10/31 (토) 23:59까지" value="전액 환불" />
-                  <KeyValue label="환불 기한이 지난 뒤" value="개인 사정 환불 불가" />
-                  <KeyValue label="대회 취소 · 일정 변경" value="전액 환불" />
-                </div>
-              )}
+              </p>
+              <KeyValue label="환불 기한 10/31 (토) 23:59까지" value="전액 환불" />
+              <KeyValue label="환불 기한이 지난 뒤" value="개인 사정 환불 불가" />
+              <KeyValue label="대회 취소 · 일정 변경" value="전액 환불" />
             </div>
             <Checkbox
               checked={agreed}
