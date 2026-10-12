@@ -37,9 +37,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/order/participations")
 public class ApiV1ParticipationController {
-	private static final String MEMBER_ID_HEADER = "X-Member-Id";
-	private static final String INVALID_MEMBER_ID = "회원 ID가 올바르지 않습니다.";
-
 	private final ParticipationFacade participationFacade;
 
 	// ResponseEntity.created()의 201은 springdoc이 추론하지 못하므로 응답 코드를 직접 명시한다
@@ -75,7 +72,7 @@ public class ApiV1ParticipationController {
 	})
 	public ResponseEntity<RsData<ParticipationDto>> apply(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MEMBER_ID_HEADER) @Positive(message = INVALID_MEMBER_ID) int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Valid @RequestBody ParticipationApplyRequestDto request
 	) {
 		ParticipationDto participation = participationFacade.apply(request, memberId);
@@ -104,7 +101,7 @@ public class ApiV1ParticipationController {
 	})
 	public ResponseEntity<RsData<ParticipantInfoDto>> findLatestParticipant(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MEMBER_ID_HEADER) @Positive(message = INVALID_MEMBER_ID) int memberId
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId
 	) {
 		return participationFacade.findLatestParticipant(memberId)
 			.map(participant -> ResponseEntity.ok()
@@ -135,7 +132,7 @@ public class ApiV1ParticipationController {
 	})
 	public ResponseEntity<RsData<ParticipationDto>> findById(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MEMBER_ID_HEADER) @Positive(message = INVALID_MEMBER_ID) int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "참가 신청 ID", example = "1")
 		@PathVariable int participationId
 	) {
@@ -179,7 +176,7 @@ public class ApiV1ParticipationController {
 	})
 	public ResponseEntity<RsData<ParticipationDto>> changeParticipant(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MEMBER_ID_HEADER) @Positive(message = INVALID_MEMBER_ID) int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "참가 신청 ID", example = "1")
 		@PathVariable int participationId,
 		@Valid @RequestBody ParticipantInfoRequestDto request

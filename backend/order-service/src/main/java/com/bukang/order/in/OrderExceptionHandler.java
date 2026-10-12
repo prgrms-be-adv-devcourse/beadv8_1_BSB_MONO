@@ -18,13 +18,10 @@ import com.bukang.common.global.rsdata.RsData;
  */
 @RestControllerAdvice
 public class OrderExceptionHandler {
-	// 회원 ID 헤더는 게이트웨이가 토큰을 검사해 넣어 줄 예정이다(PRO-20)
-	private static final String MEMBER_ID_HEADER = "X-Member-Id";
-
 	// 회원 ID 헤더가 없으면 로그인이 안 된 것이고, 그 밖의 헤더(예: 중복 요청 방지 키)가 없으면 잘못된 요청이다
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<RsData<Void>> missingRequestHeaderException(MissingRequestHeaderException exception) {
-		if (MEMBER_ID_HEADER.equalsIgnoreCase(exception.getHeaderName())) {
+		if (MemberIdHeader.NAME.equalsIgnoreCase(exception.getHeaderName())) {
 			return ResponseEntity
 				.status(HttpStatus.UNAUTHORIZED)
 				.body(RsData.of(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.", null));
