@@ -27,10 +27,6 @@ const SIZES = ['XS (85)', 'S (90)', 'M (95)', 'L (100)', 'XL (105)'].map((v) => 
   value: v,
   label: v,
 }))
-const GOALS = ['1:30 ~ 1:40', '1:40 ~ 1:50', '1:50 ~ 2:00', '2:00 이상'].map((v) => ({
-  value: v,
-  label: v,
-}))
 
 const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 
@@ -86,12 +82,6 @@ export function RaceApplyPage({ optionId }: { optionId?: string }) {
             </RadioGroup>
           </fieldset>
           <Select label="기념 티셔츠 사이즈" items={SIZES} defaultValue="M (95)" />
-          <Select
-            label="목표 기록"
-            helper="출발 그룹 배정에 써요"
-            items={GOALS}
-            defaultValue="1:50 ~ 2:00"
-          />
           <TextField label="비상 연락처 이름" defaultValue="김보호" />
           <TextField
             label="비상 연락처 전화번호"
