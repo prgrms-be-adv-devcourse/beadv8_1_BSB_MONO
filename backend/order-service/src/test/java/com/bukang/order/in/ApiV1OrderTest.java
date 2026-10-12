@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -96,7 +97,8 @@ class ApiV1OrderTest {
 	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 10분 뒤다")
 	void create() throws Exception {
 		int participationId = applyAndGetId(MEMBER_ID);
-		LocalDateTime before = LocalDateTime.now();
+		// DB(H2·MySQL)는 마이크로초까지만 저장한다. Linux의 now()는 나노초까지 나오므로 비교 기준도 맞춰 자른다
+		LocalDateTime before = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
 
 		create(MEMBER_ID, participationId, newKey())
 			.andExpect(status().isCreated())
