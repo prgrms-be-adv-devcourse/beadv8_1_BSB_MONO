@@ -6,6 +6,7 @@ gateway:
     payout: http://localhost:8082
     file: http://localhost:8083
     order: http://localhost:8084
+    product: http://localhost:8085
 
 logging:
   level:

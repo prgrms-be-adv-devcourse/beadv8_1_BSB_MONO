@@ -75,6 +75,8 @@ services:
         condition: service_healthy
       order-service:
         condition: service_healthy
+      product-service:
+        condition: service_healthy
 
   member-service:
     build:
@@ -226,6 +228,9 @@ services:
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8085" ]
     depends_on:
       bukang-db:
         condition: service_healthy

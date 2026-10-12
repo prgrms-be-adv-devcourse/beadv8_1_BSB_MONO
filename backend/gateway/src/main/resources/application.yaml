@@ -1,5 +1,5 @@
 server:
-  # 서비스 포트(8080~8084)와 겹치지 않게 둔다. Nginx는 /api를 이 포트로 넘긴다
+  # 서비스 포트(8080~8085)와 겹치지 않게 둔다. Nginx는 /api를 이 포트로 넘긴다
   port: 8000
 
 spring:
@@ -45,3 +45,7 @@ spring:
               uri: ${gateway.services.order}
               predicates:
                 - Path=/api/v1/order/**
+            - id: product-service
+              uri: ${gateway.services.product}
+              predicates:
+                - Path=/api/v1/product/**

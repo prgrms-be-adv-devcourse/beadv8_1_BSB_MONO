@@ -6,3 +6,4 @@ gateway:
     payout: http://bukang-payout-service:8082
     file: http://bukang-file-service:8083
     order: http://bukang-order-service:8084
+    product: http://bukang-product-service:8085
