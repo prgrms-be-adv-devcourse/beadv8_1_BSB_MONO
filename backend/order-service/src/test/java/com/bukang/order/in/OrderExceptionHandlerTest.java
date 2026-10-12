@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
@@ -70,8 +71,17 @@ class OrderExceptionHandlerTest {
 			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."));
 	}
 
+	@Test
+	@DisplayName("필수 쿼리 파라미터가 없으면 400과 함께 빠진 파라미터 이름을 알려 준다")
+	void withoutRequestParam() throws Exception {
+		mockMvc.perform(get("/test/param").header("X-Member-Id", "7"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.message").value("필수 요청 값(keyword)이 없습니다."));
+	}
+
 	// standalone MockMvc는 @Controller가 붙은 클래스만 핸들러로 인식한다
-	// 다른 @SpringBootTest의 컴포넌트 스캔에 잡히지 않도록, 켜지 않는 프로파일에서만 빈이 되게 한다
+	// 앱 전체 테스트(OrderExceptionHandlerIntegrationTest)에서만 쓰도록, 켜지 않는 프로파일에서만 빈이 되게 한다
 	@RestController
 	@Profile("order-exception-handler-test-only")
 	static class HeaderEchoController {
@@ -86,6 +96,14 @@ class OrderExceptionHandlerTest {
 			@RequestHeader("Idempotency-Key") String idempotencyKey
 		) {
 			return RsData.of(HttpStatus.OK, "요청을 받았습니다.", idempotencyKey);
+		}
+
+		@GetMapping("/test/param")
+		RsData<String> param(
+			@RequestHeader("X-Member-Id") int memberId,
+			@RequestParam("keyword") String keyword
+		) {
+			return RsData.of(HttpStatus.OK, "요청을 받았습니다.", keyword);
 		}
 	}
 }
