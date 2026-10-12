@@ -218,18 +218,24 @@ export function RaceDetailPage({
               value={infoTab}
               onChange={setInfoTab}
             />
-            <div className="relative h-112 overflow-hidden rounded-[12px]">
-              <Image
-                src={race.images[0]}
-                alt="상세 정보 이미지"
-                fill
-                sizes="448px"
-                className="object-cover"
-              />
-            </div>
-            <p className="text-caption text-text-secondary">
-              판매자가 올린 코스 · 타임테이블 · 기념품 사이즈표 이미지가 이어져요
-            </p>
+            {infoTab === 'detail' ? (
+              <>
+                <div className="relative h-112 overflow-hidden rounded-[12px]">
+                  <Image
+                    src={race.images[0]}
+                    alt="상세 정보 이미지"
+                    fill
+                    sizes="448px"
+                    className="object-cover"
+                  />
+                </div>
+                <p className="text-caption text-text-secondary">
+                  판매자가 올린 코스 · 타임테이블 · 기념품 사이즈표 이미지가 이어져요
+                </p>
+              </>
+            ) : (
+              <FaqList items={race.faq} />
+            )}
           </div>
         </Section>
 
@@ -300,5 +306,36 @@ function OptionCard({
         {formatWon(option.price)}
       </span>
     </button>
+  )
+}
+
+function FaqList({ items }: { items: RaceDetail['faq'] }) {
+  if (items.length === 0) {
+    return <p className="py-6 text-center text-body-s text-text-tertiary">등록된 질문이 없어요</p>
+  }
+
+  return (
+    <ul className="flex flex-col divide-y divide-border-default">
+      {items.map((item) => (
+        <li key={item.question}>
+          <details className="group">
+            <summary
+              className={cn(
+                'flex cursor-pointer list-none items-center gap-3 rounded-md py-4 [&::-webkit-details-marker]:hidden',
+                FOCUS_RING,
+              )}
+            >
+              <span className="text-label-strong text-text-brand">Q</span>
+              <span className="flex-1 text-label-m">{item.question}</span>
+              <Icon
+                name="ChevronDown"
+                className="size-5 text-text-tertiary transition-transform group-open:rotate-180"
+              />
+            </summary>
+            <p className="pb-4 pl-6 text-body-s text-text-secondary">{item.answer}</p>
+          </details>
+        </li>
+      ))}
+    </ul>
   )
 }
