@@ -7,6 +7,7 @@
 !settings.gradle.kts
 !build.gradle.kts
 !common/
+!jwt/
 !member-service/
 !cash-service/
 !payout-service/
