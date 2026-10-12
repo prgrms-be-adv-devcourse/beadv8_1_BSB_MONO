@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
+import { ConsoleCard, ConsoleLoading, ConsoleOffline, ConsolePage } from '@/widgets/console-page'
 import { cn } from '@/shared/lib'
 import {
   Badge,
@@ -89,8 +89,8 @@ const ORDERS: Order[] = [
 
 const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 
-// 피그마 V2 · S05 판매자 홈
-export function SellerDashboardPage() {
+// 피그마 V2 · S05 판매자 홈 (+ 판매자 · 관리자 공통 로딩 · 연결 끊김)
+export function SellerDashboardPage({ state }: { state?: 'loading' | 'offline' }) {
   return (
     <ConsolePage
       title="판매자 홈"
@@ -101,6 +101,16 @@ export function SellerDashboardPage() {
         </Link>
       }
     >
+      {state === 'loading' && <ConsoleLoading />}
+      {state === 'offline' && <ConsoleOffline />}
+      {!state && <DashboardBody />}
+    </ConsolePage>
+  )
+}
+
+function DashboardBody() {
+  return (
+    <>
       <div className="flex gap-4">
         <StatTile label="다음 정산일" value="11/20" unit="(금)" />
         <StatTile
@@ -189,6 +199,6 @@ export function SellerDashboardPage() {
           ]}
         />
       </ConsoleCard>
-    </ConsolePage>
+    </>
   )
 }

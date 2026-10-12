@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
 import { cn } from '@/shared/lib'
@@ -15,6 +15,7 @@ import {
   FOCUS_RING,
   KeyValue,
   TextField,
+  useToast,
   type BadgeTone,
 } from '@/shared/ui'
 
@@ -79,9 +80,28 @@ const RACES: Race[] = [
 
 const n = (value: number) => value.toLocaleString('ko-KR')
 
-// 피그마 V2 · S06 대회 관리
-export function SellerRacesPage() {
+// 피그마 V2 · S06 대회 관리 (+ S02-4 등록 완료 토스트)
+export function SellerRacesPage({ registered = false }: { registered?: boolean }) {
   const [selectedId, setSelectedId] = useState(RACES[0].id)
+  const toast = useToast()
+  const shown = useRef(false)
+
+  useEffect(() => {
+    if (!registered || shown.current) {
+      return
+    }
+    shown.current = true
+    toast({
+      message: '대회를 등록했어요',
+      tone: 'success',
+      action: {
+        label: '링크 복사',
+        onClick: () =>
+          void navigator.clipboard?.writeText(`${window.location.origin}/races/cookierun`),
+      },
+    })
+  }, [registered, toast])
+
   const race = RACES.find((r) => r.id === selectedId) ?? RACES[0]
 
   return (
@@ -111,7 +131,7 @@ export function SellerRacesPage() {
             label="내 대회"
             rows={RACES}
             rowKey={(r) => r.id}
-            selectedKey={selectedId}
+            selected={selectedId}
             onRowClick={(r) => setSelectedId(r.id)}
             columns={[
               { key: 'title', header: '대회', render: (r) => r.title },
