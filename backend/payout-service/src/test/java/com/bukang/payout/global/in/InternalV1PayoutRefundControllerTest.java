@@ -1,4 +1,4 @@
-package com.bukang.payout.in;
+package com.bukang.payout.global.in;
 
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.get;
@@ -33,7 +33,7 @@ import com.bukang.payout.support.RestDocsConfig;
 @AutoConfigureRestDocs
 @Import(RestDocsConfig.class)
 @ActiveProfiles("test")
-class InternalV1PayoutControllerTest {
+class InternalV1PayoutRefundControllerTest {
 	private static final String URL = "/internal/v1/payout/refund-eligibility";
 
 	private static final Snippet ELIGIBILITY_RESPONSE = responseFields(

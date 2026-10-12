@@ -1,4 +1,4 @@
-package com.bukang.payout.in;
+package com.bukang.payout.global.in;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -30,7 +30,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "PayoutInternal", description = "참가권 환불 가능 여부 조회 API (서비스 간 내부 호출 전용)")
 @RestController
 @RequestMapping("/internal/v1/payout")
-public class InternalV1PayoutController {
+public class InternalV1PayoutRefundController {
 	// 서버 시간대와 상관없이 한국 날짜로 판단한다 (정산 대상일 배치와 같은 기준)
 	private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 

@@ -1,7 +1,7 @@
-package com.bukang.payout.in;
+package com.bukang.payout.global.in;
 
 /**
- * InternalV1PayoutController의 Swagger 응답 예시 (실제 응답 메시지와 같게 유지한다)
+ * InternalV1PayoutRefundController의 Swagger 응답 예시 (실제 응답 메시지와 같게 유지한다)
  */
 final class PayoutInternalApiExamples {
 	static final String REFUNDABLE = """

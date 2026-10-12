@@ -14,7 +14,7 @@
 :operation-response-headers-title: 응답 헤더
 :operation-response-fields-title: 응답 본문
 
-이 문서는 컨트롤러 테스트(`ApiV1PayoutHoldControllerTest`, `InternalV1PayoutControllerTest`)가 통과할 때 만들어진 요청·응답으로 채운다.
+이 문서는 컨트롤러 테스트(`ApiV1PayoutHoldControllerTest`, `InternalV1PayoutRefundControllerTest`)가 통과할 때 만들어진 요청·응답으로 채운다.
 테스트가 실패하면 문서도 만들어지지 않으므로, 여기 있는 예시는 실제 응답과 같다.
 
 [[overview]]
