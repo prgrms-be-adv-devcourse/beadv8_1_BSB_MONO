@@ -153,12 +153,17 @@ public class Participation extends BaseIdAndTime {
 		this.canceledAt = canceledAt;
 	}
 
-	// 결제 기한을 늘렸다 (PG 충전창 진입 때 2분, 한 번). 결제 대기(APPLIED) 신청만 늘린다
-	public void extendPaymentDue(LocalDateTime newPaymentDueAt) {
+	// 결제 기한을 늘릴 수 있는지: 결제 대기(APPLIED)여야 한다. 상품 서비스에 연장을 요청하기 전에 확인한다
+	public void checkExtendable() {
 		if (status != ParticipationStatus.APPLIED) {
 			throw new ParticipationNotPayableException(
 				"결제 대기 중인 신청만 결제 기한을 늘릴 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
 		}
+	}
+
+	// 결제 기한을 늘렸다 (PG 충전창 진입 때 2분, 한 번). 결제 대기(APPLIED) 신청만 늘린다
+	public void extendPaymentDue(LocalDateTime newPaymentDueAt) {
+		checkExtendable();
 		this.paymentDueAt = newPaymentDueAt;
 	}
 

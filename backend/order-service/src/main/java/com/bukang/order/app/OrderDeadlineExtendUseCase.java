@@ -36,8 +36,13 @@ public class OrderDeadlineExtendUseCase {
 		if (!order.isOwnedBy(memberId)) {
 			throw new OrderAccessDeniedException("본인의 주문만 결제 기한을 늘릴 수 있습니다.");
 		}
-		// 상품 서비스를 부르기 전에 이쪽에서 막을 수 있는 경우를 먼저 거른다
+		// 상품 서비스를 부르기 전에 이쪽에서 막을 수 있는 경우를 먼저 거른다. 연장은 자리마다 한 번이라,
+		// 상품 서비스가 늘린 뒤에 여기서 실패하면 한 번뿐인 연장만 써 버리고 이쪽은 롤백된다
 		order.checkExtendable(now);
+		// 참가 신청도 잠근다. 참가자 정보 수정과 겹쳐도 늘린 기한이 덮이지 않는다 (잠금 순서: 주문 → 참가 신청)
+		Participation participation = participationRepository.findByIdForUpdate(order.participationId())
+			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
+		participation.checkExtendable();
 
 		SeatExtendResult result = seatHoldPort.extend(order.participationId());
 		if (result.outcome() == SeatExtendResult.Outcome.ALREADY_EXTENDED) {
@@ -46,9 +51,6 @@ public class OrderDeadlineExtendUseCase {
 		if (result.outcome() == SeatExtendResult.Outcome.EXPIRED) {
 			throw new OrderNotExtendableException("결제 기한이 지났습니다.");
 		}
-		// 참가 신청도 잠근다. 참가자 정보 수정과 겹쳐도 늘린 기한이 덮이지 않는다 (잠금 순서: 주문 → 참가 신청)
-		Participation participation = participationRepository.findByIdForUpdate(order.participationId())
-			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
 		order.extendDeadline(result.expiresAt(), now);
 		participation.extendPaymentDue(result.expiresAt());
 		return order.toDto();

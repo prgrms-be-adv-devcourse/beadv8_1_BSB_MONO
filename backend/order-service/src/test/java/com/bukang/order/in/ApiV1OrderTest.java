@@ -416,6 +416,22 @@ class ApiV1OrderTest {
 	}
 
 	@Test
+	@DisplayName("참가 신청이 결제 대기가 아니면 상품 서비스에 연장을 요청하지 않고 409다")
+	void extendDeadlineWhenParticipationNotApplied() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		int orderId = createAndGetId(MEMBER_ID, participationId, newKey());
+		Participation participation = participationRepository.findById(participationId).orElseThrow();
+		ReflectionTestUtils.setField(participation, "status", ParticipationStatus.RELEASED);
+		participationRepository.save(participation);
+
+		extend(MEMBER_ID, orderId)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message")
+				.value("결제 대기 중인 신청만 결제 기한을 늘릴 수 있습니다(현재 상태: 미결제 해제)."));
+		assertThat(seatHoldPort.extendCalls()).isZero();
+	}
+
+	@Test
 	@DisplayName("다른 회원의 주문은 403, 없는 주문은 404다")
 	void extendDeadlineNotOwnerOrMissing() throws Exception {
 		int orderId = createAndGetId(MEMBER_ID, applyAndGetId(MEMBER_ID), newKey());
