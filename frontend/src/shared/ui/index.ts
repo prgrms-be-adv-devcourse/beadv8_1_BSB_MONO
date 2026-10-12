@@ -78,6 +78,7 @@ export { Segmented, type SegmentedItem, type SegmentedProps } from './segmented/
 export { Skeleton, type SkeletonProps } from './skeleton/Skeleton'
 export { StatTile, type StatTileProps, type StatTileTone } from './stat-tile/StatTile'
 export { Stepper, type StepperProps } from './stepper/Stepper'
+export { DataTable, type DataTableColumn, type DataTableProps } from './table/DataTable'
 export { TableCell, TableHeaderCell, type CellAlign } from './table/Table'
 export { Tab, TabBar, TabPanel, Tabs, type TabBarProps, type TabProps } from './tabs/Tabs'
 export { ToastProvider, useToast, type ShowToastOptions, type ToastTone } from './toast/Toast'

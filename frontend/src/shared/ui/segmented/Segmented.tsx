@@ -4,13 +4,15 @@ import { cn } from '@/shared/lib'
 
 import { FOCUS_RING } from '../focus-ring'
 
-export type SegmentedItem<T extends string> = { value: T; label: string }
+export type SegmentedItem<T extends string> = { value: T; label: string; count?: number }
 
 export type SegmentedProps<T extends string> = {
   items: SegmentedItem<T>[]
   value: T
   onChange: (value: T) => void
   label: string
+  /** fill: 칸이 너비를 똑같이 나눔(모바일) · hug: 글자만큼(데스크톱 탭) */
+  layout?: 'fill' | 'hug'
   className?: string
 }
 
@@ -20,6 +22,7 @@ export function Segmented<T extends string>({
   value,
   onChange,
   label,
+  layout = 'fill',
   className,
 }: SegmentedProps<T>) {
   return (
@@ -38,7 +41,8 @@ export function Segmented<T extends string>({
             aria-selected={selected}
             onClick={() => onChange(item.value)}
             className={cn(
-              'h-10 min-w-0 flex-1 truncate rounded-[8px] px-2 text-label-l',
+              'flex h-10 min-w-0 items-center justify-center gap-1 truncate rounded-[8px] text-label-l',
+              layout === 'fill' ? 'flex-1 px-2' : 'px-4',
               selected
                 ? 'bg-bg-surface font-bold text-text-primary shadow-sm'
                 : 'text-text-tertiary',
@@ -46,6 +50,11 @@ export function Segmented<T extends string>({
             )}
           >
             {item.label}
+            {item.count !== undefined && (
+              <span className={cn('text-label-s', selected && 'text-text-brand')}>
+                {item.count}
+              </span>
+            )}
           </button>
         )
       })}
