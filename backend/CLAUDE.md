@@ -11,6 +11,7 @@
 |---|---|---|---|
 | `common` | 라이브러리(jar) | - | 모든 서비스가 함께 쓰는 코드 (응답 형식, 예외, JPA 부모 클래스, 서비스 간 이벤트) |
 | `jwt` | 라이브러리(jar) | - | JWT 발급·검증 (`JwtProvider`). 웹·JPA 의존성이 없어 게이트웨이(WebFlux)에서도 쓴다 |
+| `gateway` | Spring Boot 앱 (WebFlux) | 8000 | API 게이트웨이. `/api/v1/<도메인>/**`를 경로에 맞는 서비스로 넘긴다 (Spring Cloud Gateway) |
 | `member-service` | Spring Boot 앱 | 8080 | 회원가입, 로그인, 인증 |
 | `cash-service` | Spring Boot 앱 | 8081 | 회원 복제본(`CashMember`), 캐시 (뼈대만 있음) |
 | `payout-service` | Spring Boot 앱 | 8082 | 정산 내역(`Payout`), 정산 항목, 지급보류 (엔티티만 있음) |
@@ -23,7 +24,10 @@
 - 루트 패키지: `com.bukang` (`group`은 `com`). 모듈별 패키지는 `com.bukang.common`, `com.bukang.member`, `com.bukang.cash`, `com.bukang.payout`, `com.bukang.file`, `com.bukang.order`
   (모듈 폴더 이름은 케밥 케이스 `<도메인>-service`, Java 패키지는 하이픈을 쓸 수 없으므로 도메인 한 단어)
 - 공통 빌드 설정(Java 버전, Spring Boot BOM, Lombok, Checkstyle)은 루트 `build.gradle.kts`, 모듈별 의존성은 각 모듈의 `build.gradle.kts`에 있습니다.
-- 운영에서는 Nginx가 HTTP 요청을 받아 `/api`를 이 앱으로 라우팅합니다. 별도 API 게이트웨이는 아직 없습니다.
+- 운영에서는 Nginx가 HTTP 요청을 받아 `/api`를 `gateway`(8000)로, 나머지를 프론트(`web`, Next.js 3000)로 넘기고, 게이트웨이가 경로를 보고 각 서비스로 보냅니다.
+  Nginx 설정은 `docker/nginx/default.conf`, 컨테이너는 `compose.yml`의 `nginx`·`web`입니다. Nginx도 주소를 자르지 않고 `/internal/`은 404로 막습니다.
+  게이트웨이는 주소 앞부분을 자르지 않고(StripPrefix 없음) `/internal/**`는 라우팅하지 않습니다. 새 서비스를 추가하면 `gateway`의 라우팅 규칙도 추가합니다.
+  `gateway`는 WebFlux 기반이라 webmvc를 가져오는 `common`에 의존하지 않습니다.
 
 ## 빌드 및 실행 명령어
 
@@ -31,6 +35,7 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 
 ```bash
 ./gradlew build                          # 전체 모듈 컴파일 + 테스트 + 패키징 (CI: .github/workflows/backend-ci.yml)
+./gradlew :gateway:bootRun               # 게이트웨이 실행 (8000, localhost:8080~8084로 라우팅)
 ./gradlew :member-service:bootRun        # 회원 서비스 실행 (dev 프로파일, compose.yml 인프라 자동 실행)
 ./gradlew :cash-service:bootRun          # 캐시 서비스 실행 (8081)
 ./gradlew :payout-service:bootRun        # 정산 서비스 실행 (8082)
@@ -48,9 +53,10 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 
 ```
 backend/
-├── settings.gradle.kts        include("common", "jwt", "member-service", "cash-service", "payout-service", "file-service", "order-service")
+├── settings.gradle.kts        include("common", "jwt", "gateway", "member-service", "cash-service", "payout-service", "file-service", "order-service")
 ├── build.gradle.kts           모든 모듈 공통 설정
-├── compose.yml                공용 인프라 (MySQL, Kafka, Elasticsearch, Redis) + 서비스별 앱 컨테이너
+├── compose.yml                공용 인프라 (MySQL, Kafka, Elasticsearch, Redis) + 서비스별 앱 컨테이너 + nginx·web(프론트)
+├── docker/nginx/default.conf  Nginx 라우팅 (/api → gateway, 나머지 → web)
 ├── common/      com.bukang.common
 │   ├── global/                기술 공통 (도메인 지식 없음)
 │   │   ├── config/            LocalDevEnvironmentPostProcessor (compose.yml, .env 위치 탐색)
@@ -67,6 +73,7 @@ backend/
 │       ├── modeltype/         HasModelTypeCode
 │       └── resulttype/        ResultType
 ├── jwt/         com.bukang.jwt     JwtProvider, JwtProperties(jwt.*), JwtAutoConfiguration(빈 자동 등록)
+├── gateway/     com.bukang.gateway GatewayApplication. 라우팅 규칙은 application.yaml, 서비스 주소는 프로파일별 yaml(gateway.services.*)
 ├── member-service/  com.bukang.member
 │   ├── in/ app/ domain/ out/  컨트롤러 / Facade·UseCase / 엔티티·도메인 예외 / Repository
 │   ├── domain/                SourceMember, Member, exception/
@@ -100,7 +107,8 @@ backend/
 
 - 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).
 - 다른 서비스는 파일을 파일 ID로만 참조한다. 대상(대회 등)을 저장할 때 `/internal/v1/file/refs/{refType}/{refId}/files`를 동기 호출해 연결하고, `/internal/**`은 게이트웨이에 노출하지 않는다.
-- 회원 ID는 `X-Member-Id` 헤더로 받는다. 게이트웨이가 토큰을 검사해 이 헤더를 넣어 줄 예정이다(PRO-20).
+- 회원 ID는 `X-Member-Id` 헤더로 받는다. 게이트웨이는 클라이언트가 보낸 이 헤더를 지우고(`default-filters`), 토큰을 검사해 다시 넣어 줄 예정이다(PRO-20).
+  그래서 PRO-20 전에는 게이트웨이(8000)·Nginx(80)를 거치면 이 헤더가 필요한 API가 401(로그인 필요)로 응답한다. 직접 확인할 때는 서비스 포트(예: 8084)로 부른다.
 - 대상에 붙지 않은 파일(PENDING·UPLOADED·DELETED)은 마지막으로 바뀐 뒤 1일이 지나면 Spring Batch 정리 배치가 DB 행을 지우고 커밋한 뒤 S3 객체를 지운다.
   실행 기록은 DB의 `BATCH_` 테이블에 남는다 (`file-service/BATCH-ROADMAP.md`).
 
