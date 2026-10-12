@@ -128,10 +128,6 @@ public class Race extends BaseIdAndTime {
 			checkScheduleChange("크루 예매 마감", crewSaleEndAt, request.getCrewSaleEndAt(), now);
 			checkScheduleChange("개인 예매 오픈", individualOpenAt, request.getIndividualOpenAt(), now);
 			checkScheduleChange("접수 마감", applicationCloseAt, request.getApplicationCloseAt(), now);
-			// 접수 마감은 참가자 정보 수정 기한이기도 해서, 앞당기면 구매자가 정보를 고칠 시간이 줄어든다
-			if (request.getApplicationCloseAt().isBefore(applicationCloseAt)) {
-				throw new RaceChangeNotAllowedException("판매를 시작한 대회는 접수 마감 일시를 앞당길 수 없습니다.");
-			}
 		}
 		// 판매 시작 뒤 대회 일시가 바뀌면(앞당기기·늦추기 모두) 일정 변경 안내 일시를 기록한다
 		// 이날부터 7일 동안은 환불 기준일과 상관없이 전액 환불된다 (ERD schedule_changed_at, 환불 판정은 주문 쪽)

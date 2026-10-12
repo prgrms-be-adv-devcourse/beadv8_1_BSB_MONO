@@ -120,10 +120,6 @@ final class RaceApiExamples {
 		{ "status": 409, "message": "개인 예매 오픈 일시를 지난 시각으로 바꿀 수 없습니다.", "data": null }
 		""";
 
-	static final String APPLICATION_CLOSE_ADVANCED = """
-		{ "status": 409, "message": "판매를 시작한 대회는 접수 마감 일시를 앞당길 수 없습니다.", "data": null }
-		""";
-
 	static final String NOT_DRAFT = """
 		{ "status": 409, "message": "작성 중인 대회만 판매를 시작할 수 있습니다.", "data": null }
 		""";
