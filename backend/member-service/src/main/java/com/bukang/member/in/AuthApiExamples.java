@@ -23,11 +23,15 @@ final class AuthApiExamples {
 			"status": 200,
 			"message": "로그인 성공",
 			"data": {
-				"id": 1,
-				"createDate": "2026-10-05T21:25:35",
-				"modifyDate": "2026-10-05T21:25:35",
-				"nickname": "러너1",
-				"email": "runner1@crewrun.com"
+				"accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature",
+				"member": {
+					"id": 1,
+					"createDate": "2026-10-05T21:25:35",
+					"modifyDate": "2026-10-05T21:25:35",
+					"nickname": "러너1",
+					"email": "runner1@crewrun.com",
+					"phone": "010-1234-5678"
+				}
 			}
 		}
 		""";

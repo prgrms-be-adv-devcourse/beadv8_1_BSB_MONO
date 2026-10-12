@@ -19,6 +19,14 @@ spring:
     ansi:
       enabled: always
 
+  # Redis가 응답하지 않을 때 오래 기다리지 않도록 대기 시간을 줄인다 (Lettuce 기본값은 명령 60초, 연결 10초)
+  # 로그인은 Redis 저장이 실패해도 진행하므로, 장애 때 로그인이 이 시간만큼만 늦어진다 (TokenIssueUseCase)
+  # 접속 주소(host, port)는 프로파일별 yaml에 있다
+  data:
+    redis:
+      timeout: 2s
+      connect-timeout: 2s
+
 
   # Kafka
   ## JacksonJsonSerializer / JacksonJsonDeserializer 안쓴 이유

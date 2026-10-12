@@ -2,7 +2,9 @@ package com.bukang.member.in;
 
 import java.net.URI;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -14,11 +16,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.member.app.MemberFacade;
+import com.bukang.member.dto.AuthTokens;
 import com.bukang.member.dto.MemberDto;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.dto.MemberLoginRequestDto;
+import com.bukang.member.dto.MemberLoginResponseDto;
+import com.bukang.member.dto.MemberLoginResult;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -35,6 +41,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
 public class ApiV1AuthController {
+	// Refresh Token 쿠키는 토큰 재발급 등 인증 API에만 실려 가도록 경로를 좁힌다
+	static final String REFRESH_TOKEN_COOKIE = "refreshToken";
+	static final String REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth";
+
 	private final MemberFacade memberFacade;
 	private final SecurityContextRepository securityContextRepository;
 
@@ -66,9 +76,12 @@ public class ApiV1AuthController {
 	}
 
 	@PostMapping("/login")
-	@Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인하고 세션에 인증 정보를 저장한다.")
+	@Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인하고 Access Token은 응답 본문으로, "
+		+ "Refresh Token은 httpOnly 쿠키로 내려준다. Refresh Token은 Redis에도 저장한다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "로그인 성공",
+			headers = @Header(name = HttpHeaders.SET_COOKIE,
+				description = "refreshToken=...; Path=/api/v1/auth; Max-Age=1209600; Secure; HttpOnly; SameSite=Lax"),
 			content = @Content(examples = @ExampleObject(value = AuthApiExamples.LOGIN_SUCCESS))),
 		@ApiResponse(responseCode = "400", description = "입력값 검증 실패 또는 요청 본문 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
@@ -79,17 +92,33 @@ public class ApiV1AuthController {
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = AuthApiExamples.LOGIN_FAILED)))
 	})
-	public ResponseEntity<RsData<MemberDto>> login(
+	public ResponseEntity<RsData<MemberLoginResponseDto>> login(
 		@Valid @RequestBody MemberLoginRequestDto memberLoginRequestDto,
 		HttpServletRequest request,
 		HttpServletResponse response
 	) {
-		MemberDto memberDto = memberFacade.login(memberLoginRequestDto);
+		MemberLoginResult result = memberFacade.login(memberLoginRequestDto);
 
+		// 게이트웨이 토큰 검사(PRO-20)가 붙기 전까지는 기존 API가 세션으로 로그인 상태를 확인하므로 세션 저장도 유지한다
 		SecurityContext context = SecurityContextHolder.getContext();
 		securityContextRepository.saveContext(context, request, response);
 
+		AuthTokens tokens = result.tokens();
 		return ResponseEntity.ok()
-			.body(RsData.of(HttpStatus.OK, "로그인 성공", memberDto));
+			.header(HttpHeaders.SET_COOKIE, refreshTokenCookie(tokens).toString())
+			.body(RsData.of(HttpStatus.OK, "로그인 성공",
+				new MemberLoginResponseDto(tokens.accessToken(), result.member())));
+	}
+
+	// httpOnly: 자바스크립트에서 읽지 못하게 해 XSS로 토큰이 새는 것을 막는다
+	// SameSite=Lax: 다른 사이트에서 보낸 POST에는 쿠키가 실리지 않는다
+	private ResponseCookie refreshTokenCookie(AuthTokens tokens) {
+		return ResponseCookie.from(REFRESH_TOKEN_COOKIE, tokens.refreshToken())
+			.httpOnly(true)
+			.secure(true)
+			.sameSite("Lax")
+			.path(REFRESH_TOKEN_COOKIE_PATH)
+			.maxAge(tokens.refreshTokenExpiration())
+			.build();
 	}
 }
