@@ -198,6 +198,7 @@ await fetch(data.uploadUrl, {
 | `THUMBNAIL` | 대표 이미지 | 이미지 | JPG, PNG, WebP | 10MB | 1 |
 | `DETAIL` | 대회 소개 이미지 | 이미지 | JPG, PNG, WebP | 10MB | 5 |
 | `COURSE` | 코스 안내 이미지 (종목마다 1장) | 이미지 | JPG, PNG, WebP | 10MB | 7 |
+| `KIT` | 키트 이미지 (종목마다 1장) | 이미지 | JPG, PNG, WebP | 10MB | 1 |
 | `INTRO_VIDEO` | 대회 소개 영상 | 동영상 | MP4, MOV | 100MB | 1 |
 | `ROSTER` | 크루원 명단 | 엑셀 | XLSX, XLS | 5MB | 1 |
 
