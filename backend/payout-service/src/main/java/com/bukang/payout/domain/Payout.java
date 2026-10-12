@@ -5,7 +5,6 @@ import static jakarta.persistence.EnumType.STRING;
 import static lombok.AccessLevel.PROTECTED;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -116,7 +115,7 @@ public class Payout extends BaseIdAndTime {
 
 		// 수수료는 참가권 1장마다 원 미만을 버리고, 정산 내역의 수수료는 그 합이다 (payout.md 2-1)
 		salesAmount += price;
-		feeAmount += feeOf(price, feeRate);
+		feeAmount += item.getFeeAmount();
 		// 정책 공식(판매액 − 환불액 − 수수료)과 같은 모양으로 둔다. 세미는 refundAmount가 항상 0이다:
 		// 대상일 전 환불은 항목이 안 생기고, 대상일 후 환불은 막는다(PRO-28). 최종에서는 대상일~지급 사이 환불이
 		// 음수 정산 항목(PRO-32), 지급 뒤 환불은 회수(PRO-33)가 된다 (payout.md 2-2, 4-2)
@@ -179,9 +178,5 @@ public class Payout extends BaseIdAndTime {
 
 	private static LocalDate payDayOf(YearMonth month, BusinessDayCalendar calendar) {
 		return calendar.nextOrSame(month.atDay(PAY_DAY_OF_MONTH));
-	}
-
-	private static long feeOf(long price, BigDecimal feeRate) {
-		return BigDecimal.valueOf(price).multiply(feeRate).setScale(0, RoundingMode.FLOOR).longValueExact();
 	}
 }
