@@ -112,6 +112,8 @@
   --color-bg-control-off: var(--color-neutral-300);
   --color-bg-control-thumb: var(--color-neutral-0);
   --color-bg-track: var(--color-neutral-100);
+  /* 묶음 탭(세그먼트) 바탕 */
+  --color-bg-segment: var(--color-navy-100);
   --color-bg-accent: var(--color-lime-400);
   --color-bg-accent-hover: var(--color-lime-500);
   --color-bg-accent-subtle: var(--color-lime-100);
@@ -277,6 +279,7 @@
     --color-bg-info-subtle: var(--color-violet-900);
     --color-bg-control-off: var(--color-navy-600);
     --color-bg-track: var(--color-navy-700);
+    --color-bg-segment: var(--color-navy-800);
     --color-bg-accent-subtle: var(--color-lime-900);
     --color-bg-hero: var(--color-navy-800);
     --color-bg-hero-raised: var(--color-navy-700);

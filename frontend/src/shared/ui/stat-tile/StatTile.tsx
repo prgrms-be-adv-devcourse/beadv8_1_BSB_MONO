@@ -12,6 +12,8 @@ export type StatTileProps = {
   unit?: ReactNode
   caption?: ReactNode
   tone?: StatTileTone
+  /** 숫자 크기. 좁은 3칸 배치(대회 상세 등)는 s */
+  size?: 'm' | 's'
   className?: string
 }
 
@@ -49,6 +51,7 @@ export function StatTile({
   unit,
   caption,
   tone = 'surface',
+  size = 'm',
   className,
 }: StatTileProps) {
   const colors = TONE[tone]
@@ -62,7 +65,15 @@ export function StatTile({
     >
       <span className={cn('w-full truncate text-center text-label-s', colors.label)}>{label}</span>
       <span className="flex items-baseline gap-1">
-        <span className={cn('font-display text-display-m', colors.value)}>{value}</span>
+        <span
+          className={cn(
+            'font-display',
+            size === 'm' ? 'text-display-m' : 'text-display-s',
+            colors.value,
+          )}
+        >
+          {value}
+        </span>
         {unit && <span className={cn('text-label-m', colors.unit)}>{unit}</span>}
       </span>
       {caption && <span className={cn('text-caption', colors.caption)}>{caption}</span>}

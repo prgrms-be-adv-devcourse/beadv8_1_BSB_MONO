@@ -16,7 +16,13 @@ export {
   type BottomSheetOptionProps,
   type BottomSheetProps,
 } from './bottom-sheet/BottomSheet'
-export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from './button/Button'
+export {
+  Button,
+  buttonClassName,
+  type ButtonProps,
+  type ButtonSize,
+  type ButtonVariant,
+} from './button/Button'
 export {
   IconButton,
   type IconButtonProps,
@@ -57,6 +63,7 @@ export {
   type ImageListDialogProps,
 } from './image-upload/ImageUploadDialog'
 export { useImageList, type ImageItem, type UploadImage } from './image-upload/use-image-list'
+export { KeyValue, type KeyValueProps } from './key-value/KeyValue'
 export { Logo, type LogoProps, type LogoVariant } from './logo/Logo'
 export {
   LoadMore,
@@ -66,6 +73,8 @@ export {
 } from './pagination/Pagination'
 export { ProgressBar, type ProgressBarProps } from './progress-bar/ProgressBar'
 export { QuantityStepper, type QuantityStepperProps } from './quantity-stepper/QuantityStepper'
+export { Section, type SectionProps } from './section/Section'
+export { Segmented, type SegmentedItem, type SegmentedProps } from './segmented/Segmented'
 export { Skeleton, type SkeletonProps } from './skeleton/Skeleton'
 export { StatTile, type StatTileProps, type StatTileTone } from './stat-tile/StatTile'
 export { Stepper, type StepperProps } from './stepper/Stepper'

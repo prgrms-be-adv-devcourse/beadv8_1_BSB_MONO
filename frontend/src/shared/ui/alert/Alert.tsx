@@ -2,17 +2,17 @@ import type { ReactNode } from 'react'
 
 import { cn } from '@/shared/lib'
 
-import { Badge } from '../badge/Badge'
 import { FOCUS_RING } from '../focus-ring'
-import { Icon } from '../icon/icons'
+import { Icon, type IconName } from '../icon/icons'
 
 export type AlertTone = 'info' | 'success' | 'warning' | 'danger'
 
-const TAG: Record<AlertTone, string> = {
-  info: '안내',
-  success: '완료',
-  warning: '주의',
-  danger: '중요',
+// 글자색은 하나로 두고 톤은 앞쪽 아이콘 모양으로만 나눈다(10/10 색 규칙)
+const ICON: Record<AlertTone, IconName> = {
+  info: 'Info',
+  success: 'CircleCheck',
+  warning: 'TriangleAlert',
+  danger: 'CircleAlert',
 }
 
 export type AlertProps = {
@@ -26,7 +26,7 @@ export type AlertProps = {
   className?: string
 }
 
-// 화면 안에 머무는 공지. 회색 바탕 + 앞쪽 레이스 태그 + 굵은 제목 + 설명.
+// 화면 안에 머무는 공지. 회색 바탕 + 앞쪽 아이콘 + 굵은 제목 + 설명.
 export function Alert({ tone = 'info', title, description, onClose, className }: AlertProps) {
   return (
     <div
@@ -36,7 +36,7 @@ export function Alert({ tone = 'info', title, description, onClose, className }:
         className,
       )}
     >
-      <Badge tone={tone}>{TAG[tone]}</Badge>
+      <Icon name={ICON[tone]} className="size-5 text-text-primary" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="text-label-strong text-text-primary">{title}</p>
         {description && (
