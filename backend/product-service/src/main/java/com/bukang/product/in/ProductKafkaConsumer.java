@@ -29,8 +29,8 @@ public class ProductKafkaConsumer {
 	// 동시에 처리할 쓰레드 수 (재시도·DLT 리스너도 같은 수). 지금은 메시지가 적어 1개로 충분하다
 	// 파티션 수까지만 효과가 있으므로, 늘릴 때는 PARTITIONS(KafkaTopicConfig 포함)와 함께 올린다
 	private static final String CONCURRENCY = "1";
-	// 처음 시도를 포함한 시도 횟수. 1초 → 2초 → 4초 → 8초 간격으로 다시 시도한다
-	private static final String RETRY_ATTEMPTS = "5";
+	// 처음 시도를 포함한 시도 횟수. 실패하면 1초 → 2초 간격(2배수)으로 2번 다시 시도한다
+	private static final String RETRY_ATTEMPTS = "3";
 	private static final long RETRY_DELAY_MILLIS = 1000L;
 	private static final double RETRY_MULTIPLIER = 2.0;
 	// 마지막까지 실패한 메시지를 보낼 토픽 접미사 (예: product.member.joined.dlt, 기본값은 -dlt)
