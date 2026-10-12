@@ -10,15 +10,17 @@
 | 모듈 | 종류 | 포트 | 역할 |
 |---|---|---|---|
 | `common` | 라이브러리(jar) | - | 모든 서비스가 함께 쓰는 코드 (응답 형식, 예외, JPA 부모 클래스, 서비스 간 이벤트) |
+| `jwt` | 라이브러리(jar) | - | JWT 발급·검증 (`JwtProvider`). 웹·JPA 의존성이 없어 게이트웨이(WebFlux)에서도 쓴다 |
 | `member-service` | Spring Boot 앱 | 8080 | 회원가입, 로그인, 인증 |
 | `cash-service` | Spring Boot 앱 | 8081 | 회원 복제본(`CashMember`), 캐시 (뼈대만 있음) |
 | `payout-service` | Spring Boot 앱 | 8082 | 정산 내역(`Payout`), 정산 항목, 지급보류 (엔티티만 있음) |
 | `file-service` | Spring Boot 앱 | 8083 | 대회 이미지 등 파일 저장 (S3, presigned URL) |
+| `order-service` | Spring Boot 앱 | 8084 | 참가 신청, 예매(임시 확보·결제 기한), 장바구니, 주문 (뼈대만 있음) |
 
 인프라(`compose.yml`: MySQL, Kafka, Elasticsearch, Redis, 로컬 S3 대체재 S3Mock)는 모든 서비스가 공용으로 씁니다.
 
 - Java 25 (Gradle toolchain), Spring Boot 4.1.1, Gradle 9.7.1 (Kotlin DSL)
-- 루트 패키지: `com.bukang` (`group`은 `com`). 모듈별 패키지는 `com.bukang.common`, `com.bukang.member`, `com.bukang.cash`, `com.bukang.payout`, `com.bukang.file`
+- 루트 패키지: `com.bukang` (`group`은 `com`). 모듈별 패키지는 `com.bukang.common`, `com.bukang.member`, `com.bukang.cash`, `com.bukang.payout`, `com.bukang.file`, `com.bukang.order`
   (모듈 폴더 이름은 케밥 케이스 `<도메인>-service`, Java 패키지는 하이픈을 쓸 수 없으므로 도메인 한 단어)
 - 공통 빌드 설정(Java 버전, Spring Boot BOM, Lombok, Checkstyle)은 루트 `build.gradle.kts`, 모듈별 의존성은 각 모듈의 `build.gradle.kts`에 있습니다.
 - 운영에서는 Nginx가 HTTP 요청을 받아 `/api`를 이 앱으로 라우팅합니다. 별도 API 게이트웨이는 아직 없습니다.
@@ -33,6 +35,7 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 ./gradlew :cash-service:bootRun          # 캐시 서비스 실행 (8081)
 ./gradlew :payout-service:bootRun        # 정산 서비스 실행 (8082)
 ./gradlew :file-service:bootRun          # 파일 서비스 실행 (8083)
+./gradlew :order-service:bootRun         # 주문 서비스 실행 (8084)
 ./gradlew test                           # 전체 테스트 (test 프로파일, H2)
 ./gradlew :member-service:test           # 한 모듈만 테스트
 ./gradlew :member-service:test --tests "com.bukang.member.MemberApplicationTests"              # 단일 테스트 클래스
@@ -45,7 +48,7 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 
 ```
 backend/
-├── settings.gradle.kts        include("common", "member-service", "cash-service", "payout-service", "file-service")
+├── settings.gradle.kts        include("common", "jwt", "member-service", "cash-service", "payout-service", "file-service", "order-service")
 ├── build.gradle.kts           모든 모듈 공통 설정
 ├── compose.yml                공용 인프라 (MySQL, Kafka, Elasticsearch, Redis) + 서비스별 앱 컨테이너
 ├── common/      com.bukang.common
@@ -63,6 +66,7 @@ backend/
 │   └── standard/              프레임워크와 무관한 인터페이스
 │       ├── modeltype/         HasModelTypeCode
 │       └── resulttype/        ResultType
+├── jwt/         com.bukang.jwt     JwtProvider, JwtProperties(jwt.*), JwtAutoConfiguration(빈 자동 등록)
 ├── member-service/  com.bukang.member
 │   ├── in/ app/ domain/ out/  컨트롤러 / Facade·UseCase / 엔티티·도메인 예외 / Repository
 │   ├── domain/                SourceMember, Member, exception/
@@ -74,13 +78,15 @@ backend/
 ├── payout-service/  com.bukang.payout
 │   ├── domain/                Payout, PayoutItem, PayoutHold, 상태·사유 enum
 │   └── out/                   PayoutRepository
-└── file-service/    com.bukang.file
-    ├── in/                    ApiV1FileController(업로드 URL 발급·완료, 조회), InternalV1FileController(대상에 연결, 내부 전용),
-    │                          FileCleanupBatchJobConfig·FileCleanupScheduler(정리 배치, prod에서 매일 05:00)
-    ├── app/                   FileFacade, FileUploadUseCase, FileLinkUseCase, FileCleanupUseCase
-    ├── domain/                StoredFile(FILE_FILE), FileStatus, FileFormat, exception/
-    ├── config/                S3Properties(file.storage.s3), S3Config(S3Client, S3Presigner)
-    └── out/                   StoredFileRepository, storage/(FileStorage, S3FileStorage)
+├── file-service/    com.bukang.file
+│   ├── in/                    ApiV1FileController(업로드 URL 발급·완료, 조회), InternalV1FileController(대상에 연결, 내부 전용),
+│   │                          FileCleanupBatchJobConfig·FileCleanupScheduler(정리 배치, prod에서 매일 05:00)
+│   ├── app/                   FileFacade, FileUploadUseCase, FileLinkUseCase, FileCleanupUseCase
+│   ├── domain/                StoredFile(FILE_FILE), FileStatus, FileFormat, exception/
+│   ├── config/                S3Properties(file.storage.s3), S3Config(S3Client, S3Presigner)
+│   └── out/                   StoredFileRepository, storage/(FileStorage, S3FileStorage)
+└── order-service/   com.bukang.order
+    └── in/                    OrderExceptionHandler (회원 ID 헤더 누락·형식 오류를 RsData로 응답)
 ```
 
 - 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).
@@ -95,7 +101,7 @@ backend/
   `common`에는 특정 서비스 전용 코드(Spring Security, 회원 엔티티 등)를 넣지 않습니다.
 - `common` 안에서 `global`(기술 공통)은 `shared`(서비스 간 계약)를 참조하지 않습니다. 의존 방향은 `shared` → `global` → `standard`입니다.
 - 다른 서비스가 회원 정보를 가져야 하면 `ReplicaMember`를 상속한 엔티티에 Kafka 이벤트(`MemberJoinedEvent`)로 복제해 보관합니다.
-  `BaseMember`(원본·복제본 공통)에는 공개 정보(username, nickname)만 두고, 비밀번호·이메일·휴대폰 번호는 `SourceMember`에만 둡니다.
+  `BaseMember`(원본·복제본 공통)에는 공개 정보(nickname)만 두고, 비밀번호·이메일·실명·휴대폰 번호·생년월일은 `SourceMember`에만 둡니다.
   unique 제약은 원본 엔티티(`Member`)에만 겁니다.
 - 도메인 예외는 `common`의 `global/exception/BusinessException`을 상속하고 생성자에서 `HttpStatus`를 정합니다.
   `GlobalExceptionHandler`가 한 번에 처리하므로 도메인을 추가해도 핸들러는 고치지 않습니다.
