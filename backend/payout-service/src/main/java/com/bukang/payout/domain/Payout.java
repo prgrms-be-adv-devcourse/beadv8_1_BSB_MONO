@@ -134,7 +134,7 @@ public class Payout extends BaseIdAndTime {
 		this.payoutCode = "ST-%s-%04X".formatted(settledAt.format(CODE_DATE), getId() & 0xFFFF);
 	}
 
-	// 세미의 지급 완료는 실제 송금 없이 상태만 바꾸는 모의 지급이다 (payout.md 1장 지급 5번)
+	// 세미의 지급 완료는 실제 송금 없이 상태만 바꾸는 모의 지급이다 (payout.md 1장 지급 6번)
 	// 보류된 정산 내역은 지급 완료로 바꿀 수 없다. 배치가 CALCULATED만 고르지만, 잘못 불려도 여기서 막는다
 	public void pay(LocalDateTime paidAt) {
 		if (status != PayoutStatus.CALCULATED) {

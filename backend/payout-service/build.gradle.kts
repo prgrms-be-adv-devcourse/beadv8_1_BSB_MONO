@@ -51,7 +51,7 @@ tasks.clean {
 	delete(querydslDir)
 }
 
-// REST Docs: test → asciidoctor(src/docs/asciidoc → HTML) → bootJar(static/docs로 포함) 순서로 이어진다
+// REST Docs: test → asciidoctor(src/docs/asciidoc → HTML) 순서로 이어지고, -PwithDocs를 주면 bootJar가 HTML을 static/docs로 넣는다
 val snippetsDir = layout.buildDirectory.dir("generated-snippets")
 
 tasks.test {
@@ -71,10 +71,22 @@ tasks.asciidoctor {
 	baseDirFollowsSourceFile()
 }
 
-// 실행 중인 앱의 /docs/index.html에서 문서를 볼 수 있게 jar에 넣는다
-tasks.bootJar {
+// CI의 build는 테스트를 이미 돌리므로 문서도 함께 만들어, 깨진 문서를 CI에서 잡는다 (Docker가 부르는 bootJar와는 상관없다)
+tasks.build {
 	dependsOn(tasks.asciidoctor)
-	from(tasks.asciidoctor.map { it.outputDir }) {
-		into("static/docs")
+}
+
+// 문서는 -PwithDocs를 줄 때만 jar에 넣는다 (예: ./gradlew :payout-service:bootJar -PwithDocs)
+// 늘 넣으면 bootJar → asciidoctor → test로 이어져 Docker 이미지를 만들 때마다 테스트가 다시 돈다
+// from(tasks.asciidoctor...)도 asciidoctor 의존을 자동으로 만들므로 dependsOn과 함께 조건 안에 둔다
+val withDocs = providers.gradleProperty("withDocs").isPresent
+
+tasks.bootJar {
+	if (withDocs) {
+		// 실행 중인 앱의 /docs/index.html에서 문서를 볼 수 있다
+		dependsOn(tasks.asciidoctor)
+		from(tasks.asciidoctor.map { it.outputDir }) {
+			into("static/docs")
+		}
 	}
 }
