@@ -92,6 +92,10 @@ public class OrderItem extends BaseIdAndTime {
 		return item;
 	}
 
+	void markPaid() {
+		this.status = OrderItemStatus.PAID;
+	}
+
 	public OrderItemDto toDto() {
 		return new OrderItemDto(getId(), participationId, raceCourseId, sellerId, itemName, unitPrice, quantity,
 			amount, status);
