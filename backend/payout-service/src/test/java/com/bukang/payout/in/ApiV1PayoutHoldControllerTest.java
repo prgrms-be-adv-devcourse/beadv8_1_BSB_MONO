@@ -2,7 +2,16 @@ package com.bukang.payout.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
+import static org.springframework.restdocs.headers.HeaderDocumentation.requestHeaders;
+import static org.springframework.restdocs.headers.HeaderDocumentation.responseHeaders;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
+import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
+import static org.springframework.restdocs.payload.PayloadDocumentation.requestFields;
+import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.pathParameters;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,9 +23,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.restdocs.headers.HeaderDescriptor;
+import org.springframework.restdocs.payload.FieldDescriptor;
+import org.springframework.restdocs.payload.JsonFieldType;
+import org.springframework.restdocs.snippet.Snippet;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -26,13 +41,44 @@ import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
+import com.bukang.payout.support.RestDocsConfig;
 import com.jayway.jsonpath.JsonPath;
 
+// 통과한 테스트만 REST Docs 스니펫(build/generated-snippets)을 남긴다. 문서는 src/docs/asciidoc/index.adoc에서 묶는다
 @SpringBootTest
 @AutoConfigureMockMvc
+@AutoConfigureRestDocs
+@Import(RestDocsConfig.class)
 @ActiveProfiles("test")
 class ApiV1PayoutHoldControllerTest {
 	private static final int ADMIN_ID = 99;
+
+	private static final HeaderDescriptor MEMBER_ID_HEADER =
+		headerWithName("X-Member-Id").description("요청한 관리자 회원 ID (게이트웨이가 넣어 줄 예정)");
+
+	// 성공·실패 응답 모두 RsData {status, message, data} 형식이다
+	private static final FieldDescriptor[] HOLD_RESPONSE = {
+		fieldWithPath("status").description("HTTP 상태 코드"),
+		fieldWithPath("message").description("결과 메시지"),
+		fieldWithPath("data.id").description("지급보류 ID (풀기 API 경로에 쓴다)"),
+		fieldWithPath("data.holdCode").description("지급보류 ID 표기 (HD-보류한 날-16진수 4자리)"),
+		fieldWithPath("data.payoutId").description("보류된 정산 내역 ID"),
+		fieldWithPath("data.reasonType").description("보류 사유 (ACCOUNT_NOT_REGISTERED, RACE_CANCELED)"),
+		fieldWithPath("data.reason").description("사유 상세").optional().type(JsonFieldType.STRING),
+		fieldWithPath("data.status").description("보류 상태 (HELD: 지급보류, RELEASED: 해제)"),
+		fieldWithPath("data.heldBy").description("보류한 관리자 회원 ID"),
+		fieldWithPath("data.heldAt").description("보류 일시"),
+		fieldWithPath("data.releasedBy").description("푼 관리자 회원 ID (보류 중에는 null)")
+			.optional().type(JsonFieldType.NUMBER),
+		fieldWithPath("data.releasedAt").description("해제 일시 (보류 중에는 null)")
+			.optional().type(JsonFieldType.STRING)
+	};
+
+	private static final Snippet ERROR_RESPONSE = responseFields(
+		fieldWithPath("status").description("HTTP 상태 코드"),
+		fieldWithPath("message").description("실패 이유"),
+		fieldWithPath("data").description("실패 응답에서는 항상 null").type(JsonFieldType.NULL)
+	);
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -93,7 +139,17 @@ class ApiV1PayoutHoldControllerTest {
 			.andExpect(jsonPath("$.data.payoutId").value(payout.getId()))
 			.andExpect(jsonPath("$.data.reasonType").value("ACCOUNT_NOT_REGISTERED"))
 			.andExpect(jsonPath("$.data.status").value("HELD"))
-			.andExpect(jsonPath("$.data.heldBy").value(ADMIN_ID));
+			.andExpect(jsonPath("$.data.heldBy").value(ADMIN_ID))
+			.andDo(document("payout-hold-create",
+				requestHeaders(MEMBER_ID_HEADER),
+				pathParameters(parameterWithName("payoutId").description("보류를 걸 정산 내역 ID")),
+				requestFields(
+					fieldWithPath("reasonType").description("보류 사유 (ACCOUNT_NOT_REGISTERED: 정산 계좌 미등록, "
+						+ "RACE_CANCELED: 대회 취소 처리)"),
+					fieldWithPath("reason").description("사유 상세 (선택, 500자 이하)").optional()
+				),
+				responseHeaders(headerWithName("Location").description("만든 지급보류의 경로")),
+				responseFields(HOLD_RESPONSE)));
 
 		result.andExpect(header().string("Location", "/api/v1/payout/holds/" + holdIdOf(result)));
 		assertThat(statusOf(payout)).isEqualTo(PayoutStatus.HELD);
@@ -110,7 +166,11 @@ class ApiV1PayoutHoldControllerTest {
 			.andExpect(jsonPath("$.message").value("지급보류를 풀었습니다."))
 			.andExpect(jsonPath("$.data.status").value("RELEASED"))
 			.andExpect(jsonPath("$.data.releasedBy").value(ADMIN_ID))
-			.andExpect(jsonPath("$.data.releasedAt").isNotEmpty());
+			.andExpect(jsonPath("$.data.releasedAt").isNotEmpty())
+			.andDo(document("payout-hold-release",
+				requestHeaders(MEMBER_ID_HEADER),
+				pathParameters(parameterWithName("holdId").description("풀 지급보류 ID (보류 걸기 응답의 data.id)")),
+				responseFields(HOLD_RESPONSE)));
 
 		assertThat(statusOf(payout)).isEqualTo(PayoutStatus.CALCULATED);
 	}
@@ -123,7 +183,8 @@ class ApiV1PayoutHoldControllerTest {
 
 		holdAccount(payout.getId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 지급보류 중인 정산 내역입니다."));
+			.andExpect(jsonPath("$.message").value("이미 지급보류 중인 정산 내역입니다."))
+			.andDo(document("payout-hold-create-conflict", ERROR_RESPONSE));
 	}
 
 	@Test
@@ -135,7 +196,8 @@ class ApiV1PayoutHoldControllerTest {
 
 		release(holdId)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 해제된 지급보류입니다."));
+			.andExpect(jsonPath("$.message").value("이미 해제된 지급보류입니다."))
+			.andDo(document("payout-hold-release-conflict", ERROR_RESPONSE));
 	}
 
 	@Test
@@ -143,10 +205,12 @@ class ApiV1PayoutHoldControllerTest {
 	void notFound() throws Exception {
 		holdAccount(9999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("정산 내역을 찾을 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("정산 내역을 찾을 수 없습니다."))
+			.andDo(document("payout-hold-create-not-found", ERROR_RESPONSE));
 		release(9999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("지급보류를 찾을 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("지급보류를 찾을 수 없습니다."))
+			.andDo(document("payout-hold-release-not-found", ERROR_RESPONSE));
 	}
 
 	@Test
@@ -154,7 +218,8 @@ class ApiV1PayoutHoldControllerTest {
 	void missingMemberId() throws Exception {
 		mockMvc.perform(post("/api/v1/payout/holds/{holdId}/release", 1))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
+			.andDo(document("payout-hold-unauthorized", ERROR_RESPONSE));
 	}
 
 	@Test
@@ -163,7 +228,9 @@ class ApiV1PayoutHoldControllerTest {
 		Payout payout = savePayout();
 
 		hold(payout.getId(), "{}")
-			.andExpect(status().isBadRequest());
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("보류 사유를 선택해주세요."))
+			.andDo(document("payout-hold-create-bad-request", ERROR_RESPONSE));
 		hold(payout.getId(), """
 			{"reasonType": "UNKNOWN"}
 			""")

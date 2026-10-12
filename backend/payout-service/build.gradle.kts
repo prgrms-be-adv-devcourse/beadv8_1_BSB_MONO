@@ -3,7 +3,11 @@ plugins {
 	java
 	id("org.springframework.boot")
 	id("io.spring.dependency-management")
+	id("org.asciidoctor.jvm.convert") // REST Docs: 테스트가 만든 스니펫을 HTML 문서로 묶는다
 }
+
+// Asciidoctor가 REST Docs 스니펫 매크로(operation::[])를 읽도록 쓰는 확장 전용 설정
+val asciidoctorExt: Configuration by configurations.creating
 
 dependencies {
 	implementation(project(":common"))
@@ -23,6 +27,11 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 
+	// Spring REST Docs: 컨트롤러 테스트가 통과할 때만 API 문서 스니펫이 만들어진다
+	testImplementation("org.springframework.boot:spring-boot-restdocs") // @AutoConfigureRestDocs (Boot 4에서 분리된 모듈)
+	testImplementation("org.springframework.restdocs:spring-restdocs-mockmvc")
+	asciidoctorExt("org.springframework.restdocs:spring-restdocs-asciidoctor")
+
 	// QueryDSL (Jakarta 버전, 버전은 Spring Boot BOM의 querydsl.version 사용)
 	val querydslVersion = dependencyManagement.importedProperties["querydsl.version"]
 	implementation("com.querydsl:querydsl-jpa:${querydslVersion}:jakarta")
@@ -40,4 +49,32 @@ tasks.compileJava {
 
 tasks.clean {
 	delete(querydslDir)
+}
+
+// REST Docs: test → asciidoctor(src/docs/asciidoc → HTML) → bootJar(static/docs로 포함) 순서로 이어진다
+val snippetsDir = layout.buildDirectory.dir("generated-snippets")
+
+tasks.test {
+	outputs.dir(snippetsDir)
+}
+
+// 플러그인 기본값(AsciidoctorJ 2.x)은 REST Docs 4의 확장과 메서드 모양이 달라 AbstractMethodError가 난다
+// REST Docs 4는 AsciidoctorJ 3.x 기준으로 만들어졌으므로 엔진 버전을 맞춘다
+asciidoctorj {
+	setVersion("3.0.0")
+}
+
+tasks.asciidoctor {
+	inputs.dir(snippetsDir)
+	configurations(asciidoctorExt.name)
+	dependsOn(tasks.test)
+	baseDirFollowsSourceFile()
+}
+
+// 실행 중인 앱의 /docs/index.html에서 문서를 볼 수 있게 jar에 넣는다
+tasks.bootJar {
+	dependsOn(tasks.asciidoctor)
+	from(tasks.asciidoctor.map { it.outputDir }) {
+		into("static/docs")
+	}
 }
