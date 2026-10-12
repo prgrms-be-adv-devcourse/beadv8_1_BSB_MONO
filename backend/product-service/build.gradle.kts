@@ -26,6 +26,10 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-elasticsearch-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	// 테스트용 ES(nori 설치 이미지)를 Docker로 띄운다
+	testImplementation("org.springframework.boot:spring-boot-testcontainers") // @ServiceConnection
+	testImplementation("org.testcontainers:testcontainers-junit-jupiter") // @Testcontainers
+	testImplementation("org.testcontainers:testcontainers-elasticsearch")
 
 	// QueryDSL (Jakarta 버전, 버전은 Spring Boot BOM의 querydsl.version 사용)
 	val querydslVersion = dependencyManagement.importedProperties["querydsl.version"]
