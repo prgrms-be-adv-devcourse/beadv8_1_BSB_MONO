@@ -1,0 +1,49 @@
+import Image from 'next/image'
+import type { ReactNode } from 'react'
+
+import { cn } from '@/shared/lib'
+
+export type RaceTicketCardProps = {
+  image: string
+  title: string
+  /** 일시 · 장소 */
+  meta: string
+  /** 종목 · 가격 */
+  ticket: string
+  /** 오른쪽 링크·버튼 (변경, 삭제 등) */
+  action?: ReactNode
+  className?: string
+}
+
+// 피그마 "card / 대회 요약": 신청·장바구니·결제에서 고른 참가권을 한 장으로 요약한다
+export function RaceTicketCard({
+  image,
+  title,
+  meta,
+  ticket,
+  action,
+  className,
+}: RaceTicketCardProps) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-4 rounded-[12px] bg-bg-subtle py-3 pr-4 pl-3',
+        className,
+      )}
+    >
+      <Image
+        src={image}
+        alt=""
+        width={72}
+        height={72}
+        className="size-18 shrink-0 rounded-md object-cover"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="truncate text-heading-s">{title}</p>
+        <p className="truncate text-body-m text-text-secondary">{meta}</p>
+        <p className="text-label-strong">{ticket}</p>
+      </div>
+      {action}
+    </div>
+  )
+}

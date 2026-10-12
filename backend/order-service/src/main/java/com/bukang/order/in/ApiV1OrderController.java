@@ -1,0 +1,213 @@
+package com.bukang.order.in;
+
+import java.net.URI;
+import java.time.LocalDate;
+
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.bukang.common.global.rsdata.RsData;
+import com.bukang.order.app.OrderCreateResult;
+import com.bukang.order.app.OrderFacade;
+import com.bukang.order.dto.OrderCreateRequestDto;
+import com.bukang.order.dto.OrderDto;
+import com.bukang.order.dto.OrderPageDto;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+import lombok.RequiredArgsConstructor;
+
+@Tag(name = "Order", description = "바로 결제 예매(주문 생성·자리 임시 확보), 결제 기한 연장, 주문 내역 조회 API")
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/v1/order/orders")
+public class ApiV1OrderController {
+	private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+	private static final int MAX_PAGE_SIZE = 100;
+
+	private final OrderFacade orderFacade;
+
+	// 201·200·409(매진)를 직접 고르므로 응답 코드를 모두 명시한다
+	// 에러 응답은 GlobalExceptionHandler, OrderExceptionHandler가 RsData(data: null) 형식으로 반환한다
+	@PostMapping
+	@Operation(summary = "바로 결제 예매 ([결제하기])",
+		description = "자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받고, 결제 기한 10분짜리 주문(CREATED)을 만든다. "
+			+ "같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. "
+			+ "남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "201", description = "자리 확보, 주문 생성",
+			content = @Content(examples = @ExampleObject(value = OrderApiExamples.CREATE_SUCCESS))),
+		@ApiResponse(responseCode = "200", description = "같은 Idempotency-Key로 이미 만든 주문",
+			content = @Content(examples = @ExampleObject(value = OrderApiExamples.CREATE_EXISTING))),
+		@ApiResponse(responseCode = "400", description = "입력값·헤더 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "입력값 검증 실패", value = OrderApiExamples.INVALID_INPUT),
+				@ExampleObject(name = "요청 본문 형식 오류", value = OrderApiExamples.INVALID_BODY),
+				@ExampleObject(name = "Idempotency-Key 없음", value = OrderApiExamples.MISSING_IDEMPOTENCY_KEY),
+				@ExampleObject(name = "Idempotency-Key 길이 오류", value = OrderApiExamples.INVALID_IDEMPOTENCY_KEY),
+				@ExampleObject(name = "회원 ID 형식 오류", value = OrderApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = OrderApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "다른 회원의 참가 신청",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.NOT_OWNER))),
+		@ApiResponse(responseCode = "404", description = "없는 참가 신청 또는 종목",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "없는 참가 신청", value = OrderApiExamples.PARTICIPATION_NOT_FOUND),
+				@ExampleObject(name = "없는 종목", value = OrderApiExamples.COURSE_NOT_FOUND)
+			})),
+		@ApiResponse(responseCode = "409", description = "매진, 결제할 수 없는 상태, 접수 기간 아님, 요청 겹침, 키 재사용",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "매진", value = OrderApiExamples.SOLD_OUT),
+				@ExampleObject(name = "결제할 수 없는 상태", value = OrderApiExamples.NOT_PAYABLE),
+				@ExampleObject(name = "접수 기간 아님", value = OrderApiExamples.NOT_ACCEPTING),
+				@ExampleObject(name = "요청 겹침", value = OrderApiExamples.CONFLICT),
+				@ExampleObject(name = "다른 신청서에 쓴 키", value = OrderApiExamples.KEY_REUSED)
+			}))
+	})
+	public ResponseEntity<RsData<OrderDto>> create(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "중복 주문 방지 키. 같은 [결제하기] 재시도에는 같은 값을 보낸다 (예: UUID)",
+			example = "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43")
+		@RequestHeader(IDEMPOTENCY_KEY_HEADER) @Size(min = 1, max = 64, message = "Idempotency-Key는 1~64자로 보내주세요.")
+		String idempotencyKey,
+		@Valid @RequestBody OrderCreateRequestDto request
+	) {
+		OrderCreateResult result = orderFacade.create(request, idempotencyKey, memberId);
+		return switch (result.outcome()) {
+			case CREATED -> ResponseEntity.created(URI.create("/api/v1/order/orders/" + result.order().getId()))
+				.body(RsData.of(HttpStatus.CREATED, "자리를 확보했습니다. 결제 기한 안에 결제해주세요.", result.order()));
+			case EXISTING -> ResponseEntity.ok()
+				.body(RsData.of(HttpStatus.OK, "이미 처리한 주문 요청입니다.", result.order()));
+			case SOLD_OUT -> ResponseEntity.status(HttpStatus.CONFLICT)
+				.body(RsData.of(HttpStatus.CONFLICT, "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.", null));
+		};
+	}
+
+	@PostMapping("/{orderId}/deadline-extension")
+	@Operation(summary = "결제 기한 2분 늘리기",
+		description = "PG 충전창에 들어갈 때 프론트가 부른다. 결제 대기(CREATED) 주문의 결제 기한을 2분 늘리고, 주문당 한 번만 된다. "
+			+ "상품 서비스의 자리 기한을 먼저 늘린 뒤 주문·참가 신청의 결제 기한을 함께 바꾼다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "기한 연장",
+			content = @Content(examples = @ExampleObject(value = OrderApiExamples.EXTEND_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "주문 ID·회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "주문 ID·회원 ID 형식 오류", value = OrderApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = OrderApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "다른 회원의 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.ORDER_NOT_OWNER))),
+		@ApiResponse(responseCode = "404", description = "없는 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.ORDER_NOT_FOUND))),
+		@ApiResponse(responseCode = "409", description = "이미 한 번 늘림, 기한 지남, 결제 대기가 아닌 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "이미 한 번 늘림", value = OrderApiExamples.ALREADY_EXTENDED),
+				@ExampleObject(name = "기한 지남", value = OrderApiExamples.DEADLINE_PASSED),
+				@ExampleObject(name = "결제 대기가 아님", value = OrderApiExamples.NOT_WAITING_PAYMENT)
+			}))
+	})
+	public ResponseEntity<RsData<OrderDto>> extendDeadline(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "주문 ID", example = "1")
+		@PathVariable int orderId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "결제 기한을 2분 늘렸습니다.", orderFacade.extendDeadline(orderId, memberId)));
+	}
+
+	@GetMapping
+	@Operation(summary = "내 주문 목록",
+		description = "내 주문을 최신순으로 돌려준다. 조회 기간(from·to, 주문 일자 기준)은 각각 생략할 수 있고, to 날짜의 주문까지 포함한다. "
+			+ "상품은 대표 상품명과 개수만 담는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공 (주문이 없으면 빈 목록)",
+			content = @Content(examples = @ExampleObject(value = OrderApiExamples.LIST_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "조회 기간·페이지·회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "시작일이 종료일보다 늦음", value = OrderApiExamples.INVALID_PERIOD),
+				@ExampleObject(name = "페이지 크기 초과", value = OrderApiExamples.INVALID_PAGE),
+				@ExampleObject(name = "날짜·숫자 형식 오류", value = OrderApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = OrderApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED)))
+	})
+	public ResponseEntity<RsData<OrderPageDto>> findMine(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "조회 시작일 (주문 일자, 생략 가능)", example = "2026-10-01")
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+		@Parameter(description = "조회 종료일 (이날 주문까지 포함, 생략 가능)", example = "2026-10-31")
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+		@Parameter(description = "페이지 번호 (0부터)", example = "0")
+		@RequestParam(defaultValue = "0") @Min(value = 0, message = "페이지 번호는 0 이상이어야 합니다.") int page,
+		@Parameter(description = "페이지 크기 (1~100)", example = "20")
+		@RequestParam(defaultValue = "20") @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다.")
+		@Max(value = MAX_PAGE_SIZE, message = "한 번에 100개까지 조회할 수 있습니다.") int size
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "주문 내역을 조회했습니다.", orderFacade.findMine(memberId, from, to, page, size)));
+	}
+
+	@GetMapping("/{orderId}")
+	@Operation(summary = "주문 상세", description = "본인 주문의 상품·상태·금액·결제 기한을 돌려준다. 상품명·단가는 주문 당시 값이다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공",
+			content = @Content(examples = @ExampleObject(value = OrderApiExamples.FIND_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "주문 ID·회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "주문 ID·회원 ID 형식 오류", value = OrderApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = OrderApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "다른 회원의 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.VIEW_NOT_OWNER))),
+		@ApiResponse(responseCode = "404", description = "없는 주문",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.ORDER_NOT_FOUND)))
+	})
+	public ResponseEntity<RsData<OrderDto>> findById(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "주문 ID", example = "1")
+		@PathVariable int orderId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "주문을 조회했습니다.", orderFacade.findById(orderId, memberId)));
+	}
+}

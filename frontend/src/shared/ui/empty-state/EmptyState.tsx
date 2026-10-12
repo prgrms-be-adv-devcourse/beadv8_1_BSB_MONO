@@ -26,7 +26,7 @@ export function EmptyState({
       className={cn('flex w-full flex-col items-center gap-4 px-6 py-10 text-center', className)}
     >
       <div className="flex size-16 items-center justify-center rounded-full bg-bg-subtle">
-        <Icon name={icon} className="size-7 text-text-tertiary" />
+        <Icon name={icon} className="size-7 text-text-primary" />
       </div>
       <div className="flex flex-col gap-1.5">
         <p className="text-heading-s text-text-primary">{title}</p>

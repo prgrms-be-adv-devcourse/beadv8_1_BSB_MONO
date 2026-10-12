@@ -42,7 +42,8 @@ export function Dialog({
               {title}
             </AlertDialog.Title>
             {body && (
-              <AlertDialog.Description className="text-body-m text-text-secondary">
+              // 본문에 입력칸(반려 사유 등)을 넣을 수 있게 p 대신 div로 그린다
+              <AlertDialog.Description render={<div />} className="text-body-m text-text-secondary">
                 {body}
               </AlertDialog.Description>
             )}

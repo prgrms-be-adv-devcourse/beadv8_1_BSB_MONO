@@ -2,7 +2,7 @@
 
 Spring Boot 4.1 / Java 25 백엔드입니다. 명령은 이 폴더(`backend/`)에서 실행합니다.
 
-Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080), `cash-service`(8081)가 있습니다. 구조는 [`CLAUDE.md`](CLAUDE.md)를 참고합니다.
+Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080), `cash-service`(8081), `payout-service`(8082), `file-service`(8083), `order-service`(8084)가 있습니다. 구조는 [`CLAUDE.md`](CLAUDE.md)를 참고합니다.
 
 ## 실행 환경
 
@@ -16,17 +16,21 @@ Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080)
 | `bukang-elasticsearch` | Elasticsearch 9.4.5 + nori 한글 분석기 | `localhost:9200` |
 | `bukang-elasticvue` | Elasticsearch 관리 화면 (Elasticvue) | http://localhost:8090 |
 | `bukang-redis` | Redis 8.2 | `localhost:6379` |
+| `bukang-s3mock` | 로컬 S3 대체재 (Adobe S3Mock, 버킷 `bukang-file`) | http://localhost:9090 |
 | `member-service` | 회원 서비스 (prod 프로파일) | http://localhost:8080 |
 | `cash-service` | 캐시 서비스 (prod 프로파일) | http://localhost:8081 |
+| `payout-service` | 정산 서비스 (prod 프로파일) | http://localhost:8082 |
+| `file-service` | 파일 서비스 (prod 프로파일) | http://localhost:8083 |
+| `order-service` | 주문 서비스 (prod 프로파일) | http://localhost:8084 |
 
-앱 서비스(`member-service`, `cash-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
+앱 서비스(`member-service`, `cash-service`, `payout-service`, `file-service`, `order-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
 
 ### 개발 실행 (앱 컨테이너 제외)
 
-IDE나 `./gradlew :member-service:bootRun`(또는 `:cash-service:bootRun`)으로 서비스를 실행하면 Spring Boot가 `compose.yml`의 인프라 컨테이너를 자동으로 띄웁니다. 이미 실행 중이면 그대로 사용합니다.
+IDE나 `./gradlew :member-service:bootRun`(또는 `:cash-service:bootRun`, `:payout-service:bootRun`, `:file-service:bootRun`, `:order-service:bootRun`)으로 서비스를 실행하면 Spring Boot가 `compose.yml`의 인프라 컨테이너를 자동으로 띄웁니다. 이미 실행 중이면 그대로 사용합니다.
 여러 서비스가 같은 인프라를 쓰므로 서비스를 종료해도 컨테이너는 멈추지 않습니다(`lifecycle-management: start-only`). 정리할 때는 `docker compose down`을 실행합니다.
 
-IntelliJ에서는 `MemberApplication`, `CashApplication`을 바로 실행하면 됩니다. 실행 위치(working directory)가 저장소 루트, `backend/`, 모듈 폴더 중 어디여도
+IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `FileApplication`, `OrderApplication`을 바로 실행하면 됩니다. 실행 위치(working directory)가 저장소 루트, `backend/`, 모듈 폴더 중 어디여도
 `common`의 `global/config/LocalDevEnvironmentPostProcessor`가 `backend/compose.yml`과 `backend/.env`를 찾아 적용합니다.
 
 `docker/elasticsearch/Dockerfile`을 수정했다면 `docker compose up -d --build`로 이미지를 다시 만듭니다.
@@ -49,7 +53,7 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`을 바로 실행하면 
    | `MYSQL_USER` / `MYSQL_PASS` / `MYSQL_DB` | `compose.yml`의 `bukang-db` 값과 동일 |
    | `JWT_SECRET` | 32자 이상의 임의 문자열 |
 
-2. IDE나 `bootRun`으로 실행 중인 서비스가 있으면 종료합니다. 같은 포트(8080, 8081)를 사용합니다.
+2. IDE나 `bootRun`으로 실행 중인 서비스가 있으면 종료합니다. 같은 포트(8080, 8081, 8082, 8083, 8084)를 사용합니다.
 
 3. 앱 이미지를 빌드하고 전체 컨테이너를 실행합니다.
 
@@ -60,6 +64,40 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`을 바로 실행하면 
    ```
 
 앱 컨테이너는 Docker 내부 서비스 이름(`bukang-db`, `bukang-kafka:29092` 등)으로 인프라에 접속하므로, `.env`의 주소에는 `localhost` 대신 서비스 이름을 사용합니다. 운영 프로파일에서는 Swagger가 비활성화됩니다.
+
+## 파일 저장소 (S3)
+
+`file-service`는 대회 이미지·소개 영상·크루원 명단(엑셀) 파일을 S3에 둡니다. 파일 본문은 서버를 거치지 않고, 브라우저가 서버에서 받은 presigned URL로 S3에 직접 올리고 받습니다.
+접속 설정은 `file-service`의 `application.yaml`(`file.storage.s3`)에 있습니다.
+API 사용법(단계별 요청·응답, 파일 종류, 연결 규칙)은 [`file-service/README.md`](file-service/README.md)에 있습니다.
+
+| 실행 방법 | 쓰는 S3 | 설정 |
+|---|---|---|
+| `bootRun`, IDE | 로컬 S3Mock (`localhost:9090`) | 기본값 그대로 |
+| `docker compose --profile app up` | 로컬 S3Mock (컨테이너 안에서는 `bukang-s3mock:9090`) | `compose.yml`이 넘긴다 |
+| 실제 AWS S3로 확인 | 실제 버킷 | `.env`에 `S3_*` 값을 채운다 (`.env.example` 참고) |
+| 운영 서버 | 실제 버킷 | 환경변수. 키 대신 EC2 IAM 역할 |
+
+- S3Mock은 path-style 주소(`http://localhost:9090/<버킷>/<키>`)만 지원하고, presigned URL의 서명과 만료를 검사하지 않습니다. 서명 관련 동작은 실제 S3에서 확인합니다.
+- 키가 비어 있으면 AWS SDK 기본 자격 증명 체인(환경변수, `~/.aws`, EC2 역할)을 씁니다. AWS 키는 `.env`에만 두고 커밋하지 않습니다.
+- 버킷은 퍼블릭 액세스 차단을 켠 비공개 버킷입니다. 이미지는 짧게 만료되는 presigned GET URL로 보여 줍니다.
+
+### 업로드 흐름과 객체 경로
+
+```
+① POST /api/v1/file/files               업로드 URL 발급 (파일은 PENDING, 키 uploads/{uuid}.{확장자})
+② 브라우저 → S3 PUT                       응답의 headers(content-type, content-length)를 그대로 붙인다
+③ POST /api/v1/file/files/{id}/complete  서버가 uploads/ → files/로 복사하고, 복사본의 크기·앞부분(매직 바이트)을 확인 → UPLOADED
+```
+
+| 경로 | 내용 | 정리 |
+|---|---|---|
+| `uploads/` | 브라우저가 presigned URL로 올린 원본. 확인이 끝나면 지운다 | 확인하지 않고 남은 파일(PENDING)의 객체는 1일 뒤 정리 배치가 행과 함께 지운다. 확인 뒤 같은 URL로 다시 올린 객체는 아직 지우지 않는다 (S3 수명 주기 규칙 미설정) |
+| `files/` | 서버가 확인을 마친 파일. 업로드 URL을 주지 않는다 | 대상에 붙지 않았거나 대상에서 빠진 파일은 1일 뒤 정리 배치가 지운다 (file-service `BATCH-ROADMAP.md`) |
+
+presigned URL은 만료 전까지 여러 번 쓸 수 있어서, 확인을 마친 뒤 같은 URL로 다른 내용을 덮어쓸 수 있습니다.
+확인한 파일을 업로드 URL이 없는 `files/`로 옮겨 두면 확인한 내용이 바뀌지 않습니다.
+업로드 URL에는 `content-type`과 `content-length`가 서명되므로, 다른 형식이나 크기로 올리면 실제 S3가 거절합니다.
 
 ## 민감정보 암호화
 
@@ -118,7 +156,7 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`을 바로 실행하면 
    if (memberRepository.existsByPhoneHash(phoneHash)) {
    	throw new DuplicatePhoneException("이미 사용 중인 전화번호입니다.");
    }
-   new Member(username, email, passwordEncoder.encode(password), nickname, phone, phoneHash);
+   new Member(email, passwordEncoder.encode(password), name, nickname, phone, phoneHash, birthDate, gender);
    ```
 
 4. 값을 바꾸는 메서드도 원문과 해시를 **함께** 받아 둘 다 바꿉니다. 해시는 자동으로 갱신되지 않습니다.
@@ -250,6 +288,9 @@ Kafka에는 메시지를 **JSON 문자열**로 보냅니다. Kafka 직렬화기�
 |---|---|
 | http://localhost:8080/swagger-ui.html | 회원 서비스 Swagger UI (dev 프로파일에서만 열림, prod에서는 비활성화) |
 | http://localhost:8081/swagger-ui.html | 캐시 서비스 Swagger UI |
+| http://localhost:8082/swagger-ui.html | 정산 서비스 Swagger UI |
+| http://localhost:8083/swagger-ui.html | 파일 서비스 Swagger UI |
+| http://localhost:8084/swagger-ui.html | 주문 서비스 Swagger UI |
 | http://localhost:8080/v3/api-docs | OpenAPI 문서 원본(JSON) |
 
 ### 작성 규칙

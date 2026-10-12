@@ -37,6 +37,21 @@ const SPINNER_COLOR: Record<ButtonVariant, string> = {
   accent: 'text-text-on-accent',
 }
 
+/** 링크처럼 버튼이 아닌 요소에 버튼 모양을 입힐 때 쓴다. */
+export function buttonClassName({
+  variant = 'primary',
+  size = 'm',
+  className,
+}: { variant?: ButtonVariant; size?: ButtonSize; className?: string } = {}) {
+  return cn(
+    'inline-flex shrink-0 items-center justify-center rounded-md whitespace-nowrap select-none disabled:cursor-not-allowed',
+    FOCUS_RING,
+    VARIANT[variant],
+    SIZE[size],
+    className,
+  )
+}
+
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant
   size?: ButtonSize
@@ -67,13 +82,7 @@ export function Button({
       type={type}
       aria-busy={loading || undefined}
       aria-disabled={loading || undefined}
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-md whitespace-nowrap select-none disabled:cursor-not-allowed',
-        FOCUS_RING,
-        VARIANT[variant],
-        SIZE[size],
-        className,
-      )}
+      className={buttonClassName({ variant, size, className })}
       onClick={handleClick}
       {...props}
     >
