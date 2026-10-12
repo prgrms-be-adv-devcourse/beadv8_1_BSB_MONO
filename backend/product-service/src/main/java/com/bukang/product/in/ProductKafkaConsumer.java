@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Component
 @RequiredArgsConstructor
-public class ProductEventListener {
+public class ProductKafkaConsumer {
 	// application.yaml에 group-id가 없으므로 리스너마다 적는다
 	private static final String GROUP_ID = "product";
 
