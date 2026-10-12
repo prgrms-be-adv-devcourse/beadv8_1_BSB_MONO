@@ -22,6 +22,7 @@ import lombok.NoArgsConstructor;
 /**
  * 상품 서비스가 판매자 이벤트로 복제해 보관하는 판매자
  * ID와 신청·심사 시각은 원본 판매자 값을 그대로 쓴다. 정산 계좌, 연락처 같은 정보는 원본에만 둔다.
+ * 상호명·대표자·사업자등록번호는 대회 상세에 공개하는 판매자 정보라서 복제한다.
  */
 @Entity
 @NoArgsConstructor(access = PROTECTED)
@@ -44,6 +45,17 @@ public class ProductSeller extends BaseEntity {
 	@Column(name = "seller_type", nullable = false, columnDefinition = "varchar(20)")
 	private SellerType sellerType;
 
+	// 대회 상세의 판매자 정보에 보여 준다. 상호명·사업자등록번호는 사업자만 있다
+	@Column(length = 100)
+	private String businessName;
+
+	@Column(length = 20)
+	private String businessNumber;
+
+	// 사업자는 대표자, 비사업자는 성명
+	@Column(nullable = false, length = 50)
+	private String representativeName;
+
 	@Enumerated(STRING)
 	@Column(name = "status", nullable = false, columnDefinition = "varchar(20)")
 	private SellerStatus status;
@@ -59,6 +71,9 @@ public class ProductSeller extends BaseEntity {
 		int id,
 		ProductMember member,
 		SellerType sellerType,
+		String businessName,
+		String businessNumber,
+		String representativeName,
 		SellerStatus status,
 		LocalDateTime requestedAt,
 		LocalDateTime reviewedAt
@@ -66,6 +81,9 @@ public class ProductSeller extends BaseEntity {
 		this.id = id;
 		this.member = member;
 		this.sellerType = sellerType;
+		this.businessName = businessName;
+		this.businessNumber = businessNumber;
+		this.representativeName = representativeName;
 		this.status = status;
 		this.requestedAt = requestedAt;
 		this.reviewedAt = reviewedAt;
