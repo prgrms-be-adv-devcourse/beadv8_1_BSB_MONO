@@ -108,8 +108,8 @@ final class RaceApiExamples {
 		{ "status": 409, "message": "판매가 시작된 대회는 환불 기준일을 앞당길 수 없습니다.", "data": null }
 		""";
 
-	static final String QUOTA_BELOW_TAKEN = """
-		{ "status": 409, "message": "정원을 확보·판매된 자리 수보다 줄일 수 없습니다. (종목: 10K)", "data": null }
+	static final String QUOTA_DECREASED = """
+		{ "status": 409, "message": "판매가 시작된 종목은 정원을 줄일 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
 	static final String SCHEDULE_PASSED = """
@@ -128,8 +128,8 @@ final class RaceApiExamples {
 		{ "status": 409, "message": "작성 중인 대회만 판매를 시작할 수 있습니다.", "data": null }
 		""";
 
-	static final String COURSE_HAS_PARTICIPANTS = """
-		{ "status": 409, "message": "확보·판매된 자리가 있는 종목은 뺄 수 없습니다. (종목: 10K)", "data": null }
+	static final String COURSE_REMOVED = """
+		{ "status": 409, "message": "판매가 시작된 대회는 종목을 뺄 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
 	private RaceApiExamples() {

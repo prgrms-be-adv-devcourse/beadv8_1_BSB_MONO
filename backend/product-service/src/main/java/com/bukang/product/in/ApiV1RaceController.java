@@ -85,7 +85,7 @@ public class ApiV1RaceController {
 	@Operation(summary = "대회 수정",
 		description = "본인이 등록한 대회를 등록과 같은 모양의 요청으로 통째로 바꾼다. 종목은 courseId가 있으면 수정하고 없으면 추가하며, "
 			+ "요청에 없는 기존 종목은 뺀다. 이미지 목록도 통째로 바뀌어, 수정이 커밋된 뒤 file-service에 다시 연결을 요청한다. "
-			+ "판매가 시작된 뒤에는 참가비를 올리거나 환불 기준일을 앞당길 수 없고, 정원은 언제나 확보·판매된 자리보다 줄일 수 없다. "
+			+ "판매가 시작된 뒤에는 참가비를 올리거나 환불 기준일을 앞당길 수 없고, 정원을 줄이거나 종목을 뺄 수 없다(정원은 늘리기만). "
 			+ "판매 시작을 누른 뒤에는 이미 지난 판매 일정(크루 예매 시작·마감, 개인 예매 오픈, 접수 마감)을 바꾸거나 "
 			+ "일정을 지난 시각으로 옮길 수 없고, 접수 마감은 늦추기만 할 수 있다.")
 	@ApiResponses({
@@ -116,15 +116,15 @@ public class ApiV1RaceController {
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND))),
 		@ApiResponse(responseCode = "409",
 			description = "판매 시작 뒤 참가비 인상·환불 기준일 앞당김, 지난 판매 일정 변경·지난 시각으로 이동·접수 마감 앞당김, "
-				+ "확보·판매된 자리보다 작은 정원 또는 자리가 있는 종목 빼기",
+				+ "판매 시작 뒤 정원 줄이기 또는 종목 빼기",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "참가비 인상", value = RaceApiExamples.PRICE_RAISED),
 				@ExampleObject(name = "환불 기준일 앞당김", value = RaceApiExamples.REFUND_DEADLINE_ADVANCED),
 				@ExampleObject(name = "지난 판매 일정 변경", value = RaceApiExamples.SCHEDULE_PASSED),
 				@ExampleObject(name = "판매 일정을 지난 시각으로", value = RaceApiExamples.SCHEDULE_TO_PAST),
 				@ExampleObject(name = "접수 마감 앞당김", value = RaceApiExamples.APPLICATION_CLOSE_ADVANCED),
-				@ExampleObject(name = "정원 축소", value = RaceApiExamples.QUOTA_BELOW_TAKEN),
-				@ExampleObject(name = "자리가 있는 종목 빼기", value = RaceApiExamples.COURSE_HAS_PARTICIPANTS)
+				@ExampleObject(name = "정원 줄이기", value = RaceApiExamples.QUOTA_DECREASED),
+				@ExampleObject(name = "종목 빼기", value = RaceApiExamples.COURSE_REMOVED)
 			}))
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> update(

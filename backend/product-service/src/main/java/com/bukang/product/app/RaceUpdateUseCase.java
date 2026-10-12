@@ -72,7 +72,7 @@ public class RaceUpdateUseCase {
 		}
 		List<RaceCourse> removedCourses = new ArrayList<>(remainingCourses.values());
 		removedCourses.forEach(course -> {
-			course.checkRemovable();
+			course.checkRemovable(saleStarted);
 			race.removeRaceCourse(course);
 		});
 		// 새 종목은 목록 끝에 붙었으므로 요청 순서로 다시 맞춘다

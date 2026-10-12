@@ -77,9 +77,10 @@ public class RaceCourse extends BaseIdAndTime {
 	@Column(nullable = false)
 	private boolean kitIncluded;
 
-	// 정원과 확보·판매 수. 카운터는 조건부 UPDATE로만 바꾼다
+	// 정원과 확보·판매 수
 	// 남은 크루 자리 = crewQuota − movedQuota − crewReserved − crewSold
 	// 남은 개인 자리 = individualQuota + movedQuota − individualReserved − individualSold
+	// 정원(crewQuota, individualQuota)은 판매자가 등록·수정으로 정한다
 	@ColumnDefault("0")
 	@Column(nullable = false)
 	private int crewQuota;
@@ -88,28 +89,34 @@ public class RaceCourse extends BaseIdAndTime {
 	@Column(nullable = false)
 	private int individualQuota;
 
+	// 아래 카운터는 정원 변경 API(⑧-3)의 조건부 UPDATE로만 바꾼다 (updatable = false)
+	// Hibernate는 엔티티를 저장할 때 기본적으로 모든 컬럼을 UPDATE한다. 카운터를 넣으면, 판매자가 종목을 수정하는 동안
+	// 다른 요청이 올린 확보·판매 수를 수정 트랜잭션이 처음 읽은 옛 값으로 덮어써 자리 수가 사라진다
+	//   예: 수정 시작 때 확보 2500 → 그 사이 100명 확보(2600) → 수정 저장이 2500으로 덮어씀 → 100자리가 다시 팔린다
+	// 그래서 엔티티 저장(UPDATE 문)에서는 카운터를 빼고, 처음 저장(INSERT)할 때만 0을 넣는다
 	@ColumnDefault("0")
-	@Column(nullable = false)
+	@Column(nullable = false, updatable = false)
 	private int crewReserved;
 
 	@ColumnDefault("0")
-	@Column(nullable = false)
+	@Column(nullable = false, updatable = false)
 	private int individualReserved;
 
 	@ColumnDefault("0")
-	@Column(nullable = false)
+	@Column(nullable = false, updatable = false)
 	private int crewSold;
 
 	@ColumnDefault("0")
-	@Column(nullable = false)
+	@Column(nullable = false, updatable = false)
 	private int individualSold;
 
 	// 크루 기간이 끝나 개인 몫으로 옮긴 크루 자리 수. 늘기만 한다
 	@ColumnDefault("0")
-	@Column(nullable = false)
+	@Column(nullable = false, updatable = false)
 	private int movedQuota;
 
 	// 크루 몫을 개인 몫으로 옮긴 일시. null이면 크루 기간 진행 중 (두 번 옮기지 않는 조건)
+	@Column(updatable = false)
 	private LocalDateTime crewClosedAt;
 
 	@Enumerated(STRING)
@@ -127,20 +134,21 @@ public class RaceCourse extends BaseIdAndTime {
 		if (saleStarted && request.getPrice() > price) {
 			throw new RaceChangeNotAllowedException(withName("판매가 시작된 종목은 참가비를 올릴 수 없습니다."));
 		}
-		// 정원은 확보·판매된 자리보다 줄이지 못한다. 몫별로 남은 자리 식이 0 이상이어야 한다 (크루 예매 ERD v5)
-		//   개인: individualQuota + movedQuota >= individualReserved + individualSold
-		//   크루: crewQuota − movedQuota >= crewReserved + crewSold
-		if (request.getIndividualQuota() + movedQuota < individualReserved + individualSold
-			|| request.getCrewQuota() - movedQuota < crewReserved + crewSold) {
-			throw new RaceChangeNotAllowedException(withName("정원을 확보·판매된 자리 수보다 줄일 수 없습니다."));
+		// 판매 시작 뒤에는 정원을 몫별로 늘리기만 한다
+		// 줄이는 수정은 같은 순간 들어온 자리 확보와 겹치면, 확인한 뒤 저장하는 사이에 확보된 자리 때문에
+		// 정원이 확보·판매된 자리보다 작아질 수 있다 (예: 정원 3000·판매 2500에서 2600으로 줄이는 동안 100명 넘게 확보)
+		// 늘리기만 하면 "확보 + 판매 ≤ 정원"(ERD v5 남은 자리 식)이 깨지지 않는다
+		// 판매 시작 전에는 확보·판매가 0이라 줄여도 된다
+		if (saleStarted && (request.getCrewQuota() < crewQuota || request.getIndividualQuota() < individualQuota)) {
+			throw new RaceChangeNotAllowedException(withName("판매가 시작된 종목은 정원을 줄일 수 없습니다."));
 		}
 		apply(request);
 	}
 
-	// 확보·판매된 자리가 있으면 구매자가 있으므로 종목을 뺄 수 없다
-	public void checkRemovable() {
-		if (crewReserved + crewSold + individualReserved + individualSold > 0) {
-			throw new RaceChangeNotAllowedException(withName("확보·판매된 자리가 있는 종목은 뺄 수 없습니다."));
+	// 종목을 빼는 것은 정원을 0으로 줄이는 것과 같으므로, 판매 시작 뒤에는 뺄 수 없다
+	public void checkRemovable(boolean saleStarted) {
+		if (saleStarted) {
+			throw new RaceChangeNotAllowedException(withName("판매가 시작된 대회는 종목을 뺄 수 없습니다."));
 		}
 	}
 
