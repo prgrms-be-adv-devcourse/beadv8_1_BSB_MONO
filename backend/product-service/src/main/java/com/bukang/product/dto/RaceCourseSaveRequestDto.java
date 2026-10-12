@@ -85,11 +85,7 @@ public class RaceCourseSaveRequestDto {
 	@PositiveOrZero(message = "개인 정원은 0 이상이어야 합니다.")
 	private final Integer individualQuota;
 
-	@Schema(description = "종목 이미지 목록 (코스 안내·키트 이미지, 선택)")
+	@Schema(description = "종목 이미지 목록 (대표 이미지 1장 필수, 소개 이미지·소개 영상·코스 안내·키트 이미지는 선택)")
+	@NotNull(message = "종목 이미지 목록을 작성해주세요.")
 	private final List<@Valid @NotNull(message = "이미지 항목을 작성해주세요.") RaceImageRequestDto> images;
-
-	// 종목 이미지는 선택이라 비워 보내도 된다
-	public List<RaceImageRequestDto> getImages() {
-		return images == null ? List.of() : images;
-	}
 }

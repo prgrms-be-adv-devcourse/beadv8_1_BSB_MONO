@@ -76,11 +76,8 @@ public class RaceSaveRequestDto {
 	@Schema(description = "크루 최대 인원 (비우면 상한 없음, 최소 인원 이상)", example = "20")
 	private final Integer crewMaxCount;
 
+	// 이미지는 종목마다 받는다 (대회에 붙이는 이미지는 없다)
 	@Schema(description = "종목 목록")
 	@NotEmpty(message = "종목을 1개 이상 작성해주세요.")
 	private final List<@Valid @NotNull(message = "종목 항목을 작성해주세요.") RaceCourseSaveRequestDto> courses;
-
-	@Schema(description = "대회 이미지 목록 (대표 이미지 1장 필수, 소개 이미지·소개 영상은 선택)")
-	@NotNull(message = "대회 이미지 목록을 작성해주세요.")
-	private final List<@Valid @NotNull(message = "이미지 항목을 작성해주세요.") RaceImageRequestDto> images;
 }

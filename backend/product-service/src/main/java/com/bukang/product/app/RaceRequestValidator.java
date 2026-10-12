@@ -25,10 +25,9 @@ import com.bukang.product.dto.RaceSaveRequestDto;
 public class RaceRequestValidator {
 	// 크루 예매가 있으면 개인 예매는 크루 마감일 다음 날 이 시각 이후에 연다 (마감 다음 날 06:00 배치가 크루 몫을 옮긴다)
 	private static final LocalTime INDIVIDUAL_OPEN_EARLIEST_TIME = LocalTime.of(6, 0);
-	// 대회에 붙이는 이미지 용도와 종목에 붙이는 이미지 용도
-	private static final Set<FileType> RACE_IMAGE_TYPES = Set.of(FileType.THUMBNAIL, FileType.DETAIL,
-		FileType.INTRO_VIDEO);
-	private static final Set<FileType> COURSE_IMAGE_TYPES = Set.of(FileType.COURSE, FileType.KIT);
+	// 종목에 붙이는 이미지 용도 (세미는 이미지를 모두 종목에 붙이고, 대회에는 붙이지 않는다)
+	private static final Set<FileType> COURSE_IMAGE_TYPES = Set.of(FileType.THUMBNAIL, FileType.DETAIL,
+		FileType.INTRO_VIDEO, FileType.COURSE, FileType.KIT);
 
 	public void validate(RaceSaveRequestDto request) {
 		validateSchedule(request);
@@ -82,17 +81,14 @@ public class RaceRequestValidator {
 	}
 
 	private void validateImages(RaceSaveRequestDto request) {
-		validateImageTypes(request.getImages(), RACE_IMAGE_TYPES, "대회에는 대표·소개 이미지, 소개 영상만 연결할 수 있습니다.");
-		// 대표 이미지 1장 필수 (listing-gaps.md 2장 '이미지 규격')
-		if (countByType(request.getImages()).getOrDefault(FileType.THUMBNAIL, 0L) != 1) {
-			throw new InvalidRaceException("대표 이미지를 1장 연결해주세요.");
-		}
-		validateMaxCounts(request.getImages(), "대회");
-
 		for (RaceCourseSaveRequestDto course : request.getCourses()) {
 			String target = "%s 종목".formatted(course.getName());
-			validateImageTypes(course.getImages(), COURSE_IMAGE_TYPES, target + "에는 코스 안내·키트 이미지만 연결할 수 있습니다.");
-			validateMaxCounts(course.getImages(), target);
+			validateImageTypes(course.getImages(), COURSE_IMAGE_TYPES, target + "에는 크루원 명단을 연결할 수 없습니다.");
+			// 종목마다 대표 이미지 1장 필수
+			if (countByType(course.getImages()).getOrDefault(FileType.THUMBNAIL, 0L) != 1) {
+				throw new InvalidRaceException(target + "의 대표 이미지를 1장 연결해주세요.");
+			}
+			validateMaxCounts(course.getImages(), target); // 각 이미지 성격별 개수 제한 검증
 		}
 		validateUniqueFiles(request);
 	}
@@ -117,9 +113,9 @@ public class RaceRequestValidator {
 		});
 	}
 
-	// 한 파일은 한 대상에만 연결된다. 대회와 종목, 두 종목에 같은 파일을 넣으면 file-service에서 연결이 모두 실패한다
+	// 한 파일은 한 대상에만 연결된다. 두 종목에 같은 파일을 넣으면 file-service에서 연결이 모두 실패한다
 	private void validateUniqueFiles(RaceSaveRequestDto request) {
-		List<RaceImageRequestDto> allImages = new ArrayList<>(request.getImages());
+		List<RaceImageRequestDto> allImages = new ArrayList<>();
 		request.getCourses().forEach(course -> allImages.addAll(course.getImages()));
 
 		Set<Integer> fileIds = new HashSet<>();

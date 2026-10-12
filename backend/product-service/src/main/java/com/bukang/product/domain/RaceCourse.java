@@ -26,6 +26,7 @@ import lombok.NoArgsConstructor;
 /**
  * 대회 종목 (참가권). 컬럼은 크루 예매 ERD v5의 race_course 표에 피그잼의 나이 제한·키트 포함을 더했다.
  * 크루 몫·개인 몫 정원과 확보·판매 수를 센다. 남은 자리 판정은 이 행 하나의 조건부 UPDATE로 한다.
+ * 이미지(대표·소개·코스 안내·키트 이미지, 소개 영상)는 종목에 연결한다. 클래스 이름 RaceCourse가 파일 연결 대상 종류(FileRef refType)가 된다.
  */
 @Entity
 @NoArgsConstructor(access = PROTECTED)

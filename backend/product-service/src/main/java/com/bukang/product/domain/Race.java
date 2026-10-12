@@ -31,7 +31,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 판매자가 등록한 대회 (상품). 컬럼은 크루 예매 ERD v5의 race 표를 따른다.
- * 종목(참가권)과 정원은 RaceCourse에 있다. 클래스 이름 Race가 파일 연결 대상 종류(FileRef refType)가 된다.
+ * 종목(참가권)과 정원, 이미지는 RaceCourse에 있다. 대회에 이미지를 붙일지는 최종 프로젝트에서 정한다.
  */
 @Entity
 @NoArgsConstructor(access = PROTECTED)

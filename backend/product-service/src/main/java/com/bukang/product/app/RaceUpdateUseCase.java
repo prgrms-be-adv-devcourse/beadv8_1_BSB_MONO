@@ -80,7 +80,6 @@ public class RaceUpdateUseCase {
 		raceRepository.flush();
 
 		List<FileLinkRequestedEvent.Ref> refs = new ArrayList<>();
-		refs.add(FileLinkRequestedEvent.Ref.of(FileRef.of(race), RaceImageRequestDto.toItems(request.getImages())));
 		imagesByCourse.forEach((course, images) ->
 			refs.add(FileLinkRequestedEvent.Ref.of(FileRef.of(course), RaceImageRequestDto.toItems(images))));
 		// 뺀 종목에 붙어 있던 이미지는 빈 목록으로 보내 모두 뗀다 (file-service가 삭제 상태로 바꾼다)

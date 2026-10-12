@@ -46,7 +46,7 @@ public class ApiV1RaceController {
 	@PostMapping
 	@Operation(summary = "대회 등록",
 		description = "승인된 판매자가 대회와 종목을 작성 중(DRAFT)으로 등록한다. 판매 시작 일시는 크루 예매 시작·개인 예매 오픈 중 "
-			+ "이른 시각으로 채운다. 대회 이미지(대표 이미지 1장 필수)와 종목 이미지는 등록이 커밋된 뒤 file-service에 연결을 요청한다. "
+			+ "이른 시각으로 채운다. 이미지는 종목마다 받고(대표 이미지 1장 필수), 등록이 커밋된 뒤 file-service에 연결을 요청한다. "
 			+ "파일이 없거나 본인이 올린 파일이 아니어서 연결에 실패하면 응답에는 나오지 않고 file-service 로그에 남는다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "등록 성공",

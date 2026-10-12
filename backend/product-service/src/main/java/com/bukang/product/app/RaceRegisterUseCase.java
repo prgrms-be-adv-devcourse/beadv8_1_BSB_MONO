@@ -24,7 +24,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 승인된 판매자가 대회와 종목을 작성 중(DRAFT)으로 등록한다.
- * 이미지 연결 메시지(대회 이미지는 Race, 종목 이미지는 RaceCourse 대상)는 여기서 만들기만 하고,
+ * 이미지 연결 메시지(이미지는 모두 종목, 즉 RaceCourse 대상)는 여기서 만들기만 하고,
  * ProductFacade가 커밋한 뒤 Kafka로 보낸다.
  */
 @Service
@@ -52,7 +52,6 @@ public class RaceRegisterUseCase {
 		raceRepository.save(race);
 
 		List<FileLinkRequestedEvent.Ref> refs = new ArrayList<>();
-		refs.add(FileLinkRequestedEvent.Ref.of(FileRef.of(race), RaceImageRequestDto.toItems(request.getImages())));
 		imagesByCourse.forEach((course, images) ->
 			refs.add(FileLinkRequestedEvent.Ref.of(FileRef.of(course), RaceImageRequestDto.toItems(images))));
 		// 파일 소유자는 대회를 등록한 회원이다 (파일을 올린 회원과 같아야 연결된다)
