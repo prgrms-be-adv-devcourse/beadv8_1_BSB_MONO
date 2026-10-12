@@ -8,6 +8,8 @@ package com.bukang.common.shared.kafka;
 public final class KafkaTopics {
 	public static final String PRODUCT_MEMBER_JOINED = "product.member.joined";
 	public static final String PRODUCT_SELLER_CHANGED = "product.seller.changed";
+	// 대회·종목을 저장한 뒤 이미지 연결을 요청한다 (product → file)
+	public static final String RACE_FILE_LINK_REQUESTED = "race.file.link.requested";
 
 	private KafkaTopics() {
 	}

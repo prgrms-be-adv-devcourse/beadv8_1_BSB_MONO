@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 import org.hibernate.annotations.ColumnDefault;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.product.dto.RaceCourseSaveRequestDto;
 
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
@@ -113,6 +114,27 @@ public class RaceCourse extends BaseIdAndTime {
 	@ColumnDefault("'OPEN'")
 	@Column(name = "status", nullable = false, columnDefinition = "varchar(20)")
 	private CourseStatus status;
+
+	public RaceCourse(RaceCourseSaveRequestDto request) {
+		this.status = CourseStatus.OPEN;
+		apply(request);
+	}
+
+	// 판매자가 입력하는 칸을 요청 값으로 채운다. 확보·판매 수와 상태는 정원 변경 API(⑧-3)가 바꾼다
+	private void apply(RaceCourseSaveRequestDto request) {
+		this.name = request.getName();
+		this.courseType = request.getCourseType();
+		this.surface = request.getSurface();
+		this.distanceKm = request.getDistanceKm();
+		this.timeLimitMinutes = request.getTimeLimitMinutes();
+		this.minAge = request.getMinAge();
+		this.maxAge = request.getMaxAge();
+		this.price = request.getPrice();
+		this.kitPrice = request.getKitPrice();
+		this.kitIncluded = request.getKitIncluded();
+		this.crewQuota = request.getCrewQuota();
+		this.individualQuota = request.getIndividualQuota();
+	}
 
 	public void addRace(Race race) {
 		this.race = race;

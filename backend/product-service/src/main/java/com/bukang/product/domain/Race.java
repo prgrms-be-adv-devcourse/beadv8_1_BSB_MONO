@@ -14,6 +14,7 @@ import java.util.List;
 import org.hibernate.annotations.ColumnDefault;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.product.dto.RaceSaveRequestDto;
 
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
@@ -104,6 +105,40 @@ public class Race extends BaseIdAndTime {
 
 	@OneToMany(mappedBy = "race", cascade = {PERSIST, REMOVE}, orphanRemoval = true)
 	private List<RaceCourse> courses = new ArrayList<>();
+
+	public Race(ProductSeller seller, RaceSaveRequestDto request) {
+		this.seller = seller;
+		// 등록하면 작성 중이다. 판매자가 판매 시작을 눌러야 판매 예정이 된다
+		this.saleStatus = RaceSaleStatus.DRAFT;
+		apply(request);
+	}
+
+	// 판매자가 입력하는 칸을 요청 값으로 채운다
+	private void apply(RaceSaveRequestDto request) {
+		this.title = request.getTitle();
+		this.description = request.getDescription();
+		this.location = request.getLocation();
+		this.regionSido = request.getRegionSido();
+		this.regionSigungu = request.getRegionSigungu();
+		this.raceDate = request.getRaceDate();
+		this.crewSaleStartAt = request.getCrewSaleStartAt();
+		this.crewSaleEndAt = request.getCrewSaleEndAt();
+		this.individualOpenAt = request.getIndividualOpenAt();
+		this.applicationCloseAt = request.getApplicationCloseAt();
+		this.refundDeadline = request.getRefundDeadline();
+		this.refundPolicy = request.getRefundPolicy();
+		this.crewMinCount = request.getCrewMinCount();
+		this.crewMaxCount = request.getCrewMaxCount();
+		this.saleOpenAt = earliestOpenAt(request.getCrewSaleStartAt(), request.getIndividualOpenAt());
+	}
+
+	// 크루 예매가 없으면(시작 일시 null) 개인 예매 오픈이 판매 시작이다
+	private static LocalDateTime earliestOpenAt(LocalDateTime crewSaleStartAt, LocalDateTime individualOpenAt) {
+		if (crewSaleStartAt != null && crewSaleStartAt.isBefore(individualOpenAt)) {
+			return crewSaleStartAt;
+		}
+		return individualOpenAt;
+	}
 
 	public void addRaceCourse(RaceCourse raceCourse) {
 		courses.add(raceCourse);
