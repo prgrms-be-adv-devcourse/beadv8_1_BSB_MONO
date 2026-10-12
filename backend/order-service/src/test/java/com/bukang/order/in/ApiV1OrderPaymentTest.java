@@ -2,11 +2,19 @@ package com.bukang.order.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +32,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.order.app.OrderExpiryUseCase;
+import com.bukang.order.app.OrderPayUseCase;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItemStatus;
 import com.bukang.order.domain.OrderStatus;
@@ -70,6 +79,9 @@ class ApiV1OrderPaymentTest {
 
 	@Autowired
 	private OrderExpiryUseCase orderExpiryUseCase;
+
+	@Autowired
+	private OrderPayUseCase orderPayUseCase;
 
 	@Autowired
 	private TransactionTemplate transactionTemplate;
@@ -180,6 +192,81 @@ class ApiV1OrderPaymentTest {
 	}
 
 	@Test
+	@DisplayName("참가 신청이 결제 대기가 아니면 예치금을 차감하기 전에 409로 거절한다")
+	void payWhenParticipationNotApplied() throws Exception {
+		int orderId = orderAndGetId(MEMBER_ID);
+		Participation participation = participationOf(orderId);
+		ReflectionTestUtils.setField(participation, "status", ParticipationStatus.RELEASED);
+		participationRepository.save(participation);
+
+		pay(MEMBER_ID, orderId)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("결제 대기 중인 신청만 참가를 확정할 수 있습니다(현재 상태: 미결제 해제)."));
+
+		assertThat(walletPort.payCalls()).isEmpty();
+		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
+	}
+
+	@Test
+	@DisplayName("차감·판매 뒤 주문 저장이 롤백되면, 상품 서비스 기한이 지난 뒤 다시 결제해도 이미 판 자리라 결제되고 예치금은 한 번만 빠진다")
+	void payAgainAfterRollback() throws Exception {
+		int orderId = orderAndGetId(MEMBER_ID);
+		int participationId = participationOf(orderId).getId();
+		int balanceBefore = walletPort.balance();
+		// 예치금 차감(D)과 자리 판매(B)는 끝났는데 이쪽 트랜잭션만 롤백된 상황
+		transactionTemplate.executeWithoutResult(status -> {
+			orderPayUseCase.pay(MEMBER_ID, orderId, LocalDateTime.now());
+			status.setRollbackOnly();
+		});
+		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
+		seatHoldPort.expire(participationId);
+
+		pay(MEMBER_ID, orderId)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.status").value("PAID"));
+
+		assertThat(walletPort.canceledOrders()).isEmpty();
+		assertThat(walletPort.balance()).isEqualTo(balanceBefore - TICKET_PRICE);
+		assertThat(participationOf(orderId).getStatus()).isEqualTo(ParticipationStatus.CONFIRMED);
+	}
+
+	@Test
+	@DisplayName("결제와 참가자 정보 수정이 동시에 들어와도 참가 확정과 고친 정보가 모두 남는다")
+	void payWhileChangingParticipant() throws Exception {
+		int rounds = 5;
+		for (int memberId = 1; memberId <= rounds; memberId++) {
+			int orderId = orderAndGetId(memberId);
+			int participationId = participationOf(orderId).getId();
+			int finalMemberId = memberId;
+
+			CountDownLatch start = new CountDownLatch(1);
+			List<Callable<Integer>> requests = List.of(
+				() -> {
+					start.await();
+					return pay(finalMemberId, orderId).andReturn().getResponse().getStatus();
+				},
+				() -> {
+					start.await();
+					return changeParticipantName(finalMemberId, participationId, "박러너")
+						.andReturn().getResponse().getStatus();
+				});
+			List<Integer> statuses = new ArrayList<>();
+			try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+				List<Future<Integer>> futures = requests.stream().map(executor::submit).toList();
+				start.countDown();
+				for (Future<Integer> future : futures) {
+					statuses.add(future.get());
+				}
+			}
+
+			assertThat(statuses).containsExactly(200, 200);
+			Participation participation = participationOf(orderId);
+			assertThat(participation.getStatus()).isEqualTo(ParticipationStatus.CONFIRMED);
+			assertThat(participation.getParticipant().getName()).isEqualTo("박러너");
+		}
+	}
+
+	@Test
 	@DisplayName("다른 회원의 주문은 403, 없는 주문은 404이고 예치금을 건드리지 않는다")
 	void payNotOwnerOrMissing() throws Exception {
 		int orderId = orderAndGetId(MEMBER_ID);
@@ -207,6 +294,16 @@ class ApiV1OrderPaymentTest {
 
 	private ResultActions pay(int memberId, int orderId) throws Exception {
 		return mockMvc.perform(post(BASE_URL + "/" + orderId + "/payment").header("X-Member-Id", memberId));
+	}
+
+	private ResultActions changeParticipantName(int memberId, int participationId, String name) throws Exception {
+		return mockMvc.perform(put("/api/v1/order/participations/" + participationId + "/participant")
+			.header("X-Member-Id", memberId)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{ "name": "%s", "birth": "1994-06-25", "gender": "MALE", "phone": "010-1234-5678",
+					"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" }
+				""".formatted(name)));
 	}
 
 	private Participation participationOf(int orderId) {
