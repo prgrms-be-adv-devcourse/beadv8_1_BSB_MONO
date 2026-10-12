@@ -26,6 +26,9 @@
     th, td { border-bottom: 1px solid #e2e4e8; padding: 6px; text-align: left; vertical-align: top; }
     td input, td select { width: 100%; min-width: 64px; }
     .ok { color: #1a7f37; }
+    .fail { color: #cf222e; }
+    .wait { color: #888; }
+    td.status { font-size: 12px; min-width: 240px; }
     pre { margin: 0; max-height: 520px; overflow: auto; font-size: 12px; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; }
   </style>
 </head>
@@ -96,13 +99,16 @@
   <div class="panel">
     <h2>이미지</h2>
     <p class="hint">
-      이미지는 <a href="http://localhost:8083/upload-test.html" target="_blank">file-service 업로드 페이지(8083)</a>에서
-      올리고(업로드 완료까지), 받은 fileId를 적습니다. 올린 파일은 1일 안에 대회에 연결해야 정리 배치가 지우지 않습니다.
-      대표 이미지 1장은 꼭 있어야 합니다.
+      용도를 고른 뒤 파일을 선택하면 file-service(8083)로 ① 업로드 URL 발급 → ② S3에 직접 PUT → ③ 업로드 완료 확인을 하고,
+      받은 fileId를 채웁니다. file-service가 dev로 떠 있어야 합니다(dev에만 8085를 허용하는 CORS가 있다).
+      JPG·PNG·WebP, 10MB 이하. 대표 이미지 1장은 꼭 있어야 하고, 올린 파일은 1일 안에 대회에 연결해야 정리 배치가 지우지 않습니다.
     </p>
     <table>
       <thead>
-        <tr><th class="required">fileId</th><th class="required">용도</th><th class="required">순서</th><th></th></tr>
+        <tr>
+          <th class="required">용도</th><th class="required">순서</th><th>파일</th>
+          <th class="required">fileId</th><th>업로드 상태</th><th></th>
+        </tr>
       </thead>
       <tbody id="imageRows"></tbody>
     </table>
@@ -120,6 +126,12 @@
     <pre id="preview"></pre>
   </div>
 
+  <div class="panel">
+    <h2>기록</h2>
+    <p class="hint">file-service와 S3로 보낸 요청과 응답 (최신이 위)</p>
+    <pre id="log"></pre>
+  </div>
+
   <script>
     // product-service CourseType·CourseSurface와 같은 값 (화면에는 label을 보여 준다)
     const COURSE_TYPES = { KM_5: '5K', KM_10: '10K', HALF: '하프', FULL: '풀', ULTRA: '울트라' };
@@ -130,6 +142,10 @@
       DETAIL: { label: '대회 소개 이미지', maxCount: 5 },
       COURSE: { label: '코스 안내 이미지', maxCount: 7 },
     };
+
+    // 이미지는 file-service로 올린다 (페이지 주소와 달라 file-service dev 설정의 CORS로 허용한다)
+    const FILE_SERVICE_URL = 'http://localhost:8083';
+    const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp';
 
     const $ = (id) => document.getElementById(id);
 
@@ -165,12 +181,120 @@
     function addImageRow(image = {}) {
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td><input data-key="fileId" type="number" min="1" value="${image.fileId ?? ''}"></td>
         <td><select data-key="fileType">${optionsOf(FILE_TYPES, image.fileType ?? 'THUMBNAIL')}</select></td>
         <td><input data-key="sortNo" type="number" min="0" value="${image.sortNo ?? 0}"></td>
+        <td><input type="file" accept="${IMAGE_ACCEPT}" data-upload></td>
+        <td><input data-key="fileId" type="number" min="1" value="${image.fileId ?? ''}"></td>
+        <td class="status wait">파일을 고르면 올립니다</td>
         <td><button type="button" class="secondary" data-remove>삭제</button></td>`;
       $('imageRows').append(row);
       renderPreview();
+    }
+
+    // ---------- 이미지 업로드 (file-service 8083, upload-test.html과 같은 흐름) ----------
+
+    async function uploadImage(row, file) {
+      const memberId = $('memberId').value;
+      const fileType = row.querySelector('[data-key=fileType]').value;
+      const status = row.querySelector('.status');
+      row.querySelector('[data-key=fileId]').value = '';
+      renderPreview();
+      try {
+        // ① 업로드 URL 발급: 서버가 형식·크기를 검사하고 PENDING 파일을 만든다
+        setStatus(status, 'wait', '① 업로드 URL 발급 중');
+        const body = { fileType, fileName: file.name, contentType: file.type || guessContentType(file.name), fileSize: file.size };
+        const issued = await callFileApi('① 업로드 URL 발급', 'POST', '/api/v1/file/files', { memberId, body });
+        if (issued.httpStatus !== 201) {
+          setStatus(status, 'fail', `① 발급 실패 (${issued.httpStatus}): ${issued.body.message}`);
+          return;
+        }
+        const upload = issued.body.data;
+
+        // ② S3에 직접 PUT: 응답의 headers를 그대로 붙인다 (서명에 Content-Type·크기가 묶여 있다)
+        setStatus(status, 'wait', `② S3에 올리는 중 (파일 ID ${upload.fileId})`);
+        if (!await putToS3(upload, file, status)) {
+          return;
+        }
+
+        // ③ 업로드 완료 확인: 서버가 크기·형식을 검사해 UPLOADED로 바꾼다
+        const completed = await callFileApi(
+          '③ 업로드 완료 확인', 'POST', `/api/v1/file/files/${upload.fileId}/complete`, { memberId });
+        if (completed.httpStatus !== 200) {
+          setStatus(status, 'fail', `③ 확인 실패 (${completed.httpStatus}): ${completed.body.message}`);
+          return;
+        }
+        row.querySelector('[data-key=fileId]').value = upload.fileId;
+        setStatus(status, 'ok', `완료: 파일 ID ${upload.fileId} (${completed.body.data.status})`);
+        renderPreview();
+      } catch (error) {
+        // 응답을 못 받으면(TypeError) 대부분 file-service가 꺼져 있거나 CORS에 이 페이지 주소가 없어서다
+        setStatus(status, 'fail', `file-service(8083) 요청이 막혔습니다. dev로 떠 있는지 확인하세요. (${error.message})`);
+        log('업로드 오류', error.message);
+      }
+    }
+
+    // 진행률을 보려고 fetch 대신 XMLHttpRequest를 쓴다 (fetch는 업로드 진행률을 알려 주지 않는다)
+    function putToS3(upload, file, status) {
+      return new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open(upload.method, upload.uploadUrl);
+        Object.entries(upload.headers).forEach(([name, value]) => {
+          // content-length는 브라우저가 파일 크기로 직접 넣는다 (직접 넣으려 하면 브라우저가 막는다)
+          if (name.toLowerCase() !== 'content-length') {
+            xhr.setRequestHeader(name, value);
+          }
+        });
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            setStatus(status, 'wait', `② S3에 올리는 중 ${Math.round(event.loaded / event.total * 100)}%`);
+          }
+        };
+        xhr.onload = () => {
+          log(`② S3 ${upload.method} → ${xhr.status}`, xhr.responseText || '(본문 없음)');
+          const ok = xhr.status === 200;
+          if (!ok) {
+            setStatus(status, 'fail', `② S3가 ${xhr.status}로 거절했습니다. 아래 기록을 확인하세요.`);
+          }
+          resolve(ok);
+        };
+        // 응답을 아예 못 받으면(상태 0) 대부분 버킷 CORS에 이 페이지 주소가 없어서다 (S3Mock은 검사하지 않는다)
+        xhr.onerror = () => {
+          setStatus(status, 'fail', `② S3 요청이 막혔습니다. 버킷 CORS에 ${location.origin}과 PUT이 허용되어 있는지 확인하세요.`);
+          resolve(false);
+        };
+        xhr.send(file);
+      });
+    }
+
+    function guessContentType(fileName) {
+      const extension = fileName.split('.').pop().toLowerCase();
+      return { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }[extension] ?? '';
+    }
+
+    // memberId가 있으면 X-Member-Id 헤더를 붙인다
+    async function callFileApi(title, method, path, { memberId, body } = {}) {
+      const headers = {};
+      if (memberId) {
+        headers['X-Member-Id'] = memberId;
+      }
+      if (body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+      }
+      const url = FILE_SERVICE_URL + path;
+      const response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+      const json = await response.json();
+      log(`${title}: ${method} ${url} → ${response.status}`, { headers, request: body ?? null, response: json });
+      return { httpStatus: response.status, body: json };
+    }
+
+    function setStatus(element, state, message) {
+      element.className = `status ${state}`;
+      element.textContent = message;
+    }
+
+    function log(title, data) {
+      const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+      $('log').textContent = `[${new Date().toLocaleTimeString()}] ${title}\n${text}\n\n` + $('log').textContent;
     }
 
     // ---------- 입력값 → 요청 객체 ----------
@@ -248,7 +372,13 @@
     // ---------- 이벤트 ----------
 
     document.addEventListener('input', renderPreview);
-    document.addEventListener('change', renderPreview);
+    document.addEventListener('change', (event) => {
+      if (event.target.matches('[data-upload]') && event.target.files.length > 0) {
+        uploadImage(event.target.closest('tr'), event.target.files[0]);
+        return;
+      }
+      renderPreview();
+    });
     document.addEventListener('click', (event) => {
       if (event.target.matches('[data-remove]')) {
         event.target.closest('tr').remove();
