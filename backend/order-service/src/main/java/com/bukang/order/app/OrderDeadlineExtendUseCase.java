@@ -46,7 +46,8 @@ public class OrderDeadlineExtendUseCase {
 		if (result.outcome() == SeatExtendResult.Outcome.EXPIRED) {
 			throw new OrderNotExtendableException("결제 기한이 지났습니다.");
 		}
-		Participation participation = participationRepository.findById(order.participationId())
+		// 참가 신청도 잠근다. 참가자 정보 수정과 겹쳐도 늘린 기한이 덮이지 않는다 (잠금 순서: 주문 → 참가 신청)
+		Participation participation = participationRepository.findByIdForUpdate(order.participationId())
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
 		order.extendDeadline(result.expiresAt(), now);
 		participation.extendPaymentDue(result.expiresAt());

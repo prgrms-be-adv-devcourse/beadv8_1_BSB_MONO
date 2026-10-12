@@ -46,7 +46,8 @@ public class OrderPayUseCase {
 		}
 		order.checkPayable(now);
 		// 참가 신청 확인도 차감 전에 끝낸다. 차감 뒤에 실패하면 돈만 빠지고 주문은 CREATED로 남는다
-		Participation participation = participationRepository.findById(order.participationId())
+		// 참가 신청도 잠근다. 참가자 정보 수정이 옛 상태로 덮어써 CONFIRMED가 사라지지 않게 한다
+		Participation participation = participationRepository.findByIdForUpdate(order.participationId())
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
 		participation.checkConfirmable();
 
