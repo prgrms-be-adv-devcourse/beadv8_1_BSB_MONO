@@ -2,6 +2,7 @@ package com.bukang.order.out.seat;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 
 	private final Map<Integer, Integer> remainingSeats = new ConcurrentHashMap<>();
 	private final Map<Integer, Hold> holds = new ConcurrentHashMap<>();
+	private final Set<Integer> sold = ConcurrentHashMap.newKeySet();
 
 	// 호출마다 경고를 남기면 로그가 묻히므로, 앱을 켤 때 한 번만 알린다
 	public FakeSeatHoldAdapter() {
@@ -69,11 +71,16 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 
 	@Override
 	public SeatSellResult sell(int participationId) {
+		// 이미 판매한 자리는 기한과 상관없이 SOLD (같은 주문 재결제, SeatHoldPort.sell)
+		if (sold.contains(participationId)) {
+			return SeatSellResult.SOLD;
+		}
 		Hold hold = holds.get(participationId);
 		if (hold == null || !LocalDateTime.now().isBefore(hold.expiresAt())) {
 			return SeatSellResult.EXPIRED;
 		}
 		holds.remove(participationId);
+		sold.add(participationId);
 		return SeatSellResult.SOLD;
 	}
 

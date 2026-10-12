@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.order.app.OrderExpiryUseCase;
+import com.bukang.order.app.OrderPayUseCase;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItemStatus;
 import com.bukang.order.domain.OrderStatus;
@@ -70,6 +71,9 @@ class ApiV1OrderPaymentTest {
 
 	@Autowired
 	private OrderExpiryUseCase orderExpiryUseCase;
+
+	@Autowired
+	private OrderPayUseCase orderPayUseCase;
 
 	@Autowired
 	private TransactionTemplate transactionTemplate;
@@ -177,6 +181,45 @@ class ApiV1OrderPaymentTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("결제할 수 없는 주문입니다(현재 상태: 기한 만료)."));
 		assertThat(walletPort.payCalls()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("참가 신청이 결제 대기가 아니면 예치금을 차감하기 전에 409로 거절한다")
+	void payWhenParticipationNotApplied() throws Exception {
+		int orderId = orderAndGetId(MEMBER_ID);
+		Participation participation = participationOf(orderId);
+		ReflectionTestUtils.setField(participation, "status", ParticipationStatus.RELEASED);
+		participationRepository.save(participation);
+
+		pay(MEMBER_ID, orderId)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("결제 대기 중인 신청만 참가를 확정할 수 있습니다(현재 상태: 미결제 해제)."));
+
+		assertThat(walletPort.payCalls()).isEmpty();
+		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
+	}
+
+	@Test
+	@DisplayName("차감·판매 뒤 주문 저장이 롤백되면, 상품 서비스 기한이 지난 뒤 다시 결제해도 이미 판 자리라 결제되고 예치금은 한 번만 빠진다")
+	void payAgainAfterRollback() throws Exception {
+		int orderId = orderAndGetId(MEMBER_ID);
+		int participationId = participationOf(orderId).getId();
+		int balanceBefore = walletPort.balance();
+		// 예치금 차감(D)과 자리 판매(B)는 끝났는데 이쪽 트랜잭션만 롤백된 상황
+		transactionTemplate.executeWithoutResult(status -> {
+			orderPayUseCase.pay(MEMBER_ID, orderId, LocalDateTime.now());
+			status.setRollbackOnly();
+		});
+		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
+		seatHoldPort.expire(participationId);
+
+		pay(MEMBER_ID, orderId)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.status").value("PAID"));
+
+		assertThat(walletPort.canceledOrders()).isEmpty();
+		assertThat(walletPort.balance()).isEqualTo(balanceBefore - TICKET_PRICE);
+		assertThat(participationOf(orderId).getStatus()).isEqualTo(ParticipationStatus.CONFIRMED);
 	}
 
 	@Test
