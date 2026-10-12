@@ -23,9 +23,11 @@ import lombok.RequiredArgsConstructor;
 public class ProductKafkaConsumer {
 	// application.yaml에 group-id가 없으므로 리스너마다 적는다
 	private static final String GROUP_ID = "product";
-	// 토픽 파티션 수 (KafkaTopicConfig.PARTITIONS와 맞춘다). 쓰레드 하나가 파티션 하나를 맡아 병렬로 처리한다
-	// 재시도·DLT 토픽도 같은 수로 만든다 (기본값은 1개)
+	// 토픽 파티션 수 (KafkaTopicConfig.PARTITIONS와 맞춘다). 재시도·DLT 토픽도 같은 수로 만든다 (기본값은 1개)
 	private static final String PARTITIONS = "3";
+	// 동시에 처리할 쓰레드 수 (재시도·DLT 리스너도 같은 수). 지금은 메시지가 적어 1개로 충분하다
+	// 늘릴 때는 이 숫자만 바꾼다. 파티션 수(3)까지 효과가 있고, 그보다 크게 하려면 파티션 수도 함께 늘린다
+	private static final String CONCURRENCY = "1";
 	// 처음 시도를 포함한 시도 횟수. 1초 → 2초 → 4초 → 8초 간격으로 다시 시도한다
 	private static final String RETRY_ATTEMPTS = "5";
 	private static final long RETRY_DELAY_MILLIS = 1000L;
@@ -36,7 +38,7 @@ public class ProductKafkaConsumer {
 	private final ProductFacade productFacade;
 	private final JsonConverter jsonConverter;
 
-	@KafkaListener(topics = KafkaTopics.PRODUCT_MEMBER_JOINED, groupId = GROUP_ID, concurrency = PARTITIONS)
+	@KafkaListener(topics = KafkaTopics.PRODUCT_MEMBER_JOINED, groupId = GROUP_ID, concurrency = CONCURRENCY)
 	@RetryableTopic(
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
@@ -47,7 +49,7 @@ public class ProductKafkaConsumer {
 		productFacade.syncMember(jsonConverter.fromJson(payload, MemberJoinedEvent.class));
 	}
 
-	@KafkaListener(topics = KafkaTopics.PRODUCT_SELLER_CHANGED, groupId = GROUP_ID, concurrency = PARTITIONS)
+	@KafkaListener(topics = KafkaTopics.PRODUCT_SELLER_CHANGED, groupId = GROUP_ID, concurrency = CONCURRENCY)
 	@RetryableTopic(
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
