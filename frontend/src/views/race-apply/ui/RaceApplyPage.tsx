@@ -36,7 +36,8 @@ export function RaceApplyPage({ optionId }: { optionId?: string }) {
   const router = useRouter()
   const race = RACE_DETAIL
   const option = race.options.find((o) => o.id === optionId) ?? race.options[0]
-  const [agreed, setAgreed] = useState(true)
+  // 필수 동의는 사용자가 직접 체크해야 버튼이 켜진다.
+  const [agreed, setAgreed] = useState(false)
   const [replaceOpen, setReplaceOpen] = useState(false)
 
   return (
