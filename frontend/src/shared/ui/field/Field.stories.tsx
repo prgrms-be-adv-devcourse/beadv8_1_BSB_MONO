@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 
 import { Select } from './Select'
+import { SortSelect } from './SortSelect'
 import { Textarea } from './Textarea'
 import { TextField } from './TextField'
 
@@ -75,5 +76,22 @@ export const SelectStates: Story = {
       />
       <Select label="비활성" items={SIZES} defaultValue="l" disabled />
     </>
+  ),
+}
+
+const SORTS = [
+  { value: 'deadline', label: '마감 임박순' },
+  { value: 'raceDate', label: '대회일 빠른순' },
+  { value: 'latest', label: '최신 등록순' },
+  { value: 'price', label: '가격 낮은순' },
+]
+
+// 목록 위 정렬 드롭다운 (피그마 M18-1)
+export const SortSelectStates: Story = {
+  name: 'SortSelect',
+  render: () => (
+    <div className="flex justify-end">
+      <SortSelect items={SORTS} aria-label="대회 정렬" />
+    </div>
   ),
 }
