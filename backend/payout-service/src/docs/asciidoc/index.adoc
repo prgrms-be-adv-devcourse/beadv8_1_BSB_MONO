@@ -14,7 +14,7 @@
 :operation-response-headers-title: 응답 헤더
 :operation-response-fields-title: 응답 본문
 
-이 문서는 컨트롤러 테스트(`ApiV1PayoutHoldControllerTest`)가 통과할 때 만들어진 요청·응답으로 채운다.
+이 문서는 컨트롤러 테스트(`ApiV1PayoutHoldControllerTest`, `InternalV1PayoutRefundControllerTest`)가 통과할 때 만들어진 요청·응답으로 채운다.
 테스트가 실패하면 문서도 만들어지지 않으므로, 여기 있는 예시는 실제 응답과 같다.
 
 [[overview]]
@@ -72,3 +72,29 @@ include::{snippets}/payout-hold-release-not-found/http-response.adoc[]
 
 .이미 해제됨 (409)
 include::{snippets}/payout-hold-release-conflict/http-response.adoc[]
+
+[[payout-internal]]
+== 내부 API (서비스 간 호출 전용)
+
+`/internal/**` 경로는 게이트웨이에 노출하지 않는다. 회원 ID 헤더를 받지 않는다.
+
+[[payout-refund-eligibility]]
+=== 참가권 환불 가능 여부 조회
+
+대회일로 정산 대상일(대회 다음 날)을 구해, 오늘(한국 날짜)이 정산 대상일 전이면 환불 가능으로 돌려준다.
+정산 대상일 당일부터는 사유와 상관없이(대회 취소·일정 변경 포함) 환불할 수 없다 (예: 대회 9/25 → 9/26부터 환불 불가).
+환불 기한(판매자 지정) 판단은 주문 서비스가 하고, 이 API는 그 위의 상한선만 알려 준다.
+주문 서비스가 환불 요청을 받을 때 동기 호출로 부르고, `data.refundable`이 `false`면 환불을 거절한다.
+
+operation::payout-refund-eligibility[snippets='http-request,query-parameters,http-response,response-fields']
+
+.환불 불가 (정산 대상일 지남)
+include::{snippets}/payout-refund-eligibility-not-refundable/http-response.adoc[]
+
+==== 실패 예시
+
+.대회일 없음 (400)
+include::{snippets}/payout-refund-eligibility-missing/http-response.adoc[]
+
+.대회일 형식 오류 (400)
+include::{snippets}/payout-refund-eligibility-bad-request/http-response.adoc[]

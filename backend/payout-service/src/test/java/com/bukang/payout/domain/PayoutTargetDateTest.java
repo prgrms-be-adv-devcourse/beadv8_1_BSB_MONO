@@ -29,6 +29,17 @@ class PayoutTargetDateTest {
 	}
 
 	@Test
+	@DisplayName("9/25 대회 참가권은 대회 당일(9/25)까지 환불할 수 있고, 정산 대상일인 9/26부터는 환불할 수 없다")
+	void refundableUntilDayBeforeTargetDate() {
+		LocalDate raceDate = LocalDate.of(2026, 9, 25);
+
+		assertThat(PayoutTargetDate.isRefundable(raceDate, LocalDate.of(2026, 9, 24))).isTrue();
+		assertThat(PayoutTargetDate.isRefundable(raceDate, LocalDate.of(2026, 9, 25))).isTrue();
+		assertThat(PayoutTargetDate.isRefundable(raceDate, LocalDate.of(2026, 9, 26))).isFalse();
+		assertThat(PayoutTargetDate.isRefundable(raceDate, LocalDate.of(2026, 10, 20))).isFalse();
+	}
+
+	@Test
 	@DisplayName("정산 대상일이 10/1이면 그날 정산할 대회일은 9/30이다 (배치가 거꾸로 찾을 때)")
 	void raceDateForTargetDate() {
 		assertThat(PayoutTargetDate.raceDateFor(LocalDate.of(2026, 10, 1))).isEqualTo(LocalDate.of(2026, 9, 30));

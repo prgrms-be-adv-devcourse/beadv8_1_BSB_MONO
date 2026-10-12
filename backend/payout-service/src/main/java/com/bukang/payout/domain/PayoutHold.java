@@ -27,6 +27,9 @@ import lombok.NoArgsConstructor;
 @Getter
 @Table(name = "PAYOUT_PAYOUT_HOLD")
 public class PayoutHold extends BaseIdAndTime {
+	// 배치가 자동으로 건 보류의 보류한 회원 ID. 회원 ID는 1부터 시작하므로 실제 회원과 겹치지 않는다
+	public static final int SYSTEM_MEMBER_ID = 0;
+
 	private static final DateTimeFormatter CODE_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
 
 	// 지급보류 ID: HD-보류한 날-16진수 4자리 (예: HD-20261012-0A3F). 정산 ID(ST-)와 같은 방식이다
@@ -50,7 +53,7 @@ public class PayoutHold extends BaseIdAndTime {
 	@Column(nullable = false, length = 20)
 	private PayoutHoldStatus status;
 
-	// 보류한 회원 ID. 자동 보류는 system 회원 ID를 넣는다
+	// 보류한 회원 ID. 자동 보류는 SYSTEM_MEMBER_ID(0)를 넣는다
 	@Column(nullable = false)
 	private int heldBy;
 
