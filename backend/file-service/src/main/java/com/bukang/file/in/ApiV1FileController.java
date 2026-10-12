@@ -44,7 +44,7 @@ public class ApiV1FileController {
 	@Operation(summary = "업로드 URL 발급",
 		description = "파일 용도(fileType)에 맞는 형식과 크기를 검사한 뒤 파일을 업로드 대기 상태로 만들고, "
 			+ "S3에 직접 올릴 presigned PUT URL(10분)을 발급한다. 브라우저는 응답의 headers를 그대로 붙여 PUT 한다. "
-			+ "이미지(THUMBNAIL, DETAIL, COURSE)는 JPG·PNG·WebP 10MB, 동영상(INTRO_VIDEO)은 MP4·MOV 100MB, "
+			+ "이미지(THUMBNAIL, DETAIL, COURSE, KIT)는 JPG·PNG·WebP 10MB, 동영상(INTRO_VIDEO)은 MP4·MOV 100MB, "
 			+ "엑셀(ROSTER)은 XLSX·XLS 5MB 이하만 받는다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "발급 성공",
@@ -74,7 +74,7 @@ public class ApiV1FileController {
 
 	@GetMapping
 	@Operation(summary = "대상별 파일 목록 조회",
-		description = "대상(대회 등)에 연결된 파일을 용도(fileType: 대표 이미지 → 소개 이미지 → 코스 → 소개 영상 → 명단) → "
+		description = "대상(대회 등)에 연결된 파일을 용도(fileType: 대표 이미지 → 소개 이미지 → 코스 → 키트 → 소개 영상 → 명단) → "
 			+ "노출 순서(sortNo) 순으로 돌려준다. "
 			+ "이미지 URL은 30분 뒤 만료되는 presigned GET URL이다.")
 	@ApiResponses({

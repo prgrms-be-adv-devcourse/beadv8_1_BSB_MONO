@@ -14,6 +14,8 @@ public enum FileType {
 	DETAIL("대회 소개 이미지", FileKind.IMAGE, 5),
 	// 종목(풀·하프·30km대·10km·5km·5km 미만 건강달리기·울트라)마다 1장
 	COURSE("코스 안내 이미지", FileKind.IMAGE, 7),
+	// 종목에 포함된 기념품(키트) 이미지. 종목마다 1장
+	KIT("키트 이미지", FileKind.IMAGE, 1),
 	INTRO_VIDEO("대회 소개 영상", FileKind.VIDEO, 1),
 	ROSTER("크루원 명단", FileKind.EXCEL, 1);
 

@@ -57,13 +57,15 @@ product-service를 만드는 순서와 결정을 적습니다. 2026-10-12 사용
   - 차이는 `member.name` 논리명(이름 / 실명)과 피그잼에 빠진 기본값 표기(`seller.status` 'PENDING', `requested_at`)뿐이다.
 - `seller`는 `member`와 다른 테이블이다. `seller.member_id` → `member`, 상태 PENDING / APPROVED / REJECTED. `race.seller_id`는 `seller.seller_id`를 가리킨다. `member.role`은 USER / ADMIN뿐이다.
 - 코드와는 차이가 크다: `MEMBER_MEMBER`(`id`, `create_date`, int, `username`), 판매자 엔티티 없음, JWT에 역할 없음.
+  - PRO-70(10/12 dev 머지)으로 회원 원본은 ERD 이름(`member_id` · `created_at` · `updated_at`)이 되고 `username`이 빠졌다. ID는 아직 int다.
 - [제안] `race` · `race_course`도 6단계 전에 ERDCloud와 피그잼 컬럼을 대조해 기준을 정한다. 10/11 조사 때 `min_age` · `max_age` · `visibility`가 피그잼에만 있었다. 주문(PRO-39)이 종목 나이 제한을 쓴다.
 
 ### 3. 구매자 복제본
 
-- common `ReplicaMember` 상속 (`CashMember`와 같은 방식). 공개 정보만 저장한다 (비밀번호 · 이메일 · 휴대폰은 원본에만, `backend/CLAUDE.md`).
-- [미정] 이름: `ProductMember`(Claude 추천, `CashMember`와 같은 "서비스 + Member", 테이블 `PRODUCT_MEMBER`) / `MarketMember`
-- 참고: PRO-70(머지 전)이 `ReplicaMember` · `MemberJoinedEvent`에서 `username`을 뺀다. 머지되면 맞춘다.
+- common `ReplicaMember` 상속 (`CashMember`와 같은 방식). 공개 정보만 저장한다 (비밀번호 · 이메일 · 실명 · 휴대폰 · 생년월일은 원본에만, `backend/CLAUDE.md`).
+- [결정됨] 이름: `ProductMember`, 테이블 `PRODUCT_MEMBER` (`CashMember`와 같은 "서비스 + Member")
+- 필드: `id`(원본 회원 ID, PK, 자동 증가 없음) · `createDate` · `modifyDate`(원본 시각) · `nickname`. 저장소는 `out/ProductMemberRepository`
+- PRO-70(10/12 dev 머지)이 `username`을 뺐다. 생성자 인자는 4개(`id`, `createDate`, `modifyDate`, `nickname`)다.
 
 ### 4. 판매자 복제본
 
@@ -140,4 +142,10 @@ product-service를 만드는 순서와 결정을 적습니다. 2026-10-12 사용
 - Linear 이슈 PRO-87~98을 만들었다. 1단계(PRO-88)는 In Progress로 현재 사이클에 넣었다.
 - [제안] 두 가지는 채택하지 않음: 단계별 테스트(→ 10단계에서 모아 씀), 10/14 전 계약 공유(→ 10단계 뒤 사용자가 공유).
 - 진행 흐름(사용자 결정): 브랜치 생성 → ROADMAP 수정 → 작업 → 커밋 → 이슈 정리. 뼈대는 1단계 작업(ES 설정)까지 마친 뒤 함께 커밋한다.
+  - 푸시 · PR · Linear 상태 정리는 10단계까지 끝낸 뒤 한 번에 한다. 그동안 브랜치는 이슈마다 쌓는다 (dev ← `feat/PRO-88-product-skeleton` ← `feat/PRO-89-product-member` ← …).
 - file-service의 `default_batch_fetch_size` 설정은 같은 브랜치에 커밋한다 (설정 변경이라서).
+
+### 2026-10-12 3단계 구매자 복제본
+
+- PRO-70이 dev에 머지돼 `feat/PRO-88-product-skeleton`을 최신 dev 위로 rebase했다. 충돌은 `settings.gradle.kts` · `backend/CLAUDE.md`의 모듈 목록 한 줄씩이었고, `jwt`와 `product-service`를 둘 다 남겼다.
+- 이름은 `ProductMember`(테이블 `PRODUCT_MEMBER`). `MarketMember`는 테이블 접두사 규칙(`<도메인>_<엔티티>`)과 맞지 않아 고르지 않았다.
