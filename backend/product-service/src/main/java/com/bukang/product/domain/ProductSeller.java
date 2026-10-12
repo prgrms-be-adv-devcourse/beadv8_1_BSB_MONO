@@ -1,6 +1,7 @@
 package com.bukang.product.domain;
 
 import static jakarta.persistence.EnumType.STRING;
+import static jakarta.persistence.FetchType.LAZY;
 import static lombok.AccessLevel.PROTECTED;
 
 import java.time.LocalDateTime;
@@ -12,6 +13,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,9 +35,10 @@ public class ProductSeller extends BaseEntity {
 	@Id
 	private int id;
 
-	// 판매자로 등록한 회원 ID. 반려 뒤 재신청하면 한 회원에 행이 여러 개일 수 있다
-	@Column(name = "member_id", nullable = false)
-	private int memberId;
+	// 판매자로 등록한 회원. 반려 뒤 재신청하면 한 회원에 행이 여러 개일 수 있다
+	@ManyToOne(fetch = LAZY)
+	@JoinColumn(name = "member_id", nullable = false)
+	private ProductMember member;
 
 	@Enumerated(STRING)
 	@Column(name = "seller_type", nullable = false, columnDefinition = "varchar(20)")
@@ -53,14 +57,14 @@ public class ProductSeller extends BaseEntity {
 
 	public ProductSeller(
 		int id,
-		int memberId,
+		ProductMember member,
 		SellerType sellerType,
 		SellerStatus status,
 		LocalDateTime requestedAt,
 		LocalDateTime reviewedAt
 	) {
 		this.id = id;
-		this.memberId = memberId;
+		this.member = member;
 		this.sellerType = sellerType;
 		this.status = status;
 		this.requestedAt = requestedAt;
