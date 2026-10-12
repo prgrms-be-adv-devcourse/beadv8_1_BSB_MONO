@@ -18,8 +18,8 @@ const barlowCondensed = Barlow_Condensed({
 })
 
 export const metadata: Metadata = {
-  title: 'running',
-  description: '러닝 대회 접수와 크루 단체 신청',
+  title: '크루런',
+  description: '러닝 대회 참가권 마켓플레이스',
 }
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

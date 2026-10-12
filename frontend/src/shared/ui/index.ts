@@ -57,6 +57,7 @@ export {
   type ImageListDialogProps,
 } from './image-upload/ImageUploadDialog'
 export { useImageList, type ImageItem, type UploadImage } from './image-upload/use-image-list'
+export { Logo, type LogoProps, type LogoVariant } from './logo/Logo'
 export {
   LoadMore,
   Pagination,
