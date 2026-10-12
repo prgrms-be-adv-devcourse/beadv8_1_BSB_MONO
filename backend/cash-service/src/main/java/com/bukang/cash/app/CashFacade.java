@@ -20,8 +20,8 @@ public class CashFacade {
 
 	@Transactional
 	public CashMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate,
-		String username, String nickname) {
-		return cashSyncMemberUseCase.syncMember(id, createDate, modifyDate, username, nickname);
+		String nickname) {
+		return cashSyncMemberUseCase.syncMember(id, createDate, modifyDate, nickname);
 	}
 
 	@Transactional

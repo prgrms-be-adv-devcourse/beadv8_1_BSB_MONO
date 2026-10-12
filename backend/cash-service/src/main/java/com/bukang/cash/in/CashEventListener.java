@@ -21,13 +21,13 @@ public class CashEventListener {
 	@KafkaListener(topics = "queuing.member.joined", groupId = "CashEventListener__handleMemberJoined__1")
 	public void handleMemberJoined(String message) {
 		MemberJoinedEvent event = jsonConverter.fromJson(message, MemberJoinedEvent.class);
-		cashFacade.syncMember(event.id(), event.createDate(), event.modifyDate(), event.username(), event.nickname());
+		cashFacade.syncMember(event.id(), event.createDate(), event.modifyDate(), event.nickname());
 	}
 
 	@KafkaListener(topics = "queuing.member.modified", groupId = "CashEventListener__handleMemberModified__1")
 	public void handleMemberModified(String message) {
 		MemberModifiedEvent event = jsonConverter.fromJson(message, MemberModifiedEvent.class);
-		cashFacade.syncMember(event.id(), event.createDate(), event.modifyDate(), event.username(), event.nickname());
+		cashFacade.syncMember(event.id(), event.createDate(), event.modifyDate(), event.nickname());
 	}
 
 	@KafkaListener(topics = CashTopics.CASH_MEMBER_CREATED, groupId = "CashEventListener__handleCashMemberCreated__1")

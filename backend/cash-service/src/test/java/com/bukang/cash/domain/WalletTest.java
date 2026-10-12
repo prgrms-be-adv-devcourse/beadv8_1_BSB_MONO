@@ -11,7 +11,7 @@ class WalletTest {
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 12, 10, 0);
 
 	private Wallet newWallet() {
-		return new Wallet(new CashMember(3, NOW, NOW, "runner3", "러너3"));
+		return new Wallet(new CashMember(3, NOW, NOW, "러너3"));
 	}
 
 	@Test

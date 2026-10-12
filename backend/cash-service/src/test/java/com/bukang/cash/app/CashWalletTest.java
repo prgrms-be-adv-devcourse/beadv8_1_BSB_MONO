@@ -47,7 +47,7 @@ class CashWalletTest {
 	@BeforeEach
 	void setUp() {
 		LocalDateTime now = LocalDateTime.of(2026, 10, 12, 10, 0);
-		cashMemberRepository.save(new CashMember(MEMBER_ID, now, now, "runner3", "러너3"));
+		cashMemberRepository.save(new CashMember(MEMBER_ID, now, now, "러너3"));
 	}
 
 	@Test

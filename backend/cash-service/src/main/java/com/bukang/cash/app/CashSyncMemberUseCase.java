@@ -19,10 +19,10 @@ public class CashSyncMemberUseCase {
 	private final CashKafkaPublisher cashKafkaPublisher;
 
 	public CashMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate,
-		String username, String nickname) {
+		String nickname) {
 		boolean isNew = !cashMemberRepository.existsById(id);
 
-		CashMember cashMember = new CashMember(id, createDate, modifyDate, username, nickname);
+		CashMember cashMember = new CashMember(id, createDate, modifyDate, nickname);
 		cashMemberRepository.save(cashMember);
 
 		if (isNew) {

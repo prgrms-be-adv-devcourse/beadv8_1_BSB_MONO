@@ -40,7 +40,7 @@ class CashEntityConstraintTest {
 	@BeforeEach
 	void setUp() {
 		LocalDateTime now = LocalDateTime.of(2026, 10, 12, 10, 0);
-		CashMember member = cashMemberRepository.save(new CashMember(3, now, now, "runner3", "러너3"));
+		CashMember member = cashMemberRepository.save(new CashMember(3, now, now, "러너3"));
 		wallet = walletRepository.save(new Wallet(member));
 	}
 

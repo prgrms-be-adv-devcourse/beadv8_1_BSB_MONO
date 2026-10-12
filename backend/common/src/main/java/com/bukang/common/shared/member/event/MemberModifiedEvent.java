@@ -6,7 +6,6 @@ public record MemberModifiedEvent(
 	int id,
 	LocalDateTime createDate,
 	LocalDateTime modifyDate,
-	String username,
 	String nickname
 ) {
 }

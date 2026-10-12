@@ -36,7 +36,7 @@ class ApiV1CashControllerTest {
 	@DisplayName("잔액 조회: 지갑이 있으면 200과 RsData 형식으로 잔액을 돌려준다")
 	void getBalance() throws Exception {
 		LocalDateTime now = LocalDateTime.of(2026, 10, 12, 10, 0);
-		CashMember member = cashMemberRepository.save(new CashMember(3, now, now, "runner3", "러너3"));
+		CashMember member = cashMemberRepository.save(new CashMember(3, now, now, "러너3"));
 		walletRepository.save(new Wallet(member));
 
 		mockMvc.perform(get("/api/v1/cash/wallets/3/balance"))
