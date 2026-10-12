@@ -87,11 +87,12 @@ backend/
 │   └── out/                   StoredFileRepository, storage/(FileStorage, S3FileStorage)
 └── order-service/   com.bukang.order
     ├── in/                    ApiV1ParticipationController, ApiV1CartController, ApiV1OrderController,
+    │                          InternalV1OrderController(정산용 판매 내역, 내부 전용 /internal/v1/order),
     │                          OrderExpiryScheduler(1분마다 결제 기한 지난 건 정리, test 프로파일 제외),
     │                          OrderExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
     ├── app/                   ParticipationFacade·ParticipationApplyUseCase, CartFacade·CartUseCase,
     │                          OrderFacade·OrderCreateUseCase·OrderPayUseCase·OrderExpiryUseCase·
-    │                          OrderDeadlineExtendUseCase·OrderQueryUseCase
+    │                          OrderDeadlineExtendUseCase·OrderQueryUseCase, SoldEntryQueryUseCase
     ├── domain/                Participation(BOOKING_PARTICIPATION), Cart·CartItem(ORDER_CART·_ITEM),
     │                          Order·OrderItem(ORDER_ORDER·_ITEM), 상태 enum, exception/
     └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
