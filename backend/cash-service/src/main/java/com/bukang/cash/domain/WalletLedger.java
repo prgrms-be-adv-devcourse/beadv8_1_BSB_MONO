@@ -29,7 +29,7 @@ public class WalletLedger extends BaseIdAndTime {
 	@Enumerated(STRING)
 	@Column(nullable = false)
 	private LedgerRefType refTypeCode;
-	private long refId;
+	private int refId;
 
 	@ManyToOne(fetch = LAZY, optional = false)
 	private CashMember holder;
@@ -46,7 +46,7 @@ public class WalletLedger extends BaseIdAndTime {
 		long amount,
 		long balanceAfter,
 		LedgerRefType refTypeCode,
-		long refId
+		int refId
 	) {
 		this.wallet = wallet;
 		this.holder = holder;

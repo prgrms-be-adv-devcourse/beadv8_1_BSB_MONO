@@ -43,6 +43,7 @@
 - **공통 컬럼:** 모든 테이블은 `BaseIdAndTime`을 상속해 `id`(INT, AUTO_INCREMENT, PK), `create_date`, `modify_date`(DATETIME(6))를 가진다.
   ERD 초안의 `*_id` PK와 `created_at`/`updated_at`, 요청·시도·신청 일시(`requested_at`)는 이 컬럼으로 대신한다. `wallet`만 예외다(아래 참고).
 - **금액:** 금액 컬럼은 모두 BIGINT(`long`)다.
+- **ID:** 다른 행을 가리키는 ID 컬럼(FK, `order_id`, `ref_id`)은 모두 INT(`int`)로, 엔티티 `id` 타입과 맞춘다.
 - **ENUM:** 상태·사유·유형처럼 정해진 값만 들어가는 컬럼은 MySQL `ENUM` 타입이다(JPA `@Enumerated(STRING)`).
   값을 추가하면 `ddl-auto: update`가 컬럼을 고치지 않으므로 `ALTER TABLE`로 직접 바꾼다.
 - **FK:** cash-service 안의 테이블(`cash_member`, `cash_wallet`)에만 건다. 다른 서비스의 테이블(주문 등)은 FK 없이 ID 값으로만 보관한다.
@@ -106,7 +107,7 @@
 | | amount | BIGINT | NOT NULL | 변동 금액 (+/−) |
 | | balance_after | BIGINT | NOT NULL | 변동 후 잔액 |
 | | ref_type_code | ENUM | NOT NULL | WalletCharge / Order / Withdrawal / Payout. 돈의 이동을 일으킨 원인 객체. 한 이동의 두 줄(고객·홀딩)은 같은 ref를 가리킴. 충전은 CashMember 대신 WalletCharge(PG 거래 추적) |
-| | ref_id | BIGINT | NOT NULL | 근거 ID |
+| | ref_id | INT | NOT NULL | 근거 ID (WalletCharge·WalletWithdrawal의 id, 주문 id) |
 | | create_date / modify_date | DATETIME(6) | | 기록 일시 / 수정 일시 |
 
 ref_type_code는 DTO에서 문자열로 받더라도 `LedgerRefType.valueOf(...)`로 바꿔 저장한다. 목록에 없는 값이면 예외가 나서 저장되지 않는다.
