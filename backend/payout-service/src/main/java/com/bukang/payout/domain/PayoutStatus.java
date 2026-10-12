@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 정산 내역 상태
- * 세미의 PAID는 실제 송금 없이 상태만 바꾸는 모의 지급이다 (docs/policy/payout.md 1장 지급 5번)
+ * 세미의 PAID는 실제 송금 없이 상태만 바꾸는 모의 지급이다 (docs/policy/payout.md 1장 지급 6번)
  */
 @Getter
 @RequiredArgsConstructor

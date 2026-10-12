@@ -14,10 +14,15 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
+import com.bukang.payout.domain.PayoutHold;
+import com.bukang.payout.domain.PayoutHoldReason;
+import com.bukang.payout.domain.PayoutHoldStatus;
 import com.bukang.payout.domain.PayoutItem;
 import com.bukang.payout.domain.PayoutStatus;
+import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
 import com.bukang.payout.out.PayoutSourcePort;
+import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
 
 @DataJpaTest
@@ -30,13 +35,29 @@ class PayoutCreateUseCaseTest {
 	@Autowired
 	private PayoutRepository payoutRepository;
 
+	@Autowired
+	private PayoutHoldRepository payoutHoldRepository;
+
 	// 정산 대상일의 대회일(9/25)로 물어볼 때만 판매된 참가권을 돌려주는 가짜 포트
 	private PayoutSourcePort sourceReturning(List<SoldEntry> entries) {
 		return raceDate -> raceDate.equals(RACE_DATE) ? entries : List.of();
 	}
 
+	// 모든 판매자가 정산 계좌를 등록했다
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries) {
-		return new PayoutCreateUseCase(payoutRepository, sourceReturning(entries), new BusinessDayCalendar());
+		return useCaseSelling(entries, sellerId -> true);
+	}
+
+	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
+		return new PayoutCreateUseCase(payoutRepository, payoutHoldRepository, sourceReturning(entries),
+			sellerAccountPort, new BusinessDayCalendar());
+	}
+
+	private Payout payoutOf(int sellerId) {
+		return payoutRepository.findAll().stream()
+			.filter(p -> p.getSellerId() == sellerId)
+			.findFirst()
+			.orElseThrow();
 	}
 
 	@Test
@@ -91,5 +112,31 @@ class PayoutCreateUseCaseTest {
 		useCase.run(TARGET_DATE, NOW.plusHours(1));
 
 		assertThat(payoutRepository.findAll()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("정산 계좌가 없는 판매자의 정산 내역은 만들어질 때 HELD이고, '정산 계좌 미등록' 자동 보류가 걸린다")
+	void holdsPayoutOfSellerWithoutAccount() {
+		// 판매자 2만 계좌가 없다
+		PayoutCreateUseCase useCase = useCaseSelling(List.of(
+			new SoldEntry(100, 1, 10, 50_000L),
+			new SoldEntry(200, 2, 20, 30_000L)
+		), sellerId -> sellerId != 2);
+
+		useCase.run(TARGET_DATE, NOW);
+
+		assertThat(payoutOf(1).getStatus()).isEqualTo(PayoutStatus.CALCULATED);
+		assertThat(payoutOf(2).getStatus()).isEqualTo(PayoutStatus.HELD);
+
+		List<PayoutHold> holds = payoutHoldRepository.findAll();
+		assertThat(holds).hasSize(1);
+		PayoutHold hold = holds.getFirst();
+		assertThat(hold.getPayout().getId()).isEqualTo(payoutOf(2).getId());
+		assertThat(hold.getReasonType()).isEqualTo(PayoutHoldReason.ACCOUNT_NOT_REGISTERED);
+		assertThat(hold.getReason()).isEqualTo("정산 계좌 미등록으로 자동 보류");
+		assertThat(hold.getStatus()).isEqualTo(PayoutHoldStatus.HELD);
+		assertThat(hold.getHeldBy()).isEqualTo(PayoutHold.SYSTEM_MEMBER_ID);
+		assertThat(hold.getHeldAt()).isEqualTo(NOW);
+		assertThat(hold.getHoldCode()).matches("HD-20260926-[0-9A-F]{4}");
 	}
 }
