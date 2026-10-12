@@ -1,0 +1,14 @@
+package com.bukang.product.out;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.bukang.product.domain.ProductSeller;
+import com.bukang.product.domain.SellerStatus;
+
+public interface ProductSellerRepository extends JpaRepository<ProductSeller, Integer> {
+	// 회원의 승인된 판매자 (idx_product_seller_member 인덱스)
+	// member_id는 UNIQUE가 아니지만, 회원당 승인된 판매자는 1개라고 가정한다
+	Optional<ProductSeller> findByMemberIdAndStatus(int memberId, SellerStatus status);
+}

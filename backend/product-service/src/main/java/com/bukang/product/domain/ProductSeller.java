@@ -1,0 +1,90 @@
+package com.bukang.product.domain;
+
+import static jakarta.persistence.EnumType.STRING;
+import static lombok.AccessLevel.PROTECTED;
+
+import java.time.LocalDateTime;
+
+import com.bukang.common.global.jpa.entity.BaseEntity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * 상품 서비스가 판매자 이벤트로 복제해 보관하는 판매자
+ * ID와 신청·심사 시각은 원본 판매자 값을 그대로 쓴다. 정산 계좌, 연락처 같은 정보는 원본에만 둔다.
+ */
+@Entity
+@NoArgsConstructor(access = PROTECTED)
+@Getter
+@Table(
+	name = "PRODUCT_SELLER",
+	// 회원의 승인된 판매자 조회 (대회 등록 때 판매자 확인)
+	indexes = @Index(name = "idx_product_seller_member", columnList = "member_id, status")
+)
+public class ProductSeller extends BaseEntity {
+	@Id
+	private int id;
+
+	// 판매자로 등록한 회원 ID. 반려 뒤 재신청하면 한 회원에 행이 여러 개일 수 있다
+	@Column(name = "member_id", nullable = false)
+	private int memberId;
+
+	@Enumerated(STRING)
+	@Column(name = "seller_type", nullable = false, columnDefinition = "varchar(20)")
+	private SellerType sellerType;
+
+	@Enumerated(STRING)
+	@Column(name = "status", nullable = false, columnDefinition = "varchar(20)")
+	private SellerStatus status;
+
+	// 원본의 등록 신청 일시
+	@Column(nullable = false)
+	private LocalDateTime requestedAt;
+
+	// 원본의 승인·반려 일시. 심사 전에는 null
+	private LocalDateTime reviewedAt;
+
+	public ProductSeller(
+		int id,
+		int memberId,
+		SellerType sellerType,
+		SellerStatus status,
+		LocalDateTime requestedAt,
+		LocalDateTime reviewedAt
+	) {
+		this.id = id;
+		this.memberId = memberId;
+		this.sellerType = sellerType;
+		this.status = status;
+		this.requestedAt = requestedAt;
+		this.reviewedAt = reviewedAt;
+	}
+
+	public boolean isApproved() {
+		return status == SellerStatus.APPROVED;
+	}
+
+	// 원본 판매자의 심사 결과(승인·반려)를 반영한다
+	public void review(SellerStatus reviewedStatus, LocalDateTime reviewedTime) {
+		this.status = reviewedStatus;
+		this.reviewedAt = reviewedTime;
+	}
+
+	@Override
+	public LocalDateTime getCreateDate() {
+		return requestedAt;
+	}
+
+	// 심사 전에는 신청 일시가 마지막으로 바뀐 시각이다
+	@Override
+	public LocalDateTime getModifyDate() {
+		return reviewedAt != null ? reviewedAt : requestedAt;
+	}
+}
