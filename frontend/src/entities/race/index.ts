@@ -9,3 +9,4 @@ export {
   type RaceSummary,
 } from './model/fixtures'
 export { RaceCard, type RaceCardProps } from './ui/RaceCard'
+export { RaceTicketCard, type RaceTicketCardProps } from './ui/RaceTicketCard'
