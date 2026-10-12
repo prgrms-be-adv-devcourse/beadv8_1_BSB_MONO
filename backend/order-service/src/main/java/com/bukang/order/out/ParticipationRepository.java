@@ -29,11 +29,13 @@ public interface ParticipationRepository extends JpaRepository<Participation, In
 	 * 결제 기한이 지난 결제 대기 신청을 미결제 해제(RELEASED)로 끝낸다 (만료 정리 배치, PRO-42)
 	 * 결제와 겹쳐도 한쪽만 반영되도록 "지금도 APPLIED인 행"만 바꾸는 조건부 UPDATE다. 여러 번 돌아도 결과가 같다
 	 * active_flag도 함께 비워 같은 대회에 다시 신청할 수 있게 한다 (Participation.changeStatus와 같은 규칙)
+	 * 일괄 UPDATE는 JPA 감사(@LastModifiedDate)를 거치지 않으므로 수정 일시도 직접 넣는다
 	 */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 		update Participation p
-		set p.status = com.bukang.order.domain.ParticipationStatus.RELEASED, p.activeFlag = null, p.releasedAt = :now
+		set p.status = com.bukang.order.domain.ParticipationStatus.RELEASED, p.activeFlag = null, p.releasedAt = :now,
+			p.modifyDate = :now
 		where p.status = com.bukang.order.domain.ParticipationStatus.APPLIED and p.paymentDueAt <= :now
 		""")
 	int releaseOverdue(@Param("now") LocalDateTime now);

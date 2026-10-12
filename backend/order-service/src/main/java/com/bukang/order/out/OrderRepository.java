@@ -23,10 +23,11 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 	Optional<Order> findByIdForUpdate(@Param("id") int id);
 
 	// 결제 기한이 지난 결제 대기 주문을 만료(EXPIRED)로 끝낸다. 조건부 UPDATE라 여러 번 돌아도 결과가 같다 (PRO-42)
+	// 일괄 UPDATE는 JPA 감사(@LastModifiedDate)를 거치지 않으므로 수정 일시도 직접 넣는다
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 		update Order o
-		set o.status = com.bukang.order.domain.OrderStatus.EXPIRED
+		set o.status = com.bukang.order.domain.OrderStatus.EXPIRED, o.modifyDate = :now
 		where o.status = com.bukang.order.domain.OrderStatus.CREATED and o.paymentDueAt <= :now
 		""")
 	int expireOverdue(@Param("now") LocalDateTime now);
