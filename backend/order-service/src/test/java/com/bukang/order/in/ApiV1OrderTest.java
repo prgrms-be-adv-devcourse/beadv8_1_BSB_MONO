@@ -326,7 +326,8 @@ class ApiV1OrderTest {
 	void expireOverdueTwice() throws Exception {
 		int participationId = applyAndGetId(MEMBER_ID);
 		createAndGetId(MEMBER_ID, participationId, newKey());
-		LocalDateTime later = LocalDateTime.now().plusMinutes(30);
+		// DB는 마이크로초까지만 저장하므로, 저장된 해제 시각과 비교할 수 있게 잘라서 넣는다
+		LocalDateTime later = LocalDateTime.now().plusMinutes(30).truncatedTo(ChronoUnit.MICROS);
 
 		orderExpiryUseCase.expireOverdue(later);
 		OrderExpiryUseCase.ExpiryResult second = orderExpiryUseCase.expireOverdue(later.plusMinutes(1));
