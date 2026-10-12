@@ -18,12 +18,21 @@ import {
   Icon,
   IconButton,
   Skeleton,
+  SortSelect,
   useToast,
 } from '@/shared/ui'
 
-export type RaceListState = 'loading' | 'empty' | 'menu'
+export type RaceListState = 'loading' | 'empty' | 'menu' | 'sort'
 
-// 피그마 V2 · M18 대회 찾기 (+ 로딩, 결과 없음, 더보기 메뉴)
+const SORTS = [
+  { value: 'deadline', label: '마감 임박순' },
+  { value: 'raceDate', label: '대회일 빠른순' },
+  { value: 'latest', label: '최신 등록순' },
+  { value: 'price', label: '가격 낮은순' },
+] as const
+type RaceSort = (typeof SORTS)[number]['value']
+
+// 피그마 V2 · M18 대회 찾기 (+ 로딩, 결과 없음, 더보기 메뉴, M18-1 정렬 열림)
 // TODO(api): 검색 · 필터 · 정렬을 대회 목록 API에 붙인다
 export function RaceListPage({ state }: { state?: RaceListState }) {
   const toast = useToast()
@@ -33,6 +42,8 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
   const [menuRace, setMenuRace] = useState<RaceListItem | null>(
     state === 'menu' ? RACE_LIST[0] : null,
   )
+  // TODO(api): 정렬 값을 목록 API에 넘긴다. 지금 목업은 정렬 키가 없어 순서를 바꾸지 않는다.
+  const [sort, setSort] = useState<RaceSort>('deadline')
   const races = empty ? [] : RACE_LIST
 
   function copyLink(race: RaceListItem) {
@@ -67,13 +78,13 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
           ) : (
             <p className="text-label-m text-text-secondary">대회 {empty ? 0 : 24}개</p>
           )}
-          <button
-            type="button"
-            className={cn('flex items-center gap-1 rounded-sm text-label-m', FOCUS_RING)}
-          >
-            마감 임박순
-            <Icon name="ChevronDown" className="size-4" />
-          </button>
+          <SortSelect
+            items={[...SORTS]}
+            value={sort}
+            onValueChange={setSort}
+            defaultOpen={state === 'sort'}
+            aria-label="대회 정렬"
+          />
         </div>
 
         {loading && <ListSkeleton />}
