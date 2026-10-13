@@ -16,6 +16,12 @@ vi.mock('next/navigation', () => ({
 
 beforeEach(() => push.mockClear())
 
+// 약관 시트가 열려 있으면 시트가 포커스를 가져가 뒤쪽 입력칸 타이핑이 가끔 빠진다. 먼저 동의해 시트를 닫는다.
+async function agreeAllTerms(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('checkbox', { name: '모두 동의해요 (선택 포함)' }))
+  await user.click(screen.getByRole('button', { name: '동의하고 계속하기' }))
+}
+
 describe('LoginPage', () => {
   it('이메일 형식이 틀리면 필드 아래에 오류가 뜨고 버튼이 꺼진다', async () => {
     const user = userEvent.setup()
@@ -107,6 +113,7 @@ describe('비밀번호 확인 칸', () => {
         <SignupAccountPage />
       </SignupStepProvider>,
     )
+    await agreeAllTerms(user)
 
     await user.type(screen.getByLabelText('비밀번호'), 'password1')
     expect(screen.queryByText(AUTH_ERRORS.passwordMismatch)).not.toBeInTheDocument()
@@ -119,6 +126,7 @@ describe('비밀번호 확인 칸', () => {
         <SignupAccountPage />
       </SignupStepProvider>,
     )
+    await agreeAllTerms(user)
 
     await user.type(screen.getByLabelText('비밀번호'), 'password1')
     await user.type(screen.getByLabelText('비밀번호 확인'), 'password1')
