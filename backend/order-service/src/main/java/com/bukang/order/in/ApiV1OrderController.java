@@ -187,7 +187,10 @@ public class ApiV1OrderController {
 				@ExampleObject(name = "환불 기한 지남", value = OrderApiExamples.REFUND_PERIOD_PASSED),
 				@ExampleObject(name = "환불 기한·일정 변경 환불 기간 지남", value = OrderApiExamples.SCHEDULE_CHANGE_REFUND_PASSED),
 				@ExampleObject(name = "정산 대상일 지남", value = OrderApiExamples.PAYOUT_STARTED)
-			}))
+			})),
+		@ApiResponse(responseCode = "503", description = "정산 서비스에 연결하지 못함 (연결 실패, 2초 안에 응답 없음, 5xx)",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = OrderApiExamples.PAYOUT_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<OrderDto>> cancelItem(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
