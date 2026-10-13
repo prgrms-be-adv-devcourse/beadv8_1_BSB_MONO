@@ -6,6 +6,7 @@ import static lombok.AccessLevel.PACKAGE;
 import static lombok.AccessLevel.PROTECTED;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
@@ -52,4 +53,10 @@ public class PayoutItem extends BaseIdAndTime {
 
 	// 정산 대상일: 대회 다음 날
 	private LocalDate targetDate;
+
+	// 이 참가권 1장의 수수료: 금액 × 수수료율, 원 미만 버림. 정산 내역의 수수료는 이 값의 합이다 (payout.md 2-1)
+	// 칸으로 저장하지 않고 계산한다. 금액과 수수료율이 바뀌지 않으므로 언제 계산해도 같다
+	public long getFeeAmount() {
+		return BigDecimal.valueOf(amount).multiply(feeRate).setScale(0, RoundingMode.FLOOR).longValueExact();
+	}
 }

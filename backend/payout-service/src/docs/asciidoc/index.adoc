@@ -14,7 +14,7 @@
 :operation-response-headers-title: 응답 헤더
 :operation-response-fields-title: 응답 본문
 
-이 문서는 컨트롤러 테스트(`ApiV1PayoutHoldControllerTest`, `InternalV1PayoutRefundControllerTest`)가 통과할 때 만들어진 요청·응답으로 채운다.
+이 문서는 컨트롤러 테스트(`ApiV1PayoutHoldControllerTest`, `ApiV1PayoutSellerControllerTest`, `InternalV1PayoutRefundControllerTest`)가 통과할 때 만들어진 요청·응답으로 채운다.
 테스트가 실패하면 문서도 만들어지지 않으므로, 여기 있는 예시는 실제 응답과 같다.
 
 [[overview]]
@@ -26,7 +26,7 @@
 |===
 | 상태 코드 | 뜻
 
-| `400` | 입력값 검증 실패, 요청 본문 형식 오류, 경로 변수·헤더 형식 오류
+| `400` | 입력값 검증 실패, 요청 본문 형식 오류, 경로 변수·헤더·쿼리 파라미터 형식 오류, 조회 기간 한도 초과
 | `401` | `X-Member-Id` 헤더 없음
 | `404` | 정산 내역 또는 지급보류 없음
 | `409` | 지금 상태로는 처리할 수 없음 (이미 보류 중, 이미 지급 완료, 이미 해제됨, 다른 요청과 동시 수정)
@@ -72,6 +72,62 @@ include::{snippets}/payout-hold-release-not-found/http-response.adoc[]
 
 .이미 해제됨 (409)
 include::{snippets}/payout-hold-release-conflict/http-response.adoc[]
+
+[[payout-seller]]
+== 정산 조회 (판매자)
+
+`X-Member-Id`를 판매자 ID로 보고 그 판매자의 기록만 돌려준다.
+조회 기간은 나중에 바뀌지 않는 날짜로 자른다: 정산 내역은 정산 월, 건별 정산은 정산 대상일, 지급보류는 보류한 날.
+지급 예정일은 보류를 풀면 바뀌므로 기간 기준으로 쓰지 않는다.
+
+[[payout-seller-summary]]
+=== 정산 요약
+
+화면 위쪽 요약 카드(다음 정산일, 정산 예정액, 지급보류 건수)를 채운다. 조회 기간과 상관없이 지금 상태로 계산한다.
+
+operation::payout-seller-summary[snippets='http-request,request-headers,http-response,response-fields']
+
+[[payout-seller-payouts]]
+=== 정산 내역
+
+정산 월이 기간 안인 정산 내역을 최근 달부터 돌려준다. 시작 달을 포함해 최대 12개월까지 한 번에 조회한다.
+
+operation::payout-seller-payouts[snippets='http-request,request-headers,query-parameters,http-response,response-fields']
+
+[[payout-seller-items]]
+=== 건별 정산
+
+정산 대상일이 기간 안인 정산 항목(참가권 1장)을 돌려준다. 끝 날이 시작 날 + 1개월 전이어야 한다 (9/15 ~ 10/14는 되고 9/15 ~ 10/15는 안 된다).
+참가권 1장이 한 줄이라 큰 대회는 한 달에 수천 줄이 되므로, 이 API만 페이지로 나눈다 (0부터, 크기 기본 50 · 최대 100).
+
+operation::payout-seller-items[snippets='http-request,request-headers,query-parameters,http-response,response-fields']
+
+.페이지 번호 음수 (400)
+include::{snippets}/payout-seller-items-invalid-page/http-response.adoc[]
+
+[[payout-seller-holds]]
+=== 지급보류 내역
+
+보류한 날이 기간 안인 지급보류를 해제된 것까지 돌려준다. 기간 한도는 건별 정산과 같다.
+
+operation::payout-seller-holds[snippets='http-request,request-headers,query-parameters,http-response,response-fields']
+
+==== 실패 예시
+
+.정산 내역 12개월 초과 (400)
+include::{snippets}/payout-seller-payouts-too-long/http-response.adoc[]
+
+.건별 정산·지급보류 1개월 초과 (400)
+include::{snippets}/payout-seller-detail-too-long/http-response.adoc[]
+
+.시작이 끝보다 늦음 (400)
+include::{snippets}/payout-seller-period-reversed/http-response.adoc[]
+
+.기간 없음 (400)
+include::{snippets}/payout-seller-missing-period/http-response.adoc[]
+
+.회원 ID 헤더 없음 (401)
+include::{snippets}/payout-seller-unauthorized/http-response.adoc[]
 
 [[payout-internal]]
 == 내부 API (서비스 간 호출 전용)
