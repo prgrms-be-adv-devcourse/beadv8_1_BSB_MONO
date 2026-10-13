@@ -54,6 +54,10 @@ final class RaceApiExamples {
 		{ "status": 400, "message": "키트가 없는 종목은 티셔츠 사이즈를 작성할 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
+	static final String KIT_PRICE_OVER_PRICE = """
+		{ "status": 400, "message": "키트 금액은 참가비보다 클 수 없습니다. (종목: 10K)", "data": null }
+		""";
+
 	static final String THUMBNAIL_REQUIRED = """
 		{ "status": 400, "message": "10K 종목의 대표 이미지를 1장 연결해주세요.", "data": null }
 		""";
@@ -86,8 +90,12 @@ final class RaceApiExamples {
 		{ "status": 404, "message": "존재하지 않는 대회입니다.", "data": null }
 		""";
 
-	static final String PRICE_RAISED = """
-		{ "status": 409, "message": "판매가 시작된 종목은 참가비를 올릴 수 없습니다. (종목: 10K)", "data": null }
+	static final String PRICE_CHANGED = """
+		{ "status": 409, "message": "판매가 시작된 종목은 참가비를 바꿀 수 없습니다. (종목: 10K)", "data": null }
+		""";
+
+	static final String KIT_PRICE_CHANGED = """
+		{ "status": 409, "message": "판매가 시작된 종목은 키트 금액을 바꿀 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
 	static final String REFUND_DEADLINE_ADVANCED = """

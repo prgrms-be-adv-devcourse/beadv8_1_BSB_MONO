@@ -62,7 +62,7 @@ public class RaceCourseSaveRequestDto {
 	@NotNull(message = "키트 포함 여부를 작성해주세요.")
 	private final Boolean kitIncluded;
 
-	@Schema(description = "참가비에 포함된 키트 금액 (원)", example = "0")
+	@Schema(description = "참가비에 포함된 키트 금액 (원). 참가비보다 클 수 없다", example = "0")
 	@NotNull(message = "키트 금액을 작성해주세요.")
 	@PositiveOrZero(message = "키트 금액은 0원 이상이어야 합니다.")
 	private final Integer kitPrice;
