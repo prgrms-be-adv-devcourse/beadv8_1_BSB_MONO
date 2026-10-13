@@ -10,8 +10,9 @@ import java.util.List;
 @FunctionalInterface
 public interface SoldEntryPort {
 	/**
-	 * raceDate에 열린 대회에서 결제되고 취소되지 않은 참가권을 돌려준다.
-	 * 정산 대상일 전에 취소된 참가권은 넣지 않는다 (정산 전 취소, payout.md 2-3)
+	 * from ~ to(양 끝 포함)에 열린 대회에서 결제되고 취소되지 않은 참가권을 돌려준다.
+	 * 배치가 놓친 날을 따라잡도록 하루가 아니라 기간으로 묻는다 (PRO-61)
+	 * 정산 대상일 전에 취소된 참가권은 넣지 않는다 (정산 전 취소, payout.md 1장 정산 대상일 5번)
 	 */
-	List<SoldEntry> findSoldEntries(LocalDate raceDate);
+	List<SoldEntry> findSoldEntries(LocalDate fromRaceDate, LocalDate toRaceDate);
 }

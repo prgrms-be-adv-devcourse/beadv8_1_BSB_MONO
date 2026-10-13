@@ -65,7 +65,7 @@ class PayoutCreateUseCaseTransactionTest {
 	}
 
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
-		SoldEntryPort soldEntryPort = raceDate -> raceDate.equals(RACE_DATE) ? entries : List.of();
+		SoldEntryPort soldEntryPort = (from, to) -> entries;
 		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntryPort, sellerAccountPort,
 			RACE_NAMES);
 	}
@@ -74,9 +74,9 @@ class PayoutCreateUseCaseTransactionTest {
 	@DisplayName("한 묶음 저장이 DB에서 실패해도 같은 날 다른 묶음의 정산 내역은 저장된다")
 	void failedGroupDoesNotRollBackOthers() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, 50_000L),
-			new SoldEntry(300, 3, 30, 40_000L),
-			new SoldEntry(200, 2, 20, 30_000L)
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(300, 3, 30, RACE_DATE, 40_000L),
+			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
 		), sellerId -> true);
 
 		useCase.run(TARGET_DATE, NOW);
@@ -98,8 +98,8 @@ class PayoutCreateUseCaseTransactionTest {
 			return true;
 		};
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, 50_000L),
-			new SoldEntry(200, 2, 20, 30_000L)
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
 		), sellerAccountPort);
 
 		useCase.run(TARGET_DATE, NOW);
