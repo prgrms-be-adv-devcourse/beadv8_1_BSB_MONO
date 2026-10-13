@@ -1,8 +1,10 @@
 'use client'
 
+import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { cn } from '@/shared/lib'
@@ -17,6 +19,13 @@ import {
   TextField,
 } from '@/shared/ui'
 
+import {
+  AUTH_ERRORS,
+  signupAccountSchema,
+  signupProfileSchema,
+  type SignupAccountValues,
+  type SignupProfileValues,
+} from '../model/schemas'
 import { CenterBody, StepIntro } from './parts'
 
 const STEPS = ['약관', '계정', '회원 정보']
@@ -36,16 +45,29 @@ const TERMS: Term[] = [
 ]
 
 // 피그마 V2 · M04-0 약관 동의(바텀시트) → M04-1 계정(이메일 · 비밀번호) (+ M04-1E 입력 오류)
-// TODO(api): ApiV1MemberController 가입에 연결하고 react-hook-form + zod로 검사한다.
+// invalid는 시안 미리보기(?preview=error)용. 약관을 건너뛰고 M04-1E 오류를 띄운 채로 보여 준다.
 export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
   const router = useRouter()
   const [termsOpen, setTermsOpen] = useState(!invalid)
   const [checked, setChecked] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(TERMS.map((t) => [t.id, true])),
+    Object.fromEntries(TERMS.map((t) => [t.id, invalid])),
   )
   const allChecked = TERMS.every((t) => checked[t.id])
   const requiredChecked = TERMS.every((t) => !t.required || checked[t.id])
   const agreed = !termsOpen && requiredChecked
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid },
+  } = useForm<SignupAccountValues>({
+    resolver: zodResolver(signupAccountSchema),
+    mode: 'onTouched',
+    defaultValues: invalid
+      ? { email: 'runner@crewrun.kr', password: 'password1', passwordConfirm: 'password2' }
+      : { email: '', password: '', passwordConfirm: '' },
+  })
+  // TODO(api): ApiV1MemberController로 이메일 중복을 확인한다. 중복이면 AUTH_ERRORS.emailTaken.
+  const onNext = handleSubmit(() => router.push('/signup/profile'))
 
   return (
     <>
@@ -65,12 +87,8 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           type="email"
           autoComplete="email"
           placeholder="이메일을 입력해 주세요"
-          defaultValue={agreed ? 'runner@crewrun.kr' : undefined}
-          error={
-            invalid
-              ? '이미 가입된 이메일이에요. 로그인하거나 비밀번호를 재설정해 주세요.'
-              : undefined
-          }
+          error={errors.email?.message ?? (invalid ? AUTH_ERRORS.emailTaken : undefined)}
+          {...register('email')}
         />
         <TextField
           label="비밀번호"
@@ -78,25 +96,24 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           autoComplete="new-password"
           placeholder="비밀번호를 입력해 주세요"
           helper="영문 · 숫자 포함 8자 이상"
-          defaultValue={agreed ? 'password1' : undefined}
+          error={errors.password?.message}
+          {...register('password')}
         />
         <TextField
           label="비밀번호 확인"
           type="password"
           autoComplete="new-password"
           placeholder="비밀번호를 한 번 더 입력해 주세요"
-          defaultValue={agreed ? 'password2' : undefined}
-          error={invalid ? '비밀번호가 서로 달라요.' : undefined}
+          error={
+            errors.passwordConfirm?.message ?? (invalid ? AUTH_ERRORS.passwordMismatch : undefined)
+          }
+          {...register('passwordConfirm')}
         />
       </CenterBody>
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button
-            size="l"
-            disabled={!agreed || invalid}
-            onClick={() => router.push('/signup/profile')}
-          >
+          <Button size="l" disabled={!agreed || !isValid || invalid} onClick={onNext}>
             다음
           </Button>
         }
@@ -156,6 +173,18 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
 // 피그마 V2 · M04-2 가입 · 회원 정보
 export function SignupProfilePage() {
   const router = useRouter()
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid },
+  } = useForm<SignupProfileValues>({
+    resolver: zodResolver(signupProfileSchema),
+    mode: 'onTouched',
+    defaultValues: { name: '', birth: '', phone: '', nickname: '' },
+  })
+  // TODO(api): ApiV1MemberController 가입에 계정 · 회원 정보를 함께 보낸다.
+  const onSubmit = handleSubmit(() => router.push('/'))
+
   return (
     <>
       <AppHeader type="sub" title="가입하기" />
@@ -167,18 +196,33 @@ export function SignupProfilePage() {
           title="회원 정보를 적어요"
           description="마지막 단계예요. 다음은 가입 완료예요."
         />
-        <TextField label="이름" autoComplete="name" defaultValue="김러너" />
+        <TextField
+          label="이름"
+          autoComplete="name"
+          error={errors.name?.message}
+          {...register('name')}
+        />
         <TextField
           label="생년월일"
           inputMode="numeric"
+          placeholder="1995.03.02"
           helper="만 14세 미만은 가입할 수 없어요"
-          defaultValue="1995.03.02"
+          error={errors.birth?.message}
+          {...register('birth')}
         />
-        <TextField label="휴대폰 번호" type="tel" autoComplete="tel" defaultValue="010-1234-5678" />
+        <TextField
+          label="휴대폰 번호"
+          type="tel"
+          autoComplete="tel"
+          placeholder="010-1234-5678"
+          error={errors.phone?.message}
+          {...register('phone')}
+        />
         <TextField
           label="닉네임"
           helper="다른 사람에게는 실명 대신 닉네임이 보여요. 2~10자"
-          defaultValue="달리는곰"
+          error={errors.nickname?.message}
+          {...register('nickname')}
         />
         <p className="text-caption text-text-tertiary">
           이름 · 생년월일 · 휴대폰 번호는 대회 신청 때 참가자 정보로 그대로 가져와요.
@@ -187,7 +231,7 @@ export function SignupProfilePage() {
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button size="l" onClick={() => router.push('/')}>
+          <Button size="l" disabled={!isValid} onClick={onSubmit}>
             가입 완료
           </Button>
         }
