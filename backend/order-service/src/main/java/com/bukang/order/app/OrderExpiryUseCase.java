@@ -1,40 +1,103 @@
 package com.bukang.order.app;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import com.bukang.order.domain.Order;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.wallet.WalletPort;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * 결제 기한(10분, 연장 시 +2분)이 지난 결제 대기 건을 정리한다 (정책 4장 결제, ERD 추천안 v4 9쪽 6번)
- * 참가 신청 APPLIED → RELEASED, 주문 CREATED → EXPIRED. 자리 해제·정원 복구는 상품 서비스(B)가 자기 expires_at으로 한다
+ * 주문마다 예치금 결제 취소(D) → 주문 CREATED → EXPIRED, 참가 신청 APPLIED → RELEASED
+ * 결제 취소를 부르는 이유: D 결제가 커밋된 뒤 주문 쪽이 롤백되면(판매 호출 오류, 커밋 실패, 서버 재시작, 응답 시간 초과)
+ * 돈만 빠진 결제 대기 주문이 남는다. 그 주문은 결국 여기로 오므로, 결제하지 않은 주문까지 모두 불러 돌려받는다
+ * (결제하지 않은 주문이면 D가 "돌려줄 것 없음"으로 끝내고 뒤늦게 온 결제를 막는다, 10/13 김소희님 요청)
+ * 자리 해제·정원 복구는 상품 서비스(B)가 자기 expires_at으로 한다고 가정한다 (#66은 주문이 해제 메시지를 보내는 안, 정해지면 반영)
  * 여기의 payment_due_at은 화면·정리용 사본이라, 정리가 몇 분 늦어도 결제 판정에는 영향이 없다 (판정 원본은 B)
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderExpiryUseCase {
+	// 한 번의 정리에서 처리할 최대 주문 수. 주문마다 예치금 호출(시간 제한 2초)을 하므로, D가 느려도 한 번이 수 분 안에 끝난다
+	// 남은 주문은 다음 실행(1분 뒤)에서 이어서 처리한다
+	static final int BATCH_SIZE = 100;
+
 	private final ParticipationRepository participationRepository;
 	private final OrderRepository orderRepository;
+	private final WalletPort walletPort;
+	private final TransactionTemplate transactionTemplate;
 
-	public record ExpiryResult(int releasedParticipations, int expiredOrders) {
+	/**
+	 * @param releasedParticipations 미결제 해제한 참가 신청 수
+	 * @param expiredOrders          만료한 주문 수
+	 * @param retryOrders            만료 처리(결제 취소 등)에 실패해 그대로 둔 주문 수. 다음 실행에서 다시 시도한다
+	 */
+	public record ExpiryResult(int releasedParticipations, int expiredOrders, int retryOrders) {
 	}
 
-	@Transactional
+	/**
+	 * 주문마다 트랜잭션을 따로 연다. 한 주문의 결제 취소가 실패해도 그 주문만 롤백되어 결제 대기로 남고,
+	 * 다음 실행(1분 뒤)에 다시 대상이 된다. 결제 취소를 먼저 부르고 만료하므로, 돌려받지 못한 채 만료되는 주문은 없다
+	 * 바깥 트랜잭션 없이 부른다 (OrderExpiryScheduler)
+	 */
 	public ExpiryResult expireOverdue(LocalDateTime now) {
-		// 주문 → 참가 신청 순서로 바꾼다. 결제 기한 늘리기(OrderDeadlineExtendUseCase)와 잠그는 순서를 같게 해
-		// 기한 직전에 둘이 겹쳐도 서로 기다리다 멈추지 않는다. 늘리기가 먼저 끝나면 늘어난 기한이라 이 조건에 걸리지 않는다
-		int expired = orderRepository.expireOverdue(now);
-		int released = participationRepository.releaseOverdue(now);
-		if (released > 0 || expired > 0) {
-			log.info("결제 기한이 지난 건을 정리했습니다. 참가 신청 {}건, 주문 {}건", released, expired);
+		List<Integer> overdueOrderIds = orderRepository.findOverdueIds(now, PageRequest.of(0, BATCH_SIZE));
+		int expired = 0;
+		int released = 0;
+		int retry = 0;
+		for (int orderId : overdueOrderIds) {
+			try {
+				Expired result = transactionTemplate.execute(status -> expireLocked(orderId, now));
+				if (result.order()) {
+					expired++;
+				}
+				if (result.participation()) {
+					released++;
+				}
+			} catch (RuntimeException exception) {
+				// 예치금 서비스 장애·응답 시간 초과, 잠금 대기 시간 초과 등. 주문은 결제 대기로 남아 다음 실행에서 다시 시도한다
+				// D가 오래 내려가 있으면 매분 주문마다 쌓이므로 스택 없이 한 줄로 남긴다
+				retry++;
+				log.warn("결제 기한이 지난 주문의 만료 처리에 실패해 다음에 다시 시도합니다. orderId={}, cause={}",
+					orderId, exception.toString());
+			}
 		}
-		return new ExpiryResult(released, expired);
+		if (released > 0 || expired > 0 || retry > 0) {
+			log.info("결제 기한이 지난 건을 정리했습니다. 참가 신청 {}건, 주문 {}건, 다시 시도 {}건", released, expired, retry);
+		}
+		return new ExpiryResult(released, expired, retry);
+	}
+
+	/**
+	 * 주문 → 참가 신청 순서로 잠근다. 결제(OrderPayUseCase)·기한 늘리기(OrderDeadlineExtendUseCase)와 같은 순서라
+	 * 기한 직전에 겹쳐도 서로 기다리다 멈추지 않는다
+	 * 결제 취소는 주문을 잠근 채 부른다. 결제가 차감을 마치고 자리를 파는 사이에 결제 취소가 끼어들면
+	 * 돈은 돌려줬는데 주문은 결제 완료로 남기 때문이다. 결제 중이면 잠금을 기다렸다가, 결제가 끝난 주문이면 건너뛴다
+	 */
+	private Expired expireLocked(int orderId, LocalDateTime now) {
+		Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
+		// 조회와 잠금 사이에 결제됐거나, 기한을 늘려 아직 기한 전이면 건너뛴다
+		if (order == null || !order.isOverdue(now)) {
+			return new Expired(false, false);
+		}
+		walletPort.cancelPayment(order.getId(), order.getBuyerId());
+		order.expire(now);
+		boolean participationReleased = participationRepository.findByIdForUpdate(order.participationId())
+			.map(participation -> participation.markReleased(now))
+			.orElse(false);
+		return new Expired(true, participationReleased);
+	}
+
+	private record Expired(boolean order, boolean participation) {
 	}
 }

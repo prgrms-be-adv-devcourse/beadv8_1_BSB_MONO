@@ -117,7 +117,7 @@ class ApiV1OrderCancelTest {
 			.andExpect(jsonPath("$.data.items[0].status").value("CANCELED"));
 
 		assertThat(seatHoldPort.restoredParticipations()).containsExactly(paid.participationId());
-		assertThat(walletPort.refundedOrderItems()).containsExactly(paid.orderItemId());
+		assertThat(walletPort.refundCalls()).containsExactly(new StubWalletPort.Call(paid.orderId(), MEMBER_ID));
 		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
 		Participation participation = participationRepository.findById(paid.participationId()).orElseThrow();
 		assertThat(participation.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
@@ -256,7 +256,7 @@ class ApiV1OrderCancelTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 취소한 상품입니다."));
 
-		assertThat(walletPort.refundedOrderItems()).hasSize(1);
+		assertThat(walletPort.refundCalls()).hasSize(1);
 		assertThat(seatHoldPort.restoredParticipations()).hasSize(1);
 	}
 
@@ -344,7 +344,7 @@ class ApiV1OrderCancelTest {
 	}
 
 	private void assertNothingCanceled(Paid paid) {
-		assertThat(walletPort.refundedOrderItems()).isEmpty();
+		assertThat(walletPort.refundCalls()).isEmpty();
 		assertThat(seatHoldPort.restoredParticipations()).isEmpty();
 		assertThat(orderRepository.findById(paid.orderId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(participationRepository.findById(paid.participationId()).orElseThrow().getStatus())

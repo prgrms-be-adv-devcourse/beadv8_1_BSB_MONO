@@ -144,6 +144,17 @@ public class Participation extends BaseIdAndTime {
 		this.confirmedAt = confirmedAt;
 	}
 
+	// 결제하지 않고 기한이 지나 미결제 해제했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다 (OrderExpiryUseCase)
+	// 결제 대기(APPLIED)일 때만 바꾸고, 바꿨는지 돌려준다
+	public boolean markReleased(LocalDateTime releasedAt) {
+		if (status != ParticipationStatus.APPLIED) {
+			return false;
+		}
+		changeStatus(ParticipationStatus.RELEASED);
+		this.releasedAt = releasedAt;
+		return true;
+	}
+
 	// 결제한 참가권을 취소했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다 (정책 5장)
 	public void markCanceled(LocalDateTime canceledAt) {
 		if (status != ParticipationStatus.CONFIRMED) {

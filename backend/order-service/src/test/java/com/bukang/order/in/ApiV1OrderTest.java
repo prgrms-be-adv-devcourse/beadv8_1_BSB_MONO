@@ -409,10 +409,8 @@ class ApiV1OrderTest {
 		assertThat(released.getStatus()).isEqualTo(ParticipationStatus.RELEASED);
 		assertThat(released.getActiveFlag()).isNull();
 		assertThat(released.getReleasedAt()).isEqualTo(due);
-		assertThat(released.getModifyDate()).isEqualTo(due);
 		Order expired = orderRepository.findById(orderId).orElseThrow();
 		assertThat(expired.getStatus()).isEqualTo(OrderStatus.EXPIRED);
-		assertThat(expired.getModifyDate()).isEqualTo(due);
 
 		// 같은 사람이 같은 대회에 새 신청서를 쓸 수 있다
 		applyAndGetId(MEMBER_ID);
