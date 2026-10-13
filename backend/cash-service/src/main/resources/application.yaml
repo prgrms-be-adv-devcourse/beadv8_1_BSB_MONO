@@ -49,3 +49,9 @@ springdoc:
       title: Bukang Cash API
       description: 크루 중심 마라톤 대회 예매·커머스 플랫폼 캐시 API
       version: v1
+
+# 시스템 지갑(수수료 수익)·홀딩 지갑(정산 전 보관)의 회원 ID (docs/erd/cash.md 홀딩 지갑)
+cash:
+  wallet:
+    system-member-id: 1
+    holding-member-id: 2
