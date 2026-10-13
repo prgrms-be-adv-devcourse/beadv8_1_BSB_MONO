@@ -91,6 +91,11 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		return restoredParticipations;
 	}
 
+	// 판매(HELD → SOLD)까지 끝난 자리인지
+	public boolean isSold(int participationId) {
+		return sold.contains(participationId);
+	}
+
 	public int extendCalls() {
 		return extendCalls.get();
 	}
