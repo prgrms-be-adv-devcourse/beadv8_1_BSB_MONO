@@ -229,6 +229,25 @@ class GatewayAuthenticationTest {
 		assertUnauthorized(response, "로그인이 필요합니다.");
 	}
 
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("파일 조회 GET(대회 사진 등)은 로그인 없이 통과한다")
+	@ValueSource(strings = {"/api/v1/file/files/1", "/api/v1/file/files?refType=Race&refId=1"})
+	void passesFileReadWithoutToken(String path) throws Exception {
+		HttpResponse<String> response = send(request(path));
+
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(RECEIVED_MEMBER_IDS).containsExactly("없음");
+	}
+
+	@Test
+	@DisplayName("파일 업로드 등 GET이 아닌 파일 요청은 토큰이 필요하다")
+	void requiresTokenForFileWrite() throws Exception {
+		HttpResponse<String> response = send(request("/api/v1/file/files")
+			.POST(HttpRequest.BodyPublishers.noBody()));
+
+		assertUnauthorized(response, "로그인이 필요합니다.");
+	}
+
 	private void assertUnauthorized(HttpResponse<String> response, String message) {
 		assertThat(response.statusCode()).isEqualTo(401);
 		assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
