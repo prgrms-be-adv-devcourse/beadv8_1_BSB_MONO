@@ -167,6 +167,51 @@ final class ParticipationApiExamples {
 		{ "status": 409, "message": "참가자 정보를 고칠 수 없는 신청입니다(현재 상태: 취소).", "data": null }
 		""";
 
+	static final String CANCEL_SUCCESS = """
+		{
+			"status": 200,
+			"message": "참가 신청서를 취소했습니다.",
+			"data": {
+				"id": 1,
+				"createDate": "2026-10-12T10:15:30",
+				"modifyDate": "2026-10-12T10:20:05",
+				"raceId": 1,
+				"raceCourseId": 1,
+				"memberId": 1,
+				"participationType": "INDIVIDUAL",
+				"status": "CANCELED",
+				"participant": {
+					"name": "김러너",
+					"birth": "1994-06-25",
+					"gender": "MALE",
+					"phone": "010-1234-5678",
+					"emergencyContactName": "김가족",
+					"emergencyContactPhone": "010-9876-5432",
+					"tshirtSize": "L"
+				},
+				"thirdPartyConsent": true,
+				"consentedAt": "2026-10-12T10:15:30",
+				"paymentDueAt": null
+			}
+		}
+		""";
+
+	static final String NOT_CANCELABLE_APPLIED = """
+		{
+			"status": 409,
+			"message": "결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다.",
+			"data": null
+		}
+		""";
+
+	static final String NOT_CANCELABLE_CONFIRMED = """
+		{ "status": 409, "message": "결제한 참가권은 주문 상품 취소로 취소해주세요.", "data": null }
+		""";
+
+	static final String NOT_CANCELABLE_FINISHED = """
+		{ "status": 409, "message": "이미 끝난 신청입니다(현재 상태: 취소).", "data": null }
+		""";
+
 	private ParticipationApiExamples() {
 	}
 }

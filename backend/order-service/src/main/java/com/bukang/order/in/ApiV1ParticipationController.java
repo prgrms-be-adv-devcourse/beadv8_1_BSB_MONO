@@ -32,7 +32,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Participation", description = "참가 신청서 작성, 참가 신청 조회, 참가자 정보 수정, 최근 참가자 정보 조회 API")
+@Tag(name = "Participation", description = "참가 신청서 작성·취소, 참가 신청 조회, 참가자 정보 수정, 최근 참가자 정보 조회 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/order/participations")
@@ -139,6 +139,45 @@ public class ApiV1ParticipationController {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "참가 신청을 조회했습니다.",
 				participationFacade.findById(participationId, memberId)));
+	}
+
+	@PostMapping("/{participationId}/cancel")
+	@Operation(summary = "참가 신청서 취소",
+		description = "[결제하기] 전(PENDING)인 본인 참가 신청서를 취소한다. 취소하면 같은 대회의 다른 종목으로 다시 신청할 수 있다. "
+			+ "결제 대기 중인 신청은 결제 기한이 지나면 자동으로 풀리고, 결제한 참가권은 주문 상품 취소로 취소한다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "취소 성공",
+			content = @Content(examples = @ExampleObject(value = ParticipationApiExamples.CANCEL_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "참가 신청 ID·회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "참가 신청 ID·회원 ID 형식 오류", value = ParticipationApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = ParticipationApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = ParticipationApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "다른 회원의 참가 신청",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = ParticipationApiExamples.NOT_OWNER))),
+		@ApiResponse(responseCode = "404", description = "없는 참가 신청",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = ParticipationApiExamples.PARTICIPATION_NOT_FOUND))),
+		@ApiResponse(responseCode = "409", description = "결제 대기 중, 결제 완료 또는 이미 끝난 신청",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "결제 대기 중", value = ParticipationApiExamples.NOT_CANCELABLE_APPLIED),
+				@ExampleObject(name = "결제 완료", value = ParticipationApiExamples.NOT_CANCELABLE_CONFIRMED),
+				@ExampleObject(name = "이미 끝난 신청", value = ParticipationApiExamples.NOT_CANCELABLE_FINISHED)
+			}))
+	})
+	public ResponseEntity<RsData<ParticipationDto>> cancelBeforePayment(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "참가 신청 ID", example = "1")
+		@PathVariable int participationId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "참가 신청서를 취소했습니다.",
+				participationFacade.cancelBeforePayment(participationId, memberId)));
 	}
 
 	@PutMapping("/{participationId}/participant")

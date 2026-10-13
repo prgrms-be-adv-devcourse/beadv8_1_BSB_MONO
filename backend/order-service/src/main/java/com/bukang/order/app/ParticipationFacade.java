@@ -41,6 +41,11 @@ public class ParticipationFacade {
 		).toDto();
 	}
 
+	@Transactional
+	public ParticipationDto cancelBeforePayment(int participationId, int memberId) {
+		return participationApplyUseCase.cancelBeforePayment(participationId, memberId, LocalDateTime.now()).toDto();
+	}
+
 	public ParticipationDto findById(int participationId, int memberId) {
 		return participationApplyUseCase.findOwned(participationId, memberId).toDto();
 	}

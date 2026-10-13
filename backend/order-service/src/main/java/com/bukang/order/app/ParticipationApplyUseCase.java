@@ -77,6 +77,15 @@ public class ParticipationApplyUseCase {
 		return participation;
 	}
 
+	// [결제하기] 전 신청서를 버린다 (PRO-122). [결제하기]도 신청서를 잠그고 PENDING인지 보므로, 동시에 들어오면 한쪽만 반영된다
+	public Participation cancelBeforePayment(int participationId, int memberId, LocalDateTime now) {
+		Participation participation = participationRepository.findByIdForUpdate(participationId)
+			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
+		checkOwner(participation, memberId);
+		participation.cancelBeforePayment(now);
+		return participation;
+	}
+
 	public Participation findOwned(int participationId, int memberId) {
 		Participation participation = participationRepository.findById(participationId)
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));

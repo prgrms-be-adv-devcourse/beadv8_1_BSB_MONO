@@ -279,6 +279,71 @@ class ApiV1ParticipationTest {
 			.andExpect(jsonPath("$.message").value("참가자 정보를 고칠 수 없는 신청입니다(현재 상태: 취소)."));
 	}
 
+	@Test
+	@DisplayName("결제 전 신청서를 취소하면 끝난 신청이 되고, 같은 대회의 다른 종목으로 바로 다시 신청할 수 있다")
+	void cancelBeforePayment() throws Exception {
+		int id = applyAndGetId(MEMBER_ID);
+
+		cancel(MEMBER_ID, id)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("참가 신청서를 취소했습니다."))
+			.andExpect(jsonPath("$.data.id").value(id))
+			.andExpect(jsonPath("$.data.status").value("CANCELED"));
+
+		Participation canceled = participationRepository.findById(id).orElseThrow();
+		assertThat(canceled.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
+		assertThat(canceled.getActiveFlag()).isNull();
+		assertThat(canceled.getCanceledAt()).isNotNull();
+
+		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
+		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "L"), true))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.raceCourseId").value(COURSE_ID + 1));
+	}
+
+	@Test
+	@DisplayName("다른 회원의 신청서는 403, 없는 신청서는 404이고 신청서는 그대로 남는다")
+	void cancelBeforePaymentNotOwned() throws Exception {
+		int id = applyAndGetId(MEMBER_ID);
+
+		cancel(OTHER_MEMBER_ID, id)
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 보거나 고칠 수 있습니다."));
+		cancel(MEMBER_ID, id + 1000)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."));
+
+		assertThat(participationRepository.findById(id).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.PENDING);
+	}
+
+	@Test
+	@DisplayName("결제 대기·결제 완료·이미 끝난 신청서는 409이고 상태가 바뀌지 않는다")
+	void cancelBeforePaymentRejected() throws Exception {
+		int id = applyAndGetId(MEMBER_ID);
+
+		moveTo(id, ParticipationStatus.APPLIED);
+		cancel(MEMBER_ID, id)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message")
+				.value("결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다."));
+		assertThat(participationRepository.findById(id).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.APPLIED);
+
+		moveTo(id, ParticipationStatus.CONFIRMED);
+		cancel(MEMBER_ID, id)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("결제한 참가권은 주문 상품 취소로 취소해주세요."));
+		assertThat(participationRepository.findById(id).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.CONFIRMED);
+
+		moveTo(id, ParticipationStatus.PENDING);
+		cancel(MEMBER_ID, id).andExpect(status().isOk());
+		cancel(MEMBER_ID, id)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("이미 끝난 신청입니다(현재 상태: 취소)."));
+	}
+
 	private ResultActions apply(int memberId, String body) throws Exception {
 		return mockMvc.perform(post(BASE_URL)
 			.header("X-Member-Id", memberId)
@@ -291,6 +356,19 @@ class ApiV1ParticipationTest {
 			.header("X-Member-Id", memberId)
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(participantBody));
+	}
+
+	private ResultActions cancel(int memberId, int participationId) throws Exception {
+		return mockMvc.perform(post(BASE_URL + "/" + participationId + "/cancel")
+			.header("X-Member-Id", memberId));
+	}
+
+	// [결제하기]·결제는 자리·예치금 스텁이 필요해, 이 테스트에서는 살아 있는 상태로 직접 옮긴다
+	private void moveTo(int participationId, ParticipationStatus status) {
+		Participation participation = participationRepository.findById(participationId).orElseThrow();
+		ReflectionTestUtils.setField(participation, "status", status);
+		ReflectionTestUtils.setField(participation, "activeFlag", status.isActive() ? Boolean.TRUE : null);
+		participationRepository.save(participation);
 	}
 
 	private int applyAndGetId(int memberId) throws Exception {
