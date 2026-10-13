@@ -13,6 +13,7 @@ import com.bukang.order.domain.exception.DuplicateParticipationException;
 import com.bukang.order.domain.exception.ParticipationAccessDeniedException;
 import com.bukang.order.domain.exception.ParticipationNotFoundException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
+import com.bukang.order.domain.exception.ShippingAddressRequiredException;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.out.race.RaceCourseInfo;
 import com.bukang.order.out.race.RaceCoursePort;
@@ -38,11 +39,12 @@ public class ParticipationApplyUseCase {
 			throw new ApplicationPeriodException("접수 기간이 아닙니다.");
 		}
 		checkAge(course, participant);
+		ParticipantInfo checked = checkShippingAddress(course, participant);
 		if (participationRepository.existsByRaceIdAndMemberIdAndActiveFlagTrue(course.raceId(), memberId)) {
 			throw new DuplicateParticipationException("이미 이 대회에 신청했습니다.");
 		}
 		Participation participation = Participation.individual(
-			memberId, course.raceId(), course.raceCourseId(), participant, now);
+			memberId, course.raceId(), course.raceCourseId(), checked, now);
 		try {
 			// 위 확인과 저장 사이에 같은 신청이 먼저 들어오면 유니크 제약(uk_participation_active)이 막는다
 			return participationRepository.saveAndFlush(participation);
@@ -73,7 +75,7 @@ public class ParticipationApplyUseCase {
 			throw new ApplicationPeriodException("접수가 마감되어 참가자 정보를 고칠 수 없습니다.");
 		}
 		checkAge(course, participant);
-		participation.changeParticipant(participant);
+		participation.changeParticipant(checkShippingAddress(course, participant));
 		return participation;
 	}
 
@@ -93,6 +95,17 @@ public class ParticipationApplyUseCase {
 	private RaceCourseInfo findCourse(int raceCourseId) {
 		return raceCoursePort.findCourse(raceCourseId)
 			.orElseThrow(() -> new RaceCourseNotFoundException("존재하지 않는 종목입니다."));
+	}
+
+	// 키트는 배송으로만 받으므로 키트가 있는 종목은 배송 주소가 있어야 한다 (정책 2장 1-3, 3장 1-2, 5장 3-2)
+	private ParticipantInfo checkShippingAddress(RaceCourseInfo course, ParticipantInfo participant) {
+		if (!course.kitIncluded()) {
+			return participant.withShippingAddress(null);
+		}
+		if (participant.getShippingAddress() == null) {
+			throw new ShippingAddressRequiredException("키트를 받을 배송 주소를 작성해주세요.");
+		}
+		return participant;
 	}
 
 	private void checkAge(RaceCourseInfo course, ParticipantInfo participant) {

@@ -24,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.bukang.order.domain.ParticipantInfo;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.out.ParticipationRepository;
@@ -40,6 +41,7 @@ class ApiV1ParticipationTest {
 	private static final int OTHER_MEMBER_ID = 2;
 	private static final int COURSE_ID = 10;
 	private static final int RACE_ID = 100;
+	private static final String ADDRESS = "서울 성동구 왕십리로 00, 101동 1001호";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -87,13 +89,13 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
-	@DisplayName("휴대폰 번호는 하이픈 유무와 상관없이 010-1234-5678 형식으로, 빈 티셔츠 사이즈는 null로 저장한다")
+	@DisplayName("휴대폰 번호는 010-1234-5678 형식으로, 빈 티셔츠 사이즈는 null로, 배송 주소는 앞뒤 공백을 빼고 저장한다")
 	void applyNormalizesInput() throws Exception {
 		String body = """
 			{ "raceCourseId": %d, "thirdPartyConsent": true,
 				"participant": { "name": " 김러너 ", "birth": "1994-06-25", "gender": "FEMALE",
 				"phone": "01012345678", "emergencyContactName": "김가족", "emergencyContactPhone": "011-987-6543",
-				"tshirtSize": " " } }
+				"tshirtSize": " ", "shippingAddress": "  서울 성동구 왕십리로 00  " } }
 			""".formatted(COURSE_ID);
 
 		apply(MEMBER_ID, body)
@@ -101,7 +103,41 @@ class ApiV1ParticipationTest {
 			.andExpect(jsonPath("$.data.participant.name").value("김러너"))
 			.andExpect(jsonPath("$.data.participant.phone").value("010-1234-5678"))
 			.andExpect(jsonPath("$.data.participant.emergencyContactPhone").value("011-987-6543"))
-			.andExpect(jsonPath("$.data.participant.tshirtSize").isEmpty());
+			.andExpect(jsonPath("$.data.participant.tshirtSize").isEmpty())
+			.andExpect(jsonPath("$.data.participant.shippingAddress").value("서울 성동구 왕십리로 00"));
+	}
+
+	@Test
+	@DisplayName("키트가 있는 종목은 배송 주소 없이(빈 값 포함) 신청하거나 255자를 넘기면 400이고 저장되지 않는다")
+	void applyWithoutShippingAddress() throws Exception {
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L", null), true))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("키트를 받을 배송 주소를 작성해주세요."));
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L", " "), true))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("키트를 받을 배송 주소를 작성해주세요."));
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L", "가".repeat(256)), true))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("배송 주소는 255자 이하로 작성해주세요."));
+
+		assertThat(participationRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("키트가 없는 종목은 배송 주소 없이 신청되고, 주소를 보내도 저장하지 않는다")
+	void applyCourseWithoutKit() throws Exception {
+		raceCoursePort.put(StubRaceCoursePort.courseWithoutKit(COURSE_ID, RACE_ID));
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "", null), true))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.participant.shippingAddress").isEmpty());
+
+		apply(OTHER_MEMBER_ID, applyBody(COURSE_ID, participant("박러너", "1990-01-01", "", "서울 어딘가"), true))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.participant.shippingAddress").isEmpty());
+		assertThat(participationRepository.findAll())
+			.allSatisfy(saved -> assertThat(saved.getParticipant().getShippingAddress()).isNull());
 	}
 
 	@Test
@@ -207,11 +243,26 @@ class ApiV1ParticipationTest {
 			.andExpect(jsonPath("$.data.phone").value("010-1234-5678"))
 			.andExpect(jsonPath("$.data.emergencyContactName").value("김가족"))
 			.andExpect(jsonPath("$.data.emergencyContactPhone").value("010-9876-5432"))
-			.andExpect(jsonPath("$.data.tshirtSize").value("L"));
+			.andExpect(jsonPath("$.data.tshirtSize").value("L"))
+			.andExpect(jsonPath("$.data.shippingAddress").value(ADDRESS));
 
 		// 다른 회원의 정보는 채워 주지 않는다
 		mockMvc.perform(get(BASE_URL + "/latest-participant").header("X-Member-Id", OTHER_MEMBER_ID))
 			.andExpect(jsonPath("$.data").isEmpty());
+	}
+
+	@Test
+	@DisplayName("마지막 신청이 키트 없는 종목이면, 다음 신청서의 배송 주소는 주소를 적은 최근 신청에서 채운다")
+	void latestParticipantKeepsShippingAddress() throws Exception {
+		applyAndGetId(MEMBER_ID);
+		raceCoursePort.put(StubRaceCoursePort.courseWithoutKit(COURSE_ID + 1, RACE_ID + 1));
+		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "M", null), true))
+			.andExpect(status().isCreated());
+
+		mockMvc.perform(get(BASE_URL + "/latest-participant").header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.tshirtSize").value("M"))
+			.andExpect(jsonPath("$.data.shippingAddress").value(ADDRESS));
 	}
 
 	@Test
@@ -238,13 +289,34 @@ class ApiV1ParticipationTest {
 	void changeParticipantBeforeClose() throws Exception {
 		int id = applyAndGetId(MEMBER_ID);
 
-		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XL"))
+		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XL", "부산 해운대구 해운대로 00"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("참가자 정보를 수정했습니다."))
-			.andExpect(jsonPath("$.data.participant.tshirtSize").value("XL"));
+			.andExpect(jsonPath("$.data.participant.tshirtSize").value("XL"))
+			.andExpect(jsonPath("$.data.participant.shippingAddress").value("부산 해운대구 해운대로 00"));
 
-		assertThat(participationRepository.findById(id).orElseThrow().getParticipant().getTshirtSize())
-			.isEqualTo("XL");
+		ParticipantInfo saved = participationRepository.findById(id).orElseThrow().getParticipant();
+		assertThat(saved.getTshirtSize()).isEqualTo("XL");
+		assertThat(saved.getShippingAddress()).isEqualTo("부산 해운대구 해운대로 00");
+
+		// 키트가 있는 종목은 수정할 때도 배송 주소를 비울 수 없다
+		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XL", null))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("키트를 받을 배송 주소를 작성해주세요."));
+		assertThat(participationRepository.findById(id).orElseThrow().getParticipant().getShippingAddress())
+			.isEqualTo("부산 해운대구 해운대로 00");
+	}
+
+	@Test
+	@DisplayName("키트가 없는 종목은 참가자 정보를 고칠 때 보낸 배송 주소도 저장하지 않는다")
+	void changeParticipantCourseWithoutKit() throws Exception {
+		raceCoursePort.put(StubRaceCoursePort.courseWithoutKit(COURSE_ID, RACE_ID));
+		int id = applyAndGetId(MEMBER_ID);
+
+		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "", "서울 어딘가"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.participant.shippingAddress").isEmpty());
+		assertThat(participationRepository.findById(id).orElseThrow().getParticipant().getShippingAddress()).isNull();
 	}
 
 	@Test
@@ -314,9 +386,15 @@ class ApiV1ParticipationTest {
 	}
 
 	private static String participant(String name, String birth, String tshirtSize) {
+		return participant(name, birth, tshirtSize, ADDRESS);
+	}
+
+	// shippingAddress가 null이면 필드를 보내지 않는다
+	private static String participant(String name, String birth, String tshirtSize, String shippingAddress) {
+		String address = shippingAddress == null ? "" : ", \"shippingAddress\": \"%s\"".formatted(shippingAddress);
 		return """
 			{ "name": "%s", "birth": "%s", "gender": "MALE", "phone": "010-1234-5678",
-				"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "%s" }
-			""".formatted(name, birth, tshirtSize);
+				"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "%s"%s }
+			""".formatted(name, birth, tshirtSize, address);
 	}
 }

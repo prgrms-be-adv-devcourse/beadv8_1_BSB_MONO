@@ -19,7 +19,8 @@ import com.bukang.order.out.race.RaceCourseInfo;
 class OrderCancelTest {
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 12, 10, 0);
 	private static final RaceCourseInfo COURSE = new RaceCourseInfo(10, 100, NOW.plusDays(60), NOW.minusDays(1),
-		NOW.plusDays(30), 14, null, 7, "종목", 50_000, 10_000, LocalDate.of(2026, 11, 20), null);
+		NOW.plusDays(30), 14, null, 7, "종목", 50_000, 10_000, true,
+		LocalDate.of(2026, 11, 20), null);
 
 	@Test
 	@DisplayName("상품 2개 중 1개를 취소하면 PARTIAL_CANCELED, 나머지도 취소하면 CANCELED가 되고 취소 금액이 쌓인다")
@@ -63,7 +64,7 @@ class OrderCancelTest {
 
 	private static Participation participation(int memberId) {
 		ParticipantInfo info = new ParticipantInfo("김러너", LocalDate.of(1994, 6, 25), Gender.MALE, "010-1234-5678",
-			"김가족", "010-9876-5432", "L");
+			"김가족", "010-9876-5432", "L", "서울 성동구 왕십리로 00");
 		return Participation.individual(memberId, 100, 10, info, NOW);
 	}
 }

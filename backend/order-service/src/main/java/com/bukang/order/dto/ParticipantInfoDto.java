@@ -20,6 +20,8 @@ public class ParticipantInfoDto {
 	private final String emergencyContactPhone;
 	// 고르지 않았으면 null
 	private final String tshirtSize;
+	// 키트가 없는 종목이면 null
+	private final String shippingAddress;
 
 	public static ParticipantInfoDto from(ParticipantInfo info) {
 		return new ParticipantInfoDto(
@@ -29,7 +31,8 @@ public class ParticipantInfoDto {
 			info.getPhone(),
 			info.getEmergencyContactName(),
 			info.getEmergencyContactPhone(),
-			info.getTshirtSize()
+			info.getTshirtSize(),
+			info.getShippingAddress()
 		);
 	}
 }

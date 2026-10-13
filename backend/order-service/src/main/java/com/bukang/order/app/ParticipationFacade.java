@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.bukang.order.domain.ParticipantInfo;
 import com.bukang.order.dto.ParticipantInfoDto;
 import com.bukang.order.dto.ParticipantInfoRequestDto;
 import com.bukang.order.dto.ParticipationApplyRequestDto;
@@ -46,8 +47,19 @@ public class ParticipationFacade {
 	}
 
 	// 다음 신청서에 채울 참가자 정보. 신청한 적이 없으면 빈 값이다 (정책 3장 1-2)
+	// 마지막 신청이 키트 없는 종목이면 주소가 비어 있으므로, 주소는 주소를 적은 최근 신청에서 채운다
 	public Optional<ParticipantInfoDto> findLatestParticipant(int memberId) {
 		return participationRepository.findFirstByMemberIdOrderByIdDesc(memberId)
-			.map(participation -> ParticipantInfoDto.from(participation.getParticipant()));
+			.map(participation -> ParticipantInfoDto.from(withLatestShippingAddress(memberId,
+				participation.getParticipant())));
+	}
+
+	private ParticipantInfo withLatestShippingAddress(int memberId, ParticipantInfo participant) {
+		if (participant.getShippingAddress() != null) {
+			return participant;
+		}
+		return participationRepository.findFirstByMemberIdAndParticipantShippingAddressIsNotNullOrderByIdDesc(memberId)
+			.map(withAddress -> participant.withShippingAddress(withAddress.getParticipant().getShippingAddress()))
+			.orElse(participant);
 	}
 }

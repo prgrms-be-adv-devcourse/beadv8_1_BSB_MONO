@@ -53,9 +53,14 @@ public class ParticipantInfoRequestDto {
 	@Size(max = 10, message = "티셔츠 사이즈는 10자 이하로 작성해주세요.")
 	private final String tshirtSize;
 
+	@Schema(description = "키트 배송 주소 (키트가 있는 종목은 필수, 없는 종목은 보내도 저장하지 않는다, 255자 이하)",
+		example = "서울 성동구 왕십리로 00, 101동 1001호")
+	@Size(max = 255, message = "배송 주소는 255자 이하로 작성해주세요.")
+	private final String shippingAddress;
+
 	public ParticipantInfo toParticipantInfo() {
 		return new ParticipantInfo(name.strip(), birth, gender, normalizePhone(phone), emergencyContactName.strip(),
-			normalizePhone(emergencyContactPhone), blankToNull(tshirtSize));
+			normalizePhone(emergencyContactPhone), blankToNull(tshirtSize), blankToNull(shippingAddress));
 	}
 
 	// 하이픈을 넣거나 빼고 보내도 같은 사람의 번호가 같은 값으로 저장되도록 010-1234-5678 형식으로 맞춘다
@@ -65,7 +70,7 @@ public class ParticipantInfoRequestDto {
 		return digits.substring(0, 3) + "-" + digits.substring(3, middleEnd) + "-" + digits.substring(middleEnd);
 	}
 
-	// 키트가 없는 종목은 사이즈를 비워 보낸다. 빈 문자열과 null이 섞이지 않게 null로 맞춘다
+	// 키트가 없는 종목은 사이즈·주소를 비워 보낸다. 빈 문자열과 null이 섞이지 않게 null로 맞춘다
 	private static String blankToNull(String value) {
 		return value == null || value.isBlank() ? null : value.strip();
 	}

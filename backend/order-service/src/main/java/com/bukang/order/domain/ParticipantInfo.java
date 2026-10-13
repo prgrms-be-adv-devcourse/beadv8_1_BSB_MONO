@@ -44,4 +44,14 @@ public class ParticipantInfo {
 	// 기념 티셔츠(키트) 사이즈. 종목마다 고를 수 있는 값이 달라 문자열로 둔다 (ERD v4 tshirt_size)
 	@Column(name = "tshirt_size", length = 10)
 	private String tshirtSize;
+
+	// 키트 배송 주소. 키트가 있는 종목만 받는다 (정책 3장 1-2 "키트를 배송하는 대회면 배송 주소도 받는다", PRO-123)
+	@Column(name = "shipping_address", length = 255)
+	private String shippingAddress;
+
+	// 배송 주소만 바꾼 참가자 정보. 키트가 없는 종목은 null을 넣어 주소를 남기지 않는다
+	public ParticipantInfo withShippingAddress(String newShippingAddress) {
+		return new ParticipantInfo(name, birth, gender, phone, emergencyContactName, emergencyContactPhone, tshirtSize,
+			newShippingAddress);
+	}
 }

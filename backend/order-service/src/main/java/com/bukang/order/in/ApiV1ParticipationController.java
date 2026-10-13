@@ -44,17 +44,19 @@ public class ApiV1ParticipationController {
 	@PostMapping
 	@Operation(summary = "참가 신청서 작성",
 		description = "결제 전에 참가자 정보와 개인정보 제3자 제공 동의를 받아 참가 신청을 자리 확보 전(PENDING) 상태로 저장한다. "
-			+ "종목의 접수 기간, 대회 당일 만 나이 제한, 같은 대회에 살아 있는 신청이 있는지(한 사람 한 대회 1건)를 확인한다.")
+			+ "종목의 접수 기간, 대회 당일 만 나이 제한, 같은 대회에 살아 있는 신청이 있는지(한 사람 한 대회 1건)를 확인한다. "
+			+ "키트가 있는 종목은 배송 주소가 필수이고, 키트가 없는 종목은 배송 주소를 저장하지 않는다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "저장 성공",
 			content = @Content(examples = @ExampleObject(value = ParticipationApiExamples.APPLY_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 제3자 제공 미동의, 요청 본문 형식 오류, 나이 제한 밖 또는 회원 ID 오류",
+			description = "입력값 검증 실패, 제3자 제공 미동의, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음 또는 회원 ID 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = ParticipationApiExamples.INVALID_INPUT),
 				@ExampleObject(name = "제3자 제공 미동의", value = ParticipationApiExamples.CONSENT_REQUIRED),
 				@ExampleObject(name = "요청 본문 형식 오류", value = ParticipationApiExamples.INVALID_BODY),
 				@ExampleObject(name = "나이 제한 밖", value = ParticipationApiExamples.AGE_RESTRICTED),
+				@ExampleObject(name = "배송 주소 없음", value = ParticipationApiExamples.SHIPPING_ADDRESS_REQUIRED),
 				@ExampleObject(name = "회원 ID 형식 오류", value = ParticipationApiExamples.INVALID_VALUE_TYPE),
 				@ExampleObject(name = "회원 ID가 0 이하", value = ParticipationApiExamples.INVALID_MEMBER_ID)
 			})),
@@ -83,6 +85,7 @@ public class ApiV1ParticipationController {
 	@GetMapping("/latest-participant")
 	@Operation(summary = "최근 참가자 정보 조회",
 		description = "다음 신청서에 미리 채울 수 있도록, 회원이 가장 최근에 작성한 참가 신청의 참가자 정보를 돌려준다. "
+			+ "그 신청에 배송 주소가 없으면(키트 없는 종목) 주소를 적은 최근 신청의 주소를 채운다. "
 			+ "신청한 적이 없으면 data가 null이다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공 (이전 신청이 없으면 data가 null)",
@@ -144,16 +147,18 @@ public class ApiV1ParticipationController {
 	@PutMapping("/{participationId}/participant")
 	@Operation(summary = "참가자 정보 수정",
 		description = "접수 마감 전까지 본인 참가 신청의 참가자 정보를 통째로 바꾼다. 생년월일이 바뀔 수 있어 나이 제한을 다시 확인한다. "
+			+ "키트가 있는 종목은 배송 주소가 필수이고, 키트가 없는 종목은 배송 주소를 저장하지 않는다. "
 			+ "취소·미결제 해제·확보 실패한 신청은 고칠 수 없다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "수정 성공",
 			content = @Content(examples = @ExampleObject(value = ParticipationApiExamples.CHANGE_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 요청 본문 형식 오류, 나이 제한 밖 또는 참가 신청 ID·회원 ID 오류",
+			description = "입력값 검증 실패, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음 또는 참가 신청 ID·회원 ID 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = ParticipationApiExamples.INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = ParticipationApiExamples.INVALID_BODY),
 				@ExampleObject(name = "나이 제한 밖", value = ParticipationApiExamples.AGE_RESTRICTED),
+				@ExampleObject(name = "배송 주소 없음", value = ParticipationApiExamples.SHIPPING_ADDRESS_REQUIRED),
 				@ExampleObject(name = "참가 신청 ID·회원 ID 형식 오류", value = ParticipationApiExamples.INVALID_VALUE_TYPE),
 				@ExampleObject(name = "회원 ID가 0 이하", value = ParticipationApiExamples.INVALID_MEMBER_ID)
 			})),

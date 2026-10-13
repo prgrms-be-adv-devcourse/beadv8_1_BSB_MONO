@@ -182,7 +182,8 @@ class ApiV1OrderQueryTest {
 				{ "raceCourseId": %d, "thirdPartyConsent": true,
 					"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 						"phone": "010-1234-5678", "emergencyContactName": "김가족",
-						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": "서울 성동구 왕십리로 00" } }
 				""".formatted(raceCourseId))));
 		int orderId = read(mockMvc.perform(post(BASE_URL)
 			.header("X-Member-Id", memberId)

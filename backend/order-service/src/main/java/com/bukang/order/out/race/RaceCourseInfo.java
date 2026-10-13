@@ -19,6 +19,8 @@ import java.time.Period;
  * @param courseName         주문 상품명으로 남길 이름 (예: "2026 서울 하프 마라톤 10K")
  * @param price              참가비 (원)
  * @param kitPrice           참가권에 포함된 키트 금액 (원). 키트가 없으면 0
+ * @param kitIncluded        키트가 있는 종목인지 (ERD v5 race_course.kit_included). 키트는 배송으로만 받으므로
+ *                           있으면 신청 때 배송 주소를 받는다 (정책 2장 1-3, 3장 1-2)
  * @param refundDeadline     환불 기한 (날짜). 이날 23:59:59까지 취소하면 전액 환불한다 (정책 5장, ERD v4 race.refund_deadline)
  * @param scheduleChangedAt  일정 변경 안내 일시. 판매 시작 뒤 대회 일시가 바뀌면 상품 서비스가 기록한다. 바뀐 적 없으면 null
  *                           (ERD v4 race.schedule_changed_at)
@@ -35,6 +37,7 @@ public record RaceCourseInfo(
 	String courseName,
 	int price,
 	int kitPrice,
+	boolean kitIncluded,
 	LocalDate refundDeadline,
 	LocalDateTime scheduleChangedAt
 ) {
