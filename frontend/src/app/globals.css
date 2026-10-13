@@ -134,7 +134,7 @@
   --color-text-on-brand: var(--color-neutral-0);
   --color-text-on-danger: var(--color-neutral-0);
   --color-text-brand: var(--color-brand-700);
-  --color-text-disabled: var(--color-neutral-400);
+  --color-text-disabled: var(--color-neutral-500);
   --color-text-success: var(--color-green-700);
   --color-text-warning: var(--color-amber-700);
   --color-text-danger: var(--color-red-700);
@@ -295,7 +295,7 @@
     --color-text-tertiary: var(--color-navy-300);
     --color-text-inverse: var(--color-navy-900);
     --color-text-brand: var(--color-brand-300);
-    --color-text-disabled: var(--color-navy-500);
+    --color-text-disabled: var(--color-neutral-500);
     --color-text-success: var(--color-green-400);
     --color-text-warning: var(--color-amber-400);
     --color-text-danger: var(--color-red-300);

@@ -8,16 +8,20 @@ package com.bukang.common.shared.kafka;
  */
 public final class KafkaTopics {
 	// 회원 이벤트 (member-service가 발행하고 다른 서비스가 구독한다)
-	public static final String MEMBER_MEMBER_JOINED = "queuing.member.joined";
-	public static final String MEMBER_MODIFIED = "queuing.member.modified";
+	public static final String MEMBER_MEMBER_JOINED = "member.member.joined";
+	public static final String MEMBER_MODIFIED = "member.member.modified";
 
 	// 캐시 회원 복제본을 처음 저장한 뒤 지갑을 만든다 (cash → cash)
-	public static final String CASH_MEMBER_CREATED = "queuing.cashmember.created";
+	public static final String CASH_MEMBER_CREATED = "cash.member.created";
 
 	public static final String PRODUCT_MEMBER_JOINED = "product.member.joined";
 	public static final String PRODUCT_SELLER_CHANGED = "product.seller.changed";
 	// 대회·종목을 저장한 뒤 이미지 연결을 요청한다 (product → file)
-	public static final String RACE_FILE_LINK_REQUESTED = "race.file.link.requested";
+	public static final String RACE_FILE_LINK_REQUESTED = "race.filelink.requested";
+	// 대기열 활성 시간이 끝나 임시 확보한 자리를 해제한다 (order → product)
+	public static final String PRODUCT_HOLD_CANCEL = "product.hold.cancel";
+	// 판매자가 대회를 취소했다. 주문 서비스가 참가권을 일괄 환불한다 (product → order)
+	public static final String ORDER_RACE_CANCEL = "order.race.cancel";
 
 	private KafkaTopics() {
 	}

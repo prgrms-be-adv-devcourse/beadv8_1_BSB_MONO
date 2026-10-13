@@ -80,6 +80,7 @@ public class RaceCourseDocument extends BaseDocument {
 	//   "서울 하" 입력 → 종목 "2026 JTBC 서울마라톤 하프", "계룡산 트" 입력 → 종목 "계룡산 트레일런 10K"
 	//   한 요청에서 두 auto_complete 필드에 이름표(_name: race, course)를 붙여 찾고,
 	//   결과의 matched_queries로 대회 연관검색어와 종목 연관검색어를 나눈다
+	//   목록 검색어로는 찾지 않는다 (대회명과 겹쳐 점수가 두 번 붙는다)
 	@MultiField(
 		mainField = @Field(type = FieldType.Text, analyzer = INDEX_ANALYZER, searchAnalyzer = SEARCH_ANALYZER),
 		otherFields = @InnerField(suffix = "auto_complete", type = FieldType.Search_As_You_Type,
@@ -87,8 +88,13 @@ public class RaceCourseDocument extends BaseDocument {
 	)
 	private String courseLabel;
 
+	// 대회 소개. 목록 검색어로만 찾는다. HTML이 들어와도 분석기가 태그를 지운다 (html_strip)
+	@Field(type = FieldType.Text, analyzer = INDEX_ANALYZER, searchAnalyzer = SEARCH_ANALYZER)
+	private String description;
+
 	// 지역·장소는 검색창으로 찾고(text), 지역 필터는 keyword 하위 필드로 거른다
-	//   검색 "충남" → regionSido "충청남도"와 맞는다 (동의어), 필터는 regionSido.keyword = "충청남도"
+	//   검색 "충남" → regionSido "충청남도"와 맞는다 (동의어)
+	//   필터는 글자가 똑같아야 한다: regionSido.keyword = "충청남도", regionSigungu.keyword = "공주시"
 	//   "서울특별시"는 nori가 서울, 특별시로 쪼개서 "서울"만으로도 맞는다
 	@MultiField(
 		mainField = @Field(type = FieldType.Text, analyzer = INDEX_ANALYZER, searchAnalyzer = SEARCH_ANALYZER),
@@ -129,12 +135,17 @@ public class RaceCourseDocument extends BaseDocument {
 	@Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
 	private LocalDateTime saleOpenAt;
 
+	// 대회 등록 일시 (최신 등록순). 문서의 createdAt은 종목 등록 일시라 따로 둔다
+	@Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
+	private LocalDateTime raceCreatedAt;
+
 	@Field(type = FieldType.Integer)
 	private int price;
 
 	@Field(type = FieldType.Boolean)
 	private boolean kitIncluded;
 
+	// 거리 필터는 판매자가 입력한 값(소수 둘째 자리까지)과 똑같은 종목만 거른다 (10 → 10.00 종목)
 	@Field(type = FieldType.Double)
 	private double distanceKm;
 
@@ -155,6 +166,7 @@ public class RaceCourseDocument extends BaseDocument {
 		this.raceTitle = race.getTitle();
 		this.courseName = course.getName();
 		this.courseLabel = race.getTitle() + " " + course.getName();
+		this.description = race.getDescription();
 		this.location = race.getLocation();
 		this.regionSido = race.getRegionSido();
 		this.regionSigungu = race.getRegionSigungu();
@@ -165,6 +177,7 @@ public class RaceCourseDocument extends BaseDocument {
 		this.raceDate = race.getRaceDate();
 		this.applicationCloseAt = race.getApplicationCloseAt();
 		this.saleOpenAt = race.getSaleOpenAt();
+		this.raceCreatedAt = race.getCreateDate();
 		this.price = course.getPrice();
 		this.kitIncluded = course.isKitIncluded();
 		this.distanceKm = course.getDistanceKm().doubleValue();

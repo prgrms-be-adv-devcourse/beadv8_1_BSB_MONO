@@ -11,7 +11,7 @@
 |---|---|---|---|
 | `common` | 라이브러리(jar) | - | 모든 서비스가 함께 쓰는 코드 (응답 형식, 예외, JPA 부모 클래스, 서비스 간 이벤트) |
 | `jwt` | 라이브러리(jar) | - | JWT 발급·검증 (`JwtProvider`). 웹·JPA 의존성이 없어 게이트웨이(WebFlux)에서도 쓴다 |
-| `gateway` | Spring Boot 앱 (WebFlux) | 8000 | API 게이트웨이. `/api/v1/<도메인>/**`를 경로에 맞는 서비스로 넘긴다 (Spring Cloud Gateway) |
+| `gateway` | Spring Boot 앱 (WebFlux) | 8000 | API 게이트웨이. Access Token을 검사하고 `/api/v1/<도메인>/**`를 경로에 맞는 서비스로 넘긴다 (Spring Cloud Gateway) |
 | `member-service` | Spring Boot 앱 | 8080 | 회원가입, 로그인, 인증 |
 | `cash-service` | Spring Boot 앱 | 8081 | 회원 복제본(`CashMember`), 캐시 (뼈대만 있음) |
 | `payout-service` | Spring Boot 앱 | 8082 | 정산 내역(`Payout`), 정산 항목, 지급보류 (엔티티만 있음) |
@@ -75,7 +75,7 @@ backend/
 │       ├── modeltype/         HasModelTypeCode
 │       └── resulttype/        ResultType
 ├── jwt/         com.bukang.jwt     JwtProvider, JwtProperties(jwt.*), JwtAutoConfiguration(빈 자동 등록)
-├── gateway/     com.bukang.gateway GatewayApplication. 라우팅 규칙은 application.yaml, 서비스 주소는 프로파일별 yaml(gateway.services.*)
+├── gateway/     com.bukang.gateway GatewayApplication, auth/(JwtAuthenticationFilter, PublicPaths). 라우팅 규칙·공개 주소(gateway.auth.*)는 application.yaml, 서비스 주소는 프로파일별 yaml(gateway.services.*)
 ├── member-service/  com.bukang.member
 │   ├── in/ app/ domain/ out/  컨트롤러 / Facade·UseCase / 엔티티·도메인 예외 / Repository
 │   ├── domain/                SourceMember, Member, exception/
@@ -107,15 +107,17 @@ backend/
 │   └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
 │                              race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보·연장·판매),
 │                              wallet/(WalletPort 예치금 결제·환원·환불), payout/(RefundEligibilityPort 환불 가능 여부)
-│                              상품(B)·예치금(D)·정산(E) 서비스와 연결 전이라 Fake*Adapter가 가짜 응답을 준다
+│                              상품(B)·예치금(D)은 연결 전이라 Fake*Adapter가 가짜 응답을 준다. 정산(E)은 order.clients.payout.mode가
+│                              http면 HttpRefundEligibilityAdapter(RestClient, 2초 제한, 실패 시 503)로 부른다 (prod=http, 그 밖=fake)
 └── product-service/ com.bukang.product
     └── ProductApplication     (뼈대만 있음)
 ```
 
 - 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).
 - 다른 서비스는 파일을 파일 ID로만 참조한다. 대상(대회 등)을 저장할 때 `/internal/v1/file/refs/{refType}/{refId}/files`를 동기 호출해 연결하고, `/internal/**`은 게이트웨이에 노출하지 않는다.
-- 회원 ID는 `X-Member-Id` 헤더로 받는다. 게이트웨이는 클라이언트가 보낸 이 헤더를 지우고(`default-filters`), 토큰을 검사해 다시 넣어 줄 예정이다(PRO-20).
-  그래서 PRO-20 전에는 게이트웨이(8000)·Nginx(80)를 거치면 이 헤더가 필요한 API가 401(로그인 필요)로 응답한다. 직접 확인할 때는 서비스 포트(예: 8084)로 부른다.
+- 회원 ID는 `X-Member-Id` 헤더로 받는다. 게이트웨이의 `auth/JwtAuthenticationFilter`가 클라이언트가 보낸 이 헤더를 지우고, Access Token을 검사해 토큰 속 회원 ID로 다시 넣는다.
+  토큰 없이 통과하는 주소는 `gateway`의 `application.yaml` `gateway.auth.public-paths`에 있다. 로그인 전에 쓰는 API를 추가하면 여기에도 추가한다(빠뜨리면 401로 막힌다).
+  서비스는 이 헤더를 그대로 믿으므로, `compose.yml`은 서비스 포트를 호스트에 열지 않는다. 서비스를 직접 부르며 확인할 때는 `bootRun`(dev)으로 띄운 서비스 포트(예: 8084)로 부른다.
 - 대상에 붙지 않은 파일(PENDING·UPLOADED·DELETED)은 마지막으로 바뀐 뒤 1일이 지나면 Spring Batch 정리 배치가 DB 행을 지우고 커밋한 뒤 S3 객체를 지운다.
   실행 기록은 DB의 `BATCH_` 테이블에 남는다 (`file-service/BATCH-ROADMAP.md`).
 

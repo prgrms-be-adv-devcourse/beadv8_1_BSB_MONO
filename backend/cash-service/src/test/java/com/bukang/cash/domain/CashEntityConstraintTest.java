@@ -13,6 +13,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.bukang.cash.domain.charge.WalletCharge;
+import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.payment.Payment;
+import com.bukang.cash.domain.wallet.LedgerRefType;
+import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.cash.domain.wallet.WalletLedger;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.WalletChargeRepository;

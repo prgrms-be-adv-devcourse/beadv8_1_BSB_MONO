@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 판매자가 작성 중인 대회의 판매를 시작한다 (작성 중 → 판매 예정, 판매 시작 일시가 지났으면 판매 중)
- * 판매 예정에서 판매 중으로 바꾸는 방법(스케줄러 / 조회할 때 판정)은 조회·정원 작업에서 정한다.
+ * 판매 예정에서 판매 중으로는 판매 시작 일시가 지난 뒤 RaceSaleStatusScheduler가 5분마다 바꾼다.
  */
 @Service
 @RequiredArgsConstructor
@@ -29,7 +29,8 @@ public class RaceSaleStartUseCase {
 	public RaceSaveResult startSale(int memberId, int raceId) {
 		ProductSeller seller = productSellerRepository.findByMemberIdAndStatus(memberId, SellerStatus.APPROVED)
 			.orElseThrow(SellerNotApprovedException::new);
-		Race race = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new);
+		// 잠그고 읽는다. 같은 순간 취소가 커밋되면 취소된 상태를 보고 막힌다 (잠그지 않으면 취소를 판매 예정으로 덮어쓴다)
+		Race race = raceRepository.findByIdForUpdate(raceId).orElseThrow(RaceNotFoundException::new);
 		if (!race.isOwnedBy(seller)) {
 			throw new RaceAccessDeniedException();
 		}

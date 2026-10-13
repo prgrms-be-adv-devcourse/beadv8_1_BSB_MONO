@@ -15,8 +15,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.bukang.cash.domain.CashMember;
-import com.bukang.cash.domain.Wallet;
+import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.WalletRepository;
 

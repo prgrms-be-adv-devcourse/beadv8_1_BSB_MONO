@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.elasticsearch.config.EnableElasticsearchAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.querydsl.jpa.impl.JPAQueryFactory;
 
@@ -15,6 +16,7 @@ import jakarta.persistence.EntityManager;
 @EnableJpaAuditing
 // ES 문서의 createdAt·lastModifiedAt (domain/document/BaseDocument)
 @EnableElasticsearchAuditing
+@EnableScheduling // 대회 판매 상태 배치(RaceSaleStatusScheduler, test 프로파일 제외)
 public class ProductApplication {
 
 	public static void main(String[] args) {

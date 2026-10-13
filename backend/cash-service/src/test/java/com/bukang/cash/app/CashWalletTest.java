@@ -13,12 +13,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.bukang.cash.domain.CashMember;
-import com.bukang.cash.domain.LedgerRefType;
-import com.bukang.cash.domain.LedgerType;
-import com.bukang.cash.domain.Wallet;
-import com.bukang.cash.domain.WalletLedger;
 import com.bukang.cash.domain.exception.WalletNotFoundException;
+import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.wallet.LedgerRefType;
+import com.bukang.cash.domain.wallet.LedgerType;
+import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.cash.domain.wallet.WalletLedger;
 import com.bukang.cash.dto.WalletBalanceDto;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.WalletLedgerRepository;

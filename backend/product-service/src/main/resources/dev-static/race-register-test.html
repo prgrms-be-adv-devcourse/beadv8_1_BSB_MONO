@@ -3,124 +3,203 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>대회 등록 테스트 (product-service 개발용)</title>
+  <title>대회 등록·수정 테스트 (product-service 개발용)</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #222; }
     h1 { margin: 0 0 4px; font-size: 22px; }
     h2 { margin: 0 0 4px; font-size: 17px; }
+    h3 { margin: 16px 0 4px; font-size: 15px; }
+    h4 { margin: 16px 0 0; font-size: 14px; }
+    a { color: #2f6fed; }
+    .nav { margin: 0 0 12px; font-size: 14px; }
     .desc { margin: 0 0 20px; color: #666; font-size: 14px; }
     .panel { background: #fff; border: 1px solid #e2e4e8; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .panel.sticky { position: sticky; top: 0; z-index: 1; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
     .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; margin-top: 12px; }
+    .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
     label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #444; }
     label.inline { flex-direction: row; align-items: center; gap: 6px; }
-    label.wide { grid-column: 1 / -1; }
+    .wide { grid-column: 1 / -1; }
     input, select, textarea, button { font: inherit; padding: 8px; border: 1px solid #ccd0d6; border-radius: 6px; }
+    input.narrow { width: 120px; }
     textarea { min-height: 64px; resize: vertical; }
     button { background: #2f6fed; color: #fff; border: none; cursor: pointer; white-space: nowrap; }
     button.secondary { background: #6b7280; }
+    button.danger { background: #cf222e; }
+    button:disabled { opacity: 0.5; cursor: default; }
     .hint { font-size: 12px; color: #888; margin: 4px 0 0; }
+    ul.hint { padding-left: 20px; }
     .required::after { content: " *"; color: #cf222e; }
-    .actions { display: flex; gap: 8px; margin: 12px 0 0; }
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; }
+    .checks { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; }
+    .scroll { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
     th, td { border-bottom: 1px solid #e2e4e8; padding: 6px; text-align: left; vertical-align: top; }
     td input, td select { width: 100%; min-width: 64px; }
     .ok { color: #1a7f37; }
     .fail { color: #cf222e; }
     .wait { color: #888; }
+    .result { margin: 12px 0 0; padding: 8px 12px; border-radius: 6px; font-size: 14px; font-weight: 600; }
+    .result:empty { display: none; }
+    .result.ok { background: #dafbe1; }
+    .result.fail { background: #ffebe9; }
     td.status { font-size: 12px; min-width: 240px; }
+    .course { border: 1px solid #ccd0d6; border-radius: 8px; padding: 12px; margin-top: 12px; background: #fafbfc; }
+    .course-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+    .course-head h3 { margin: 0; }
     pre { margin: 0; max-height: 520px; overflow: auto; font-size: 12px; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; }
+    pre.small { max-height: 280px; margin-top: 8px; }
   </style>
 </head>
 <body>
-  <h1>대회 등록 테스트</h1>
+  <!-- 이 페이지는 API를 같은 주소(상대 경로)로 부른다. IntelliJ 내장 서버(63342) 등 다른 주소로 열면 요청이 product-service로 가지 않는다 -->
+  <p id="originWarning" hidden style="margin: 0 0 12px; padding: 12px; border-radius: 6px; background: #ffebe9; color: #cf222e; font-weight: 600;">
+    이 페이지는 product-service가 연 주소로 열어야 API가 동작합니다. dev로 product-service를 띄운 뒤
+    <a href="http://localhost:8085/race-register-test.html">http://localhost:8085/race-register-test.html</a> 로 여세요.
+    (지금 주소: <span id="currentOrigin"></span>)
+  </p>
+  <script>
+    if (location.port !== '8085') {
+      document.getElementById('originWarning').hidden = false;
+      document.getElementById('currentOrigin').textContent = location.origin || location.href;
+    }
+  </script>
+  <p class="nav"><strong>대회 등록·수정</strong> · <a href="/race-query-test.html">대회 조회·자리 확보 테스트로 이동 →</a></p>
+  <h1>대회 등록·수정 테스트</h1>
   <p class="desc">
-    등록 요청에 어떤 값이 들어가는지 확인하는 개발용 페이지입니다. 칸을 채우면 아래 요청 JSON이 바로 바뀝니다.
-    등록 API는 아직 없어서 요청을 보내지 않습니다. 검사 규칙은 칸 아래 안내로만 적었습니다(실제 검사는 등록 API에서 합니다).
+    product-service(8085)의 대회 등록·수정·판매 시작·취소 API를 직접 불러 보는 개발용 페이지입니다(dev 프로파일에서만 열립니다).
+    검사 규칙은 칸 아래 안내로만 적었고, 실제 검사는 서버가 합니다. 요청과 응답은 맨 아래 '기록'에 남습니다.
   </p>
 
   <div class="panel">
-    <h2>판매자</h2>
-    <p class="hint">요청 헤더 X-Member-Id로 보냅니다. 승인된 판매자 복제본(PRODUCT_SELLER, APPROVED)이 있는 회원이어야 합니다.</p>
+    <h2>판매자 준비</h2>
+    <p class="hint">
+      대회를 등록하려면 product-service에 승인된 판매자 복제본(PRODUCT_SELLER, status APPROVED)이 있어야 합니다(없으면 403).
+      복제본은 Kafka 메시지로만 만들어지므로 Redpanda Console(<a href="http://localhost:8091" target="_blank" rel="noopener">http://localhost:8091</a>)
+      → Topics → 토픽 선택 → Produce Record에서 Value에 아래 JSON을 붙여 넣고 보냅니다. Key는 비워도 됩니다(토픽 파티션 1개).
+    </p>
     <div class="form">
-      <label><span class="required">회원 ID (X-Member-Id)</span><input id="memberId" type="number" min="1" value="9001"></label>
+      <label><span class="required">회원 ID (X-Member-Id)</span><input id="memberId" type="number" min="1" value="9001">
+        <span class="hint">등록·불러오기·수정·판매 시작·취소와 파일 업로드에 헤더로 보냅니다. 아래 두 메시지의 회원 ID도 이 값입니다</span></label>
+      <label>판매자 ID (판매자 메시지의 id)<input id="sellerId" type="number" min="1" value="7001">
+        <span class="hint">회원 ID와 다른 판매자 번호입니다. 같은 회원에게 판매자 ID를 바꿔 승인 메시지를 여러 번 보내면
+          승인된 판매자가 둘이 되어 등록이 실패하므로(회원당 1명으로 가정) 회원마다 하나로 유지합니다</span></label>
     </div>
+    <ul class="hint">
+      <li>회원 메시지(product.member.joined)를 먼저 보냅니다. 회원 복제본(PRODUCT_MEMBER)이 없으면 판매자 메시지는 다시 시도 없이 건너뜁니다(product-service 에러 로그에만 남음).</li>
+      <li>그다음 판매자 메시지(product.seller.changed, status APPROVED)를 보냅니다.</li>
+      <li>같은 메시지를 다시 보내도 결과가 같습니다(원본 값으로 덮어씀). 깨진 JSON이나 모르는 enum 값은 다시 시도 없이 &lt;토픽&gt;.dlt로 갑니다.</li>
+      <li>날짜는 LocalDateTime 형식(yyyy-MM-ddTHH:mm:ss, 시간대 없음)입니다. 아래 값은 이 페이지를 연 시각입니다.</li>
+    </ul>
+    <div class="columns">
+      <div>
+        <h3>① product.member.joined (MemberJoinedEvent)</h3>
+        <div class="actions">
+          <button type="button" class="secondary" data-copy="memberJoinedJson">JSON 복사</button>
+          <span class="hint" data-copy-message="memberJoinedJson"></span>
+        </div>
+        <pre id="memberJoinedJson" class="small"></pre>
+      </div>
+      <div>
+        <h3>② product.seller.changed (SellerChangedEvent)</h3>
+        <div class="actions">
+          <button type="button" class="secondary" data-copy="sellerChangedJson">JSON 복사</button>
+          <span class="hint" data-copy-message="sellerChangedJson"></span>
+        </div>
+        <pre id="sellerChangedJson" class="small"></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel sticky">
+    <h2>요청 보내기</h2>
+    <div class="actions">
+      <label class="inline">대회 ID (raceId)<input id="raceId" class="narrow" type="number" min="1"></label>
+      <button type="button" id="registerRace">등록</button>
+      <button type="button" class="secondary" id="loadRace">불러오기</button>
+      <button type="button" id="updateRace">수정</button>
+      <button type="button" id="startSale">판매 시작</button>
+      <button type="button" class="danger" id="cancelRace">대회 취소</button>
+      <span id="raceState" class="hint"></span>
+    </div>
+    <p id="actionResult" class="result"></p>
+  </div>
+
+  <div class="panel">
+    <h2>버튼이 부르는 API</h2>
+    <ul class="hint">
+      <li>[등록] POST /api/v1/product/races → 201, 작성 중(DRAFT)으로 저장. 성공하면 대회 ID와 종목별 courseId를 채웁니다.</li>
+      <li>[불러오기] GET /api/v1/product/races/{raceId} → 폼을 채우고, 종목마다 file-service GET /api/v1/file/files?refType=RaceCourse&amp;refId={종목 ID}로 이미지 표를 채웁니다. 작성 중 대회는 등록한 회원 ID로만 보입니다(아니면 404).</li>
+      <li>[수정] PUT /api/v1/product/races/{raceId} (등록과 같은 본문). courseId가 있는 종목은 고치고, 없는 종목은 추가하고, 요청에 없는 기존 종목은 뺍니다. 이미지 목록도 통째로 바뀝니다.</li>
+      <li>[판매 시작] POST /api/v1/product/races/{raceId}/sale → 작성 중 대회만(아니면 409). 판매 시작 일시가 지났으면 바로 판매 중, 아니면 판매 예정.</li>
+      <li>[대회 취소] POST /api/v1/product/races/{raceId}/cancel → 200 "대회를 취소했습니다.", saleStatus CANCELED. 되돌릴 수 없습니다.</li>
+    </ul>
   </div>
 
   <div class="panel">
     <h2>대회 정보</h2>
     <div class="form">
       <label class="wide"><span class="required">대회 이름</span>
-        <input id="title" maxlength="200" value="2026 용감한 쿠키RUN in 서울"></label>
+        <input id="title" maxlength="200" value="2026 용감한 쿠키RUN in 서울">
+        <span class="hint">200자 이하</span></label>
       <label class="wide">소개
         <textarea id="description">서울숲에서 달리는 가을 러닝 대회</textarea></label>
-      <label><span class="required">장소</span><input id="location" value="서울숲 일대"></label>
+      <label><span class="required">장소</span><input id="location" maxlength="255" value="서울숲 일대">
+        <span class="hint">255자 이하. 판매 시작 뒤 바꾸면 일정·장소 변경 안내 일시가 기록됩니다(그날부터 7일 전액 환불)</span></label>
       <label><span class="required">시·도</span><input id="regionSido" maxlength="20" value="서울특별시">
-        <span class="hint">실제 서비스는 주소 검색 API로 채웁니다</span></label>
-      <label><span class="required">시·군·구</span><input id="regionSigungu" maxlength="30" value="성동구"></label>
-      <label><span class="required">대회 일시</span><input id="raceDate" type="datetime-local" value="2026-11-01T08:00"></label>
+        <span class="hint">20자 이하. 실제 서비스는 주소 검색 API로 채웁니다</span></label>
+      <label><span class="required">시·군·구</span><input id="regionSigungu" maxlength="30" value="성동구">
+        <span class="hint">30자 이하</span></label>
+      <label><span class="required">대회 일시</span><input id="raceDate" type="datetime-local">
+        <span class="hint">판매 시작 뒤 바꾸면 일정·장소 변경 안내 일시가 기록됩니다</span></label>
       <label>크루 예매 시작<input id="crewSaleStartAt" type="datetime-local">
-        <span class="hint">비우면 크루 모집 없이 개인 예매만 합니다</span></label>
+        <span class="hint">비우면 크루 모집 없이 개인 예매만 합니다. 시작·마감은 함께 쓰거나 함께 비웁니다</span></label>
       <label>크루 예매 마감<input id="crewSaleEndAt" type="datetime-local">
         <span class="hint">크루 예매 시작보다 늦어야 합니다</span></label>
-      <label><span class="required">개인 예매 오픈</span><input id="individualOpenAt" type="datetime-local" value="2026-10-14T10:00">
-        <span class="hint">크루 예매가 있으면 크루 마감일 다음 날 06:00 이후</span></label>
-      <label><span class="required">접수 마감</span><input id="applicationCloseAt" type="datetime-local" value="2026-10-31T18:00">
-        <span class="hint">참가자 정보 수정 기한</span></label>
-      <label><span class="required">환불 기한</span><input id="refundDeadline" type="date" value="2026-10-31">
-        <span class="hint">이날까지 취소하면 전액 환불. 대회일 날짜 이하</span></label>
+      <label><span class="required">개인 예매 오픈</span><input id="individualOpenAt" type="datetime-local">
+        <span class="hint">크루 예매가 있으면 크루 마감일 다음 날 06:00 이후. 자리 확보는 이 시각부터 됩니다</span></label>
+      <label><span class="required">접수 마감</span><input id="applicationCloseAt" type="datetime-local">
+        <span class="hint">개인 예매 오픈보다 늦고, 대회 일시보다 늦을 수 없습니다. 참가자 정보 수정 기한</span></label>
+      <label><span class="required">환불 기한</span><input id="refundDeadline" type="date">
+        <span class="hint">이날까지 취소하면 전액 환불. 대회 날짜보다 늦을 수 없고, 판매 시작 뒤에는 앞당길 수 없습니다</span></label>
       <label><span class="required">크루 최소 인원</span><input id="crewMinCount" type="number" min="5" value="5">
-        <span class="hint">5 이상</span></label>
+        <span class="hint">5명 이상</span></label>
       <label>크루 최대 인원<input id="crewMaxCount" type="number" min="5">
-        <span class="hint">비우면 상한 없음</span></label>
+        <span class="hint">비우면 상한 없음. 최소 인원 이상</span></label>
       <label class="wide">환불 안내 글
         <textarea id="refundPolicy">환불 기한까지 취소하면 전액 환불됩니다.</textarea></label>
     </div>
-    <p class="hint">판매 시작 일시(sale_open_at)는 입력하지 않습니다. 크루 예매 시작·개인 예매 오픈 중 이른 시각으로 서버가 채웁니다.</p>
+    <ul class="hint">
+      <li>판매 시작 일시(saleOpenAt)는 입력하지 않습니다. 크루 예매 시작·개인 예매 오픈 중 이른 시각으로 서버가 채웁니다.</li>
+      <li>일정 기본값은 페이지를 연 시각 기준입니다: 개인 예매 오픈 +2분, 접수 마감 +10일, 대회 +15일 08:00, 환불 기한 +10일.</li>
+      <li>판매 시작을 누른 뒤에는 이미 지난 판매 일정(크루 예매 시작·마감, 개인 예매 오픈, 접수 마감)을 바꾸거나 일정을 지난 시각으로 옮길 수 없습니다(409).</li>
+    </ul>
+    <div class="actions"><button type="button" class="secondary" id="resetSchedule">일정 기본값 다시 채우기 (지금 기준)</button></div>
   </div>
 
   <div class="panel">
     <h2>종목 · 참가권</h2>
-    <p class="hint">참가비는 0원으로 등록할 수 없습니다. 최소 나이는 만 14세 이상이고(대회 당일 만 나이), 최대 나이를 비우면 상한이 없습니다.</p>
-    <table>
-      <thead>
-        <tr>
-          <th class="required">종목명</th><th class="required">구분</th><th class="required">노면</th>
-          <th class="required">거리(km)</th><th class="required">제한 시간(분)</th><th class="required">참가비</th>
-          <th>키트 포함</th><th>키트 금액</th><th class="required">최소 나이</th><th>최대 나이</th>
-          <th>크루 몫 정원</th><th class="required">개인 몫 정원</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="courseRows"></tbody>
-    </table>
+    <ul class="hint">
+      <li>종목은 1개 이상이어야 합니다. 판매 시작 뒤에는 참가비 인상, 정원 줄이기, 참가 조건(거리·종목 구분·노면·제한 시간·나이 제한·키트 포함 여부) 변경,
+        티셔츠 사이즈 변경, 종목 빼기를 할 수 없습니다(409).</li>
+      <li>이미지는 종목마다 붙입니다. 용도를 고르고 파일을 선택하면 file-service(8083)로 ① 업로드 URL 발급 → ② S3에 직접 PUT → ③ 업로드 완료 확인을 하고 fileId를 채웁니다.
+        file-service가 dev로 떠 있어야 합니다(dev에만 8085를 허용하는 CORS가 있습니다).</li>
+      <li>이미지(대표·소개·코스·키트)는 JPG·PNG·WebP 10MB 이하, 소개 영상은 MP4·MOV 100MB 이하입니다(올린 뒤 파일 앞부분으로 형식을 다시 확인합니다).</li>
+      <li>종목마다 대표 이미지 1장 필수. 최대 개수: 대회 소개 이미지 5, 코스 안내 이미지 7, 키트 이미지 1, 대회 소개 영상 1. 순서(sortNo)는 0 이상.</li>
+      <li>같은 파일(fileId)은 한 번만 연결됩니다(종목끼리도 안 됨). 위 회원 ID로 올린 파일만 연결되고, 연결은 저장 뒤 Kafka(race.filelink.requested)로 따로 처리되어 실패하면 file-service 로그에만 남습니다.
+        올린 뒤 1일 안에 연결되지 않은 파일은 정리 배치가 지웁니다.</li>
+    </ul>
+    <div id="courses"></div>
     <div class="actions"><button type="button" id="addCourse">+ 종목 추가</button></div>
   </div>
 
   <div class="panel">
-    <h2>이미지</h2>
-    <p class="hint">
-      용도를 고른 뒤 파일을 선택하면 file-service(8083)로 ① 업로드 URL 발급 → ② S3에 직접 PUT → ③ 업로드 완료 확인을 하고,
-      받은 fileId를 채웁니다. file-service가 dev로 떠 있어야 합니다(dev에만 8085를 허용하는 CORS가 있다).
-      JPG·PNG·WebP, 10MB 이하. 대표 이미지 1장은 꼭 있어야 하고, 올린 파일은 1일 안에 대회에 연결해야 정리 배치가 지우지 않습니다.
-    </p>
-    <table>
-      <thead>
-        <tr>
-          <th class="required">용도</th><th class="required">순서</th><th>파일</th>
-          <th class="required">fileId</th><th>업로드 상태</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="imageRows"></tbody>
-    </table>
-    <div class="actions"><button type="button" id="addImage">+ 이미지 추가</button></div>
-  </div>
-
-  <div class="panel">
     <h2>요청 미리보기</h2>
-    <p class="hint">등록 API가 생기면 이 본문을 X-Member-Id 헤더와 함께 보냅니다.</p>
+    <p class="hint">[등록]·[수정]은 이 본문을 X-Member-Id 헤더와 함께 보냅니다. 등록 때 courseId는 무시됩니다.</p>
     <div class="actions">
-      <button type="button" class="secondary" id="copyJson">JSON 복사</button>
-      <span id="copyMessage" class="hint"></span>
+      <button type="button" class="secondary" data-copy="preview">JSON 복사</button>
+      <span class="hint" data-copy-message="preview"></span>
     </div>
     <p class="hint" id="headerPreview"></p>
     <pre id="preview"></pre>
@@ -128,79 +207,400 @@
 
   <div class="panel">
     <h2>기록</h2>
-    <p class="hint">file-service와 S3로 보낸 요청과 응답 (최신이 위)</p>
-    <pre id="log"></pre>
+    <p class="hint">product-service, file-service, S3로 보낸 요청과 응답 (최신이 위)</p>
+    <div class="actions"><button type="button" class="secondary" id="clearLog">기록 지우기</button></div>
+    <pre id="log" class="small"></pre>
   </div>
 
   <script>
-    // product-service CourseType·CourseSurface와 같은 값 (화면에는 label을 보여 준다)
-    const COURSE_TYPES = { KM_5: '5K', KM_10: '10K', HALF: '하프', FULL: '풀', ULTRA: '울트라' };
-    const SURFACES = { ROAD: '로드', TRAIL: '트레일' };
-    // common FileType 중 대회 이미지 용도와 최대 개수
-    const FILE_TYPES = {
-      THUMBNAIL: { label: '대표 이미지', maxCount: 1 },
-      DETAIL: { label: '대회 소개 이미지', maxCount: 5 },
-      COURSE: { label: '코스 안내 이미지', maxCount: 7 },
-    };
-
+    const RACES_PATH = '/api/v1/product/races';
     // 이미지는 file-service로 올린다 (페이지 주소와 달라 file-service dev 설정의 CORS로 허용한다)
     const FILE_SERVICE_URL = 'http://localhost:8083';
-    const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp';
+
+    // product-service CourseType·CourseSurface·TshirtSize·RaceSaleStatus와 같은 값
+    const COURSE_TYPES = { KM_5: '5K', KM_10: '10K', HALF: '하프', FULL: '풀', ULTRA: '울트라' };
+    const SURFACES = { ROAD: '로드', TRAIL: '트레일' };
+    const TSHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+    const SALE_STATUSES = {
+      DRAFT: '작성 중', SCHEDULED: '판매 예정', ON_SALE: '판매 중', STOPPED: '판매 중지', CLOSED: '판매 종료', CANCELED: '취소',
+    };
+    // common FileType 중 종목에 붙이는 용도와 최대 개수 (크루원 명단 ROSTER는 종목에 붙일 수 없다)
+    const FILE_TYPES = {
+      THUMBNAIL: { label: '대표 이미지', maxCount: 1, kind: 'IMAGE' },
+      DETAIL: { label: '대회 소개 이미지', maxCount: 5, kind: 'IMAGE' },
+      COURSE: { label: '코스 안내 이미지', maxCount: 7, kind: 'IMAGE' },
+      KIT: { label: '키트 이미지', maxCount: 1, kind: 'IMAGE' },
+      INTRO_VIDEO: { label: '대회 소개 영상', maxCount: 1, kind: 'VIDEO' },
+    };
+    // file-service FileFormat과 같은 형식 (파일 고르기 창에서 이 형식만 보여 준다)
+    const ACCEPT_BY_KIND = {
+      IMAGE: 'image/jpeg,image/png,image/webp',
+      VIDEO: 'video/mp4,video/quicktime,.mp4,.mov',
+    };
 
     const $ = (id) => document.getElementById(id);
 
+    // ---------- 공통 도우미 ----------
+
+    function escapeHtml(value) {
+      const replacements = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return String(value ?? '').replace(/[&<>"']/g, (char) => replacements[char]);
+    }
+
+    function pad(number) {
+      return String(number).padStart(2, '0');
+    }
+
+    // Date → LocalDateTime 문자열 (2026-10-13T10:00:00, 브라우저 시간대 기준)
+    function toLocalDateTime(date) {
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+        + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function addMinutes(date, minutes) {
+      return new Date(date.getTime() + minutes * 60 * 1000);
+    }
+
+    function addDays(date, days) {
+      const result = new Date(date);
+      result.setDate(result.getDate() + days);
+      return result;
+    }
+
+    // 응답의 LocalDateTime(초까지)을 datetime-local 칸 값으로 바꾼다 (초가 0이면 분까지만)
+    function toInputDateTime(value) {
+      if (!value) {
+        return '';
+      }
+      const trimmed = value.slice(0, 19);
+      return trimmed.length === 19 && trimmed.endsWith(':00') ? trimmed.slice(0, 16) : trimmed;
+    }
+
+    function log(title, data) {
+      const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+      $('log').textContent = `[${new Date().toLocaleTimeString()}] ${title}\n${text}\n\n` + $('log').textContent;
+    }
+
+    // 응답 본문을 RsData로 읽는다. JSON이 아니면(예: 프록시 오류 페이지) 상태와 앞부분 글로 채운다
+    async function readBody(response) {
+      const text = await response.text();
+      if (text === '') {
+        return { status: response.status, message: '(본문 없음)', data: null };
+      }
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { status: response.status, message: text.slice(0, 300), data: null };
+      }
+    }
+
+    function toQueryString(query) {
+      if (!query) {
+        return '';
+      }
+      const params = new URLSearchParams();
+      Object.entries(query).forEach(([name, value]) => {
+        const values = Array.isArray(value) ? value : [value];
+        values
+          .filter((item) => item !== null && item !== undefined && item !== '')
+          .forEach((item) => params.append(name, item));
+      });
+      const text = params.toString();
+      return text === '' ? '' : `?${text}`;
+    }
+
+    // product-service(이 페이지와 같은 주소) 호출. memberId가 있으면 X-Member-Id 헤더를 붙인다
+    async function callApi(title, method, path, { memberId, body, query } = {}) {
+      const headers = {};
+      if (memberId) {
+        headers['X-Member-Id'] = memberId;
+      }
+      if (body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+      }
+      const url = path + toQueryString(query);
+      try {
+        const response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+        const json = await readBody(response);
+        log(`${title}: ${method} ${url} → ${response.status}`, { headers, request: body ?? null, response: json });
+        return { httpStatus: response.status, body: json };
+      } catch (error) {
+        log(`${title}: ${method} ${url} → 요청 실패`, error.message);
+        return {
+          httpStatus: 0,
+          body: { status: 0, message: `요청을 보내지 못했습니다. product-service(8085)가 떠 있는지 확인하세요. (${error.message})`, data: null },
+        };
+      }
+    }
+
+    // file-service(8083) 호출. 응답을 못 받으면(CORS·서버 꺼짐) 예외를 그대로 던진다
+    async function callFileApi(title, method, path, { memberId, body } = {}) {
+      const headers = {};
+      if (memberId) {
+        headers['X-Member-Id'] = memberId;
+      }
+      if (body !== undefined) {
+        headers['Content-Type'] = 'application/json';
+      }
+      const url = FILE_SERVICE_URL + path;
+      const response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+      const json = await readBody(response);
+      log(`${title}: ${method} ${url} → ${response.status}`, { headers, request: body ?? null, response: json });
+      return { httpStatus: response.status, body: json };
+    }
+
+    // 응답 상태 코드와 message를 보여 준다 (2xx 초록, 그 밖은 빨강). 성공 여부를 돌려준다
+    function showResult(element, { httpStatus, body }, extra = '') {
+      const ok = httpStatus >= 200 && httpStatus < 300;
+      const head = httpStatus ? `${httpStatus} · ` : '';
+      showMessage(element, ok, `${head}${body?.message ?? '(메시지 없음)'}${extra ? ` — ${extra}` : ''}`);
+      return ok;
+    }
+
+    function showMessage(element, ok, message) {
+      element.className = `result ${ok ? 'ok' : 'fail'}`;
+      element.textContent = message;
+    }
+
+    // 요청 중에는 버튼을 잠가 두 번 누르지 않게 한다
+    function bindAction(id, action) {
+      const button = $(id);
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          await action();
+        } finally {
+          button.disabled = false;
+        }
+      });
+    }
+
+    async function copyText(id) {
+      const message = document.querySelector(`[data-copy-message="${id}"]`);
+      try {
+        await navigator.clipboard.writeText($(id).textContent);
+        message.className = 'hint ok';
+        message.textContent = '복사했습니다';
+      } catch (error) {
+        message.className = 'hint fail';
+        message.textContent = `복사하지 못했습니다: ${error.message}`;
+      }
+    }
+
+    // ---------- 판매자 준비 (Kafka 메시지 예시) ----------
+
+    // 메시지에 넣는 시각 (페이지를 연 시각)
+    const PREPARED_AT = toLocalDateTime(new Date());
+
+    function memberIdValue() {
+      return $('memberId').value.trim();
+    }
+
+    // MemberJoinedEvent·SellerChangedEvent와 같은 필드. product-service가 이 값을 그대로 복제본에 저장한다
+    function renderSellerPrep() {
+      const memberId = integer(memberIdValue());
+      const sellerId = integer($('sellerId').value.trim());
+      $('memberJoinedJson').textContent = JSON.stringify({
+        id: memberId,
+        createDate: PREPARED_AT,
+        modifyDate: PREPARED_AT,
+        nickname: `판매자${memberId ?? ''}`,
+      }, null, 2);
+      $('sellerChangedJson').textContent = JSON.stringify({
+        id: sellerId,
+        memberId,
+        sellerType: 'BUSINESS',
+        businessName: '(주)쿠키런',
+        businessNumber: '123-45-67890',
+        representativeName: '김대표',
+        status: 'APPROVED',
+        requestedAt: PREPARED_AT,
+        reviewedAt: PREPARED_AT,
+      }, null, 2);
+    }
+
+    // ---------- 대회 일정 기본값 ----------
+
+    function fillDefaultSchedule() {
+      const now = new Date();
+      now.setSeconds(0, 0);
+      const individualOpenAt = addMinutes(now, 2);
+      const applicationCloseAt = addDays(now, 10);
+      const raceDate = addDays(now, 15);
+      raceDate.setHours(8, 0, 0, 0);
+      $('individualOpenAt').value = toLocalDateTime(individualOpenAt).slice(0, 16);
+      $('applicationCloseAt').value = toLocalDateTime(applicationCloseAt).slice(0, 16);
+      $('raceDate').value = toLocalDateTime(raceDate).slice(0, 16);
+      $('refundDeadline').value = toLocalDateTime(applicationCloseAt).slice(0, 10);
+    }
+
+    // ---------- 종목 카드 ----------
+
     function optionsOf(values, selected) {
       return Object.entries(values)
-        .map(([value, label]) => {
-          const text = typeof label === 'string' ? label : `${label.label} (최대 ${label.maxCount}장)`;
-          return `<option value="${value}" ${value === selected ? 'selected' : ''}>${text}</option>`;
-        })
+        .map(([value, label]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${value} · ${label}</option>`)
         .join('');
     }
 
-    function addCourseRow(course = {}) {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td><input data-key="name" maxlength="50" value="${course.name ?? ''}"></td>
-        <td><select data-key="courseType">${optionsOf(COURSE_TYPES, course.courseType ?? 'KM_10')}</select></td>
-        <td><select data-key="surface">${optionsOf(SURFACES, course.surface ?? 'ROAD')}</select></td>
-        <td><input data-key="distanceKm" type="number" step="0.01" min="0.01" value="${course.distanceKm ?? ''}"></td>
-        <td><input data-key="timeLimitMinutes" type="number" min="1" value="${course.timeLimitMinutes ?? ''}"></td>
-        <td><input data-key="price" type="number" min="1" value="${course.price ?? ''}"></td>
-        <td><input data-key="kitIncluded" type="checkbox" ${course.kitIncluded ? 'checked' : ''}></td>
-        <td><input data-key="kitPrice" type="number" min="0" value="${course.kitPrice ?? 0}"></td>
-        <td><input data-key="minAge" type="number" min="14" value="${course.minAge ?? 14}"></td>
-        <td><input data-key="maxAge" type="number" min="14" value="${course.maxAge ?? ''}"></td>
-        <td><input data-key="crewQuota" type="number" min="0" value="${course.crewQuota ?? 0}"></td>
-        <td><input data-key="individualQuota" type="number" min="0" value="${course.individualQuota ?? ''}"></td>
-        <td><button type="button" class="secondary" data-remove>삭제</button></td>`;
-      $('courseRows').append(row);
-      renderPreview();
+    function fileTypeOptions(selected) {
+      return Object.entries(FILE_TYPES)
+        .map(([value, type]) =>
+          `<option value="${value}" ${value === selected ? 'selected' : ''}>${type.label} (최대 ${type.maxCount}개)</option>`)
+        .join('');
     }
 
-    function addImageRow(image = {}) {
+    function acceptOf(fileType) {
+      return ACCEPT_BY_KIND[FILE_TYPES[fileType]?.kind ?? 'IMAGE'];
+    }
+
+    function field(card, key) {
+      return card.querySelector(`[data-field="${key}"]`);
+    }
+
+    function addCourseCard(course = {}) {
+      const sizes = course.tshirtSizeOption ?? [];
+      const card = document.createElement('div');
+      card.className = 'course';
+      card.innerHTML = `
+        <div class="course-head">
+          <h3>종목: <span data-course-title></span></h3>
+          <button type="button" class="secondary" data-remove-course>종목 삭제</button>
+        </div>
+        <div class="form">
+          <label>종목 ID (courseId)<input data-field="courseId" type="number" min="1" value="${course.courseId ?? ''}">
+            <span class="hint">수정 때 기존 종목이면 채웁니다. 비우면 새 종목입니다(등록 때는 무시)</span></label>
+          <label><span class="required">종목명</span><input data-field="name" maxlength="50" value="${escapeHtml(course.name)}">
+            <span class="hint">50자 이하</span></label>
+          <label><span class="required">종목 구분</span>
+            <select data-field="courseType">${optionsOf(COURSE_TYPES, course.courseType ?? 'KM_10')}</select></label>
+          <label><span class="required">노면</span>
+            <select data-field="surface">${optionsOf(SURFACES, course.surface ?? 'ROAD')}</select></label>
+          <label><span class="required">거리(km)</span>
+            <input data-field="distanceKm" type="number" step="0.01" min="0.01" max="999.99" value="${course.distanceKm ?? ''}">
+            <span class="hint">0km보다 크고 999.99km 이하, 소수 둘째 자리까지</span></label>
+          <label><span class="required">제한 시간(분)</span>
+            <input data-field="timeLimitMinutes" type="number" min="1" value="${course.timeLimitMinutes ?? ''}">
+            <span class="hint">0분보다 커야 합니다</span></label>
+          <label><span class="required">참가비(원)</span><input data-field="price" type="number" min="1" value="${course.price ?? ''}">
+            <span class="hint">0원보다 커야 합니다(0원 참가권 불가). 판매 시작 뒤 올릴 수 없습니다</span></label>
+          <label><span class="required">키트 금액(원)</span><input data-field="kitPrice" type="number" min="0" value="${course.kitPrice ?? 0}">
+            <span class="hint">0원 이상. 참가비 안에 포함된 금액입니다(따로 더하지 않음)</span></label>
+          <label><span class="required">참가 최소 나이</span><input data-field="minAge" type="number" min="14" value="${course.minAge ?? 14}">
+            <span class="hint">만 14세 이상 (대회 당일 만 나이)</span></label>
+          <label>참가 최대 나이<input data-field="maxAge" type="number" min="14" value="${course.maxAge ?? ''}">
+            <span class="hint">비우면 상한 없음. 최소 나이 이상</span></label>
+          <label><span class="required">크루 몫 정원</span><input data-field="crewQuota" type="number" min="0" value="${course.crewQuota ?? 0}">
+            <span class="hint">0 이상. 크루 예매가 없는 대회는 0</span></label>
+          <label><span class="required">개인 몫 정원</span>
+            <input data-field="individualQuota" type="number" min="0" value="${course.individualQuota ?? ''}">
+            <span class="hint">0 이상. 크루 + 개인 정원은 1명 이상. 판매 시작 뒤 줄일 수 없습니다</span></label>
+          <div class="wide">
+            <label class="inline"><input data-field="kitIncluded" type="checkbox" ${course.kitIncluded ? 'checked' : ''}> 키트 포함 (kitIncluded)</label>
+            <div class="checks">
+              ${TSHIRT_SIZES.map((size) => `<label class="inline"><input type="checkbox" data-size="${size}" ${sizes.includes(size) ? 'checked' : ''}> ${size}</label>`).join('')}
+            </div>
+            <p class="hint">티셔츠 사이즈(tshirtSizeOption)는 키트 포함일 때만 고를 수 있습니다. 비우면 티셔츠 없음. 판매 시작 뒤 바꿀 수 없습니다</p>
+          </div>
+        </div>
+        <h4>이미지 (images)</h4>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th class="required">용도</th><th class="required">순서</th><th>파일</th>
+                <th class="required">fileId</th><th>업로드 상태</th><th></th>
+              </tr>
+            </thead>
+            <tbody data-images></tbody>
+          </table>
+        </div>
+        <p class="hint" data-image-note></p>
+        <div class="actions"><button type="button" data-add-image>+ 이미지 추가</button></div>`;
+      $('courses').append(card);
+      updateCourseTitle(card);
+      syncSizeInputs(card);
+      return card;
+    }
+
+    function updateCourseTitle(card) {
+      const name = field(card, 'name').value.trim() || '(이름 없음)';
+      const courseId = field(card, 'courseId').value.trim();
+      card.querySelector('[data-course-title]').textContent = courseId ? `${name} (courseId ${courseId})` : `${name} (새 종목)`;
+    }
+
+    // 티셔츠는 키트에 들어 있으므로 키트 포함일 때만 사이즈를 고르게 한다
+    function syncSizeInputs(card) {
+      const kitIncluded = field(card, 'kitIncluded').checked;
+      card.querySelectorAll('[data-size]').forEach((input) => {
+        input.disabled = !kitIncluded;
+        if (!kitIncluded) {
+          input.checked = false;
+        }
+      });
+    }
+
+    // 같은 용도 안에서 다음 노출 순서
+    function nextSortNo(card, fileType) {
+      return [...card.querySelectorAll('[data-images] [data-key=fileType]')]
+        .filter((select) => select.value === fileType)
+        .length;
+    }
+
+    function addImageRow(card, image = {}) {
+      const fileType = image.fileType ?? 'DETAIL';
+      const sortNo = image.sortNo ?? nextSortNo(card, fileType);
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td><select data-key="fileType">${optionsOf(FILE_TYPES, image.fileType ?? 'THUMBNAIL')}</select></td>
-        <td><input data-key="sortNo" type="number" min="0" value="${image.sortNo ?? 0}"></td>
-        <td><input type="file" accept="${IMAGE_ACCEPT}" data-upload></td>
+        <td><select data-key="fileType">${fileTypeOptions(fileType)}</select></td>
+        <td><input data-key="sortNo" type="number" min="0" value="${sortNo}"></td>
+        <td><input type="file" accept="${acceptOf(fileType)}" data-upload></td>
         <td><input data-key="fileId" type="number" min="1" value="${image.fileId ?? ''}"></td>
-        <td class="status wait">파일을 고르면 올립니다</td>
+        <td class="status"></td>
         <td><button type="button" class="secondary" data-remove>삭제</button></td>`;
-      $('imageRows').append(row);
-      renderPreview();
+      card.querySelector('[data-images]').append(row);
+      setStatus(row.querySelector('.status'), image.url ? 'ok' : 'wait', image.statusText ?? '파일을 고르면 올립니다', image.url);
+      return row;
     }
 
-    // ---------- 이미지 업로드 (file-service 8083, upload-test.html과 같은 흐름) ----------
+    // 업로드할 때 정한 용도와 연결 요청의 용도가 같아야 하므로, 용도를 바꾸면 다시 올리게 한다
+    function onFileTypeChange(row) {
+      const fileType = row.querySelector('[data-key=fileType]').value;
+      const fileInput = row.querySelector('[data-upload]');
+      const fileIdInput = row.querySelector('[data-key=fileId]');
+      const status = row.querySelector('.status');
+      fileInput.accept = acceptOf(fileType);
+      fileInput.value = '';
+      if (fileIdInput.value !== '') {
+        fileIdInput.value = '';
+        setStatus(status, 'fail', '용도를 바꿔 fileId를 비웠습니다. 파일을 다시 올려 주세요(올릴 때 정한 용도와 같아야 연결됩니다)');
+      } else {
+        setStatus(status, 'wait', '파일을 고르면 올립니다');
+      }
+    }
+
+    function setStatus(element, state, message, url) {
+      element.className = `status ${state}`;
+      element.textContent = message;
+      if (url) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = '보기';
+        element.append(' ', link);
+      }
+    }
+
+    // ---------- 이미지 업로드 (file-service 8083) ----------
 
     async function uploadImage(row, file) {
-      const memberId = $('memberId').value;
+      const memberId = memberIdValue();
       const fileType = row.querySelector('[data-key=fileType]').value;
       const status = row.querySelector('.status');
       row.querySelector('[data-key=fileId]').value = '';
       renderPreview();
       try {
-        // ① 업로드 URL 발급: 서버가 형식·크기를 검사하고 PENDING 파일을 만든다
+        // ① 업로드 URL 발급: 서버가 용도에 맞는 형식·크기인지 검사하고 PENDING 파일을 만든다
         setStatus(status, 'wait', '① 업로드 URL 발급 중');
         const body = { fileType, fileName: file.name, contentType: file.type || guessContentType(file.name), fileSize: file.size };
         const issued = await callFileApi('① 업로드 URL 발급', 'POST', '/api/v1/file/files', { memberId, body });
@@ -216,7 +616,7 @@
           return;
         }
 
-        // ③ 업로드 완료 확인: 서버가 크기·형식을 검사해 UPLOADED로 바꾼다
+        // ③ 업로드 완료 확인: 서버가 크기·형식(앞부분)을 검사해 UPLOADED로 바꾼다
         const completed = await callFileApi(
           '③ 업로드 완료 확인', 'POST', `/api/v1/file/files/${upload.fileId}/complete`, { memberId });
         if (completed.httpStatus !== 200) {
@@ -224,7 +624,7 @@
           return;
         }
         row.querySelector('[data-key=fileId]').value = upload.fileId;
-        setStatus(status, 'ok', `완료: 파일 ID ${upload.fileId} (${completed.body.data.status})`);
+        setStatus(status, 'ok', `완료: 파일 ID ${upload.fileId} (${completed.body.data.status})`, completed.body.data.url);
         renderPreview();
       } catch (error) {
         // 응답을 못 받으면(TypeError) 대부분 file-service가 꺼져 있거나 CORS에 이 페이지 주소가 없어서다
@@ -268,33 +668,10 @@
 
     function guessContentType(fileName) {
       const extension = fileName.split('.').pop().toLowerCase();
-      return { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }[extension] ?? '';
-    }
-
-    // memberId가 있으면 X-Member-Id 헤더를 붙인다
-    async function callFileApi(title, method, path, { memberId, body } = {}) {
-      const headers = {};
-      if (memberId) {
-        headers['X-Member-Id'] = memberId;
-      }
-      if (body !== undefined) {
-        headers['Content-Type'] = 'application/json';
-      }
-      const url = FILE_SERVICE_URL + path;
-      const response = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-      const json = await response.json();
-      log(`${title}: ${method} ${url} → ${response.status}`, { headers, request: body ?? null, response: json });
-      return { httpStatus: response.status, body: json };
-    }
-
-    function setStatus(element, state, message) {
-      element.className = `status ${state}`;
-      element.textContent = message;
-    }
-
-    function log(title, data) {
-      const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-      $('log').textContent = `[${new Date().toLocaleTimeString()}] ${title}\n${text}\n\n` + $('log').textContent;
+      const types = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', mp4: 'video/mp4', mov: 'video/quicktime',
+      };
+      return types[extension] ?? '';
     }
 
     // ---------- 입력값 → 요청 객체 ----------
@@ -308,42 +685,46 @@
       return value === '' ? null : Number.parseInt(value, 10);
     }
 
+    function decimal(value) {
+      return value === '' ? null : Number.parseFloat(value);
+    }
+
     // datetime-local 값(2026-11-01T08:00)에 초를 붙여 LocalDateTime 형식으로 보낸다
     function dateTime(id) {
       const value = $(id).value;
-      return value === '' ? null : `${value}:00`;
+      if (value === '') {
+        return null;
+      }
+      return value.length === 16 ? `${value}:00` : value;
     }
 
-    function rowValues(row) {
-      const values = {};
-      row.querySelectorAll('[data-key]').forEach((input) => {
-        values[input.dataset.key] = input.type === 'checkbox' ? input.checked : input.value.trim();
-      });
-      return values;
+    function buildCourse(card) {
+      const value = (key) => field(card, key).value.trim();
+      const images = [...card.querySelector('[data-images]').children].map((row) => ({
+        fileId: integer(row.querySelector('[data-key=fileId]').value.trim()),
+        fileType: row.querySelector('[data-key=fileType]').value,
+        sortNo: integer(row.querySelector('[data-key=sortNo]').value.trim()),
+      }));
+      return {
+        courseId: integer(value('courseId')),
+        name: value('name') || null,
+        courseType: value('courseType'),
+        surface: value('surface'),
+        distanceKm: decimal(value('distanceKm')),
+        timeLimitMinutes: integer(value('timeLimitMinutes')),
+        price: integer(value('price')),
+        kitIncluded: field(card, 'kitIncluded').checked,
+        kitPrice: integer(value('kitPrice')),
+        tshirtSizeOption: [...card.querySelectorAll('[data-size]:checked')].map((input) => input.dataset.size),
+        minAge: integer(value('minAge')),
+        maxAge: integer(value('maxAge')),
+        crewQuota: integer(value('crewQuota')),
+        individualQuota: integer(value('individualQuota')),
+        images,
+      };
     }
 
     function buildRequest() {
-      const courses = [...$('courseRows').children].map((row) => {
-        const value = rowValues(row);
-        return {
-          name: value.name || null,
-          courseType: value.courseType,
-          surface: value.surface,
-          distanceKm: value.distanceKm === '' ? null : Number.parseFloat(value.distanceKm),
-          timeLimitMinutes: integer(value.timeLimitMinutes),
-          price: integer(value.price),
-          kitIncluded: value.kitIncluded,
-          kitPrice: integer(value.kitPrice),
-          minAge: integer(value.minAge),
-          maxAge: integer(value.maxAge),
-          crewQuota: integer(value.crewQuota),
-          individualQuota: integer(value.individualQuota),
-        };
-      });
-      const images = [...$('imageRows').children].map((row) => {
-        const value = rowValues(row);
-        return { fileId: integer(value.fileId), fileType: value.fileType, sortNo: integer(value.sortNo) };
-      });
       return {
         title: text('title'),
         description: text('description'),
@@ -357,48 +738,232 @@
         applicationCloseAt: dateTime('applicationCloseAt'),
         refundDeadline: text('refundDeadline'),
         refundPolicy: text('refundPolicy'),
-        crewMinCount: integer($('crewMinCount').value),
-        crewMaxCount: integer($('crewMaxCount').value),
-        courses,
-        images,
+        crewMinCount: integer($('crewMinCount').value.trim()),
+        crewMaxCount: integer($('crewMaxCount').value.trim()),
+        courses: [...$('courses').children].map(buildCourse),
       };
     }
 
     function renderPreview() {
-      $('headerPreview').textContent = `헤더: X-Member-Id: ${$('memberId').value || '(없음)'}`;
+      $('headerPreview').textContent = `헤더: X-Member-Id: ${memberIdValue() || '(없음)'}`;
       $('preview').textContent = JSON.stringify(buildRequest(), null, 2);
+      renderSellerPrep();
+    }
+
+    // ---------- 응답 → 폼 ----------
+
+    function showRaceState(race) {
+      const parts = [
+        `판매 상태 ${race.saleStatus}(${SALE_STATUSES[race.saleStatus] ?? '?'})`,
+        `판매 시작 일시 ${race.saleOpenAt ?? '-'}`,
+      ];
+      if (race.scheduleChangedAt) {
+        parts.push(`일정·장소 변경 안내 ${race.scheduleChangedAt}`);
+      }
+      $('raceState').textContent = parts.join(' · ');
+    }
+
+    // 등록·수정 응답의 courseIds는 요청한 종목 순서대로다
+    function applySaveResult(data) {
+      $('raceId').value = data.raceId;
+      const cards = [...$('courses').children];
+      (data.courseIds ?? []).forEach((courseId, index) => {
+        if (cards[index]) {
+          field(cards[index], 'courseId').value = courseId;
+          updateCourseTitle(cards[index]);
+        }
+      });
+      showRaceState(data);
+      renderPreview();
+    }
+
+    function fillRaceForm(race) {
+      $('title').value = race.title ?? '';
+      $('description').value = race.description ?? '';
+      $('location').value = race.location ?? '';
+      $('regionSido').value = race.regionSido ?? '';
+      $('regionSigungu').value = race.regionSigungu ?? '';
+      ['raceDate', 'crewSaleStartAt', 'crewSaleEndAt', 'individualOpenAt', 'applicationCloseAt'].forEach((id) => {
+        $(id).value = toInputDateTime(race[id]);
+      });
+      $('refundDeadline').value = race.refundDeadline ?? '';
+      $('refundPolicy').value = race.refundPolicy ?? '';
+      $('crewMinCount').value = race.crewMinCount ?? '';
+      $('crewMaxCount').value = race.crewMaxCount ?? '';
+    }
+
+    // 대회 상세에는 이미지가 없어서 종목마다 file-service에서 받는다
+    async function loadCourseImages(card, raceCourseId) {
+      const note = card.querySelector('[data-image-note]');
+      try {
+        const result = await callFileApi(`종목 ${raceCourseId} 이미지 목록`, 'GET',
+          `/api/v1/file/files?refType=RaceCourse&refId=${raceCourseId}`);
+        if (result.httpStatus !== 200) {
+          note.className = 'hint fail';
+          note.textContent = `이미지 목록을 받지 못했습니다 (${result.httpStatus}): ${result.body.message}`;
+          return;
+        }
+        const files = result.body.data ?? [];
+        files.forEach((file) => addImageRow(card, {
+          fileId: file.id,
+          fileType: file.fileType,
+          sortNo: file.sortNo,
+          url: file.url,
+          statusText: `연결됨: ${file.originFileName} (${file.status})`,
+        }));
+        note.className = 'hint';
+        note.textContent = files.length === 0
+          ? '연결된 이미지가 없습니다. 이미지 연결은 저장 뒤 Kafka로 따로 처리되어 늦을 수 있고, 실패하면 file-service 로그에만 남습니다.'
+          : `file-service에서 연결된 파일 ${files.length}개를 받았습니다 (보기 URL은 30분 뒤 만료).`;
+      } catch (error) {
+        note.className = 'hint fail';
+        note.textContent = `file-service(8083) 요청이 막혔습니다. dev로 떠 있는지 확인하세요. (${error.message})`;
+        log('이미지 목록 오류', error.message);
+      }
+    }
+
+    // ---------- 버튼 동작 ----------
+
+    function requireRaceId() {
+      const raceId = $('raceId').value.trim();
+      if (raceId === '') {
+        showMessage($('actionResult'), false, '대회 ID를 먼저 채우세요 (등록하면 자동으로 채워집니다)');
+        return null;
+      }
+      return raceId;
+    }
+
+    async function registerRace() {
+      const result = await callApi('대회 등록', 'POST', RACES_PATH, { memberId: memberIdValue(), body: buildRequest() });
+      if (showResult($('actionResult'), result)) {
+        applySaveResult(result.body.data);
+      }
+    }
+
+    async function loadRace() {
+      const raceId = requireRaceId();
+      if (!raceId) {
+        return;
+      }
+      const result = await callApi('대회 불러오기', 'GET', `${RACES_PATH}/${raceId}`, { memberId: memberIdValue() });
+      if (!showResult($('actionResult'), result)) {
+        return;
+      }
+      const race = result.body.data;
+      fillRaceForm(race);
+      showRaceState(race);
+      $('courses').replaceChildren();
+      for (const course of race.courses) {
+        const card = addCourseCard({ ...course, courseId: course.raceCourseId });
+        await loadCourseImages(card, course.raceCourseId);
+      }
+      renderPreview();
+    }
+
+    async function updateRace() {
+      const raceId = requireRaceId();
+      if (!raceId) {
+        return;
+      }
+      const result = await callApi('대회 수정', 'PUT', `${RACES_PATH}/${raceId}`,
+        { memberId: memberIdValue(), body: buildRequest() });
+      if (showResult($('actionResult'), result)) {
+        applySaveResult(result.body.data);
+      }
+    }
+
+    async function startSale() {
+      const raceId = requireRaceId();
+      if (!raceId) {
+        return;
+      }
+      const result = await callApi('판매 시작', 'POST', `${RACES_PATH}/${raceId}/sale`, { memberId: memberIdValue() });
+      if (showResult($('actionResult'), result)) {
+        showRaceState(result.body.data);
+      }
+    }
+
+    async function cancelRace() {
+      const raceId = requireRaceId();
+      if (!raceId) {
+        return;
+      }
+      if (!confirm(`대회 ${raceId}을(를) 취소합니다. 되돌릴 수 없습니다. 계속할까요?`)) {
+        return;
+      }
+      const result = await callApi('대회 취소', 'POST', `${RACES_PATH}/${raceId}/cancel`, { memberId: memberIdValue() });
+      if (showResult($('actionResult'), result)) {
+        showRaceState(result.body.data);
+      }
     }
 
     // ---------- 이벤트 ----------
 
-    document.addEventListener('input', renderPreview);
+    document.addEventListener('input', (event) => {
+      if (event.target.matches('[data-field=name], [data-field=courseId]')) {
+        updateCourseTitle(event.target.closest('.course'));
+      }
+      renderPreview();
+    });
     document.addEventListener('change', (event) => {
-      if (event.target.matches('[data-upload]') && event.target.files.length > 0) {
-        uploadImage(event.target.closest('tr'), event.target.files[0]);
+      const target = event.target;
+      if (target.matches('[data-upload]')) {
+        if (target.files.length > 0) {
+          uploadImage(target.closest('tr'), target.files[0]);
+        }
         return;
+      }
+      if (target.matches('[data-field=kitIncluded]')) {
+        syncSizeInputs(target.closest('.course'));
+      }
+      if (target.matches('[data-key=fileType]')) {
+        onFileTypeChange(target.closest('tr'));
       }
       renderPreview();
     });
     document.addEventListener('click', (event) => {
-      if (event.target.matches('[data-remove]')) {
-        event.target.closest('tr').remove();
+      const target = event.target;
+      if (target.matches('[data-remove]')) {
+        target.closest('tr').remove();
         renderPreview();
+      } else if (target.matches('[data-remove-course]')) {
+        target.closest('.course').remove();
+        renderPreview();
+      } else if (target.matches('[data-add-image]')) {
+        addImageRow(target.closest('.course'), { fileType: 'DETAIL' });
+        renderPreview();
+      } else if (target.matches('[data-copy]')) {
+        copyText(target.dataset.copy);
       }
     });
-    $('addCourse').addEventListener('click', () => addCourseRow());
-    $('addImage').addEventListener('click', () => addImageRow({ fileType: 'DETAIL' }));
-    $('copyJson').addEventListener('click', async () => {
-      await navigator.clipboard.writeText($('preview').textContent);
-      $('copyMessage').className = 'ok';
-      $('copyMessage').textContent = '복사했습니다';
+
+    bindAction('registerRace', registerRace);
+    bindAction('loadRace', loadRace);
+    bindAction('updateRace', updateRace);
+    bindAction('startSale', startSale);
+    bindAction('cancelRace', cancelRace);
+    $('addCourse').addEventListener('click', () => {
+      const card = addCourseCard();
+      addImageRow(card, { fileType: 'THUMBNAIL', sortNo: 0 });
+      renderPreview();
+    });
+    $('resetSchedule').addEventListener('click', () => {
+      fillDefaultSchedule();
+      renderPreview();
+    });
+    $('clearLog').addEventListener('click', () => {
+      $('log').textContent = '';
     });
 
-    // 처음 화면에 예시 종목과 대표 이미지 칸을 하나씩 채워 둔다
-    addCourseRow({
+    // 처음 화면: 지금 기준 일정과 예시 종목 하나(매진 시험이 쉽게 개인 정원 3), 대표 이미지 칸을 채워 둔다
+    fillDefaultSchedule();
+    const firstCourse = addCourseCard({
       name: '10K', courseType: 'KM_10', surface: 'ROAD', distanceKm: 10, timeLimitMinutes: 90,
-      price: 45000, kitIncluded: true, kitPrice: 0, minAge: 14, individualQuota: 600,
+      price: 45000, kitIncluded: true, kitPrice: 0, tshirtSizeOption: ['S', 'M', 'L', 'XL'],
+      minAge: 14, crewQuota: 0, individualQuota: 3,
     });
-    addImageRow({ fileType: 'THUMBNAIL', sortNo: 0 });
+    addImageRow(firstCourse, { fileType: 'THUMBNAIL', sortNo: 0 });
+    renderPreview();
   </script>
 </body>
 </html>

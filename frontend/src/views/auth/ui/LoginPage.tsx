@@ -1,20 +1,35 @@
 'use client'
 
+import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Fragment } from 'react'
+import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
 import { cn } from '@/shared/lib'
 import { Button, FOCUS_RING, Logo, TextField } from '@/shared/ui'
 
+import { AUTH_ERRORS, loginSchema, type LoginValues } from '../model/schemas'
+
 const LINK = cn('rounded-sm', FOCUS_RING)
 
 // 피그마 V2 · M03 로그인 (+ M03-E 로그인 실패)
-// TODO(api): ApiV1AuthController 로그인에 연결하고 react-hook-form + zod로 검사한다.
+// failed는 시안 미리보기(?preview=error)용. 실패 문구를 띄운 채로 보여 준다.
 export function LoginPage({ failed = false }: { failed?: boolean }) {
   const router = useRouter()
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid },
+  } = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    mode: 'onTouched',
+    defaultValues: failed
+      ? { email: 'runner@crewrun.kr', password: 'password1' }
+      : { email: '', password: '' },
+  })
   return (
     <>
       <AppHeader type="sub" title="로그인" />
@@ -22,10 +37,11 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
         <div className="flex-1" />
         <form
           className="flex flex-col items-center px-6"
-          onSubmit={(event) => {
-            event.preventDefault()
+          noValidate
+          onSubmit={handleSubmit(() => {
+            // TODO(api): ApiV1AuthController 로그인에 연결한다. 실패하면 AUTH_ERRORS.loginFailed를 띄운다.
             router.push('/')
-          }}
+          })}
         >
           <Logo className="h-11 w-[150px]" />
           <p className="mt-3 text-center text-heading-s">러닝 대회, 여기서 바로 신청해요</p>
@@ -35,17 +51,18 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
               type="email"
               autoComplete="email"
               placeholder="이메일"
-              defaultValue="runner@crewrun.kr"
+              error={errors.email?.message}
+              {...register('email')}
             />
             <TextField
               aria-label="비밀번호"
               type="password"
               autoComplete="current-password"
               placeholder="비밀번호"
-              defaultValue="password1"
-              error={failed ? '이메일 또는 비밀번호가 맞지 않아요.' : undefined}
+              error={errors.password?.message ?? (failed ? AUTH_ERRORS.loginFailed : undefined)}
+              {...register('password')}
             />
-            <Button type="submit" size="l" className="w-full">
+            <Button type="submit" size="l" className="w-full" disabled={!isValid}>
               로그인
             </Button>
             <LinkRow
