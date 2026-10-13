@@ -140,6 +140,35 @@ final class RaceApiExamples {
 		{ "status": 409, "message": "판매가 시작된 대회는 종목을 뺄 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
+	static final String UPDATE_CANCELED = """
+		{ "status": 409, "message": "취소된 대회는 수정할 수 없습니다.", "data": null }
+		""";
+
+	static final String CANCEL_SUCCESS = """
+		{
+			"status": 200,
+			"message": "대회를 취소했습니다.",
+			"data": {
+				"raceId": 1,
+				"saleStatus": "CANCELED",
+				"saleOpenAt": "2026-10-13T10:00:00",
+				"courseIds": [1]
+			}
+		}
+		""";
+
+	static final String ALREADY_CANCELED = """
+		{ "status": 409, "message": "이미 취소된 대회입니다.", "data": null }
+		""";
+
+	static final String CANCEL_AFTER_CLOSED = """
+		{ "status": 409, "message": "판매가 끝난 대회는 취소할 수 없습니다.", "data": null }
+		""";
+
+	static final String CANCEL_STATUS_CHANGED = """
+		{ "status": 409, "message": "대회 상태가 바뀌어 취소하지 못했습니다. 다시 조회해 주세요.", "data": null }
+		""";
+
 	static final String SEARCH_SUCCESS = """
 		{
 			"status": 200,

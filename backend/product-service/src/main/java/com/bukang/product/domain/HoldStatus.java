@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
 public enum HoldStatus {
 	HELD("결제 대기"),
 	SOLD("판매"),
-	// 결제하지 않고 끝난 자리 (활성 시간이 끝남)
+	// 결제하지 않고 끝난 자리 (활성 시간이 끝남, 대회 취소)
 	RELEASED("해제"),
 	// 판매한 뒤 결제를 취소해 정원으로 되돌린 자리
 	RESTORED("환불 복구");

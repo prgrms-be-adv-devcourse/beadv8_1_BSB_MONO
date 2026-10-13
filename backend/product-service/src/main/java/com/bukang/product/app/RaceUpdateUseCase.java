@@ -43,7 +43,8 @@ public class RaceUpdateUseCase {
 	public RaceSaveResult update(int memberId, int raceId, RaceSaveRequestDto request) {
 		ProductSeller seller = productSellerRepository.findByMemberIdAndStatus(memberId, SellerStatus.APPROVED)
 			.orElseThrow(SellerNotApprovedException::new);
-		Race race = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new);
+		// 잠그고 읽는다. 같은 순간 취소가 커밋되면 취소된 상태를 보고 막힌다 (잠그지 않으면 취소된 대회를 고친다)
+		Race race = raceRepository.findByIdForUpdate(raceId).orElseThrow(RaceNotFoundException::new);
 		if (!race.isOwnedBy(seller)) {
 			throw new RaceAccessDeniedException();
 		}

@@ -1,6 +1,7 @@
 package com.bukang.product.out;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -27,6 +28,11 @@ public interface ParticipationHoldRepository extends JpaRepository<Participation
 	@Query("select h from ParticipationHold h where h.participationId = :participationId")
 	Optional<ParticipationHold> findForUpdate(@Param("participationId") int participationId);
 
+	// 대회를 취소할 때 해제할 결제 대기 자리
+	@Query("select h from ParticipationHold h where h.raceCourse.race.id = :raceId "
+		+ "and h.status = com.bukang.product.domain.HoldStatus.HELD")
+	List<ParticipationHold> findHeldByRaceId(@Param("raceId") int raceId);
+
 	// 결제 대기 → 판매. 결제 기한(expires_at) 안일 때만 바꾼다
 	@Modifying(clearAutomatically = true)
 	@Query("update ParticipationHold h set h.status = com.bukang.product.domain.HoldStatus.SOLD, "
@@ -34,7 +40,7 @@ public interface ParticipationHoldRepository extends JpaRepository<Participation
 		+ "where h.id = :id and h.status = com.bukang.product.domain.HoldStatus.HELD and h.expiresAt > :now")
 	int sell(@Param("id") int id, @Param("now") LocalDateTime now);
 
-	// 결제 대기 → 해제 (활성 시간이 끝남)
+	// 결제 대기 → 해제 (활성 시간이 끝남, 대회 취소)
 	@Modifying(clearAutomatically = true)
 	@Query("update ParticipationHold h set h.status = com.bukang.product.domain.HoldStatus.RELEASED, "
 		+ "h.releasedAt = :now, h.releaseReason = :reason, h.modifyDate = :now "

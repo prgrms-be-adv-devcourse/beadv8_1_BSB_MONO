@@ -31,7 +31,7 @@ public class RaceQueryUseCase {
 	private final RaceRepository raceRepository;
 	private final RaceCourseRepository raceCourseRepository;
 
-	// 작성 중인 대회는 등록한 판매자만 볼 수 있다. 다른 사람에게는 없는 대회(404)로 보인다
+	// 작성 중·취소된 대회는 등록한 판매자만 볼 수 있다. 다른 사람에게는 없는 대회(404)로 보인다
 	public RaceDetailDto findDetail(int raceId, Integer memberId) {
 		Race race = raceRepository.findById(raceId)
 			.filter(found -> found.isVisibleTo(memberId))

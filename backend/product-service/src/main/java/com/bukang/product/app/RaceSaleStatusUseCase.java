@@ -45,7 +45,9 @@ public class RaceSaleStatusUseCase {
 		}
 
 		// 바꾼 상태를 DB에서 다시 읽어 검색 문서를 만든다 (조건부 UPDATE에서 건너뛴 대회는 지금 상태 그대로 색인된다)
-		return raceRepository.findAllById(changedIds).stream()
+		// 잠그고 읽어야 최신 상태를 본다. 그냥 읽으면 처음 대상 ID를 읽을 때의 스냅숏이라,
+		// 그 사이 취소된 대회를 옛 상태(판매 예정)로 다시 색인해 공개 목록에 남긴다
+		return raceRepository.findAllByIdForShare(changedIds).stream()
 			.flatMap(race -> race.getCourses().stream())
 			.map(RaceCourseDocument::from)
 			.toList();

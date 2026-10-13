@@ -50,6 +50,7 @@ public class ProductFacade {
 	private final RaceQueryUseCase raceQueryUseCase;
 	private final RaceSaleStatusUseCase raceSaleStatusUseCase;
 	private final RaceHoldUseCase raceHoldUseCase;
+	private final RaceCancelUseCase raceCancelUseCase;
 	private final TransactionTemplate transactionTemplate;
 	private final RaceCourseDocumentRepository raceCourseDocumentRepository;
 	private final KafkaTemplate<String, String> kafkaTemplate;
@@ -95,6 +96,18 @@ public class ProductFacade {
 			raceSaleStartUseCase.startSale(memberId, raceId));
 		indexRaceCourses(result);
 		return result.dto();
+	}
+
+	// 판매자가 대회를 취소한다. 커밋한 뒤 검색 문서를 다시 색인하고(공개 목록에서 빠짐), 주문 서비스에 취소를 알린다
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public RaceSaveDto cancelRace(int memberId, int raceId) {
+		RaceCancelResult result = transactionTemplate.execute(status ->
+			raceCancelUseCase.cancel(memberId, raceId, LocalDateTime.now()));
+		indexRaceCourses(result.saved());
+		if (result.cancelEvent() != null) {
+			publish(KafkaTopics.ORDER_RACE_CANCEL, String.valueOf(raceId), result.cancelEvent(), "대회 취소");
+		}
+		return result.saved().dto();
 	}
 
 	// 주문 서비스의 [결제하기] 자리 확보 (내부 API)
@@ -177,22 +190,25 @@ public class ProductFacade {
 	}
 
 	// file-service에 이미지 연결 메시지를 보낸다 (race.filelink.requested)
-	// 같은 대회의 메시지가 순서대로 처리되도록 대회 ID를 key로 보낸다 (같은 key는 같은 파티션)
-	// 보내지 못하면 이미 커밋된 대회를 되돌릴 수 없어 에러 로그에 메시지를 남긴다
-	// 연결되지 않은 파일은 하루 뒤 file-service 정리 배치가 지우므로, 그 전에 로그의 메시지를 다시 보내야 한다
+	// 연결되지 않은 파일은 하루 뒤 file-service 정리 배치가 지우므로, 보내지 못했으면 그 전에 로그의 메시지를 다시 보내야 한다
 	private void publishFileLink(RaceSaveResult result) {
-		String key = String.valueOf(result.raceId());
-		String payload = jsonConverter.toJson(result.fileLink());
+		publish(KafkaTopics.RACE_FILE_LINK_REQUESTED, String.valueOf(result.raceId()), result.fileLink(), "파일 연결");
+	}
+
+	// 커밋한 뒤 Kafka 메시지를 보낸다. 같은 대회의 메시지가 순서대로 처리되도록 대회 ID를 key로 보낸다 (같은 key는 같은 파티션)
+	// 보내지 못하면 이미 커밋된 저장을 되돌릴 수 없어 에러 로그에 메시지를 남긴다 (아웃박스 없이 로그로 남기기로 결정, 10/13)
+	private void publish(String topic, String key, Object event, String name) {
+		String payload = jsonConverter.toJson(event);
 		try {
-			kafkaTemplate.send(KafkaTopics.RACE_FILE_LINK_REQUESTED, key, payload)
+			kafkaTemplate.send(topic, key, payload)
 				.whenComplete((sendResult, exception) -> {
 					if (exception != null) {
-						log.error("파일 연결 메시지를 보내지 못했습니다. raceId={}, payload={}", key, payload, exception);
+						log.error("{} 메시지를 보내지 못했습니다. key={}, payload={}", name, key, payload, exception);
 					}
 				});
 		} catch (RuntimeException exception) {
 			// 브로커에 연결하지 못하면 send()가 기다리다(max.block.ms, 기본 60초) 예외를 던진다
-			log.error("파일 연결 메시지를 보내지 못했습니다. raceId={}, payload={}", key, payload, exception);
+			log.error("{} 메시지를 보내지 못했습니다. key={}, payload={}", name, key, payload, exception);
 		}
 	}
 }

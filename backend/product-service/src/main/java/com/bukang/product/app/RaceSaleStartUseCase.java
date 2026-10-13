@@ -29,7 +29,8 @@ public class RaceSaleStartUseCase {
 	public RaceSaveResult startSale(int memberId, int raceId) {
 		ProductSeller seller = productSellerRepository.findByMemberIdAndStatus(memberId, SellerStatus.APPROVED)
 			.orElseThrow(SellerNotApprovedException::new);
-		Race race = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new);
+		// 잠그고 읽는다. 같은 순간 취소가 커밋되면 취소된 상태를 보고 막힌다 (잠그지 않으면 취소를 판매 예정으로 덮어쓴다)
+		Race race = raceRepository.findByIdForUpdate(raceId).orElseThrow(RaceNotFoundException::new);
 		if (!race.isOwnedBy(seller)) {
 			throw new RaceAccessDeniedException();
 		}

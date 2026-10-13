@@ -1,7 +1,11 @@
 package com.bukang.product.app;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 import org.springframework.stereotype.Service;
 
@@ -36,7 +40,7 @@ public class RaceHoldUseCase {
 	private final RaceCourseRepository raceCourseRepository;
 	private final ParticipationHoldRepository participationHoldRepository;
 
-	// 해제할 자리와 그 종목 (UPDATE가 영속성 컨텍스트를 비우기 전에 ID만 꺼내 둔다)
+	// 대회 취소 때 해제할 자리와 그 종목 (UPDATE가 영속성 컨텍스트를 비우기 전에 ID만 꺼내 둔다)
 	private record HeldSeat(int holdId, int raceCourseId) {
 	}
 
@@ -52,8 +56,8 @@ public class RaceHoldUseCase {
 			throw new InvalidHoldException("임시 확보 끝 시각이 이미 지났습니다.");
 		}
 		int raceCourseId = request.getRaceCourseId();
-		// 대회 행을 공유 잠금으로 먼저 읽고, 종목 행은 그다음에 잠근다 (대회 → 종목 순서)
-		// 대회 행을 바꾸는 요청이 진행 중이면 커밋을 기다렸다가 바뀐 상태를 본다
+		// 대회 행을 공유 잠금으로 먼저 읽고, 종목 행은 그다음에 잠근다 (취소·수정과 같은 대회 → 종목 순서)
+		// 취소가 진행 중이면 커밋을 기다렸다가 취소된 상태를 보고 막힌다
 		// 이 트랜잭션에서 대회를 처음 읽는 조회여야 해서, 종목 엔티티가 아니라 대회 ID만 먼저 읽는다
 		// 작성 중인 대회의 종목은 공개 전이라 없는 종목으로 본다 (주문용 종목 정보 API와 같게)
 		Race race = raceCourseRepository.findRaceIdById(raceCourseId)
@@ -102,6 +106,10 @@ public class RaceHoldUseCase {
 		if (hold.getStatus() == HoldStatus.SOLD) {
 			return HoldSellResult.SOLD;
 		}
+		// 취소된 대회의 자리는 팔지 않는다. 대회 취소와 같은 순간 확보된 자리는 취소 때 해제되지 못하고 남을 수 있다
+		if (hold.getRaceCourse().getRace().getSaleStatus() == RaceSaleStatus.CANCELED) {
+			return HoldSellResult.EXPIRED;
+		}
 		int raceCourseId = hold.getRaceCourse().getId();
 		if (participationHoldRepository.sell(hold.getId(), now) == 0) {
 			return HoldSellResult.EXPIRED;
@@ -118,6 +126,32 @@ public class RaceHoldUseCase {
 		}
 		ParticipationHold hold = found.get();
 		return releaseSeat(new HeldSeat(hold.getId(), hold.getRaceCourse().getId()), reason, now);
+	}
+
+	// 대회를 취소할 때 그 대회의 결제 대기 자리를 모두 해제한다. 해제한 자리 수를 돌려준다
+	// 한 번에 범위 UPDATE를 하지 않고 자리마다 조건부 UPDATE를 한다
+	// (ERD release_reason 주석: 범위 UPDATE는 갭 락을 잡아 같은 때 들어온 확보 INSERT와 서로 기다리다 멈출 수 있다)
+	// 자리 행을 모두 먼저 해제하고, 종목 카운터는 마지막에 종목마다 한 번에 줄인다
+	//   판매·해제·복구는 자리 행 → 종목 행 순서로 잠근다. 자리 하나를 풀 때마다 종목 행까지 잠그면,
+	//   그다음 자리를 결제 중인 판매와 서로 상대의 잠금을 기다리다 멈춘다
+	public int releaseAllHeld(int raceId, LocalDateTime now) {
+		List<HeldSeat> seats = participationHoldRepository.findHeldByRaceId(raceId).stream()
+			.map(hold -> new HeldSeat(hold.getId(), hold.getRaceCourse().getId()))
+			.sorted(Comparator.comparingInt(HeldSeat::holdId))
+			.toList();
+		// 종목 ID 순서로 카운터를 바꾸려고 정렬되는 TreeMap에 모은다
+		Map<Integer, Integer> releasedByCourse = new TreeMap<>();
+		for (HeldSeat seat : seats) {
+			// 그 사이 판매·해제된 자리는 0행이라 세지 않는다
+			if (participationHoldRepository.release(seat.holdId(), HoldReleaseReason.RACE_CANCELED, now) == 1) {
+				releasedByCourse.merge(seat.raceCourseId(), 1, Integer::sum);
+			}
+		}
+		releasedByCourse.forEach((raceCourseId, count) -> {
+			raceCourseRepository.releaseIndividual(raceCourseId, count, now);
+			raceCourseRepository.refreshStatus(raceCourseId);
+		});
+		return releasedByCourse.values().stream().mapToInt(Integer::intValue).sum();
 	}
 
 	private boolean releaseSeat(HeldSeat seat, HoldReleaseReason reason, LocalDateTime now) {

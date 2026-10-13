@@ -23,7 +23,7 @@ public interface RaceCourseRepository extends JpaRepository<RaceCourse, Integer>
 	// 남은 개인 자리가 있을 때만 결제 대기를 1 늘린다. 마지막 자리를 두 사람이 함께 가져가지 못하게 하는 조건부 UPDATE다
 	//   남은 자리를 먼저 읽고 늘리면, 마지막 1자리를 두 요청이 함께 '남았다'고 읽고 둘 다 늘린다
 	//   이 UPDATE는 행을 잠근 뒤 조건을 다시 보므로, 두 번째 요청은 0행이 되어 매진으로 끝난다
-	// 대회가 판매 예정·판매 중일 때만 늘린다
+	// 대회가 판매 예정·판매 중일 때만 늘린다. 판매자가 같은 순간 대회를 취소해도 취소된 대회에 자리가 잡히지 않게 한다
 	//   (판매 예정도 넣는 이유: 판매 시작 일시가 지나도 상태 배치가 판매 중으로 바꾸기까지 최대 5분 걸린다)
 	@Modifying(clearAutomatically = true)
 	@Query("update RaceCourse c set c.individualReserved = c.individualReserved + 1, c.modifyDate = :now "
@@ -38,7 +38,7 @@ public interface RaceCourseRepository extends JpaRepository<RaceCourse, Integer>
 		+ "c.individualSold = c.individualSold + 1, c.modifyDate = :now where c.id = :id")
 	int sellIndividual(@Param("id") int id, @Param("now") LocalDateTime now);
 
-	// 결제 대기 count개를 정원으로 되돌린다 (해제)
+	// 결제 대기 count개를 정원으로 되돌린다 (해제. 대회 취소는 한 종목의 여러 자리를 한 번에 되돌린다)
 	@Modifying(clearAutomatically = true)
 	@Query("update RaceCourse c set c.individualReserved = c.individualReserved - :count, c.modifyDate = :now "
 		+ "where c.id = :id")

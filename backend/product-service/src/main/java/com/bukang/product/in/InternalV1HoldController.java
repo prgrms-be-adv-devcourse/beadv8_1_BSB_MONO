@@ -60,7 +60,7 @@ public class InternalV1HoldController {
 		@ApiResponse(responseCode = "404", description = "없는 종목 또는 작성 중인 대회의 종목",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceInternalApiExamples.COURSE_NOT_FOUND))),
-		@ApiResponse(responseCode = "409", description = "접수 기간이 아님(판매 중지 포함) 또는 이미 끝난 참가 신청",
+		@ApiResponse(responseCode = "409", description = "접수 기간이 아님(판매 중지·대회 취소 포함) 또는 이미 끝난 참가 신청",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "접수 기간이 아님", value = RaceHoldApiExamples.NOT_ACCEPTING),
 				@ExampleObject(name = "이미 끝난 참가 신청", value = RaceHoldApiExamples.HOLD_FINISHED)
@@ -74,7 +74,7 @@ public class InternalV1HoldController {
 
 	@PostMapping("/{participationId}/sell")
 	@Operation(summary = "자리 판매",
-		description = "결제가 끝난 결제 대기 자리를 판매로 바꾼다. 끝 시각이 지났거나 이미 해제된 자리는 "
+		description = "결제가 끝난 결제 대기 자리를 판매로 바꾼다. 끝 시각이 지났거나 이미 해제된 자리, 취소된 대회의 자리는 "
 			+ "판매하지 않고 result=EXPIRED로 응답한다(주문 서비스는 결제를 취소하고 예치금을 돌려준다). "
 			+ "이미 판매한 자리면 끝 시각과 상관없이 SOLD로 응답한다(같은 주문으로 다시 결제할 때).")
 	@ApiResponses({

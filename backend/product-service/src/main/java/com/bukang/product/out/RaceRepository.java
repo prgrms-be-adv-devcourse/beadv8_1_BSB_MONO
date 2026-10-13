@@ -17,15 +17,30 @@ import com.bukang.product.domain.RaceSaleStatus;
 
 import jakarta.persistence.LockModeType;
 
+// 잠그는 순서: 대회 행을 잡는 요청(판매 시작·수정·취소·자리 확보)은 모두 대회 행을 먼저, 종목 행을 나중에 잠근다
+// 순서가 엇갈리면 MySQL에서 두 트랜잭션이 서로 상대의 잠금을 기다리다 한쪽이 교착으로 롤백된다
 public interface RaceRepository extends JpaRepository<Race, Integer> {
 	// 판매자의 대회 (최근 등록 순)
 	List<Race> findAllBySellerOrderByIdDesc(ProductSeller seller);
 
+	// 대회 행을 잠그고 읽는다 (SELECT … FOR UPDATE). 판매 시작·수정·취소가 쓴다
+	// 같은 대회에서 겹치면 차례로 처리되어, 나중 요청이 최신 상태(예: 방금 취소됨)를 보고 막힌다
+	// 잠그지 않고 읽으면 옛 상태로 판단해, 취소된 대회를 판매 시작으로 덮어쓰거나 수정할 수 있다
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select r from Race r where r.id = :id")
+	Optional<Race> findByIdForUpdate(@Param("id") int id);
+
 	// 대회 행을 공유 잠금으로 읽는다 (MySQL SELECT … FOR SHARE). 자리 확보가 판매 상태를 볼 때 쓴다
-	// 확보끼리는 서로 막지 않고, 대회 행을 바꾸는 요청이 있으면 커밋을 기다렸다가 최신 상태를 본다
+	// 확보끼리는 서로 막지 않고, 취소·수정이 대회 행을 잡고 있으면 커밋을 기다렸다가 최신 상태를 본다
 	@Lock(LockModeType.PESSIMISTIC_READ)
 	@Query("select r from Race r where r.id = :id")
 	Optional<Race> findByIdForShare(@Param("id") int id);
+
+	// 상태 배치가 바꾼 대회를 다시 읽는다. 잠그고 읽어야 트랜잭션 처음의 스냅숏이 아닌 최신 상태를 본다
+	// (그 사이 다른 요청이 취소한 대회를 옛 상태로 다시 색인하지 않게)
+	@Lock(LockModeType.PESSIMISTIC_READ)
+	@Query("select r from Race r where r.id in :ids")
+	List<Race> findAllByIdForShare(@Param("ids") Collection<Integer> ids);
 
 	// 판매 상태 배치가 바꿀 대회 (판매 예정인데 판매 시작 일시가 지난 대회)
 	@Query("select r.id from Race r where r.saleStatus = :status and r.saleOpenAt <= :now")
@@ -46,6 +61,16 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 		+ "where r.id in :ids and r.saleStatus in :statuses and r.raceDate < :before")
 	int closeSale(@Param("ids") Collection<Integer> ids, @Param("statuses") Collection<RaceSaleStatus> statuses,
 		@Param("before") LocalDateTime before, @Param("now") LocalDateTime now);
+
+	// 판매자가 대회를 취소한다. 판매 종료 전 상태이고 대회일 다음 날 0시 전일 때만 바꾼다 (조건부 UPDATE)
+	// 엔티티를 고쳐 커밋 때 저장하지 않는 이유: 확인하고 저장하는 사이 상태 배치가 판매 종료로 바꾸면 그 상태를 덮어쓴다
+	//   조건부 UPDATE는 그 사이 상태가 바뀌었으면 0행이 되어 취소하지 않는다
+	@Modifying(clearAutomatically = true)
+	@Query("update Race r set r.saleStatus = com.bukang.product.domain.RaceSaleStatus.CANCELED, "
+		+ "r.canceledAt = :now, r.modifyDate = :now "
+		+ "where r.id = :id and r.saleStatus in :statuses and r.raceDate >= :today")
+	int cancel(@Param("id") int id, @Param("statuses") Collection<RaceSaleStatus> statuses,
+		@Param("today") LocalDateTime today, @Param("now") LocalDateTime now);
 
 	// 판매 시작 일시가 지난 판매 예정 대회 → 판매 중
 	@Modifying(clearAutomatically = true)

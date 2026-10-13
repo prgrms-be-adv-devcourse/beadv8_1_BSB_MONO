@@ -48,7 +48,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 
 // 게이트웨이가 경로 앞부분을 자르지 않으므로(StripPrefix 금지, PRO-17) 서비스 이름(/product)부터 쓴다
-@Tag(name = "Race", description = "대회 등록, 수정, 판매 시작, 목록·상세·내 대회 조회 API")
+@Tag(name = "Race", description = "대회 등록, 수정, 판매 시작, 취소, 목록·상세·내 대회 조회 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/product/races")
@@ -138,8 +138,9 @@ public class ApiV1RaceController {
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND))),
 		@ApiResponse(responseCode = "409",
 			description = "판매 시작 뒤 참가비 인상·환불 기준일 앞당김, 지난 판매 일정 변경·지난 시각으로 이동, "
-				+ "판매 시작 뒤 정원 줄이기·참가 조건 변경·티셔츠 사이즈 변경 또는 종목 빼기",
+				+ "판매 시작 뒤 정원 줄이기·참가 조건 변경·티셔츠 사이즈 변경, 종목 빼기 또는 취소된 대회",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "취소된 대회", value = RaceApiExamples.UPDATE_CANCELED),
 				@ExampleObject(name = "참가비 인상", value = RaceApiExamples.PRICE_RAISED),
 				@ExampleObject(name = "환불 기준일 앞당김", value = RaceApiExamples.REFUND_DEADLINE_ADVANCED),
 				@ExampleObject(name = "지난 판매 일정 변경", value = RaceApiExamples.SCHEDULE_PASSED),
@@ -200,6 +201,46 @@ public class ApiV1RaceController {
 			? "판매를 시작했습니다."
 			: "%s에 판매가 시작됩니다.".formatted(race.getSaleOpenAt().format(MESSAGE_DATE_TIME));
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, message, race));
+	}
+
+	@PostMapping("/{raceId}/cancel")
+	@Operation(summary = "대회 취소",
+		description = "본인이 등록한 대회를 취소한다. 판매가 끝나기 전(대회일 다음 날 0시 전)이면 작성 중·판매 예정·판매 중·판매 중지 "
+			+ "어느 상태든 취소할 수 있고, 되돌릴 수 없다. 결제 대기 자리는 모두 해제되고 공개 목록에서 빠진다. "
+			+ "판매를 시작했던 대회면 주문 서비스에 취소 메시지(Kafka order.race.cancel)를 보내 참가권을 일괄 환불하게 한다. "
+			+ "취소된 대회는 수정·판매 시작·자리 확보를 할 수 없고, 상세는 등록한 판매자만 볼 수 있다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "취소 성공",
+			content = @Content(examples = @ExampleObject(value = RaceApiExamples.CANCEL_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "승인된 판매자가 아님 또는 다른 판매자의 대회",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "승인된 판매자가 아님", value = RaceApiExamples.SELLER_NOT_APPROVED),
+				@ExampleObject(name = "다른 판매자의 대회", value = RaceApiExamples.NOT_OWNER)
+			})),
+		@ApiResponse(responseCode = "404", description = "없는 대회",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND))),
+		@ApiResponse(responseCode = "409", description = "이미 취소된 대회, 판매가 끝난 대회 또는 그 사이 상태가 바뀜",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "이미 취소된 대회", value = RaceApiExamples.ALREADY_CANCELED),
+				@ExampleObject(name = "판매가 끝난 대회", value = RaceApiExamples.CANCEL_AFTER_CLOSED),
+				@ExampleObject(name = "그 사이 상태가 바뀜", value = RaceApiExamples.CANCEL_STATUS_CHANGED)
+			}))
+	})
+	public ResponseEntity<RsData<RaceSaveDto>> cancel(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
+		@RequestHeader("X-Member-Id") int memberId,
+		@Parameter(description = "대회 ID", example = "1")
+		@PathVariable int raceId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "대회를 취소했습니다.", productFacade.cancelRace(memberId, raceId)));
 	}
 
 	@GetMapping
@@ -324,7 +365,7 @@ public class ApiV1RaceController {
 	@GetMapping("/{raceId}")
 	@Operation(summary = "대회 상세",
 		description = "대회와 종목(남은 자리·티셔츠 사이즈 포함), 판매자 정보를 돌려준다. 로그인하지 않아도 된다. "
-			+ "작성 중인 대회는 등록한 판매자만 볼 수 있고, 다른 사람에게는 없는 대회(404)로 보인다. "
+			+ "작성 중이거나 취소된 대회는 등록한 판매자만 볼 수 있고, 다른 사람에게는 없는 대회(404)로 보인다. "
 			+ "종목 이미지는 file-service에서 종목마다 받는다(GET /api/v1/file/files?refType=RaceCourse&refId=종목 ID).")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
@@ -332,12 +373,12 @@ public class ApiV1RaceController {
 		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
-		@ApiResponse(responseCode = "404", description = "없는 대회 또는 다른 판매자의 작성 중 대회",
+		@ApiResponse(responseCode = "404", description = "없는 대회 또는 다른 판매자의 작성 중·취소된 대회",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<RaceDetailDto>> findRace(
-		@Parameter(description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 작성 중 대회는 등록한 판매자만 본다)",
+		@Parameter(description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 작성 중·취소된 대회는 등록한 판매자만 본다)",
 			example = "9001")
 		@RequestHeader(name = "X-Member-Id", required = false) Integer memberId,
 		@Parameter(description = "대회 ID", example = "1")
