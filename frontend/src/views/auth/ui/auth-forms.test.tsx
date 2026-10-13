@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AUTH_ERRORS } from '../model/schemas'
 import { SignupStepProvider } from '../model/signup-store'
-import { PasswordResetPage } from './FindAccountPages'
+import { PasswordNewPage, PasswordResetPage } from './FindAccountPages'
 import { LoginPage } from './LoginPage'
-import { SignupProfilePage } from './SignupPages'
+import { SignupAccountPage, SignupProfilePage } from './SignupPages'
 
 const push = vi.fn()
 vi.mock('next/navigation', () => ({
@@ -78,5 +78,52 @@ describe('PasswordResetPage', () => {
     await user.type(screen.getByLabelText('이메일'), 'runner@crewrun.kr')
     await user.click(button)
     expect(push).toHaveBeenCalledWith('/password-reset/new')
+  })
+})
+
+describe('비밀번호 확인 칸', () => {
+  it('확인 칸을 채운 뒤 비밀번호를 고치면 확인 칸 오류가 바로 바뀐다', async () => {
+    const user = userEvent.setup()
+    render(<PasswordNewPage />)
+
+    await user.type(screen.getByLabelText('새 비밀번호'), 'password1')
+    await user.type(screen.getByLabelText('새 비밀번호 확인'), 'password1')
+    await user.tab()
+    expect(screen.queryByText(AUTH_ERRORS.passwordMismatch)).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('새 비밀번호'), '2')
+    expect(await screen.findByText(AUTH_ERRORS.passwordMismatch)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('새 비밀번호 확인'), '2')
+    await user.clear(screen.getByLabelText('새 비밀번호'))
+    await user.type(screen.getByLabelText('새 비밀번호'), 'password12')
+    expect(screen.queryByText(AUTH_ERRORS.passwordMismatch)).not.toBeInTheDocument()
+  })
+
+  it('확인 칸이 비어 있으면 비밀번호를 입력해도 다르다는 오류를 먼저 띄우지 않는다', async () => {
+    const user = userEvent.setup()
+    render(
+      <SignupStepProvider>
+        <SignupAccountPage />
+      </SignupStepProvider>,
+    )
+
+    await user.type(screen.getByLabelText('비밀번호'), 'password1')
+    expect(screen.queryByText(AUTH_ERRORS.passwordMismatch)).not.toBeInTheDocument()
+  })
+
+  it('가입 계정 화면에서도 비밀번호를 고치면 확인 칸 오류가 바로 뜬다', async () => {
+    const user = userEvent.setup()
+    render(
+      <SignupStepProvider>
+        <SignupAccountPage />
+      </SignupStepProvider>,
+    )
+
+    await user.type(screen.getByLabelText('비밀번호'), 'password1')
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'password1')
+    await user.tab()
+    await user.type(screen.getByLabelText('비밀번호'), '2')
+    expect(await screen.findByText(AUTH_ERRORS.passwordMismatch)).toBeInTheDocument()
   })
 })

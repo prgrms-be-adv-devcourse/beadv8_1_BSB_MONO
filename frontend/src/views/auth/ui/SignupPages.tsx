@@ -54,6 +54,8 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
     register,
     handleSubmit,
     subscribe,
+    getValues,
+    trigger,
     formState: { errors, isValid },
   } = useForm<SignupAccountValues>({
     resolver: zodResolver(signupAccountSchema),
@@ -70,6 +72,10 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
       callback: ({ values }) => setAccount(values),
     })
   }, [invalid, subscribe, setAccount])
+  // 비밀번호를 고치면 이미 채운 확인 칸도 다시 검사한다. 비어 있으면 "다르다" 오류를 먼저 띄우지 않는다.
+  const revalidateConfirm = () => {
+    if (getValues('passwordConfirm')) void trigger('passwordConfirm')
+  }
   // TODO(api): ApiV1MemberController로 이메일 중복을 확인한다. 중복이면 AUTH_ERRORS.emailTaken.
   const onNext = handleSubmit(() => router.push('/signup/profile'))
 
@@ -101,7 +107,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           placeholder="비밀번호를 입력해 주세요"
           helper="영문 · 숫자 포함 8자 이상"
           error={errors.password?.message}
-          {...register('password')}
+          {...register('password', { onChange: revalidateConfirm })}
         />
         <TextField
           label="비밀번호 확인"

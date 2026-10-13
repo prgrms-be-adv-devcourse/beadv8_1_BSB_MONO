@@ -68,12 +68,18 @@ export function PasswordNewPage() {
   const {
     register,
     handleSubmit,
+    getValues,
+    trigger,
     formState: { errors, isValid },
   } = useForm<PasswordNewValues>({
     resolver: zodResolver(passwordNewSchema),
     mode: 'onTouched',
     defaultValues: { password: '', passwordConfirm: '' },
   })
+  // 비밀번호를 고치면 이미 채운 확인 칸도 다시 검사한다. 비어 있으면 "다르다" 오류를 먼저 띄우지 않는다.
+  const revalidateConfirm = () => {
+    if (getValues('passwordConfirm')) void trigger('passwordConfirm')
+  }
   // TODO(api): 메일 링크의 토큰과 함께 새 비밀번호를 보낸다.
   const onSubmit = handleSubmit(() => router.push('/login'))
 
@@ -88,7 +94,7 @@ export function PasswordNewPage() {
           autoComplete="new-password"
           helper="영문 · 숫자 포함 8자 이상"
           error={errors.password?.message}
-          {...register('password')}
+          {...register('password', { onChange: revalidateConfirm })}
         />
         <TextField
           label="새 비밀번호 확인"
