@@ -55,6 +55,10 @@ public class OrderCreateUseCase {
 			return OrderCreateResult.existing(existing.get().toDto());
 		}
 
+		// 매진으로 이미 끝난 신청서로 다시 요청하면(같은 키 재시도 포함) 처음과 같은 매진 결과를 돌려준다
+		if (participation.isHoldFailed()) {
+			return OrderCreateResult.soldOut();
+		}
 		participation.checkPayable();
 		RaceCourseInfo course = raceCoursePort.findCourse(participation.getRaceCourseId())
 			.orElseThrow(() -> new RaceCourseNotFoundException("존재하지 않는 종목입니다."));

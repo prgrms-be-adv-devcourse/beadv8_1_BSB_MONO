@@ -8,12 +8,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.bukang.common.shared.file.event.FileLinkRequestedEvent;
 import com.bukang.file.domain.FileStatus;
 import com.bukang.file.domain.StoredFile;
 import com.bukang.file.domain.exception.FileAccessDeniedException;
 import com.bukang.file.domain.exception.InvalidFileException;
 import com.bukang.file.domain.exception.StoredFileNotFoundException;
 import com.bukang.file.dto.FileDto;
+import com.bukang.file.dto.FileLinkItemDto;
 import com.bukang.file.dto.FileLinkRequestDto;
 import com.bukang.file.dto.FileUploadDto;
 import com.bukang.file.dto.FileUploadRequestDto;
@@ -61,6 +63,20 @@ public class FileFacade {
 	public List<FileDto> link(String refType, int refId, FileLinkRequestDto request) {
 		return fileLinkUseCase.link(refType, refId, request.getOwnerId(), request.getFiles()).stream()
 			.map(this::toDto)
+			.toList();
+	}
+
+	// 대상 서비스가 Kafka로 보낸 연결 요청 (FileKafkaConsumer). 여러 대상을 한 트랜잭션으로 연결하므로
+	// 하나라도 실패하면 모두 되돌린다 (대회는 연결되고 종목만 빠지는 일이 없다)
+	@Transactional
+	public void linkAll(FileLinkRequestedEvent event) {
+		event.refs().forEach(ref ->
+			fileLinkUseCase.link(ref.refType(), ref.refId(), event.ownerId(), toLinkItems(ref.files())));
+	}
+
+	private List<FileLinkItemDto> toLinkItems(List<FileLinkRequestedEvent.Item> files) {
+		return files.stream()
+			.map(file -> new FileLinkItemDto(file.fileId(), file.fileType(), file.sortNo()))
 			.toList();
 	}
 

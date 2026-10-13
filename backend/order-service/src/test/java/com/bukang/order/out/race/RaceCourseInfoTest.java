@@ -12,6 +12,7 @@ class RaceCourseInfoTest {
 	private static final LocalDateTime RACE_DATE = LocalDateTime.of(2026, 11, 15, 8, 0);
 	private static final LocalDateTime OPEN_AT = LocalDateTime.of(2026, 10, 1, 10, 0);
 	private static final LocalDateTime CLOSE_AT = LocalDateTime.of(2026, 10, 31, 23, 59);
+	private static final LocalDate REFUND_DEADLINE = LocalDate.of(2026, 11, 5);
 
 	@Test
 	@DisplayName("나이는 대회 당일의 만 나이로 따진다. 대회 날이 생일이면 그날 한 살 많다")
@@ -50,7 +51,58 @@ class RaceCourseInfoTest {
 		assertThat(course.isBeforeClose(CLOSE_AT)).isFalse();
 	}
 
+	@Test
+	@DisplayName("환불 기한 날짜까지(그날 포함) 환불할 수 있고 다음 날부터는 안 된다")
+	void refundable() {
+		RaceCourseInfo course = course(14, null);
+
+		assertThat(course.isRefundableOn(REFUND_DEADLINE.minusDays(1))).isTrue();
+		assertThat(course.isRefundableOn(REFUND_DEADLINE)).isTrue();
+		assertThat(course.isRefundableOn(REFUND_DEADLINE.plusDays(1))).isFalse();
+	}
+
+	@Test
+	@DisplayName("일정이 바뀌면 환불 기한이 지났어도 바뀐 날(알린 날)을 1일째로 7일째 날까지 전액 환불되고, 8일째부터는 안 된다")
+	void refundableAfterScheduleChange() {
+		// 환불 기한(11/5)이 지난 11/8 14:00에 대회 일정이 바뀌었다 → 11/8이 1일째, 7일째인 11/14까지
+		LocalDateTime changedAt = LocalDateTime.of(2026, 11, 8, 14, 0);
+		RaceCourseInfo course = courseChangedAt(changedAt);
+
+		assertThat(course.isRefundableOn(LocalDate.of(2026, 11, 8))).isTrue();
+		assertThat(course.isRefundableOn(LocalDate.of(2026, 11, 14))).isTrue();
+		assertThat(course.isRefundableOn(LocalDate.of(2026, 11, 15))).isFalse();
+		assertThat(course.isWithinScheduleChangeRefund(LocalDate.of(2026, 11, 14))).isTrue();
+		assertThat(course.isWithinScheduleChangeRefund(LocalDate.of(2026, 11, 15))).isFalse();
+		assertThat(course.scheduleChangeRefundLastDay()).isEqualTo(LocalDate.of(2026, 11, 14));
+	}
+
+	@Test
+	@DisplayName("일정 변경 7일이 환불 기한보다 먼저 끝나면 환불 기한까지는 그대로 환불된다")
+	void scheduleChangeDoesNotShortenRefundDeadline() {
+		// 10/1에 바뀌어 10/8에 7일이 끝나도, 환불 기한(11/5)까지는 원래대로 환불된다
+		RaceCourseInfo course = courseChangedAt(LocalDateTime.of(2026, 10, 1, 9, 0));
+
+		assertThat(course.isWithinScheduleChangeRefund(LocalDate.of(2026, 10, 9))).isFalse();
+		assertThat(course.isRefundableOn(LocalDate.of(2026, 10, 9))).isTrue();
+		assertThat(course.isRefundableOn(REFUND_DEADLINE)).isTrue();
+		assertThat(course.isRefundableOn(REFUND_DEADLINE.plusDays(1))).isFalse();
+	}
+
+	@Test
+	@DisplayName("일정이 바뀐 적 없으면 일정 변경 환불 기간은 없다")
+	void noScheduleChange() {
+		RaceCourseInfo course = course(14, null);
+
+		assertThat(course.isWithinScheduleChangeRefund(REFUND_DEADLINE.plusDays(1))).isFalse();
+	}
+
 	private RaceCourseInfo course(int minAge, Integer maxAge) {
-		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, minAge, maxAge, 1, "종목", 50_000, 10_000);
+		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, minAge, maxAge, 1, "종목", 50_000, 10_000,
+			REFUND_DEADLINE, null);
+	}
+
+	private RaceCourseInfo courseChangedAt(LocalDateTime scheduleChangedAt) {
+		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, 14, null, 1, "종목", 50_000, 10_000,
+			REFUND_DEADLINE, scheduleChangedAt);
 	}
 }

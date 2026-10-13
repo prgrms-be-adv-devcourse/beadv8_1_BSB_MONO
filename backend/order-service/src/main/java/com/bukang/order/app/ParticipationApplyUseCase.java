@@ -63,7 +63,11 @@ public class ParticipationApplyUseCase {
 	// 참가자 정보는 접수 마감 전까지 고칠 수 있다 (정책 3장 1-5). 생년월일이 바뀔 수 있으니 나이 제한도 다시 본다
 	public Participation changeParticipant(int participationId, int memberId, ParticipantInfo participant,
 		LocalDateTime now) {
-		Participation participation = findOwned(participationId, memberId);
+		// 잠가서 읽는다. 엔티티는 저장할 때 모든 컬럼을 다시 쓰므로, 잠그지 않으면 결제·취소가 바꾼 상태를
+		// 옛 값으로 덮을 수 있다. 결제·연장·취소도 참가 신청을 잠그고 바꾼다
+		Participation participation = participationRepository.findByIdForUpdate(participationId)
+			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
+		checkOwner(participation, memberId);
 		RaceCourseInfo course = findCourse(participation.getRaceCourseId());
 		if (!course.isBeforeClose(now)) {
 			throw new ApplicationPeriodException("접수가 마감되어 참가자 정보를 고칠 수 없습니다.");
@@ -76,10 +80,14 @@ public class ParticipationApplyUseCase {
 	public Participation findOwned(int participationId, int memberId) {
 		Participation participation = participationRepository.findById(participationId)
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
+		checkOwner(participation, memberId);
+		return participation;
+	}
+
+	private void checkOwner(Participation participation, int memberId) {
 		if (!participation.isOwnedBy(memberId)) {
 			throw new ParticipationAccessDeniedException("본인의 참가 신청만 보거나 고칠 수 있습니다.");
 		}
-		return participation;
 	}
 
 	private RaceCourseInfo findCourse(int raceCourseId) {

@@ -7,12 +7,14 @@ import static lombok.AccessLevel.PROTECTED;
 import java.time.LocalDateTime;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.exception.OrderItemNotCancelableException;
 import com.bukang.order.dto.OrderItemDto;
 import com.bukang.order.out.race.RaceCourseInfo;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -32,6 +34,12 @@ import lombok.NoArgsConstructor;
 	uniqueConstraints = {
 		// 결제 1건 = 참가 신청 1건 (ERD 추천안 v4 연결점). 같은 신청서로 주문이 두 번 생기지 않는다
 		@UniqueConstraint(name = "uk_order_item_participation", columnNames = {"participation_id"})
+	},
+	indexes = {
+		// 정산 배치가 대회 날짜로 결제된 참가권을 찾는다 (정산용 판매 내역 조회)
+		// 같음 조건(status = PAID)을 앞에, 범위 조건(race_date)을 뒤에 둬야 두 조건을 모두 인덱스로 좁힌다
+		// 이름을 바꾼 건 dev(ddl-auto: update)가 같은 이름의 옛 인덱스를 고치지 않아서다
+		@Index(name = "idx_order_item_status_race_date", columnList = "status, race_date")
 	}
 )
 public class OrderItem extends BaseIdAndTime {
@@ -52,6 +60,10 @@ public class OrderItem extends BaseIdAndTime {
 
 	@Column(name = "seller_id", nullable = false)
 	private int sellerId;
+
+	// 대회 일시 사본 (주문 당시 종목 정보). 정산 배치가 대회 날짜로 판매 내역을 찾는 조건이다
+	@Column(name = "race_date", nullable = false)
+	private LocalDateTime raceDate;
 
 	// 주문 당시 상품명·단가. 판매자가 나중에 고쳐도 주문 내역은 바뀌지 않는다
 	@Column(name = "item_name", nullable = false, length = 200)
@@ -84,12 +96,35 @@ public class OrderItem extends BaseIdAndTime {
 		item.raceId = course.raceId();
 		item.raceCourseId = course.raceCourseId();
 		item.sellerId = course.sellerId();
+		item.raceDate = course.raceDate();
 		item.itemName = course.courseName();
 		item.unitPrice = course.ticketPrice();
 		item.quantity = TICKET_QUANTITY;
 		item.amount = item.unitPrice * TICKET_QUANTITY;
 		item.status = OrderItemStatus.ORDERED;
 		return item;
+	}
+
+	void markPaid() {
+		this.status = OrderItemStatus.PAID;
+	}
+
+	// 결제한 상품만 취소할 수 있다. 같은 취소가 두 번 오면 두 번째는 여기서 막혀 환불도 한 번만 일어난다
+	public void checkCancelable() {
+		if (status == OrderItemStatus.CANCELED) {
+			throw new OrderItemNotCancelableException("이미 취소한 상품입니다.");
+		}
+		if (status != OrderItemStatus.PAID) {
+			throw new OrderItemNotCancelableException(
+				"결제한 상품만 취소할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+	}
+
+	void cancel(LocalDateTime canceledAt) {
+		checkCancelable();
+		this.status = OrderItemStatus.CANCELED;
+		this.canceledAmount = amount;
+		this.canceledAt = canceledAt;
 	}
 
 	public OrderItemDto toDto() {

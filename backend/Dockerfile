@@ -15,11 +15,13 @@ RUN chmod +x gradlew
 # 모듈 소스를 복사한다. settings.gradle.kts에 등록된 모듈 폴더가 모두 있어야 Gradle이 설정 단계를 통과한다
 COPY common common
 COPY jwt jwt
+COPY gateway gateway
 COPY member-service member-service
 COPY cash-service cash-service
 COPY payout-service payout-service
 COPY file-service file-service
 COPY order-service order-service
+COPY product-service product-service
 
 # Gradle 캐시(~/.gradle)를 빌드 간에 유지해서, 의존성은 변경된 것만 새로 받는다
 # :<모듈>:bootJar 는 그 서비스와 의존하는 라이브러리 모듈(common, jwt)만 빌드한다
@@ -41,6 +43,6 @@ RUN useradd --system --no-create-home --shell /usr/sbin/nologin spring
 COPY --from=build /workspace/${MODULE}/build/libs/*.jar app.jar
 
 USER spring
-# 실제 포트는 서비스마다 다르다 (member-service 8080, cash-service 8081, payout-service 8082, file-service 8083, order-service 8084 / 각 application.yaml의 server.port)
-EXPOSE 8080 8081 8082 8083 8084
+# 실제 포트는 서비스마다 다르다 (gateway 8000, member-service 8080, cash-service 8081, payout-service 8082, file-service 8083, order-service 8084, product-service 8085 / 각 application.yaml의 server.port)
+EXPOSE 8000 8080 8081 8082 8083 8084 8085
 ENTRYPOINT ["java", "-jar", "app.jar"]
