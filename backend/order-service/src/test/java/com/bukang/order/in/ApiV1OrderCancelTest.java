@@ -1,5 +1,6 @@
 package com.bukang.order.in;
 
+import static com.bukang.order.out.race.RaceCourseInfo.SCHEDULE_CHANGE_REFUND_DAYS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -145,6 +147,96 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
+	@DisplayName("환불 기한이 지났어도 대회 일정이 바뀐 날(알린 날)부터 7일째 날까지는 취소하면 전액 환불된다")
+	void cancelWithinScheduleChangeRefund() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		// 6일 전에 바뀌었다 → 바뀐 날을 1일째로 세면 오늘이 7일째 날
+		setRefundDeadline(LocalDate.now().minusDays(10), LocalDateTime.now().minusDays(6));
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("취소했습니다. 예치금 %,d원을 돌려드렸습니다.".formatted(TICKET_PRICE)))
+			.andExpect(jsonPath("$.data.canceledAmount").value(TICKET_PRICE));
+
+		assertThat(seatHoldPort.restoredParticipations()).containsExactly(paid.participationId());
+		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
+	}
+
+	@Test
+	@DisplayName("일정 변경 뒤 8일째 날에는 환불 기한도 지났으면 409로 거절되고 아무것도 바뀌지 않는다")
+	void cancelAfterScheduleChangeRefund() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		LocalDate refundDeadline = LocalDate.now().minusDays(10);
+		// 7일 전에 바뀌었다 → 오늘이 8일째 날
+		LocalDateTime changedAt = LocalDateTime.now().minusDays(7);
+		setRefundDeadline(refundDeadline, changedAt);
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("환불 기한(%s)과 일정 변경 뒤 전액 환불 기간(%s까지)이 지나 취소할 수 없습니다."
+				.formatted(refundDeadline, changedAt.toLocalDate().plusDays(SCHEDULE_CHANGE_REFUND_DAYS - 1))));
+
+		assertNothingCanceled(paid);
+	}
+
+	@Test
+	@DisplayName("일정 변경 7일이 환불 기한보다 먼저 끝났으면 거절 메시지에는 환불 기한만 나온다")
+	void cancelAfterRefundDeadlineWithOldScheduleChange() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		LocalDate refundDeadline = LocalDate.now().minusDays(2);
+		setRefundDeadline(refundDeadline, LocalDateTime.now().minusDays(20));
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("환불 기한(%s)이 지나 취소할 수 없습니다.".formatted(refundDeadline)));
+	}
+
+	@Test
+	@DisplayName("대회가 미뤄져도 정산은 주문 때 복사한 옛 대회 날짜로 하므로, 그 날짜로 정산이 시작됐으면 7일 안이어도 거절한다")
+	void cancelPostponedRaceAlreadySettled() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		RaceCourseInfo before = raceCoursePort.findCourse(COURSE_ID).orElseThrow();
+		reschedule(before, before.raceDate().plusDays(14));
+		refundEligibilityPort.settle(before.raceDate().toLocalDate());
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+
+		assertNothingCanceled(paid);
+	}
+
+	@Test
+	@DisplayName("대회가 당겨져 바뀐 대회 날짜로 정산이 시작됐으면, 주문 때 복사한 날짜로는 아직이어도 거절한다")
+	void cancelAdvancedRaceAlreadySettled() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		RaceCourseInfo before = raceCoursePort.findCourse(COURSE_ID).orElseThrow();
+		LocalDateTime advanced = before.raceDate().minusDays(14);
+		reschedule(before, advanced);
+		refundEligibilityPort.settle(advanced.toLocalDate());
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+
+		assertNothingCanceled(paid);
+	}
+
+	@Test
+	@DisplayName("대회가 미뤄졌고 두 날짜 모두 정산 전이면 7일 안 취소는 환불되고, 정산 여부는 두 날짜로 모두 묻는다")
+	void cancelPostponedRaceBeforePayout() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		RaceCourseInfo before = raceCoursePort.findCourse(COURSE_ID).orElseThrow();
+		LocalDateTime postponed = before.raceDate().plusDays(14);
+		reschedule(before, postponed);
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isOk());
+
+		assertThat(refundEligibilityPort.askedRaceDates())
+			.containsExactly(before.raceDate().toLocalDate(), postponed.toLocalDate());
+	}
+
+	@Test
 	@DisplayName("같은 상품 취소를 두 번 보내면 두 번째는 409이고 환불은 한 번만 일어난다")
 	void cancelTwice() throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);
@@ -252,6 +344,19 @@ class ApiV1OrderCancelTest {
 	private void setRefundDeadline(LocalDate refundDeadline) {
 		RaceCourseInfo course = StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, refundDeadline);
 		raceCoursePort.put(course);
+	}
+
+	// 환불 기한이 지난 뒤 대회 일시를 바꿔, 일정 변경 뒤 7일 전액 환불 기간 안으로 만든다
+	private void reschedule(RaceCourseInfo before, LocalDateTime newRaceDate) {
+		raceCoursePort.put(new RaceCourseInfo(before.raceCourseId(), before.raceId(), newRaceDate,
+			before.applicationOpenAt(), before.applicationCloseAt(), before.minAge(), before.maxAge(),
+			before.sellerId(), before.courseName(), before.price(), before.kitPrice(), LocalDate.now().minusDays(1),
+			LocalDateTime.now().minusDays(1)));
+	}
+
+	private void setRefundDeadline(LocalDate refundDeadline, LocalDateTime scheduleChangedAt) {
+		raceCoursePort.put(
+			StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, refundDeadline, scheduleChangedAt));
 	}
 
 	private ResultActions cancel(int memberId, int orderId, int orderItemId) throws Exception {

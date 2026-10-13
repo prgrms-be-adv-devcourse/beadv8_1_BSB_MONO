@@ -156,7 +156,8 @@ public class ApiV1OrderController {
 
 	@PostMapping("/{orderId}/items/{orderItemId}/cancel")
 	@Operation(summary = "참가권 취소·환불",
-		description = "결제한 주문 상품(참가권, 키트 포함)을 취소하고 예치금으로 전액 돌려준다. 환불 기한 날짜까지(그날 23:59:59 포함)는 자동 승인한다. "
+		description = "결제한 주문 상품(참가권, 키트 포함)을 취소하고 예치금으로 전액 돌려준다. 환불 기한 날짜까지(그날 23:59:59 포함)는 자동 승인하고, "
+			+ "판매 시작 뒤 대회 일정이 바뀌었으면 바뀐 날(알린 날)부터 7일 동안은 환불 기한과 상관없이 자동 승인한다. "
 			+ "일부만 취소하면 주문은 PARTIAL_CANCELED, 모두 취소하면 CANCELED가 되고, 참가 신청은 CANCELED가 되어 같은 대회에 다시 신청할 수 있다. "
 			+ "정산 대상일(대회 다음 날)이 지난 참가권은 정산 서비스가 거절한다. 같은 취소를 다시 보내면 409로 막혀 환불은 한 번만 일어난다.")
 	@ApiResponses({
@@ -184,6 +185,7 @@ public class ApiV1OrderController {
 				@ExampleObject(name = "이미 취소함", value = OrderApiExamples.ALREADY_CANCELED),
 				@ExampleObject(name = "결제 전 상품", value = OrderApiExamples.NOT_PAID_ITEM),
 				@ExampleObject(name = "환불 기한 지남", value = OrderApiExamples.REFUND_PERIOD_PASSED),
+				@ExampleObject(name = "환불 기한·일정 변경 환불 기간 지남", value = OrderApiExamples.SCHEDULE_CHANGE_REFUND_PASSED),
 				@ExampleObject(name = "정산 대상일 지남", value = OrderApiExamples.PAYOUT_STARTED)
 			}))
 	})

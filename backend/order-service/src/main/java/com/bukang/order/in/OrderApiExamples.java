@@ -371,6 +371,14 @@ final class OrderApiExamples {
 		{ "status": 409, "message": "환불 기한(2026-07-15)이 지나 취소할 수 없습니다.", "data": null }
 		""";
 
+	static final String SCHEDULE_CHANGE_REFUND_PASSED = """
+		{
+			"status": 409,
+			"message": "환불 기한(2026-07-15)과 일정 변경 뒤 전액 환불 기간(2026-07-25까지)이 지나 취소할 수 없습니다.",
+			"data": null
+		}
+		""";
+
 	static final String PAYOUT_STARTED = """
 		{ "status": 409, "message": "정산이 시작된 참가권이라 취소할 수 없습니다.", "data": null }
 		""";
