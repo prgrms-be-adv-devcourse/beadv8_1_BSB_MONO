@@ -102,7 +102,7 @@
   <div class="panel">
     <h2>공개 대회 목록</h2>
     <p class="hint">
-      GET /api/v1/product/races. 판매 예정·판매 중이고 접수 마감 전인 대회만 나옵니다(작성 중·취소 대회는 안 나옴). 빈 칸은 보내지 않습니다.
+      GET /api/v1/product/races. 판매 예정·판매 중이고 접수 마감 전인 대회만 나옵니다(판매 중지·판매 종료·취소 대회는 안 나옴). 빈 칸은 보내지 않습니다.
       종목 조건(종목 구분·노면·거리·참가비)은 종목 하나라도 맞으면 그 대회가 나오고, minPrice는 조건에 맞은 종목 중 가장 싼 참가비입니다.
       검색어 오타는 3~5글자 단어 1글자, 6글자 이상 2글자까지 허용합니다. 행을 누르면 아래 대회 상세를 조회합니다.
     </p>
@@ -159,7 +159,7 @@
   <div class="panel" id="detailPanel">
     <h2>대회 상세</h2>
     <p class="hint">
-      GET /api/v1/product/races/{raceId}. 로그인 없이 볼 수 있지만, 작성 중(DRAFT) 대회는 등록한 판매자 회원 ID를 헤더로 보내야 보입니다(아니면 404).
+      GET /api/v1/product/races/{raceId}. 로그인 없이 볼 수 있지만, 취소된(CANCELED) 대회는 등록한 판매자 회원 ID를 헤더로 보내야 보입니다(아니면 404).
       종목 이미지는 상세에 없고 file-service에서 종목마다 받습니다. 남은 개인 자리 = 개인 정원 − 결제 대기 − 판매입니다.
     </p>
     <div class="form">
@@ -186,7 +186,7 @@
   <div class="panel">
     <h2>내 대회</h2>
     <p class="hint">
-      GET /api/v1/product/races/mine (X-Member-Id 필수, 승인된 판매자만, 아니면 403). 작성 중 대회를 포함해 최근 등록 순으로 모두 나옵니다.
+      GET /api/v1/product/races/mine (X-Member-Id 필수, 승인된 판매자만, 아니면 403). 취소된 대회를 포함해 최근 등록 순으로 모두 나옵니다.
       정원(quota) = 크루 + 개인 정원, 결제 대기(reserved) = 확보만 하고 결제 전인 자리, 판매(sold) = 판매한 자리입니다. 대회 ID를 누르면 대회 상세를 조회합니다.
     </p>
     <div class="actions"><button type="button" id="loadMine">조회</button></div>
@@ -208,7 +208,7 @@
     <h2>주문용 종목 정보 (내부 API)</h2>
     <p class="hint">
       GET /internal/v1/product/courses/{raceCourseId}. 주문 서비스가 부르는 API라 게이트웨이(8000)에는 없고 8085로 직접 부릅니다(헤더 없음).
-      작성 중 대회의 종목은 404입니다. price가 참가권 한 장 값이고 kitPrice는 그 안에 포함된 금액입니다(더하지 않음).
+      price가 참가권 한 장 값이고 kitPrice는 그 안에 포함된 금액입니다(더하지 않음).
     </p>
     <div class="form">
       <label>종목 ID (raceCourseId)<input id="courseInfoId" type="number" min="1"></label>
@@ -276,7 +276,7 @@
       <li>취소한 대회는 공개 대회 목록과 연관검색어에서 빠집니다.</li>
       <li>대회 상세는 등록한 판매자만 볼 수 있고('헤더 보내기'를 켜고 그 판매자의 회원 ID), 다른 사람에게는 404입니다. 내 대회에는 취소 상태로 남습니다.</li>
       <li>결제 대기 자리(확보만 한 자리)는 해제됩니다. 내 대회의 결제 대기(reserved)가 줄었는지 봅니다.</li>
-      <li>작성 중이 아니던 대회면 Kafka 토픽 order.race.cancel에 {"raceId", "sellerId", "canceledAt"} 메시지가 나갑니다.
+      <li>Kafka 토픽 order.race.cancel에 {"raceId", "sellerId", "canceledAt"} 메시지가 나갑니다.
         Redpanda Console(<a href="http://localhost:8091" target="_blank" rel="noopener">http://localhost:8091</a>) → Topics → order.race.cancel에서 메시지를 확인합니다.
         예: {"raceId": 1, "sellerId": 7001, "canceledAt": "2026-10-13T10:00:00"}</li>
       <li>취소한 뒤에는 자리 확보와 대회 수정이 409입니다.</li>
@@ -293,8 +293,8 @@
     <h2>해 볼 시나리오</h2>
     <p class="hint">체크 표시는 이 화면에만 있고 저장되지 않습니다.</p>
     <ul class="checklist">
-      <li><label class="inline"><input type="checkbox"> 등록 → 판매 시작 → 공개 목록에 보임</label>
-        <p class="hint">등록 페이지에서 [등록]·[판매 시작] 뒤 여기서 [검색]. 판매 예정(SCHEDULED)도 목록에 나옵니다. 작성 중일 때는 안 나옵니다.</p></li>
+      <li><label class="inline"><input type="checkbox"> 등록 → 바로 공개 목록에 보임</label>
+        <p class="hint">등록 페이지에서 [등록] 뒤 여기서 [검색]. 판매 예정(SCHEDULED)으로 나오고, 판매 시작 일시가 지나면 5분 안에 판매 중(ON_SALE)이 됩니다.</p></li>
       <li><label class="inline"><input type="checkbox"> 검색어 · 필터 · 정렬</label>
         <p class="hint">검색어(오타 포함), 시·도/시·군·구, 종목 구분 여러 개, 노면, 거리, 참가비 범위, 대회 날짜, 정렬 5가지, 페이지 크기 101(400), 참가비 -1(400).</p></li>
       <li><label class="inline"><input type="checkbox"> 자리 확보 → 남은 자리 1 감소</label>
@@ -340,7 +340,7 @@
       RELEVANCE: '정확도순', DEADLINE: '마감 임박순', RACE_DATE: '대회일 빠른순', LATEST: '최신 등록순', PRICE: '가격 낮은순',
     };
     const SALE_STATUSES = {
-      DRAFT: '작성 중', SCHEDULED: '판매 예정', ON_SALE: '판매 중', STOPPED: '판매 중지', CLOSED: '판매 종료', CANCELED: '취소',
+      SCHEDULED: '판매 예정', ON_SALE: '판매 중', STOPPED: '판매 중지', CLOSED: '판매 종료', CANCELED: '취소',
     };
     const COURSE_STATUSES = { OPEN: '접수 중', SOLD_OUT: '정원 마감' };
 

@@ -68,7 +68,7 @@
   <p class="nav"><strong>대회 등록·수정</strong> · <a href="/race-query-test.html">대회 조회·자리 확보 테스트로 이동 →</a></p>
   <h1>대회 등록·수정 테스트</h1>
   <p class="desc">
-    product-service(8085)의 대회 등록·수정·판매 시작·취소 API를 직접 불러 보는 개발용 페이지입니다(dev 프로파일에서만 열립니다).
+    product-service(8085)의 대회 등록·수정·취소 API를 직접 불러 보는 개발용 페이지입니다(dev 프로파일에서만 열립니다).
     검사 규칙은 칸 아래 안내로만 적었고, 실제 검사는 서버가 합니다. 요청과 응답은 맨 아래 '기록'에 남습니다.
   </p>
 
@@ -81,7 +81,7 @@
     </p>
     <div class="form">
       <label><span class="required">회원 ID (X-Member-Id)</span><input id="memberId" type="number" min="1" value="9001">
-        <span class="hint">등록·불러오기·수정·판매 시작·취소와 파일 업로드에 헤더로 보냅니다. 아래 두 메시지의 회원 ID도 이 값입니다</span></label>
+        <span class="hint">등록·불러오기·수정·취소와 파일 업로드에 헤더로 보냅니다. 아래 두 메시지의 회원 ID도 이 값입니다</span></label>
       <label>판매자 ID (판매자 메시지의 id)<input id="sellerId" type="number" min="1" value="7001">
         <span class="hint">회원 ID와 다른 판매자 번호입니다. 같은 회원에게 판매자 ID를 바꿔 승인 메시지를 여러 번 보내면
           승인된 판매자가 둘이 되어 등록이 실패하므로(회원당 1명으로 가정) 회원마다 하나로 유지합니다</span></label>
@@ -119,7 +119,6 @@
       <button type="button" id="registerRace">등록</button>
       <button type="button" class="secondary" id="loadRace">불러오기</button>
       <button type="button" id="updateRace">수정</button>
-      <button type="button" id="startSale">판매 시작</button>
       <button type="button" class="danger" id="cancelRace">대회 취소</button>
       <span id="raceState" class="hint"></span>
     </div>
@@ -129,10 +128,10 @@
   <div class="panel">
     <h2>버튼이 부르는 API</h2>
     <ul class="hint">
-      <li>[등록] POST /api/v1/product/races → 201, 작성 중(DRAFT)으로 저장. 성공하면 대회 ID와 종목별 courseId를 채웁니다.</li>
-      <li>[불러오기] GET /api/v1/product/races/{raceId} → 폼을 채우고, 종목마다 file-service GET /api/v1/file/files?refType=RaceCourse&amp;refId={종목 ID}로 이미지 표를 채웁니다. 작성 중 대회는 등록한 회원 ID로만 보입니다(아니면 404).</li>
+      <li>[등록] POST /api/v1/product/races → 201, 판매 예정(SCHEDULED)으로 저장되고 바로 공개됩니다. 판매 시작 일시가 이미 지났으면 400.
+        판매 시작 일시가 지나면 5분마다 도는 상태 배치가 판매 중(ON_SALE)으로 바꿉니다. 성공하면 대회 ID와 종목별 courseId를 채웁니다.</li>
+      <li>[불러오기] GET /api/v1/product/races/{raceId} → 폼을 채우고, 종목마다 file-service GET /api/v1/file/files?refType=RaceCourse&amp;refId={종목 ID}로 이미지 표를 채웁니다. 취소된 대회는 등록한 회원 ID로만 보입니다(아니면 404).</li>
       <li>[수정] PUT /api/v1/product/races/{raceId} (등록과 같은 본문). courseId가 있는 종목은 고치고, 없는 종목은 추가하고, 요청에 없는 기존 종목은 뺍니다. 이미지 목록도 통째로 바뀝니다.</li>
-      <li>[판매 시작] POST /api/v1/product/races/{raceId}/sale → 작성 중 대회만(아니면 409). 판매 시작 일시가 지났으면 바로 판매 중, 아니면 판매 예정.</li>
       <li>[대회 취소] POST /api/v1/product/races/{raceId}/cancel → 200 "대회를 취소했습니다.", saleStatus CANCELED. 되돌릴 수 없습니다.</li>
     </ul>
   </div>
@@ -172,8 +171,9 @@
     </div>
     <ul class="hint">
       <li>판매 시작 일시(saleOpenAt)는 입력하지 않습니다. 크루 예매 시작·개인 예매 오픈 중 이른 시각으로 서버가 채웁니다.</li>
-      <li>일정 기본값은 페이지를 연 시각 기준입니다: 개인 예매 오픈 +2분, 접수 마감 +10일, 대회 +15일 08:00, 환불 기한 +10일.</li>
-      <li>판매 시작을 누른 뒤에는 이미 지난 판매 일정(크루 예매 시작·마감, 개인 예매 오픈, 접수 마감)을 바꾸거나 일정을 지난 시각으로 옮길 수 없습니다(409).</li>
+      <li>일정 기본값은 페이지를 연 시각 기준입니다: 개인 예매 오픈 +5분, 접수 마감 +10일, 대회 +15일 08:00, 환불 기한 +10일.
+        판매 시작 일시가 지나면 등록할 수 없으므로(400), 등록 전에 시간이 지났으면 아래 버튼으로 다시 채웁니다.</li>
+      <li>이미 지난 판매 일정(크루 예매 시작·마감, 개인 예매 오픈, 접수 마감)을 바꾸거나 일정을 지난 시각으로 옮길 수 없습니다(409).</li>
     </ul>
     <div class="actions"><button type="button" class="secondary" id="resetSchedule">일정 기본값 다시 채우기 (지금 기준)</button></div>
   </div>
@@ -222,7 +222,7 @@
     const SURFACES = { ROAD: '로드', TRAIL: '트레일' };
     const TSHIRT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
     const SALE_STATUSES = {
-      DRAFT: '작성 중', SCHEDULED: '판매 예정', ON_SALE: '판매 중', STOPPED: '판매 중지', CLOSED: '판매 종료', CANCELED: '취소',
+      SCHEDULED: '판매 예정', ON_SALE: '판매 중', STOPPED: '판매 중지', CLOSED: '판매 종료', CANCELED: '취소',
     };
     // common FileType 중 종목에 붙이는 용도와 최대 개수 (크루원 명단 ROSTER는 종목에 붙일 수 없다)
     const FILE_TYPES = {
@@ -424,7 +424,7 @@
     function fillDefaultSchedule() {
       const now = new Date();
       now.setSeconds(0, 0);
-      const individualOpenAt = addMinutes(now, 2);
+      const individualOpenAt = addMinutes(now, 5);
       const applicationCloseAt = addDays(now, 10);
       const raceDate = addDays(now, 15);
       raceDate.setHours(8, 0, 0, 0);
@@ -872,17 +872,6 @@
       }
     }
 
-    async function startSale() {
-      const raceId = requireRaceId();
-      if (!raceId) {
-        return;
-      }
-      const result = await callApi('판매 시작', 'POST', `${RACES_PATH}/${raceId}/sale`, { memberId: memberIdValue() });
-      if (showResult($('actionResult'), result)) {
-        showRaceState(result.body.data);
-      }
-    }
-
     async function cancelRace() {
       const raceId = requireRaceId();
       if (!raceId) {
@@ -940,7 +929,6 @@
     bindAction('registerRace', registerRace);
     bindAction('loadRace', loadRace);
     bindAction('updateRace', updateRace);
-    bindAction('startSale', startSale);
     bindAction('cancelRace', cancelRace);
     $('addCourse').addEventListener('click', () => {
       const card = addCourseCard();
