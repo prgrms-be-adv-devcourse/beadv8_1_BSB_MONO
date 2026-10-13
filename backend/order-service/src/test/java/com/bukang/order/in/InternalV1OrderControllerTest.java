@@ -46,7 +46,7 @@ class InternalV1OrderControllerTest {
 	// 11/15 대회 종목과 11/16 대회 종목
 	private static final int COURSE_1115 = 10;
 	private static final int COURSE_1116 = 11;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -173,7 +173,7 @@ class InternalV1OrderControllerTest {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, raceDate, now.minusDays(1), now.plusDays(30), 14, null,
 			StubRaceCoursePort.SELLER_ID, "테스트 대회 종목 " + raceCourseId, StubRaceCoursePort.PRICE,
-			StubRaceCoursePort.KIT_PRICE, raceDate.toLocalDate().minusDays(10), null);
+			true, raceDate.toLocalDate().minusDays(10), null);
 	}
 
 	private void markCanceled(int orderItemId) {
@@ -205,7 +205,9 @@ class InternalV1OrderControllerTest {
 				{ "raceCourseId": %d, "thirdPartyConsent": true,
 					"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 						"phone": "010-1234-5678", "emergencyContactName": "김가족",
-						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 				""".formatted(raceCourseId))));
 		return read(mockMvc.perform(post("/api/v1/order/orders")
 			.header("X-Member-Id", memberId)

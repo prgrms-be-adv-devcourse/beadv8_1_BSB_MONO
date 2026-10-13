@@ -37,6 +37,8 @@ import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
+import com.bukang.order.domain.exception.ParticipationNotCancelableException;
+import com.bukang.order.domain.exception.ParticipationNotPayableException;
 import com.bukang.order.dto.OrderDto;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
@@ -49,7 +51,7 @@ import com.bukang.order.support.StubWalletPortConfig;
 import com.jayway.jsonpath.JsonPath;
 
 /**
- * 결제 기한 직전에 결제·만료 정리·연장·[결제하기]가 겹쳐도 돈과 자리가 어긋나지 않는지 본다 (PRO-47, 정책 경쟁 상황 테스트)
+ * 결제 기한 직전에 결제·만료 정리·연장·[결제하기]·신청서 취소가 겹쳐도 돈과 자리가 어긋나지 않는지 본다 (PRO-47, 정책 경쟁 상황 테스트)
  * 요청마다 스레드를 따로 띄워 한꺼번에 출발시키고, 시각은 유스케이스에 직접 넣는다. B·D는 스텁으로 응답을 조절한다
  * 끝나면 "결제 성공 = 주문 PAID = 참가 확정 = 예치금 차감"이 주문마다 함께 성립하는지 확인한다
  * H2(MySQL 모드)로 돈다. B·D 실제 API가 나오면(PRO-99) 같은 시나리오를 다시 돌린다
@@ -61,7 +63,7 @@ import com.jayway.jsonpath.JsonPath;
 class OrderPayExpiryConcurrencyTest {
 	private static final int COURSE_ID = 10;
 	private static final int RACE_ID = 100;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 	private static final int BALANCE = 1_000_000;
 	private static final int ORDER_COUNT = 10;
 	private static final long TIMEOUT_SECONDS = 30;
@@ -87,6 +89,9 @@ class OrderPayExpiryConcurrencyTest {
 
 	@Autowired
 	private OrderExpiryUseCase orderExpiryUseCase;
+
+	@Autowired
+	private ParticipationApplyUseCase participationApplyUseCase;
 
 	@Autowired
 	private StubRaceCoursePort raceCoursePort;
@@ -303,6 +308,48 @@ class OrderPayExpiryConcurrencyTest {
 		}
 	}
 
+	@Test
+	@DisplayName("⑥ 신청서 취소와 [결제하기]가 동시에 들어오면 한쪽만 반영되고, 취소된 신청서로 자리를 잡지 않는다")
+	void cancelApplicationWhileStartingPayment() throws Exception {
+		List<Integer> participationIds = new ArrayList<>();
+		List<Callable<Object>> tasks = new ArrayList<>();
+		for (int memberId = 1; memberId <= ORDER_COUNT; memberId++) {
+			int participationId = apply(memberId);
+			participationIds.add(participationId);
+			int finalMemberId = memberId;
+			// 절반은 [결제하기]를 조금 늦게 출발시켜 취소가 먼저 잠그는 경우도 자주 생기게 한다
+			long delayMillis = memberId % 2 == 0 ? 0 : PAY_DELAY_MILLIS;
+			tasks.add(() -> {
+				Thread.sleep(delayMillis);
+				return transactionTemplate.execute(status -> orderCreateUseCase.create(finalMemberId,
+					participationId, UUID.randomUUID().toString(), LocalDateTime.now()));
+			});
+			tasks.add(() -> transactionTemplate.execute(status ->
+				participationApplyUseCase.cancelBeforePayment(participationId, finalMemberId, LocalDateTime.now())));
+		}
+		List<Outcome> outcomes = runTogether(tasks);
+
+		int createdCount = 0;
+		for (int index = 0; index < participationIds.size(); index++) {
+			Outcome createOutcome = outcomes.get(index * 2);
+			Outcome cancelOutcome = outcomes.get(index * 2 + 1);
+			Participation participation = participationRepository.findById(participationIds.get(index)).orElseThrow();
+			assertThat(createOutcome.succeeded()).isNotEqualTo(cancelOutcome.succeeded());
+			if (createOutcome.succeeded()) {
+				createdCount++;
+				assertThat(cancelOutcome.error()).isInstanceOf(ParticipationNotCancelableException.class);
+				assertThat(participation.getStatus()).isEqualTo(ParticipationStatus.APPLIED);
+			} else {
+				assertThat(createOutcome.error()).isInstanceOf(ParticipationNotPayableException.class);
+				assertThat(participation.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
+				assertThat(participation.getActiveFlag()).isNull();
+			}
+		}
+		// 취소된 신청서로는 상품 서비스에 자리를 요청하지 않고, 주문도 만들지 않는다
+		assertThat(seatHoldPort.holdCalls()).isEqualTo(createdCount);
+		assertThat(orderRepository.count()).isEqualTo(createdCount);
+	}
+
 	// 결제 성공 = 주문 PAID = 참가 확정 = 자리 판매 = 예치금이 그 주문으로 차감된 채 남아 있음
 	private void assertPaid(int orderId) {
 		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.PAID);
@@ -389,7 +436,9 @@ class OrderPayExpiryConcurrencyTest {
 					{ "raceCourseId": %d, "thirdPartyConsent": true,
 						"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 							"phone": "010-1234-5678", "emergencyContactName": "김가족",
-							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 					""".formatted(COURSE_ID)))
 			.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(body, "$.data.id");

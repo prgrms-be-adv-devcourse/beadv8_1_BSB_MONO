@@ -24,7 +24,14 @@ final class ParticipationApiExamples {
 					"phone": "010-1234-5678",
 					"emergencyContactName": "김가족",
 					"emergencyContactPhone": "010-9876-5432",
-					"tshirtSize": "L"
+					"tshirtSize": "L",
+					"shippingAddress": {
+						"recipientName": "김러너",
+						"recipientPhone": "010-1234-5678",
+						"zipcode": "04700",
+						"address": "서울 성동구 왕십리로 00",
+						"addressDetail": "101동 1001호"
+					}
 				},
 				"thirdPartyConsent": true,
 				"consentedAt": "2026-10-12T10:15:30",
@@ -53,7 +60,14 @@ final class ParticipationApiExamples {
 					"phone": "010-1234-5678",
 					"emergencyContactName": "김가족",
 					"emergencyContactPhone": "010-9876-5432",
-					"tshirtSize": "L"
+					"tshirtSize": "L",
+					"shippingAddress": {
+						"recipientName": "김러너",
+						"recipientPhone": "010-1234-5678",
+						"zipcode": "04700",
+						"address": "서울 성동구 왕십리로 00",
+						"addressDetail": "101동 1001호"
+					}
 				},
 				"thirdPartyConsent": true,
 				"consentedAt": "2026-10-12T10:15:30",
@@ -82,7 +96,14 @@ final class ParticipationApiExamples {
 					"phone": "010-1234-5678",
 					"emergencyContactName": "김가족",
 					"emergencyContactPhone": "010-9876-5432",
-					"tshirtSize": "XL"
+					"tshirtSize": "XL",
+					"shippingAddress": {
+						"recipientName": "김러너",
+						"recipientPhone": "010-1234-5678",
+						"zipcode": "04700",
+						"address": "서울 성동구 왕십리로 00",
+						"addressDetail": "101동 1001호"
+					}
 				},
 				"thirdPartyConsent": true,
 				"consentedAt": "2026-10-12T10:15:30",
@@ -102,7 +123,14 @@ final class ParticipationApiExamples {
 				"phone": "010-1234-5678",
 				"emergencyContactName": "김가족",
 				"emergencyContactPhone": "010-9876-5432",
-				"tshirtSize": "L"
+				"tshirtSize": "L",
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				}
 			}
 		}
 		""";
@@ -165,6 +193,66 @@ final class ParticipationApiExamples {
 
 	static final String NOT_EDITABLE = """
 		{ "status": 409, "message": "참가자 정보를 고칠 수 없는 신청입니다(현재 상태: 취소).", "data": null }
+		""";
+
+	static final String CANCEL_SUCCESS = """
+		{
+			"status": 200,
+			"message": "참가 신청서를 취소했습니다.",
+			"data": {
+				"id": 1,
+				"createDate": "2026-10-12T10:15:30",
+				"modifyDate": "2026-10-12T10:20:05",
+				"raceId": 1,
+				"raceCourseId": 1,
+				"memberId": 1,
+				"participationType": "INDIVIDUAL",
+				"status": "CANCELED",
+				"participant": {
+					"name": "김러너",
+					"birth": "1994-06-25",
+					"gender": "MALE",
+					"phone": "010-1234-5678",
+					"emergencyContactName": "김가족",
+					"emergencyContactPhone": "010-9876-5432",
+					"tshirtSize": "L",
+					"shippingAddress": {
+						"recipientName": "김러너",
+						"recipientPhone": "010-1234-5678",
+						"zipcode": "04700",
+						"address": "서울 성동구 왕십리로 00",
+						"addressDetail": "101동 1001호"
+					}
+				},
+				"thirdPartyConsent": true,
+				"consentedAt": "2026-10-12T10:15:30",
+				"paymentDueAt": null
+			}
+		}
+		""";
+
+	static final String NOT_CANCELABLE_APPLIED = """
+		{
+			"status": 409,
+			"message": "결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다.",
+			"data": null
+		}
+		""";
+
+	static final String NOT_CANCELABLE_CONFIRMED = """
+		{ "status": 409, "message": "결제한 참가권은 주문 상품 취소로 취소해주세요.", "data": null }
+		""";
+
+	static final String NOT_CANCELABLE_FINISHED = """
+		{ "status": 409, "message": "이미 끝난 신청입니다(현재 상태: 취소).", "data": null }
+		""";
+
+	static final String SHIPPING_ADDRESS_REQUIRED = """
+		{ "status": 400, "message": "키트를 받을 배송 주소를 작성해주세요.", "data": null }
+		""";
+
+	static final String CHANGE_RETRY = """
+		{ "status": 409, "message": "방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
 		""";
 
 	private ParticipationApiExamples() {

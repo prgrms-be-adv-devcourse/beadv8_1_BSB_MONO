@@ -49,3 +49,13 @@ springdoc:
       title: Bukang Order API
       description: 크루 중심 마라톤 대회 예매·커머스 플랫폼 예매·주문 API
       version: v1
+
+# 다른 서비스 호출 (PRO-99). mode가 fake면 가짜 어댑터가 답하고, http면 실제 내부 API(/internal/v1/...)를 부른다
+# 로컬 개발은 다른 서비스를 띄우지 않아도 되게 fake가 기본이고, 운영(prod)은 http다
+order:
+  clients:
+    # 연결·응답 시간 제한. 넘으면 503으로 다시 시도하게 한다
+    timeout: 2s
+    payout:
+      mode: fake
+      base-url: http://localhost:8082
