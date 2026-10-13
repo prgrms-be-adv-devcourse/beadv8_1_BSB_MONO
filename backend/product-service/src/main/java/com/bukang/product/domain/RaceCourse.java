@@ -167,6 +167,15 @@ public class RaceCourse extends BaseIdAndTime {
 		apply(request);
 	}
 
+	// 남은 자리 (ERD v5 race_course 주석의 식). 크루 몫을 개인 몫으로 옮기면(movedQuota) 크루 자리가 줄고 개인 자리가 는다
+	public int individualRemaining() {
+		return individualQuota + movedQuota - individualReserved - individualSold;
+	}
+
+	public int crewRemaining() {
+		return crewQuota - movedQuota - crewReserved - crewSold;
+	}
+
 	// 종목을 빼는 것은 정원을 0으로 줄이는 것과 같으므로, 판매 시작 뒤에는 뺄 수 없다
 	public void checkRemovable(boolean saleStarted) {
 		if (saleStarted) {

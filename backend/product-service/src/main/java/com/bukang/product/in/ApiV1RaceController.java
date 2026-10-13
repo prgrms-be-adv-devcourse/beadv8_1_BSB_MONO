@@ -1,23 +1,37 @@
 package com.bukang.product.in;
 
+import java.math.BigDecimal;
 import java.net.URI;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.product.app.ProductFacade;
+import com.bukang.product.domain.CourseSurface;
+import com.bukang.product.domain.CourseType;
 import com.bukang.product.domain.RaceSaleStatus;
+import com.bukang.product.dto.RaceDetailDto;
+import com.bukang.product.dto.RacePageDto;
 import com.bukang.product.dto.RaceSaveDto;
 import com.bukang.product.dto.RaceSaveRequestDto;
+import com.bukang.product.dto.RaceSearchCondition;
+import com.bukang.product.dto.RaceSort;
+import com.bukang.product.dto.RaceSuggestionDto;
+import com.bukang.product.dto.SellerRaceDto;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -28,16 +42,20 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 
 // 게이트웨이가 경로 앞부분을 자르지 않으므로(StripPrefix 금지, PRO-17) 서비스 이름(/product)부터 쓴다
-@Tag(name = "Race", description = "대회 등록, 수정, 판매 시작 API")
+@Tag(name = "Race", description = "대회 등록, 수정, 판매 시작, 목록·상세·내 대회 조회 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/product/races")
 public class ApiV1RaceController {
 	// 응답 메시지에 보여 주는 일시 형식 (예: 2026-10-13 10:00)
 	private static final DateTimeFormatter MESSAGE_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+	private static final int MAX_PAGE_SIZE = 100;
 
 	private final ProductFacade productFacade;
 
@@ -182,5 +200,150 @@ public class ApiV1RaceController {
 			? "판매를 시작했습니다."
 			: "%s에 판매가 시작됩니다.".formatted(race.getSaleOpenAt().format(MESSAGE_DATE_TIME));
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, message, race));
+	}
+
+	@GetMapping
+	@Operation(summary = "공개 대회 목록",
+		description = "판매를 시작했고(판매 예정·판매 중) 아직 접수 마감 전인 대회를 찾는다. 로그인하지 않아도 된다. "
+			+ "검색어는 대회명·장소·종목명·지역·소개에서 찾고, 단어는 하나만 맞아도 나온다(예: '충남 트레일'). "
+			+ "오타는 단어 길이에 따라 허용한다(1~2글자 단어는 허용 안 함, 3~5글자는 1글자, 6글자 이상은 2글자). "
+			+ "정확도순은 대회명에서 맞으면 3배, 장소에서 맞으면 2배 점수를 준다. "
+			+ "정렬을 보내지 않으면 검색어가 있을 때 정확도순, 없을 때 마감 임박순이다. "
+			+ "종목 조건(종목 구분·노면·거리·참가비)은 종목 하나라도 맞으면 그 대회가 나온다. "
+			+ "종목이 여러 개인 대회도 한 줄로 나온다. 가격 낮은순과 최저가(minPrice)는 조건에 맞은 종목 중 가장 싼 종목 기준이다"
+			+ "(조건이 없으면 대회에서 가장 싼 종목). 최신 등록순은 대회 등록 일시 기준이다. "
+			+ "목록 카드는 대회 정보로 만든 색 포스터를 쓰므로 이미지는 주지 않는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공",
+			content = @Content(examples = @ExampleObject(value = RaceApiExamples.SEARCH_SUCCESS))),
+		@ApiResponse(responseCode = "400",
+			description = "페이지 번호·크기 범위 오류, 너무 큰 페이지 번호, 참가비 범위 오류 "
+				+ "또는 값 형식 오류(종목 구분·노면·거리·참가비·정렬·날짜)",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "페이지 크기 초과", value = RaceApiExamples.PAGE_SIZE_EXCEEDED),
+				@ExampleObject(name = "너무 큰 페이지 번호", value = RaceApiExamples.PAGE_TOO_LARGE),
+				@ExampleObject(name = "참가비 범위 오류", value = RaceApiExamples.PRICE_NEGATIVE),
+				@ExampleObject(name = "값 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE)
+			}))
+	})
+	public ResponseEntity<RsData<RacePageDto>> search(
+		@Parameter(description = "검색어 (대회명·장소·종목명·지역·소개)", example = "서울 10K")
+		@RequestParam(required = false) String keyword,
+		@Parameter(description = "시·도 (주소 검색 API가 채운 이름 그대로)", example = "서울특별시")
+		@RequestParam(required = false) String regionSido,
+		@Parameter(description = "시·군·구 (주소 검색 API가 채운 이름 그대로, 이름이 겹치는 곳이 있어 시·도와 함께 보낸다)",
+			example = "성동구")
+		@RequestParam(required = false) String regionSigungu,
+		@Parameter(description = "종목 구분. 여러 개면 courseType=KM_10&courseType=HALF처럼 보낸다", example = "KM_10")
+		@RequestParam(name = "courseType", required = false) List<CourseType> courseTypes,
+		@Parameter(description = "노면 (ROAD 로드, TRAIL 트레일)", example = "ROAD")
+		@RequestParam(required = false) CourseSurface surface,
+		@Parameter(description = "거리(km). 이 값과 똑같은 종목만 찾는다", example = "10")
+		@RequestParam(required = false) BigDecimal distanceKm,
+		@Parameter(description = "참가비 최소 (포함)", example = "30000")
+		@RequestParam(required = false) @Min(value = 0, message = "참가비 범위는 0원 이상이어야 합니다.") Integer minPrice,
+		@Parameter(description = "참가비 최대 (포함)", example = "50000")
+		@RequestParam(required = false) @Min(value = 0, message = "참가비 범위는 0원 이상이어야 합니다.") Integer maxPrice,
+		@Parameter(description = "대회 날짜 시작 (포함)", example = "2026-11-01")
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate raceDateFrom,
+		@Parameter(description = "대회 날짜 끝 (포함)", example = "2026-11-30")
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate raceDateTo,
+		@Parameter(description = "정렬 (RELEVANCE 정확도순, DEADLINE 마감 임박순, RACE_DATE 대회일 빠른순, "
+			+ "LATEST 최신 등록순, PRICE 가격 낮은순). 보내지 않으면 검색어가 있을 때 정확도순, 없을 때 마감 임박순",
+			example = "RELEVANCE")
+		@RequestParam(required = false) RaceSort sort,
+		@Parameter(description = "페이지 번호 (0부터)", example = "0")
+		@RequestParam(defaultValue = "0") @Min(value = 0, message = "페이지 번호는 0 이상이어야 합니다.") int page,
+		@Parameter(description = "페이지 크기 (1~100)", example = "20")
+		@RequestParam(defaultValue = "20") @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다.")
+		@Max(value = MAX_PAGE_SIZE, message = "한 번에 100개까지 조회할 수 있습니다.") int size
+	) {
+		RaceSearchCondition condition = RaceSearchCondition.builder()
+			.keyword(keyword)
+			.regionSido(regionSido)
+			.regionSigungu(regionSigungu)
+			.courseTypes(courseTypes)
+			.surface(surface)
+			.distanceKm(distanceKm)
+			.minPrice(minPrice)
+			.maxPrice(maxPrice)
+			.raceDateFrom(raceDateFrom)
+			.raceDateTo(raceDateTo)
+			.sort(sort)
+			.build();
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "대회 목록을 조회했습니다.", productFacade.searchRaces(condition, page, size)));
+	}
+
+	@GetMapping("/suggestions")
+	@Operation(summary = "검색창 연관검색어",
+		description = "입력한 글자로 시작하는 대회명과 종목명('대회명 종목명')을 각각 5개까지 찾는다. 로그인하지 않아도 된다. "
+			+ "공개 목록과 같은 대회(판매 예정·판매 중, 접수 마감 전)에서만 찾는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공",
+			content = @Content(examples = @ExampleObject(value = RaceApiExamples.SUGGEST_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "검색어 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "검색어 빈 값", value = RaceApiExamples.KEYWORD_BLANK),
+				@ExampleObject(name = "검색어 파라미터 없음", value = RaceApiExamples.KEYWORD_MISSING)
+			}))
+	})
+	public ResponseEntity<RsData<RaceSuggestionDto>> suggest(
+		@Parameter(description = "검색창에 입력한 글자", example = "서울 하")
+		@RequestParam @NotBlank(message = "검색어를 작성해주세요.") String keyword
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "연관검색어를 조회했습니다.", productFacade.suggestRaces(keyword)));
+	}
+
+	@GetMapping("/mine")
+	@Operation(summary = "판매자 내 대회 목록",
+		description = "승인된 판매자가 등록한 대회를 최근 등록 순으로 모두 돌려준다(작성 중 포함). "
+			+ "종목마다 정원·결제 대기·판매 수를 함께 준다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공",
+			content = @Content(examples = @ExampleObject(value = RaceApiExamples.MINE_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "승인된 판매자가 아님",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.SELLER_NOT_APPROVED)))
+	})
+	public ResponseEntity<RsData<List<SellerRaceDto>>> findMine(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
+		@RequestHeader("X-Member-Id") int memberId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "내 대회 목록을 조회했습니다.", productFacade.findMyRaces(memberId)));
+	}
+
+	@GetMapping("/{raceId}")
+	@Operation(summary = "대회 상세",
+		description = "대회와 종목(남은 자리·티셔츠 사이즈 포함), 판매자 정보를 돌려준다. 로그인하지 않아도 된다. "
+			+ "작성 중인 대회는 등록한 판매자만 볼 수 있고, 다른 사람에게는 없는 대회(404)로 보인다. "
+			+ "종목 이미지는 file-service에서 종목마다 받는다(GET /api/v1/file/files?refType=RaceCourse&refId=종목 ID).")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공",
+			content = @Content(examples = @ExampleObject(value = RaceApiExamples.DETAIL_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "404", description = "없는 대회 또는 다른 판매자의 작성 중 대회",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND)))
+	})
+	public ResponseEntity<RsData<RaceDetailDto>> findRace(
+		@Parameter(description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 작성 중 대회는 등록한 판매자만 본다)",
+			example = "9001")
+		@RequestHeader(name = "X-Member-Id", required = false) Integer memberId,
+		@Parameter(description = "대회 ID", example = "1")
+		@PathVariable int raceId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "대회를 조회했습니다.", productFacade.findRace(raceId, memberId)));
 	}
 }

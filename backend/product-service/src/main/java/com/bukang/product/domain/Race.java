@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Objects;
 
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.DynamicUpdate;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
@@ -38,6 +39,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = PROTECTED)
 @Getter
 @Table(name = "race")
+// 바뀐 컬럼만 UPDATE한다. 판매자가 수정하는 동안 상태 배치(RaceSaleStatusScheduler)가 바꾼 판매 상태를
+// 수정 트랜잭션이 처음 읽은 옛 상태로 덮어쓰지 않게 하려는 것이다 (수정은 판매 상태를 바꾸지 않는다)
+@DynamicUpdate
 @AttributeOverride(name = "id", column = @Column(name = "race_id"))
 @AttributeOverride(name = "createDate", column = @Column(name = "created_at", nullable = false, updatable = false))
 @AttributeOverride(name = "modifyDate", column = @Column(name = "updated_at", nullable = false))
@@ -206,6 +210,11 @@ public class Race extends BaseIdAndTime {
 
 	public boolean isOwnedBy(ProductSeller seller) {
 		return this.seller.getId() == seller.getId();
+	}
+
+	// 작성 중인 대회는 등록한 판매자(회원)만 볼 수 있고, 판매를 시작한 대회는 누구나 볼 수 있다
+	public boolean isVisibleTo(Integer memberId) {
+		return saleStatus != RaceSaleStatus.DRAFT || (memberId != null && seller.getMember().getId() == memberId);
 	}
 
 	// 판매자가 판매 시작을 누르면 판매 예정이 되고, 판매 시작 일시가 이미 지났으면 바로 판매 중이 된다

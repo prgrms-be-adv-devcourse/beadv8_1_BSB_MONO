@@ -140,6 +140,162 @@ final class RaceApiExamples {
 		{ "status": 409, "message": "판매가 시작된 대회는 종목을 뺄 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
+	static final String SEARCH_SUCCESS = """
+		{
+			"status": 200,
+			"message": "대회 목록을 조회했습니다.",
+			"data": {
+				"races": [
+					{
+						"raceId": 1,
+						"title": "2026 용감한 쿠키RUN in 서울",
+						"location": "서울숲 일대",
+						"regionSido": "서울특별시",
+						"regionSigungu": "성동구",
+						"raceDate": "2026-11-01T08:00:00",
+						"saleStatus": "ON_SALE",
+						"saleOpenAt": "2026-10-13T10:00:00",
+						"applicationCloseAt": "2026-10-31T18:00:00",
+						"minPrice": 45000,
+						"courses": [
+							{
+								"raceCourseId": 1,
+								"name": "10K",
+								"courseType": "KM_10",
+								"distanceKm": 10.00,
+								"price": 45000,
+								"status": "OPEN",
+								"individualRemaining": 580
+							}
+						]
+					}
+				],
+				"page": 0,
+				"size": 20,
+				"totalElements": 1,
+				"totalPages": 1
+			}
+		}
+		""";
+
+	static final String SUGGEST_SUCCESS = """
+		{
+			"status": 200,
+			"message": "연관검색어를 조회했습니다.",
+			"data": {
+				"races": [
+					{ "raceId": 1, "title": "2026 용감한 쿠키RUN in 서울" }
+				],
+				"courses": [
+					{ "raceCourseId": 1, "raceId": 1, "label": "2026 용감한 쿠키RUN in 서울 10K" }
+				]
+			}
+		}
+		""";
+
+	static final String MINE_SUCCESS = """
+		{
+			"status": 200,
+			"message": "내 대회 목록을 조회했습니다.",
+			"data": [
+				{
+					"raceId": 1,
+					"title": "2026 용감한 쿠키RUN in 서울",
+					"raceDate": "2026-11-01T08:00:00",
+					"saleStatus": "ON_SALE",
+					"saleOpenAt": "2026-10-13T10:00:00",
+					"applicationCloseAt": "2026-10-31T18:00:00",
+					"courses": [
+						{
+							"raceCourseId": 1,
+							"name": "10K",
+							"price": 45000,
+							"status": "OPEN",
+							"quota": 600,
+							"reserved": 5,
+							"sold": 15
+						}
+					]
+				}
+			]
+		}
+		""";
+
+	static final String DETAIL_SUCCESS = """
+		{
+			"status": 200,
+			"message": "대회를 조회했습니다.",
+			"data": {
+				"raceId": 1,
+				"title": "2026 용감한 쿠키RUN in 서울",
+				"description": "서울숲에서 달리는 가을 러닝 대회",
+				"location": "서울숲 일대",
+				"regionSido": "서울특별시",
+				"regionSigungu": "성동구",
+				"raceDate": "2026-11-01T08:00:00",
+				"saleStatus": "ON_SALE",
+				"saleOpenAt": "2026-10-13T10:00:00",
+				"crewSaleStartAt": null,
+				"crewSaleEndAt": null,
+				"individualOpenAt": "2026-10-13T10:00:00",
+				"applicationCloseAt": "2026-10-31T18:00:00",
+				"refundDeadline": "2026-10-31",
+				"refundPolicy": "환불 기한까지 취소하면 전액 환불됩니다.",
+				"crewMinCount": 5,
+				"crewMaxCount": null,
+				"scheduleChangedAt": null,
+				"seller": {
+					"sellerId": 7001,
+					"sellerType": "BUSINESS",
+					"businessName": "(주)쿠키런",
+					"businessNumber": "123-45-67890",
+					"representativeName": "김대표"
+				},
+				"courses": [
+					{
+						"raceCourseId": 1,
+						"name": "10K",
+						"courseType": "KM_10",
+						"surface": "ROAD",
+						"distanceKm": 10.00,
+						"timeLimitMinutes": 90,
+						"minAge": 14,
+						"maxAge": 70,
+						"price": 45000,
+						"kitIncluded": true,
+						"kitPrice": 0,
+						"tshirtSizeOption": ["S", "M", "L", "XL"],
+						"status": "OPEN",
+						"crewQuota": 0,
+						"individualQuota": 600,
+						"crewRemaining": 0,
+						"individualRemaining": 580
+					}
+				]
+			}
+		}
+		""";
+
+	static final String PAGE_SIZE_EXCEEDED = """
+		{ "status": 400, "message": "한 번에 100개까지 조회할 수 있습니다.", "data": null }
+		""";
+
+	static final String PAGE_TOO_LARGE = """
+		{ "status": 400, "message": "페이지 번호가 너무 큽니다.", "data": null }
+		""";
+
+	static final String PRICE_NEGATIVE = """
+		{ "status": 400, "message": "참가비 범위는 0원 이상이어야 합니다.", "data": null }
+		""";
+
+	static final String KEYWORD_BLANK = """
+		{ "status": 400, "message": "검색어를 작성해주세요.", "data": null }
+		""";
+
+	static final String KEYWORD_MISSING = """
+		{ "status": 400, "message": "필수 요청 값(keyword)이 없습니다.", "data": null }
+		""";
+
 	private RaceApiExamples() {
 	}
 }

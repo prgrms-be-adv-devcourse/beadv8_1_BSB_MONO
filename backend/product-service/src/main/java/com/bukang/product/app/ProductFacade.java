@@ -1,5 +1,7 @@
 package com.bukang.product.app;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.kafka.core.KafkaTemplate;
@@ -14,8 +16,15 @@ import com.bukang.common.shared.member.event.MemberJoinedEvent;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.product.domain.ProductMember;
 import com.bukang.product.domain.ProductSeller;
+import com.bukang.product.domain.document.RaceCourseDocument;
+import com.bukang.product.dto.RaceCourseInfoDto;
+import com.bukang.product.dto.RaceDetailDto;
+import com.bukang.product.dto.RacePageDto;
 import com.bukang.product.dto.RaceSaveDto;
 import com.bukang.product.dto.RaceSaveRequestDto;
+import com.bukang.product.dto.RaceSearchCondition;
+import com.bukang.product.dto.RaceSuggestionDto;
+import com.bukang.product.dto.SellerRaceDto;
 import com.bukang.product.out.RaceCourseDocumentRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -31,6 +40,9 @@ public class ProductFacade {
 	private final RaceRegisterUseCase raceRegisterUseCase;
 	private final RaceUpdateUseCase raceUpdateUseCase;
 	private final RaceSaleStartUseCase raceSaleStartUseCase;
+	private final RaceSearchUseCase raceSearchUseCase;
+	private final RaceQueryUseCase raceQueryUseCase;
+	private final RaceSaleStatusUseCase raceSaleStatusUseCase;
 	private final TransactionTemplate transactionTemplate;
 	private final RaceCourseDocumentRepository raceCourseDocumentRepository;
 	private final KafkaTemplate<String, String> kafkaTemplate;
@@ -76,6 +88,42 @@ public class ProductFacade {
 			raceSaleStartUseCase.startSale(memberId, raceId));
 		indexRaceCourses(result);
 		return result.dto();
+	}
+
+	public RacePageDto searchRaces(RaceSearchCondition condition, int page, int size) {
+		return raceSearchUseCase.search(condition, page, size);
+	}
+
+	public RaceSuggestionDto suggestRaces(String keyword) {
+		return raceSearchUseCase.suggest(keyword);
+	}
+
+	public RaceDetailDto findRace(int raceId, Integer memberId) {
+		return raceQueryUseCase.findDetail(raceId, memberId);
+	}
+
+	public List<SellerRaceDto> findMyRaces(int memberId) {
+		return raceQueryUseCase.findMine(memberId);
+	}
+
+	public RaceCourseInfoDto findCourseInfo(int raceCourseId) {
+		return raceQueryUseCase.findCourseInfo(raceCourseId);
+	}
+
+	// 시각이 지난 대회의 판매 상태를 바꾸고(커밋), 바뀐 대회의 검색 문서를 다시 색인한다. 바꾼 종목 문서 수를 돌려준다
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public int refreshSaleStatuses() {
+		List<RaceCourseDocument> documents = transactionTemplate.execute(status ->
+			raceSaleStatusUseCase.refresh(LocalDateTime.now()));
+		if (!documents.isEmpty()) {
+			try {
+				raceCourseDocumentRepository.saveAll(documents);
+			} catch (RuntimeException exception) {
+				log.error("판매 상태가 바뀐 대회의 검색 문서를 색인하지 못했습니다. 다시 색인해야 합니다. 문서 수={}",
+					documents.size(), exception);
+			}
+		}
+		return documents.size();
 	}
 
 	// ES 검색 문서(race_courses)를 맞춘다
