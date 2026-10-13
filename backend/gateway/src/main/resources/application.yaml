@@ -20,10 +20,8 @@ spring:
           # 주소 앞부분을 자르지 않는다(StripPrefix 없음). 서비스 주소와 쿠키 경로가 게이트웨이 주소와 그대로 맞아야 한다
           # /internal/**는 규칙을 만들지 않는다. 맞는 규칙이 없으면 게이트웨이가 404로 응답한다
           # 서비스 주소(gateway.services.*)는 프로파일별 yaml에 있다 (dev: localhost, prod: 컨테이너 이름)
-          # 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿으므로, 클라이언트가 보낸 값은 지운다 (남의 ID로 위장 차단)
-          # 토큰을 검사해 이 헤더를 다시 넣는 일은 PRO-20에서 게이트웨이 필터로 한다
-          default-filters:
-            - RemoveRequestHeader=X-Member-Id
+          # 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿는다. 클라이언트가 보낸 값을 지우고 토큰 속 회원 ID로 다시 넣는 일은
+          # JwtAuthenticationFilter가 한다 (default-filters로 지우면 필터가 넣은 값까지 지워질 수 있어 한곳에서 처리)
           routes:
             - id: member-service
               uri: ${gateway.services.member}

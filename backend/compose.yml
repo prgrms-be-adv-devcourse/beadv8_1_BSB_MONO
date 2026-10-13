@@ -57,6 +57,10 @@ services:
     profiles: [ app ]
     ports:
       - "8000:8000"
+    # 토큰 검사에 member-service와 같은 JWT_SECRET을 쓴다 (.env.example 참고)
+    env_file:
+      - path: .env
+        required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
     healthcheck:

@@ -17,6 +17,8 @@ dependencyManagement {
 
 dependencies {
 	implementation("org.springframework.cloud:spring-cloud-starter-gateway-server-webflux")
+	// 토큰 검사(JwtProvider). 웹 의존성이 없는 모듈이라 WebFlux와 충돌하지 않는다
+	implementation(project(":jwt"))
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 }

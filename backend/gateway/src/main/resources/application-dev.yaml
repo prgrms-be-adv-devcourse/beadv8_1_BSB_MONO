@@ -8,6 +8,10 @@ gateway:
     order: http://localhost:8084
     product: http://localhost:8085
 
+# Access Token 검사용 서명 키. member-service가 발급할 때 쓰는 키와 같아야 한다
+jwt:
+  secret: jwt-dev-secret-key-1423-1126-7541-3217
+
 logging:
   level:
     com.bukang: debug
