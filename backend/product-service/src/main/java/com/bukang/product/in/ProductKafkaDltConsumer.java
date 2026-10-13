@@ -20,6 +20,8 @@ public class ProductKafkaDltConsumer {
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
 	private static final String SELLER_CHANGED_DLT = KafkaTopics.PRODUCT_SELLER_CHANGED
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
+	private static final String HOLD_CANCEL_DLT = KafkaTopics.PRODUCT_HOLD_CANCEL
+		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
 
 	@KafkaListener(topics = MEMBER_JOINED_DLT, groupId = GROUP_ID)
 	public void handleMemberJoinedDlt(String payload) {
@@ -29,5 +31,11 @@ public class ProductKafkaDltConsumer {
 	@KafkaListener(topics = SELLER_CHANGED_DLT, groupId = GROUP_ID)
 	public void handleSellerChangedDlt(String payload) {
 		log.error("처리하지 못한 판매자 메시지: {}", payload);
+	}
+
+	// 해제하지 못한 자리는 결제 대기로 남아 남은 자리가 그만큼 적게 보인다. 원인을 고친 뒤 메시지를 다시 보내야 한다
+	@KafkaListener(topics = HOLD_CANCEL_DLT, groupId = GROUP_ID)
+	public void handleHoldCancelDlt(String payload) {
+		log.error("처리하지 못한 임시 확보 해제 메시지: {}", payload);
 	}
 }
