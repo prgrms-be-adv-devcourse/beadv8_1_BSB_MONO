@@ -19,15 +19,18 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
+import com.bukang.jwt.JwtProvider;
 import com.sun.net.httpserver.HttpServer;
 
 // 서비스마다 가짜 서버를 하나씩 띄우고, 게이트웨이가 요청을 어느 서버로 어떤 주소로 넘기는지 확인한다
+// 토큰 검사는 GatewayAuthenticationTest에서 확인하고, 여기서는 유효한 토큰을 붙여 라우팅만 본다
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class GatewayRoutingTest {
@@ -36,13 +39,14 @@ class GatewayRoutingTest {
 	private static final List<HttpServer> STUBS = new CopyOnWriteArrayList<>();
 	// 가짜 서버가 받은 요청을 "서비스이름 경로" 형식으로 남긴다
 	private static final List<String> RECEIVED = new CopyOnWriteArrayList<>();
-	// 가짜 서버가 받은 X-Member-Id 헤더 값 (없으면 "없음")
-	private static final List<String> RECEIVED_MEMBER_IDS = new CopyOnWriteArrayList<>();
 
 	private final HttpClient client = HttpClient.newHttpClient();
 
 	@Value("${local.server.port}")
 	private int gatewayPort;
+
+	@Autowired
+	private JwtProvider jwtProvider;
 
 	@DynamicPropertySource
 	static void serviceUris(DynamicPropertyRegistry registry) throws IOException {
@@ -50,8 +54,6 @@ class GatewayRoutingTest {
 			HttpServer stub = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
 			stub.createContext("/", exchange -> {
 				RECEIVED.add(service + " " + exchange.getRequestURI());
-				String memberId = exchange.getRequestHeaders().getFirst("X-Member-Id");
-				RECEIVED_MEMBER_IDS.add(memberId == null ? "없음" : memberId);
 				byte[] body = service.getBytes(StandardCharsets.UTF_8);
 				exchange.sendResponseHeaders(200, body.length);
 				try (OutputStream out = exchange.getResponseBody()) {
@@ -72,7 +74,6 @@ class GatewayRoutingTest {
 	@BeforeEach
 	void clearReceived() {
 		RECEIVED.clear();
-		RECEIVED_MEMBER_IDS.clear();
 	}
 
 	@ParameterizedTest(name = "{0} → {1}")
@@ -112,21 +113,19 @@ class GatewayRoutingTest {
 	}
 
 	@Test
-	@DisplayName("클라이언트가 보낸 X-Member-Id 헤더는 지우고 서비스로 넘긴다")
-	void removesMemberIdHeaderFromClient() throws Exception {
-		HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + "/api/v1/order/orders"))
-			.header("X-Member-Id", "999")
-			.GET()
-			.build();
-
-		HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+	@DisplayName("서비스 응답에 HSTS 헤더를 붙여 브라우저가 HTTPS로만 접속하게 한다")
+	void addsHstsHeaderToServiceResponse() throws Exception {
+		HttpResponse<String> response = get("/api/v1/order/orders");
 
 		assertThat(response.statusCode()).isEqualTo(200);
-		assertThat(RECEIVED_MEMBER_IDS).containsExactly("없음");
+		assertThat(response.headers().firstValue("Strict-Transport-Security")).hasValue("max-age=31536000");
 	}
 
 	private HttpResponse<String> get(String path) throws IOException, InterruptedException {
-		HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + path)).GET().build();
+		HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + path))
+			.header("Authorization", "Bearer " + jwtProvider.issueAccessToken(1L))
+			.GET()
+			.build();
 		return client.send(request, HttpResponse.BodyHandlers.ofString());
 	}
 
