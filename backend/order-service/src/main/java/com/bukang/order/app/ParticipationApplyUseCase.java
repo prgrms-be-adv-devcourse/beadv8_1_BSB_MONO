@@ -1,10 +1,12 @@
 package com.bukang.order.app;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import com.bukang.order.domain.Order;
 import com.bukang.order.domain.ParticipantInfo;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.exception.AgeRestrictionException;
@@ -14,6 +16,8 @@ import com.bukang.order.domain.exception.ParticipationAccessDeniedException;
 import com.bukang.order.domain.exception.ParticipationNotFoundException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
 import com.bukang.order.domain.exception.ShippingAddressRequiredException;
+import com.bukang.order.out.OrderItemRepository;
+import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.out.race.RaceCourseInfo;
 import com.bukang.order.out.race.RaceCoursePort;
@@ -31,6 +35,8 @@ public class ParticipationApplyUseCase {
 	private static final String ACTIVE_PARTICIPATION_CONSTRAINT = "uk_participation_active";
 
 	private final ParticipationRepository participationRepository;
+	private final OrderRepository orderRepository;
+	private final OrderItemRepository orderItemRepository;
 	private final RaceCoursePort raceCoursePort;
 
 	public Participation apply(int memberId, int raceCourseId, ParticipantInfo participant, LocalDateTime now) {
@@ -65,6 +71,9 @@ public class ParticipationApplyUseCase {
 	// 참가자 정보는 접수 마감 전까지 고칠 수 있다 (정책 3장 1-5). 생년월일이 바뀔 수 있으니 나이 제한도 다시 본다
 	public Participation changeParticipant(int participationId, int memberId, ParticipantInfo participant,
 		LocalDateTime now) {
+		// [결제하기]로 주문이 있으면 주문의 배송지도 바꿔야 하므로 주문부터 잠근다 (잠금 순서: 주문 → 참가 신청)
+		Optional<Order> order = orderItemRepository.findOrderIdByParticipationId(participationId)
+			.flatMap(orderRepository::findByIdForUpdate);
 		// 잠가서 읽는다. 엔티티는 저장할 때 모든 컬럼을 다시 쓰므로, 잠그지 않으면 결제·취소가 바꾼 상태를
 		// 옛 값으로 덮을 수 있다. 결제·연장·취소도 참가 신청을 잠그고 바꾼다
 		Participation participation = participationRepository.findByIdForUpdate(participationId)
@@ -75,7 +84,9 @@ public class ParticipationApplyUseCase {
 			throw new ApplicationPeriodException("접수가 마감되어 참가자 정보를 고칠 수 없습니다.");
 		}
 		checkAge(course, participant);
-		participation.changeParticipant(checkShippingAddress(course, participant));
+		ParticipantInfo checked = checkShippingAddress(course, participant);
+		participation.changeParticipant(checked);
+		order.ifPresent(found -> found.changeShippingAddress(checked.getShippingAddress()));
 		return participation;
 	}
 

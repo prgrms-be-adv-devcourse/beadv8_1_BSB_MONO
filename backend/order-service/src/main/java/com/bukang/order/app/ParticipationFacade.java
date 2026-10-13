@@ -47,7 +47,7 @@ public class ParticipationFacade {
 	}
 
 	// 다음 신청서에 채울 참가자 정보. 신청한 적이 없으면 빈 값이다 (정책 3장 1-2)
-	// 마지막 신청이 키트 없는 종목이면 주소가 비어 있으므로, 주소는 주소를 적은 최근 신청에서 채운다
+	// 마지막 신청이 키트 없는 종목이면 배송지가 비어 있으므로, 배송지는 배송지를 적은 최근 신청에서 채운다
 	public Optional<ParticipantInfoDto> findLatestParticipant(int memberId) {
 		return participationRepository.findFirstByMemberIdOrderByIdDesc(memberId)
 			.map(participation -> ParticipantInfoDto.from(withLatestShippingAddress(memberId,
@@ -58,7 +58,8 @@ public class ParticipationFacade {
 		if (participant.getShippingAddress() != null) {
 			return participant;
 		}
-		return participationRepository.findFirstByMemberIdAndParticipantShippingAddressIsNotNullOrderByIdDesc(memberId)
+		return participationRepository
+			.findFirstByMemberIdAndParticipantShippingAddressAddressIsNotNullOrderByIdDesc(memberId)
 			.map(withAddress -> participant.withShippingAddress(withAddress.getParticipant().getShippingAddress()))
 			.orElse(participant);
 	}

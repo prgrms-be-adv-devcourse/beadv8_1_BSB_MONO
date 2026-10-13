@@ -6,6 +6,7 @@ import com.bukang.order.domain.Gender;
 import com.bukang.order.domain.ParticipantInfo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
@@ -18,7 +19,7 @@ import lombok.Getter;
 @AllArgsConstructor
 @Getter
 public class ParticipantInfoRequestDto {
-	private static final String PHONE_REGEXP = "^01[016789]-?\\d{3,4}-?\\d{4}$";
+	static final String PHONE_REGEXP = "^01[016789]-?\\d{3,4}-?\\d{4}$";
 
 	@Schema(description = "참가자 이름 (50자 이하)", example = "김러너")
 	@NotBlank(message = "참가자 이름을 작성해주세요.")
@@ -53,24 +54,24 @@ public class ParticipantInfoRequestDto {
 	@Size(max = 10, message = "티셔츠 사이즈는 10자 이하로 작성해주세요.")
 	private final String tshirtSize;
 
-	@Schema(description = "키트 배송 주소 (키트가 있는 종목은 필수, 없는 종목은 보내도 저장하지 않는다, 255자 이하)",
-		example = "서울 성동구 왕십리로 00, 101동 1001호")
-	@Size(max = 255, message = "배송 주소는 255자 이하로 작성해주세요.")
-	private final String shippingAddress;
+	@Schema(description = "키트 배송지. 키트가 있는 종목은 필수이고, 키트가 없는 종목은 보내지 않는다 (보내면 형식은 검사하고 저장하지 않는다)")
+	@Valid
+	private final ShippingAddressRequestDto shippingAddress;
 
 	public ParticipantInfo toParticipantInfo() {
 		return new ParticipantInfo(name.strip(), birth, gender, normalizePhone(phone), emergencyContactName.strip(),
-			normalizePhone(emergencyContactPhone), blankToNull(tshirtSize), blankToNull(shippingAddress));
+			normalizePhone(emergencyContactPhone), blankToNull(tshirtSize),
+			shippingAddress == null ? null : shippingAddress.toShippingAddress());
 	}
 
 	// 하이픈을 넣거나 빼고 보내도 같은 사람의 번호가 같은 값으로 저장되도록 010-1234-5678 형식으로 맞춘다
-	private static String normalizePhone(String value) {
+	static String normalizePhone(String value) {
 		String digits = value.replace("-", "");
 		int middleEnd = digits.length() - 4;
 		return digits.substring(0, 3) + "-" + digits.substring(3, middleEnd) + "-" + digits.substring(middleEnd);
 	}
 
-	// 키트가 없는 종목은 사이즈·주소를 비워 보낸다. 빈 문자열과 null이 섞이지 않게 null로 맞춘다
+	// 키트가 없는 종목은 사이즈를 비워 보낸다. 빈 문자열과 null이 섞이지 않게 null로 맞춘다
 	private static String blankToNull(String value) {
 		return value == null || value.isBlank() ? null : value.strip();
 	}
