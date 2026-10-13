@@ -17,6 +17,7 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.DynamicUpdate;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.product.domain.exception.InvalidRaceException;
 import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
 import com.bukang.product.dto.RaceSaveRequestDto;
 
@@ -101,7 +102,7 @@ public class Race extends BaseIdAndTime {
 	private Integer crewMaxCount;
 
 	@Enumerated(STRING)
-	@ColumnDefault("'DRAFT'")
+	@ColumnDefault("'SCHEDULED'")
 	@Column(name = "sale_status", nullable = false, columnDefinition = "varchar(20)")
 	private RaceSaleStatus saleStatus;
 
@@ -113,11 +114,15 @@ public class Race extends BaseIdAndTime {
 	@OneToMany(mappedBy = "race", cascade = {PERSIST, REMOVE}, orphanRemoval = true)
 	private List<RaceCourse> courses = new ArrayList<>();
 
-	public Race(ProductSeller seller, RaceSaveRequestDto request) {
+	public Race(ProductSeller seller, RaceSaveRequestDto request, LocalDateTime now) {
 		this.seller = seller;
-		// 등록하면 작성 중이다. 판매자가 판매 시작을 눌러야 판매 예정이 된다
-		this.saleStatus = RaceSaleStatus.DRAFT;
 		apply(request);
+		// 등록하면 판매 예정이고, 판매 시작 일시가 지나면 상태 배치(RaceSaleStatusScheduler)가 판매 중으로 바꾼다
+		// 판매 예정에서 시작하므로 판매 시작 일시가 이미 지난 대회는 등록하지 못한다
+		if (!saleOpenAt.isAfter(now)) {
+			throw new InvalidRaceException("판매 시작 일시가 이미 지났습니다. 크루 예매 시작·개인 예매 오픈 일시를 지금보다 늦게 작성해주세요.");
+		}
+		this.saleStatus = RaceSaleStatus.SCHEDULED;
 	}
 
 	public void update(RaceSaveRequestDto request, boolean saleStarted, LocalDateTime now) {
@@ -128,14 +133,13 @@ public class Race extends BaseIdAndTime {
 		if (saleStarted && request.getRefundDeadline().isBefore(refundDeadline)) {
 			throw new RaceChangeNotAllowedException("판매가 시작된 대회는 환불 기준일을 앞당길 수 없습니다.");
 		}
-		// 판매 시작을 누른 뒤에는 판매 일정을 마음대로 바꾸지 못한다 (대기열, 크루 마감 다음 날 06:00 배치, 확보 기한이 이 일정을 따른다)
+		// 판매 일정은 마음대로 바꾸지 못한다 (대기열, 크루 마감 다음 날 06:00 배치, 확보 기한이 이 일정을 따른다)
+		// 판매 시작 일시 전에는 일정이 모두 아직 오지 않았으므로, 지난 시각으로 옮기는 것만 막힌다 (등록 때와 같은 기준)
 		// 판매 시작 일시는 크루 예매 시작·개인 예매 오픈으로 계산하므로, 이 검사로 판매 시작 일시도 지난 뒤에는 바뀌지 않는다
-		if (saleStatus != RaceSaleStatus.DRAFT) {
-			checkScheduleChange("크루 예매 시작", crewSaleStartAt, request.getCrewSaleStartAt(), now);
-			checkScheduleChange("크루 예매 마감", crewSaleEndAt, request.getCrewSaleEndAt(), now);
-			checkScheduleChange("개인 예매 오픈", individualOpenAt, request.getIndividualOpenAt(), now);
-			checkScheduleChange("접수 마감", applicationCloseAt, request.getApplicationCloseAt(), now);
-		}
+		checkScheduleChange("크루 예매 시작", crewSaleStartAt, request.getCrewSaleStartAt(), now);
+		checkScheduleChange("크루 예매 마감", crewSaleEndAt, request.getCrewSaleEndAt(), now);
+		checkScheduleChange("개인 예매 오픈", individualOpenAt, request.getIndividualOpenAt(), now);
+		checkScheduleChange("접수 마감", applicationCloseAt, request.getApplicationCloseAt(), now);
 		// 판매 시작 뒤 대회 일시(앞당기기·늦추기 모두)나 장소가 바뀌면 일정·장소 변경 안내 일시를 기록한다
 		// 이날부터 7일 동안은 환불 기준일과 상관없이 전액 환불된다 (ERD schedule_changed_at, 환불 판정은 주문 쪽)
 		// 장소도 참가 여부를 다시 생각하게 하는 변경이라 대회 일시와 같은 기준으로 환불한다
@@ -215,25 +219,15 @@ public class Race extends BaseIdAndTime {
 		return this.seller.getId() == seller.getId();
 	}
 
-	// 작성 중·취소된 대회는 등록한 판매자(회원)만 볼 수 있고, 판매를 시작한 대회는 누구나 볼 수 있다
+	// 대회는 등록하면 누구나 볼 수 있다. 취소된 대회만 등록한 판매자(회원)만 볼 수 있다
 	// 취소된 대회는 자동 환불로 끝난 대회라 공개 화면에서 뺀다 (판매자는 내 대회에서 기록을 본다)
 	public boolean isVisibleTo(Integer memberId) {
-		boolean hidden = saleStatus == RaceSaleStatus.DRAFT || saleStatus == RaceSaleStatus.CANCELED;
-		return !hidden || (memberId != null && seller.getMember().getId() == memberId);
+		return saleStatus != RaceSaleStatus.CANCELED || (memberId != null && seller.getMember().getId() == memberId);
 	}
 
-	// 판매자가 판매 시작을 누르면 판매 예정이 되고, 판매 시작 일시가 이미 지났으면 바로 판매 중이 된다
-	// 대회 검수는 없다 (ERD race.sale_status 주석: 판매자가 직접 판매 시작)
-	public void startSale(LocalDateTime now) {
-		if (saleStatus != RaceSaleStatus.DRAFT) {
-			throw new RaceChangeNotAllowedException("작성 중인 대회만 판매를 시작할 수 있습니다.");
-		}
-		this.saleStatus = now.isBefore(saleOpenAt) ? RaceSaleStatus.SCHEDULED : RaceSaleStatus.ON_SALE;
-	}
-
-	// 판매자가 판매를 시작했고(작성 중이 아님) 판매 시작 일시가 지났으면, 구매자가 있을 수 있는 대회다
+	// 판매 시작 일시가 지났으면 구매자가 있을 수 있는 대회다
 	public boolean isSaleStarted(LocalDateTime now) {
-		return saleStatus != RaceSaleStatus.DRAFT && !now.isBefore(saleOpenAt);
+		return !now.isBefore(saleOpenAt);
 	}
 
 	// 판매 종료 전이면 어떤 상태든 취소할 수 있다 (10/13 결정). 대회일 다음 날 0시부터는 판매 종료로 본다

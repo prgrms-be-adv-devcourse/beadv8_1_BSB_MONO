@@ -38,10 +38,10 @@ import jakarta.persistence.PersistenceContext;
 
 /**
  * 대회 취소 API(POST /api/v1/product/races/{raceId}/cancel)를 확인한다.
- * - 작성 중·판매 예정·판매 중·판매 중지 대회는 취소되고(CANCELED, 취소 일시 기록), 판매를 시작했던 대회만 취소 메시지를 보낸다
+ * - 판매 예정·판매 중·판매 중지 대회는 취소되고(CANCELED, 취소 일시 기록), 주문 서비스에 취소 메시지를 보낸다
  * - 결제 대기 자리는 대회 취소 사유로 해제되어 종목의 결제 대기 수가 돌아오고, 판매된 자리는 그대로 남는다
  * - 취소한 대회는 공개 목록·연관검색어에서 빠지고, 상세와 내 대회 목록은 등록한 판매자만 본다
- * - 취소한 대회는 자리 확보·수정·판매 시작·다시 취소를 할 수 없고, 결제 대기 자리의 판매 요청은 기한 지남(EXPIRED)이다
+ * - 취소한 대회는 자리 확보·수정·다시 취소를 할 수 없고, 결제 대기 자리의 판매 요청은 기한 지남(EXPIRED)이다
  * - 판매가 끝난 대회(대회일 다음 날 0시부터), 다른 판매자, 판매자가 아닌 회원, 헤더 없음, 없는 대회는 막는다
  * - 취소와 자리 확보가 동시에 들어와도 결제 대기 수와 HELD 자리 수가 맞고, 남은 결제 대기 자리는 판매되지 않는다
  */
@@ -147,25 +147,9 @@ class ApiV1RaceCancelTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("작성 중 대회를 취소하면 200이고 CANCELED가 되지만, 산 사람이 없어 order.race.cancel 메시지는 보내지 않는다")
-	void cancelDraftRace() throws Exception {
-		RegisteredRace draft = register(race().build());
-
-		cancelRace(draft.raceId(), SELLER_MEMBER_ID)
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.message").value("대회를 취소했습니다."))
-			.andExpect(jsonPath("$.data.saleStatus").value("CANCELED"));
-
-		Race canceled = findRace(draft.raceId());
-		assertThat(canceled.getSaleStatus()).isEqualTo(RaceSaleStatus.CANCELED);
-		assertThat(canceled.getCanceledAt()).isNotNull();
-		assertThat(sentMessages(KafkaTopics.ORDER_RACE_CANCEL)).isEmpty();
-	}
-
-	@Test
 	@DisplayName("개인 예매 오픈이 하루 뒤라 판매 예정인 대회도 취소되고 order.race.cancel 메시지를 보낸다")
 	void cancelScheduledRace() throws Exception {
-		RegisteredRace scheduled = registerOnSale(race()
+		RegisteredRace scheduled = register(race()
 			.individualOpenAt(LocalDateTime.now().withNano(0).plusDays(1))
 			.build());
 		assertThat(findRace(scheduled.raceId()).getSaleStatus()).isEqualTo(RaceSaleStatus.SCHEDULED);
@@ -313,19 +297,6 @@ class ApiV1RaceCancelTest extends ProductIntegrationTest {
 		Race canceled = findRace(onSale.raceId());
 		assertThat(canceled.getTitle()).isEqualTo(DEFAULT_TITLE);
 		assertThat(canceled.getSaleStatus()).isEqualTo(RaceSaleStatus.CANCELED);
-	}
-
-	@Test
-	@DisplayName("작성 중에 취소한 대회는 판매 시작을 눌러도 409 '작성 중인 대회만 판매를 시작할 수 있습니다.'이고 CANCELED로 남는다")
-	void rejectStartSaleAfterCancel() throws Exception {
-		RegisteredRace draft = register(race().build());
-		cancelRace(draft.raceId(), SELLER_MEMBER_ID).andExpect(status().isOk());
-
-		postAs(racePath(draft.raceId()) + "/sale", SELLER_MEMBER_ID)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("작성 중인 대회만 판매를 시작할 수 있습니다."));
-
-		assertThat(findRace(draft.raceId()).getSaleStatus()).isEqualTo(RaceSaleStatus.CANCELED);
 	}
 
 	@Test
@@ -536,7 +507,7 @@ class ApiV1RaceCancelTest extends ProductIntegrationTest {
 			.andExpect(jsonPath("$.data.result").value("SOLD"));
 	}
 
-	// 대회일이 이틀 전인 대회 (개인 예매 오픈 5일 전, 접수 마감 3일 전). 판매 시작을 누르면 판매 중이 된다
+	// 대회일이 이틀 전인 대회 (개인 예매 오픈 5일 전, 접수 마감 3일 전). registerOnSale()로 만들면 판매 중이다
 	private RaceSaveRequestDto pastRace() {
 		LocalDateTime now = LocalDateTime.now().withNano(0);
 		return race()
