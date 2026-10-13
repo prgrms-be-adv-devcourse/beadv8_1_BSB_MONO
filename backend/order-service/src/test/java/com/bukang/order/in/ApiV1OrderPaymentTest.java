@@ -57,7 +57,7 @@ class ApiV1OrderPaymentTest {
 	private static final int MEMBER_ID = 1;
 	private static final int OTHER_MEMBER_ID = 2;
 	private static final int COURSE_ID = 10;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 
 	@Autowired
 	private MockMvc mockMvc;

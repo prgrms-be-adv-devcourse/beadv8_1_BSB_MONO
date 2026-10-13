@@ -126,10 +126,10 @@ class ApiV1OrderTest {
 	}
 
 	@Test
-	@DisplayName("주문 상품에 정산이 쓰는 판매자 ID·대회 ID·금액(참가비 + 키트)이 저장된다")
+	@DisplayName("주문 상품에 정산이 쓰는 판매자 ID·대회 ID·금액(참가비, 키트 포함)이 저장된다")
 	void createStoresSettlementFields() throws Exception {
 		int participationId = applyAndGetId(MEMBER_ID);
-		int ticketPrice = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+		int ticketPrice = StubRaceCoursePort.PRICE;
 
 		create(MEMBER_ID, participationId, newKey())
 			.andExpect(status().isCreated())

@@ -61,7 +61,7 @@ import com.jayway.jsonpath.JsonPath;
 class OrderPayExpiryConcurrencyTest {
 	private static final int COURSE_ID = 10;
 	private static final int RACE_ID = 100;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 	private static final int BALANCE = 1_000_000;
 	private static final int ORDER_COUNT = 10;
 	private static final long TIMEOUT_SECONDS = 30;

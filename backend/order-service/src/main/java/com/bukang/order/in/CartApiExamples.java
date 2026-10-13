@@ -109,7 +109,7 @@ final class CartApiExamples {
 							"buyerId": 1,
 							"raceId": 1,
 							"status": "CREATED",
-							"totalAmount": 60000,
+							"totalAmount": 50000,
 							"canceledAmount": 0,
 							"paymentDueAt": "2026-10-13T10:10:00",
 							"paidAt": null,
@@ -120,9 +120,9 @@ final class CartApiExamples {
 									"raceCourseId": 1,
 									"sellerId": 1,
 									"itemName": "2026 서울 하프 마라톤 10K",
-									"unitPrice": 60000,
+									"unitPrice": 50000,
 									"quantity": 1,
-									"amount": 60000,
+									"amount": 50000,
 									"status": "ORDERED"
 								}
 							]

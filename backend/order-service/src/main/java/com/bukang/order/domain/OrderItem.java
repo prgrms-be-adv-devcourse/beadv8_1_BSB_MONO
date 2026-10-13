@@ -98,7 +98,7 @@ public class OrderItem extends BaseIdAndTime {
 		item.sellerId = course.sellerId();
 		item.raceDate = course.raceDate();
 		item.itemName = course.courseName();
-		item.unitPrice = course.ticketPrice();
+		item.unitPrice = course.price();
 		item.quantity = TICKET_QUANTITY;
 		item.amount = item.unitPrice * TICKET_QUANTITY;
 		item.status = OrderItemStatus.ORDERED;

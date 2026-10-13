@@ -97,12 +97,12 @@ class RaceCourseInfoTest {
 	}
 
 	private RaceCourseInfo course(int minAge, Integer maxAge) {
-		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, minAge, maxAge, 1, "종목", 50_000, 10_000, true,
+		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, minAge, maxAge, 1, "종목", 50_000, true,
 			REFUND_DEADLINE, null);
 	}
 
 	private RaceCourseInfo courseChangedAt(LocalDateTime scheduleChangedAt) {
-		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, 14, null, 1, "종목", 50_000, 10_000, true,
+		return new RaceCourseInfo(1, 1, RACE_DATE, OPEN_AT, CLOSE_AT, 14, null, 1, "종목", 50_000, true,
 			REFUND_DEADLINE, scheduleChangedAt);
 	}
 }

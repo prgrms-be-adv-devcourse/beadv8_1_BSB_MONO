@@ -15,7 +15,6 @@ import com.bukang.order.out.race.RaceCoursePort;
 public class StubRaceCoursePort implements RaceCoursePort {
 	public static final int SELLER_ID = 7;
 	public static final int PRICE = 50_000;
-	public static final int KIT_PRICE = 10_000;
 
 	private final Map<Integer, RaceCourseInfo> courses = new HashMap<>();
 
@@ -48,7 +47,7 @@ public class StubRaceCoursePort implements RaceCoursePort {
 		LocalDate refundDeadline, LocalDateTime scheduleChangedAt) {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(60), now.minusDays(1), now.plusDays(30),
-			minAge, maxAge, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE, true, refundDeadline,
+			minAge, maxAge, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, true, refundDeadline,
 			scheduleChangedAt);
 	}
 
@@ -56,7 +55,7 @@ public class StubRaceCoursePort implements RaceCoursePort {
 	public static RaceCourseInfo courseWithoutKit(int raceCourseId, int raceId) {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(60), now.minusDays(1), now.plusDays(30),
-			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, 0, false, now.toLocalDate().plusDays(40),
+			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, false, now.toLocalDate().plusDays(40),
 			null);
 	}
 
@@ -64,7 +63,7 @@ public class StubRaceCoursePort implements RaceCoursePort {
 	public static RaceCourseInfo closedCourse(int raceCourseId, int raceId) {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(10), now.minusDays(30), now.minusDays(1),
-			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE, true, now.toLocalDate().plusDays(5),
+			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, true, now.toLocalDate().plusDays(5),
 			null);
 	}
 }

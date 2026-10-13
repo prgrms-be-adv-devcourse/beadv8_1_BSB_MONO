@@ -19,7 +19,7 @@ import com.bukang.order.out.race.RaceCourseInfo;
 class OrderCancelTest {
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 12, 10, 0);
 	private static final RaceCourseInfo COURSE = new RaceCourseInfo(10, 100, NOW.plusDays(60), NOW.minusDays(1),
-		NOW.plusDays(30), 14, null, 7, "종목", 50_000, 10_000, true,
+		NOW.plusDays(30), 14, null, 7, "종목", 50_000, true,
 		LocalDate.of(2026, 11, 20), null);
 
 	@Test
@@ -31,15 +31,15 @@ class OrderCancelTest {
 
 		order.cancelItem(first, NOW);
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.PARTIAL_CANCELED);
-		assertThat(order.getCanceledAmount()).isEqualTo(60_000);
+		assertThat(order.getCanceledAmount()).isEqualTo(50_000);
 		assertThat(first.getStatus()).isEqualTo(OrderItemStatus.CANCELED);
-		assertThat(first.getCanceledAmount()).isEqualTo(60_000);
+		assertThat(first.getCanceledAmount()).isEqualTo(50_000);
 		assertThat(first.getCanceledAt()).isEqualTo(NOW);
 		assertThat(second.getStatus()).isEqualTo(OrderItemStatus.PAID);
 
 		order.cancelItem(second, NOW.plusMinutes(1));
 		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
-		assertThat(order.getCanceledAmount()).isEqualTo(120_000);
+		assertThat(order.getCanceledAmount()).isEqualTo(100_000);
 	}
 
 	@Test
@@ -52,7 +52,7 @@ class OrderCancelTest {
 		assertThatThrownBy(() -> order.cancelItem(first, NOW))
 			.isInstanceOf(OrderItemNotCancelableException.class)
 			.hasMessage("이미 취소한 상품입니다.");
-		assertThat(order.getCanceledAmount()).isEqualTo(60_000);
+		assertThat(order.getCanceledAmount()).isEqualTo(50_000);
 	}
 
 	private static Order paidOrderWithTwoItems() {

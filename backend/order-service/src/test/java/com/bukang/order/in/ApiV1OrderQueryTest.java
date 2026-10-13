@@ -159,7 +159,7 @@ class ApiV1OrderQueryTest {
 			.andExpect(jsonPath("$.data.canceledAmount").value(0))
 			.andExpect(jsonPath("$.data.items[0].itemName").value("테스트 대회 종목 " + FIRST_COURSE_ID))
 			.andExpect(jsonPath("$.data.items[0].unitPrice")
-				.value(StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE));
+				.value(StubRaceCoursePort.PRICE));
 
 		mockMvc.perform(get(BASE_URL + "/" + orderId).header("X-Member-Id", OTHER_MEMBER_ID))
 			.andExpect(status().isForbidden())

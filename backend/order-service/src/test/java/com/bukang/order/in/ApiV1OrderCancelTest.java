@@ -62,7 +62,7 @@ class ApiV1OrderCancelTest {
 	private static final int OTHER_MEMBER_ID = 2;
 	private static final int COURSE_ID = 10;
 	private static final int RACE_ID = 100;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -350,7 +350,7 @@ class ApiV1OrderCancelTest {
 	private void reschedule(RaceCourseInfo before, LocalDateTime newRaceDate) {
 		raceCoursePort.put(new RaceCourseInfo(before.raceCourseId(), before.raceId(), newRaceDate,
 			before.applicationOpenAt(), before.applicationCloseAt(), before.minAge(), before.maxAge(),
-			before.sellerId(), before.courseName(), before.price(), before.kitPrice(), before.kitIncluded(),
+			before.sellerId(), before.courseName(), before.price(), before.kitIncluded(),
 			LocalDate.now().minusDays(1),
 			LocalDateTime.now().minusDays(1)));
 	}
