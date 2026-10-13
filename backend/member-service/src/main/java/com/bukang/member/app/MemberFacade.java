@@ -25,6 +25,8 @@ public class MemberFacade {
 	private final MemberRepository memberRepository;
 	private final AuthenticationManager authenticationManager;
 	private final TokenIssueUseCase tokenIssueUseCase;
+	private final TokenReissueUseCase tokenReissueUseCase;
+	private final LogoutUseCase logoutUseCase;
 
 	@Transactional
 	public MemberDto join(MemberJoinRequestDto memberJoinDto) {
@@ -56,5 +58,13 @@ public class MemberFacade {
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
 
 		return new MemberLoginResult(member.toDto(), tokenIssueUseCase.issue(member.getId()));
+	}
+
+	public String reissueAccessToken(String refreshToken) {
+		return tokenReissueUseCase.reissue(refreshToken);
+	}
+
+	public void logout(String refreshToken) {
+		logoutUseCase.logout(refreshToken);
 	}
 }

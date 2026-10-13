@@ -30,4 +30,8 @@ public class RefreshTokenRepository {
 	public Optional<String> findByMemberId(long memberId) {
 		return Optional.ofNullable(redisTemplate.opsForValue().get(key(memberId)));
 	}
+
+	public void delete(long memberId) {
+		redisTemplate.delete(key(memberId));
+	}
 }

@@ -36,6 +36,24 @@ final class AuthApiExamples {
 		}
 		""";
 
+	static final String REISSUE_SUCCESS = """
+		{
+			"status": 200,
+			"message": "토큰 재발급 성공",
+			"data": {
+				"accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature"
+			}
+		}
+		""";
+
+	static final String LOGOUT_SUCCESS = """
+		{
+			"status": 200,
+			"message": "로그아웃 성공",
+			"data": null
+		}
+		""";
+
 	static final String JOIN_INVALID_INPUT = """
 		{ "status": 400, "message": "비밀번호는 10자 이상 작성해야합니다.", "data": null }
 		""";
@@ -62,6 +80,18 @@ final class AuthApiExamples {
 
 	static final String LOGIN_FAILED = """
 		{ "status": 401, "message": "이메일 또는 비밀번호가 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String REISSUE_MISSING_TOKEN = """
+		{ "status": 401, "message": "Refresh Token이 없습니다. 다시 로그인해주세요.", "data": null }
+		""";
+
+	static final String REISSUE_EXPIRED_TOKEN = """
+		{ "status": 401, "message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.", "data": null }
+		""";
+
+	static final String REISSUE_INVALID_TOKEN = """
+		{ "status": 401, "message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.", "data": null }
 		""";
 
 	private AuthApiExamples() {

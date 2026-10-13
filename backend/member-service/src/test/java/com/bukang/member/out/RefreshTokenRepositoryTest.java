@@ -42,4 +42,12 @@ class RefreshTokenRepositoryTest {
 
 		assertThat(refreshTokenRepository.findByMemberId(7)).isEmpty();
 	}
+
+	@Test
+	@DisplayName("로그아웃하면 members:{회원 ID}:refreshToken 키를 지운다")
+	void delete() {
+		refreshTokenRepository.delete(7);
+
+		verify(redisTemplate).delete("members:7:refreshToken");
+	}
 }

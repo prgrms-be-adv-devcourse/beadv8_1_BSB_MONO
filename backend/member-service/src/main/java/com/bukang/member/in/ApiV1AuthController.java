@@ -1,6 +1,7 @@
 package com.bukang.member.in;
 
 import java.net.URI;
+import java.time.Duration;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -8,7 +9,9 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,8 +25,10 @@ import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.dto.MemberLoginRequestDto;
 import com.bukang.member.dto.MemberLoginResponseDto;
 import com.bukang.member.dto.MemberLoginResult;
+import com.bukang.member.dto.TokenReissueResponseDto;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -36,7 +41,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Auth", description = "회원가입, 로그인 API")
+@Tag(name = "Auth", description = "회원가입, 로그인, 토큰 재발급, 로그아웃 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
@@ -105,20 +110,69 @@ public class ApiV1AuthController {
 
 		AuthTokens tokens = result.tokens();
 		return ResponseEntity.ok()
-			.header(HttpHeaders.SET_COOKIE, refreshTokenCookie(tokens).toString())
+			.header(HttpHeaders.SET_COOKIE,
+				refreshTokenCookie(tokens.refreshToken(), tokens.refreshTokenExpiration()).toString())
 			.body(RsData.of(HttpStatus.OK, "로그인 성공",
 				new MemberLoginResponseDto(tokens.accessToken(), result.member())));
 	}
 
+	@PostMapping("/reissue")
+	@Operation(summary = "토큰 재발급", description = "쿠키의 Refresh Token을 검증하고 Redis에 저장된 토큰과 같으면 "
+		+ "새 Access Token을 응답 본문으로 내려준다. Refresh Token은 바꾸지 않는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "재발급 성공",
+			content = @Content(examples = @ExampleObject(value = AuthApiExamples.REISSUE_SUCCESS))),
+		@ApiResponse(responseCode = "401", description = "Refresh Token 쿠키 없음, 만료 또는 유효하지 않음",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "쿠키 없음", value = AuthApiExamples.REISSUE_MISSING_TOKEN),
+				@ExampleObject(name = "만료", value = AuthApiExamples.REISSUE_EXPIRED_TOKEN),
+				@ExampleObject(name = "유효하지 않음", value = AuthApiExamples.REISSUE_INVALID_TOKEN)
+			}))
+	})
+	public ResponseEntity<RsData<TokenReissueResponseDto>> reissue(
+		@Parameter(description = "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)")
+		@CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshToken
+	) {
+		String accessToken = memberFacade.reissueAccessToken(refreshToken);
+		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "토큰 재발급 성공", new TokenReissueResponseDto(accessToken)));
+	}
+
+	@PostMapping("/logout")
+	@Operation(summary = "로그아웃", description = "Redis의 Refresh Token을 지우고 Refresh Token 쿠키를 만료시킨다. "
+		+ "쿠키가 없거나 이미 무효한 토큰이어도 성공으로 응답한다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "로그아웃 성공",
+			headers = @Header(name = HttpHeaders.SET_COOKIE,
+				description = "refreshToken=; Path=/api/v1/auth; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; "
+					+ "Secure; HttpOnly; SameSite=Lax"),
+			content = @Content(examples = @ExampleObject(value = AuthApiExamples.LOGOUT_SUCCESS)))
+	})
+	public ResponseEntity<RsData<Void>> logout(
+		@Parameter(description = "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)")
+		@CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshToken,
+		HttpServletRequest request,
+		HttpServletResponse response
+	) {
+		memberFacade.logout(refreshToken);
+
+		// 게이트웨이 토큰 검사(PRO-20) 전까지 로그인이 세션에도 저장되므로 세션도 함께 끝낸다
+		new SecurityContextLogoutHandler().logout(request, response, null);
+
+		return ResponseEntity.ok()
+			.header(HttpHeaders.SET_COOKIE, refreshTokenCookie("", Duration.ZERO).toString())
+			.body(RsData.of(HttpStatus.OK, "로그아웃 성공", null));
+	}
+
 	// httpOnly: 자바스크립트에서 읽지 못하게 해 XSS로 토큰이 새는 것을 막는다
 	// SameSite=Lax: 다른 사이트에서 보낸 POST에는 쿠키가 실리지 않는다
-	private ResponseCookie refreshTokenCookie(AuthTokens tokens) {
-		return ResponseCookie.from(REFRESH_TOKEN_COOKIE, tokens.refreshToken())
+	// maxAge가 0이면 브라우저가 쿠키를 지운다 (로그아웃). 지우려면 이름·경로가 발급할 때와 같아야 한다
+	private ResponseCookie refreshTokenCookie(String value, Duration maxAge) {
+		return ResponseCookie.from(REFRESH_TOKEN_COOKIE, value)
 			.httpOnly(true)
 			.secure(true)
 			.sameSite("Lax")
 			.path(REFRESH_TOKEN_COOKIE_PATH)
-			.maxAge(tokens.refreshTokenExpiration())
+			.maxAge(maxAge)
 			.build();
 	}
 }
