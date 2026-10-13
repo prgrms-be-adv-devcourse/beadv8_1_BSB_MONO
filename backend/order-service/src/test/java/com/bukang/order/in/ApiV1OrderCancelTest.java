@@ -127,7 +127,7 @@ class ApiV1OrderCancelTest {
 
 		// 취소한 참가권은 정산용 판매 내역에서 빠지고, 같은 대회에 다시 신청할 수 있다
 		String raceDate = raceCoursePort.findCourse(COURSE_ID).orElseThrow().raceDate().toLocalDate().toString();
-		mockMvc.perform(get("/internal/v1/order/sold-entries").param("raceDate", raceDate))
+		mockMvc.perform(get("/internal/v1/order/sold-entries").param("from", raceDate).param("to", raceDate))
 			.andExpect(jsonPath("$.data.length()").value(0));
 		applyAndGetId(MEMBER_ID);
 	}
