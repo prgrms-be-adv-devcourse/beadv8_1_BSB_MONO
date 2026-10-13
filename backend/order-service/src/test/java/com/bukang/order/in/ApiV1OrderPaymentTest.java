@@ -57,7 +57,7 @@ class ApiV1OrderPaymentTest {
 	private static final int MEMBER_ID = 1;
 	private static final int OTHER_MEMBER_ID = 2;
 	private static final int COURSE_ID = 10;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -302,7 +302,9 @@ class ApiV1OrderPaymentTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{ "name": "%s", "birth": "1994-06-25", "gender": "MALE", "phone": "010-1234-5678",
-					"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" }
+					"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } }
 				""".formatted(name)));
 	}
 
@@ -321,7 +323,9 @@ class ApiV1OrderPaymentTest {
 				{ "raceCourseId": %d, "thirdPartyConsent": true,
 					"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 						"phone": "010-1234-5678", "emergencyContactName": "김가족",
-						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 				""".formatted(COURSE_ID))));
 		return read(mockMvc.perform(post(BASE_URL)
 			.header("X-Member-Id", memberId)

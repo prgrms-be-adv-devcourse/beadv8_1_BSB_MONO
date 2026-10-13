@@ -63,7 +63,7 @@ import com.jayway.jsonpath.JsonPath;
 class OrderPayExpiryConcurrencyTest {
 	private static final int COURSE_ID = 10;
 	private static final int RACE_ID = 100;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 	private static final int BALANCE = 1_000_000;
 	private static final int ORDER_COUNT = 10;
 	private static final long TIMEOUT_SECONDS = 30;
@@ -436,7 +436,9 @@ class OrderPayExpiryConcurrencyTest {
 					{ "raceCourseId": %d, "thirdPartyConsent": true,
 						"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 							"phone": "010-1234-5678", "emergencyContactName": "김가족",
-							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 					""".formatted(COURSE_ID)))
 			.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(body, "$.data.id");

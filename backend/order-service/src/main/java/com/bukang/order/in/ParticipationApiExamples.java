@@ -24,7 +24,14 @@ final class ParticipationApiExamples {
 					"phone": "010-1234-5678",
 					"emergencyContactName": "김가족",
 					"emergencyContactPhone": "010-9876-5432",
-					"tshirtSize": "L"
+					"tshirtSize": "L",
+					"shippingAddress": {
+						"recipientName": "김러너",
+						"recipientPhone": "010-1234-5678",
+						"zipcode": "04700",
+						"address": "서울 성동구 왕십리로 00",
+						"addressDetail": "101동 1001호"
+					}
 				},
 				"thirdPartyConsent": true,
 				"consentedAt": "2026-10-12T10:15:30",
@@ -53,7 +60,14 @@ final class ParticipationApiExamples {
 					"phone": "010-1234-5678",
 					"emergencyContactName": "김가족",
 					"emergencyContactPhone": "010-9876-5432",
-					"tshirtSize": "L"
+					"tshirtSize": "L",
+					"shippingAddress": {
+						"recipientName": "김러너",
+						"recipientPhone": "010-1234-5678",
+						"zipcode": "04700",
+						"address": "서울 성동구 왕십리로 00",
+						"addressDetail": "101동 1001호"
+					}
 				},
 				"thirdPartyConsent": true,
 				"consentedAt": "2026-10-12T10:15:30",
@@ -82,7 +96,14 @@ final class ParticipationApiExamples {
 					"phone": "010-1234-5678",
 					"emergencyContactName": "김가족",
 					"emergencyContactPhone": "010-9876-5432",
-					"tshirtSize": "XL"
+					"tshirtSize": "XL",
+					"shippingAddress": {
+						"recipientName": "김러너",
+						"recipientPhone": "010-1234-5678",
+						"zipcode": "04700",
+						"address": "서울 성동구 왕십리로 00",
+						"addressDetail": "101동 1001호"
+					}
 				},
 				"thirdPartyConsent": true,
 				"consentedAt": "2026-10-12T10:15:30",
@@ -102,7 +123,14 @@ final class ParticipationApiExamples {
 				"phone": "010-1234-5678",
 				"emergencyContactName": "김가족",
 				"emergencyContactPhone": "010-9876-5432",
-				"tshirtSize": "L"
+				"tshirtSize": "L",
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				}
 			}
 		}
 		""";
@@ -187,7 +215,14 @@ final class ParticipationApiExamples {
 					"phone": "010-1234-5678",
 					"emergencyContactName": "김가족",
 					"emergencyContactPhone": "010-9876-5432",
-					"tshirtSize": "L"
+					"tshirtSize": "L",
+					"shippingAddress": {
+						"recipientName": "김러너",
+						"recipientPhone": "010-1234-5678",
+						"zipcode": "04700",
+						"address": "서울 성동구 왕십리로 00",
+						"addressDetail": "101동 1001호"
+					}
 				},
 				"thirdPartyConsent": true,
 				"consentedAt": "2026-10-12T10:15:30",
@@ -210,6 +245,10 @@ final class ParticipationApiExamples {
 
 	static final String NOT_CANCELABLE_FINISHED = """
 		{ "status": 409, "message": "이미 끝난 신청입니다(현재 상태: 취소).", "data": null }
+		""";
+
+	static final String SHIPPING_ADDRESS_REQUIRED = """
+		{ "status": 400, "message": "키트를 받을 배송 주소를 작성해주세요.", "data": null }
 		""";
 
 	private ParticipationApiExamples() {

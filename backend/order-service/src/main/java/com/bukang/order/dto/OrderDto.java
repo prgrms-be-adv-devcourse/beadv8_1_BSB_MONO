@@ -25,5 +25,7 @@ public class OrderDto {
 	private final LocalDateTime paymentDueAt;
 	// 결제 완료 일시. 결제 전이면 null
 	private final LocalDateTime paidAt;
+	// 키트 배송지. 키트가 없는 종목이면 null
+	private final ShippingAddressDto shippingAddress;
 	private final List<OrderItemDto> items;
 }

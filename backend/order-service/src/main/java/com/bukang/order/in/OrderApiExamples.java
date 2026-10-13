@@ -15,10 +15,17 @@ final class OrderApiExamples {
 				"buyerId": 1,
 				"raceId": 1,
 				"status": "CREATED",
-				"totalAmount": 60000,
+				"totalAmount": 50000,
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": null,
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -26,9 +33,9 @@ final class OrderApiExamples {
 						"raceCourseId": 1,
 						"sellerId": 1,
 						"itemName": "2026 서울 하프 마라톤 10K",
-						"unitPrice": 60000,
+						"unitPrice": 50000,
 						"quantity": 1,
-						"amount": 60000,
+						"amount": 50000,
 						"status": "ORDERED"
 					}
 				]
@@ -47,10 +54,17 @@ final class OrderApiExamples {
 				"buyerId": 1,
 				"raceId": 1,
 				"status": "CREATED",
-				"totalAmount": 60000,
+				"totalAmount": 50000,
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": null,
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -58,9 +72,9 @@ final class OrderApiExamples {
 						"raceCourseId": 1,
 						"sellerId": 1,
 						"itemName": "2026 서울 하프 마라톤 10K",
-						"unitPrice": 60000,
+						"unitPrice": 50000,
 						"quantity": 1,
-						"amount": 60000,
+						"amount": 50000,
 						"status": "ORDERED"
 					}
 				]
@@ -139,10 +153,17 @@ final class OrderApiExamples {
 				"buyerId": 1,
 				"raceId": 1,
 				"status": "CREATED",
-				"totalAmount": 60000,
+				"totalAmount": 50000,
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:12:00",
 				"paidAt": null,
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -150,9 +171,9 @@ final class OrderApiExamples {
 						"raceCourseId": 1,
 						"sellerId": 1,
 						"itemName": "2026 서울 하프 마라톤 10K",
-						"unitPrice": 60000,
+						"unitPrice": 50000,
 						"quantity": 1,
-						"amount": 60000,
+						"amount": 50000,
 						"status": "ORDERED"
 					}
 				]
@@ -191,10 +212,17 @@ final class OrderApiExamples {
 				"buyerId": 1,
 				"raceId": 1,
 				"status": "PAID",
-				"totalAmount": 60000,
+				"totalAmount": 50000,
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": "2026-10-12T10:04:12",
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -202,9 +230,9 @@ final class OrderApiExamples {
 						"raceCourseId": 1,
 						"sellerId": 1,
 						"itemName": "2026 서울 하프 마라톤 10K",
-						"unitPrice": 60000,
+						"unitPrice": 50000,
 						"quantity": 1,
-						"amount": 60000,
+						"amount": 50000,
 						"status": "PAID"
 					}
 				]
@@ -223,7 +251,7 @@ final class OrderApiExamples {
 						"createDate": "2026-10-12T10:00:00",
 						"orderNo": "OD-20261012-0002",
 						"status": "CREATED",
-						"totalAmount": 60000,
+						"totalAmount": 50000,
 						"paymentDueAt": "2026-10-12T10:10:00",
 						"itemName": "2026 서울 하프 마라톤 10K",
 						"itemCount": 1
@@ -270,10 +298,17 @@ final class OrderApiExamples {
 				"buyerId": 1,
 				"raceId": 1,
 				"status": "PAID",
-				"totalAmount": 60000,
+				"totalAmount": 50000,
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": "2026-10-12T10:04:12",
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -281,9 +316,9 @@ final class OrderApiExamples {
 						"raceCourseId": 1,
 						"sellerId": 1,
 						"itemName": "2026 서울 하프 마라톤 10K",
-						"unitPrice": 60000,
+						"unitPrice": 50000,
 						"quantity": 1,
-						"amount": 60000,
+						"amount": 50000,
 						"status": "PAID"
 					}
 				]
@@ -322,7 +357,7 @@ final class OrderApiExamples {
 	static final String CANCEL_SUCCESS = """
 		{
 			"status": 200,
-			"message": "취소했습니다. 예치금 60,000원을 돌려드렸습니다.",
+			"message": "취소했습니다. 예치금 50,000원을 돌려드렸습니다.",
 			"data": {
 				"id": 1,
 				"createDate": "2026-10-12T10:00:00",
@@ -330,10 +365,17 @@ final class OrderApiExamples {
 				"buyerId": 1,
 				"raceId": 1,
 				"status": "CANCELED",
-				"totalAmount": 60000,
-				"canceledAmount": 60000,
+				"totalAmount": 50000,
+				"canceledAmount": 50000,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": "2026-10-12T10:04:12",
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -341,9 +383,9 @@ final class OrderApiExamples {
 						"raceCourseId": 1,
 						"sellerId": 1,
 						"itemName": "2026 서울 하프 마라톤 10K",
-						"unitPrice": 60000,
+						"unitPrice": 50000,
 						"quantity": 1,
-						"amount": 60000,
+						"amount": 50000,
 						"status": "CANCELED"
 					}
 				]
