@@ -179,6 +179,15 @@ class GatewayAuthenticationTest {
 	}
 
 	@Test
+	@DisplayName("공개 주소와 앞부분만 같은 주소는 토큰이 필요하다")
+	void requiresTokenForPathOnlyStartingWithPublicPath() throws Exception {
+		HttpResponse<String> response = send(request("/api/v1/auth/login-history")
+			.POST(HttpRequest.BodyPublishers.noBody()));
+
+		assertUnauthorized(response, "로그인이 필요합니다.");
+	}
+
+	@Test
 	@DisplayName("상품 서비스 GET 요청은 로그인 없이 통과하고, 클라이언트가 보낸 X-Member-Id는 지운다")
 	void passesProductReadWithoutToken() throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/product/races/1").header(MEMBER_ID_HEADER, "999"));

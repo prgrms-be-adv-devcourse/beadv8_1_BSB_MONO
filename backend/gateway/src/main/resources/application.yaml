@@ -47,3 +47,19 @@ spring:
               uri: ${gateway.services.product}
               predicates:
                 - Path=/api/v1/product/**
+
+gateway:
+  auth:
+    # 토큰 없이 통과하는 주소 (JwtAuthenticationFilter). 여기 없는 주소는 토큰이 없으면 게이트웨이가 401로 막는다
+    # 로그인 전에 쓰는 API를 서비스에 추가하면 여기에도 추가한다. 빠뜨리면 그 API가 401로 막힌다(열리지는 않는다)
+    # pattern: "/a/b"는 정확히 같은 주소만, "/a/**"는 그 아래 전부. methods: 비우면 모든 메서드
+    # 공개 주소라도 유효한 토큰이 있으면 회원 ID를 넘긴다 (예: 대회 상세의 "이미 신청함" 표시)
+    public-paths:
+      # 재발급·로그아웃은 Refresh Token 쿠키로 본인을 확인하므로 Access Token이 만료돼도 부를 수 있어야 한다
+      - pattern: /api/v1/auth/join
+      - pattern: /api/v1/auth/login
+      - pattern: /api/v1/auth/reissue
+      - pattern: /api/v1/auth/logout
+      # 로그인 없이 대회 목록·상세를 볼 수 있게 한다. 등록·수정(POST 등)은 토큰이 필요하다
+      - pattern: /api/v1/product/**
+        methods: [ GET ]

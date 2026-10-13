@@ -1,7 +1,6 @@
 package com.bukang.gateway.auth;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Set;
 
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -34,21 +33,11 @@ import reactor.core.publisher.Mono;
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 	public static final String MEMBER_ID_HEADER = "X-Member-Id";
 
-	// 토큰 없이 통과하는 주소: 회원가입, 로그인, 토큰 재발급, 로그아웃
-	// 재발급·로그아웃은 Refresh Token 쿠키로 본인을 확인하므로 Access Token이 만료돼도 부를 수 있어야 한다
-	static final Set<String> PUBLIC_PATHS = Set.of(
-		"/api/v1/auth/join",
-		"/api/v1/auth/login",
-		"/api/v1/auth/reissue",
-		"/api/v1/auth/logout"
-	);
-
-	// 로그인 없이 대회 목록·상세를 볼 수 있도록 상품 서비스의 GET 요청은 토큰 없이 통과한다
-	private static final String PUBLIC_READ_PREFIX = "/api/v1/product/";
-
 	private static final String BEARER_PREFIX = "Bearer ";
 
 	private final JwtProvider jwtProvider;
+	// 토큰 없이 통과하는 주소는 코드가 아니라 application.yaml의 gateway.auth.public-paths에 둔다
+	private final PublicPaths publicPaths;
 
 	@Override
 	public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -92,11 +81,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 	}
 
 	// CORS 사전 요청(OPTIONS)은 브라우저가 토큰 없이 보내므로 통과시킨다
+	// OPTIONS는 API마다 다른 규칙이 아니라 브라우저 동작이라 설정(gateway.auth.public-paths)이 아닌 코드에 둔다
 	private boolean isPublic(ServerHttpRequest request) {
-		String path = request.getPath().pathWithinApplication().value();
 		return HttpMethod.OPTIONS.equals(request.getMethod())
-			|| PUBLIC_PATHS.contains(path)
-			|| (HttpMethod.GET.equals(request.getMethod()) && path.startsWith(PUBLIC_READ_PREFIX));
+			|| publicPaths.matches(request.getMethod(), request.getPath().pathWithinApplication());
 	}
 
 	private ServerHttpRequest withMemberIdIfValid(ServerHttpRequest request, String token) {
