@@ -11,7 +11,7 @@ ID="${1:-1001}"
 NICKNAME="${2:-테스터${ID}}"
 NOW="$(date +%Y-%m-%dT%H:%M:%S)"
 
-# 토픽 이름은 common의 MemberTopics.MEMBER_JOINED와 같아야 한다
+# 토픽 이름은 common의 KafkaTopics.MEMBER_MEMBER_JOINED와 같아야 한다
 TOPIC="queuing.member.joined"
 MESSAGE="{\"id\":${ID},\"createDate\":\"${NOW}\",\"modifyDate\":\"${NOW}\",\"nickname\":\"${NICKNAME}\"}"
 
