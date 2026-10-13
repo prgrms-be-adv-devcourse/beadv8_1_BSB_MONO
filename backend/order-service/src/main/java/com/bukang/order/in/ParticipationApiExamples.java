@@ -251,6 +251,10 @@ final class ParticipationApiExamples {
 		{ "status": 400, "message": "키트를 받을 배송 주소를 작성해주세요.", "data": null }
 		""";
 
+	static final String CHANGE_RETRY = """
+		{ "status": 409, "message": "방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
+		""";
+
 	private ParticipationApiExamples() {
 	}
 }

@@ -212,10 +212,11 @@ public class ApiV1ParticipationController {
 				@ExampleObject(name = "없는 참가 신청", value = ParticipationApiExamples.PARTICIPATION_NOT_FOUND),
 				@ExampleObject(name = "없는 종목", value = ParticipationApiExamples.COURSE_NOT_FOUND)
 			})),
-		@ApiResponse(responseCode = "409", description = "접수 마감 뒤 또는 고칠 수 없는 상태",
+		@ApiResponse(responseCode = "409", description = "접수 마감 뒤, 고칠 수 없는 상태 또는 수정 중 주문이 만들어짐(다시 시도)",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "접수 마감 뒤", value = ParticipationApiExamples.APPLICATION_CLOSED),
-				@ExampleObject(name = "고칠 수 없는 상태", value = ParticipationApiExamples.NOT_EDITABLE)
+				@ExampleObject(name = "고칠 수 없는 상태", value = ParticipationApiExamples.NOT_EDITABLE),
+				@ExampleObject(name = "수정 중 주문이 만들어짐", value = ParticipationApiExamples.CHANGE_RETRY)
 			}))
 	})
 	public ResponseEntity<RsData<ParticipationDto>> changeParticipant(

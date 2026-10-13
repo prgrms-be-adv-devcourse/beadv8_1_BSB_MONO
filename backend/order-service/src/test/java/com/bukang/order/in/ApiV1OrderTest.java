@@ -2,6 +2,7 @@ package com.bukang.order.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
+import static org.mockito.Mockito.doReturn;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -29,6 +31,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -41,6 +44,7 @@ import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.domain.ShippingAddress;
+import com.bukang.order.out.OrderItemRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.support.StubRaceCoursePort;
@@ -66,6 +70,10 @@ class ApiV1OrderTest {
 
 	@Autowired
 	private OrderRepository orderRepository;
+
+	// 참가자 정보 수정과 [결제하기]가 겹치는 경합을 만들 때만 응답을 바꾼다. 나머지는 실제 저장소 그대로다
+	@MockitoSpyBean
+	private OrderItemRepository orderItemRepository;
 
 	@Autowired
 	private ParticipationRepository participationRepository;
@@ -167,6 +175,33 @@ class ApiV1OrderTest {
 		ShippingAddress saved = orderRepository.findAll().getFirst().getShippingAddress();
 		assertThat(saved.getZipcode()).isEqualTo("04700");
 		assertThat(saved.getAddress()).isEqualTo("서울 성동구 왕십리로 00");
+	}
+
+	@Test
+	@DisplayName("참가자 정보 수정이 주문을 찾은 뒤 [결제하기]가 주문을 만들면 409로 거절하고, 주문·신청서의 배송지는 그대로다")
+	void changeParticipantWhileOrderCreated() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
+		int orderId = orderRepository.findAll().getFirst().getId();
+		// 수정이 주문을 찾을 때는 아직 없었고, 신청서를 잠그기 전에 [결제하기]가 주문을 만든 경합을 만든다
+		doReturn(Optional.empty()).doReturn(Optional.of(orderId))
+			.when(orderItemRepository).findOrderIdByParticipationId(participationId);
+
+		mockMvc.perform(put("/api/v1/order/participations/" + participationId + "/participant")
+				.header("X-Member-Id", MEMBER_ID)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{ "name": "김러너", "birth": "1994-06-25", "gender": "MALE", "phone": "010-1234-5678",
+						"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김가족", "recipientPhone": "010-9876-5432",
+							"zipcode": "48094", "address": "부산 해운대구 해운대로 00" } }
+					"""))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요."));
+
+		assertThat(orderRepository.findAll().getFirst().getShippingAddress().getZipcode()).isEqualTo("04700");
+		assertThat(participationRepository.findById(participationId).orElseThrow()
+			.getParticipant().getShippingAddress().getZipcode()).isEqualTo("04700");
 	}
 
 	@Test

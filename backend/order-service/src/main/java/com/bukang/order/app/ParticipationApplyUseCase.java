@@ -13,6 +13,7 @@ import com.bukang.order.domain.exception.AgeRestrictionException;
 import com.bukang.order.domain.exception.ApplicationPeriodException;
 import com.bukang.order.domain.exception.DuplicateParticipationException;
 import com.bukang.order.domain.exception.ParticipationAccessDeniedException;
+import com.bukang.order.domain.exception.ParticipationChangeRetryException;
 import com.bukang.order.domain.exception.ParticipationNotFoundException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
 import com.bukang.order.domain.exception.ShippingAddressRequiredException;
@@ -72,13 +73,18 @@ public class ParticipationApplyUseCase {
 	public Participation changeParticipant(int participationId, int memberId, ParticipantInfo participant,
 		LocalDateTime now) {
 		// [결제하기]로 주문이 있으면 주문의 배송지도 바꿔야 하므로 주문부터 잠근다 (잠금 순서: 주문 → 참가 신청)
-		Optional<Order> order = orderItemRepository.findOrderIdByParticipationId(participationId)
-			.flatMap(orderRepository::findByIdForUpdate);
+		Optional<Integer> orderId = orderItemRepository.findOrderIdByParticipationId(participationId);
+		Optional<Order> order = orderId.flatMap(orderRepository::findByIdForUpdate);
 		// 잠가서 읽는다. 엔티티는 저장할 때 모든 컬럼을 다시 쓰므로, 잠그지 않으면 결제·취소가 바꾼 상태를
 		// 옛 값으로 덮을 수 있다. 결제·연장·취소도 참가 신청을 잠그고 바꾼다
 		Participation participation = participationRepository.findByIdForUpdate(participationId)
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
 		checkOwner(participation, memberId);
+		// 주문을 찾은 뒤 신청서를 잠그기 전에 [결제하기]가 주문을 만들었으면, 그 주문에는 옛 배송지가 복사돼 있다
+		// 신청서를 잡은 채 주문을 잠그면 결제(주문 → 참가 신청)와 서로 기다릴 수 있으므로, 거절하고 다시 시도하게 한다
+		if (orderId.isEmpty() && orderItemRepository.findOrderIdByParticipationId(participationId).isPresent()) {
+			throw new ParticipationChangeRetryException("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.");
+		}
 		RaceCourseInfo course = findCourse(participation.getRaceCourseId());
 		if (!course.isBeforeClose(now)) {
 			throw new ApplicationPeriodException("접수가 마감되어 참가자 정보를 고칠 수 없습니다.");
