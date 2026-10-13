@@ -3,6 +3,7 @@ package com.bukang.order.out.payout;
 import java.time.LocalDate;
 
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -37,6 +38,11 @@ public class HttpRefundEligibilityAdapter implements RefundEligibilityPort {
 				.uri(uriBuilder -> uriBuilder.path(PATH).queryParam("raceDate", raceDate).build())
 				.retrieve()
 				.body(RESPONSE_TYPE);
+		} catch (HttpClientErrorException exception) {
+			// 4xx는 다시 시도해도 풀리지 않는다. 경로·파라미터 계약이 어긋났을 수 있어 장애와 구분해 남긴다
+			log.error("정산 서비스가 환불 가능 여부 요청을 거절했습니다. 계약(경로·파라미터)을 확인해야 합니다. status={}, raceDate={}",
+				exception.getStatusCode(), raceDate, exception);
+			throw new ExternalServiceUnavailableException(UNAVAILABLE_MESSAGE);
 		} catch (RestClientException exception) {
 			log.error("정산 서비스에 환불 가능 여부를 묻지 못했습니다. raceDate={}", raceDate, exception);
 			throw new ExternalServiceUnavailableException(UNAVAILABLE_MESSAGE);

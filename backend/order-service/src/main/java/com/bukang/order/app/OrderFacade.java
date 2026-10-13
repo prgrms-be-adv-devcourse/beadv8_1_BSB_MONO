@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.order.dto.OrderCreateRequestDto;
@@ -46,7 +47,8 @@ public class OrderFacade {
 		return orderPayUseCase.pay(memberId, orderId, LocalDateTime.now());
 	}
 
-	@Transactional
+	// 다른 서비스에 묻는 판정을 잠금 밖에서 하려고 트랜잭션은 OrderCancelUseCase가 단계마다 연다
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public OrderCancelUseCase.CancelResult cancelItem(int orderId, int orderItemId, int memberId) {
 		return orderCancelUseCase.cancel(memberId, orderId, orderItemId, LocalDateTime.now());
 	}

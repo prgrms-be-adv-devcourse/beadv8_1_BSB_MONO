@@ -6,20 +6,25 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.net.ServerSocket;
 import java.net.SocketTimeoutException;
+import java.time.Duration;
 import java.time.LocalDate;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
+import com.bukang.order.out.InternalHttpClients;
 
 class HttpRefundEligibilityAdapterTest {
 	private static final String BASE_URL = "http://payout";
@@ -72,6 +77,30 @@ class HttpRefundEligibilityAdapterTest {
 
 		assertThatThrownBy(() -> adapter.isRefundable(RACE_DATE))
 			.isInstanceOf(ExternalServiceUnavailableException.class);
+		assertThatThrownBy(() -> adapter.isRefundable(RACE_DATE))
+			.isInstanceOf(ExternalServiceUnavailableException.class);
+	}
+
+	@Test
+	@DisplayName("정산 서비스가 시간 제한 안에 답하지 않으면 기다리지 않고 503 예외로 알린다 (실제 연결로 확인)")
+	void timeout() throws Exception {
+		// 연결은 받지만 아무 응답도 하지 않는 서버
+		try (ServerSocket silentServer = new ServerSocket(0)) {
+			HttpRefundEligibilityAdapter slowAdapter = new HttpRefundEligibilityAdapter(
+				InternalHttpClients.create("http://localhost:" + silentServer.getLocalPort(), Duration.ofMillis(300)));
+			long startedAt = System.nanoTime();
+
+			assertThatThrownBy(() -> slowAdapter.isRefundable(RACE_DATE))
+				.isInstanceOf(ExternalServiceUnavailableException.class);
+			assertThat(Duration.ofNanos(System.nanoTime() - startedAt)).isLessThan(Duration.ofSeconds(2));
+		}
+	}
+
+	@Test
+	@DisplayName("정산 서비스가 4xx로 거절해도(계약 어긋남) 503 예외로 알린다")
+	void clientError() {
+		server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.NOT_FOUND));
+
 		assertThatThrownBy(() -> adapter.isRefundable(RACE_DATE))
 			.isInstanceOf(ExternalServiceUnavailableException.class);
 	}

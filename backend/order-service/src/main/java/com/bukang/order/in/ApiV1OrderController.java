@@ -188,7 +188,7 @@ public class ApiV1OrderController {
 				@ExampleObject(name = "환불 기한·일정 변경 환불 기간 지남", value = OrderApiExamples.SCHEDULE_CHANGE_REFUND_PASSED),
 				@ExampleObject(name = "정산 대상일 지남", value = OrderApiExamples.PAYOUT_STARTED)
 			})),
-		@ApiResponse(responseCode = "503", description = "정산 서비스에 연결하지 못함 (연결 실패, 2초 안에 응답 없음, 5xx)",
+		@ApiResponse(responseCode = "503", description = "정산 서비스에 환불 가능 여부를 묻지 못함 (연결 실패, 시간 초과, 오류 응답, 응답 형식 오류)",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = OrderApiExamples.PAYOUT_UNAVAILABLE)))
 	})
