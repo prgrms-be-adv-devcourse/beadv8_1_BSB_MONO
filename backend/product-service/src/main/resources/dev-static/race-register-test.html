@@ -131,7 +131,8 @@
       <li>[등록] POST /api/v1/product/races → 201, 판매 예정(SCHEDULED)으로 저장되고 바로 공개됩니다. 판매 시작 일시가 이미 지났으면 400.
         판매 시작 일시가 지나면 5분마다 도는 상태 배치가 판매 중(ON_SALE)으로 바꿉니다. 성공하면 대회 ID와 종목별 courseId를 채웁니다.</li>
       <li>[불러오기] GET /api/v1/product/races/{raceId} → 폼을 채우고, 종목마다 file-service GET /api/v1/file/files?refType=RaceCourse&amp;refId={종목 ID}로 이미지 표를 채웁니다. 취소된 대회는 등록한 회원 ID로만 보입니다(아니면 404).</li>
-      <li>[수정] PUT /api/v1/product/races/{raceId} (등록과 같은 본문). courseId가 있는 종목은 고치고, 없는 종목은 추가하고, 요청에 없는 기존 종목은 뺍니다. 이미지 목록도 통째로 바뀝니다.</li>
+      <li>[수정] PUT /api/v1/product/races/{raceId} (등록과 같은 본문). courseId가 있는 종목은 고치고, 없는 종목은 추가하고, 요청에 없는 기존 종목은 뺍니다. 이미지 목록도 통째로 바뀝니다.
+        취소된 대회와 판매가 끝난 대회(대회일 다음 날 0시부터)는 수정할 수 없습니다(409).</li>
       <li>[대회 취소] POST /api/v1/product/races/{raceId}/cancel → 200 "대회를 취소했습니다.", saleStatus CANCELED. 되돌릴 수 없습니다.</li>
     </ul>
   </div>
