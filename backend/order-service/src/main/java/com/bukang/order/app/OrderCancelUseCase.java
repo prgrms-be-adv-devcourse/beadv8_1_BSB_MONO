@@ -1,5 +1,6 @@
 package com.bukang.order.app;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
@@ -25,7 +26,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 결제한 참가권을 주문 상품 단위로 취소·환불한다 (정책 5장). 키트는 같은 주문 상품이라 함께 취소된다
- * 환불 기한 안이면 자동 승인: 주문 상품 CANCELED, 주문 PARTIAL_CANCELED/CANCELED, 참가 신청 CANCELED
+ * 환불 기한 안이거나, 대회 일정이 바뀐 뒤 7일 안이면 자동 승인 (ERD v4 환불 판정):
+ * 주문 상품 CANCELED, 주문 PARTIAL_CANCELED/CANCELED, 참가 신청 CANCELED
  * → 자리 되돌리기(B) → 예치금 환불(D). 정산 대상일이 지난 참가권은 정산 서비스(E)가 거절한다
  * 외부 호출은 모두 주문 상품·참가 신청 단위로 멱등이라, 중간에 실패해 롤백되면 같은 취소를 다시 요청하면 된다
  */
@@ -55,10 +57,11 @@ public class OrderCancelUseCase {
 		RaceCourseInfo course = raceCoursePort.findCourse(item.getRaceCourseId())
 			.orElseThrow(() -> new RaceCourseNotFoundException("존재하지 않는 종목입니다."));
 		if (!course.isRefundableOn(now.toLocalDate())) {
-			throw new RefundNotAllowedException(
-				"환불 기한(%s)이 지나 취소할 수 없습니다.".formatted(course.refundDeadline()));
+			throw new RefundNotAllowedException(refundPeriodPassedMessage(course));
 		}
-		if (!refundEligibilityPort.isRefundable(item.getRaceDate().toLocalDate())) {
+		// 정산 대상일은 상품 서비스의 지금 대회 일시로 따진다. 주문 상품의 대회 일시는 주문 때 복사한 값이라
+		// 일정이 미뤄졌으면 옛 날짜로 남아 있어, 일정 변경 뒤 7일 환불을 정산 시작으로 잘못 거절한다
+		if (!refundEligibilityPort.isRefundable(course.raceDate().toLocalDate())) {
 			throw new RefundNotAllowedException("정산이 시작된 참가권이라 취소할 수 없습니다.");
 		}
 
@@ -71,5 +74,14 @@ public class OrderCancelUseCase {
 		seatHoldPort.restore(item.getParticipationId());
 		walletPort.refund(order.getId(), item.getId(), item.getAmount());
 		return new CancelResult(order.toDto(), item.getAmount());
+	}
+
+	private String refundPeriodPassedMessage(RaceCourseInfo course) {
+		LocalDate scheduleChangeLastDay = course.scheduleChangeRefundLastDay();
+		if (scheduleChangeLastDay == null) {
+			return "환불 기한(%s)이 지나 취소할 수 없습니다.".formatted(course.refundDeadline());
+		}
+		return "환불 기한(%s)과 일정 변경 뒤 전액 환불 기간(%s까지)이 지나 취소할 수 없습니다."
+			.formatted(course.refundDeadline(), scheduleChangeLastDay);
 	}
 }

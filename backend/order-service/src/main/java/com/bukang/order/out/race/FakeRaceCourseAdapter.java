@@ -41,7 +41,8 @@ public class FakeRaceCourseAdapter implements RaceCoursePort {
 			"가짜 대회 %d 종목".formatted(raceCourseId),
 			50_000,
 			10_000,
-			now.plusDays(40).toLocalDate()
+			now.plusDays(40).toLocalDate(),
+			null
 		));
 	}
 }

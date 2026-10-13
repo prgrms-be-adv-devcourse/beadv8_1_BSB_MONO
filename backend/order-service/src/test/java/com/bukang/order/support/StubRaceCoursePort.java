@@ -40,15 +40,23 @@ public class StubRaceCoursePort implements RaceCoursePort {
 	// 환불 기한을 정한 접수 중 종목 (취소 테스트에서 기한 경계를 맞출 때 쓴다)
 	public static RaceCourseInfo openCourse(int raceCourseId, int raceId, int minAge, Integer maxAge,
 		LocalDate refundDeadline) {
+		return openCourse(raceCourseId, raceId, minAge, maxAge, refundDeadline, null);
+	}
+
+	// 환불 기한과 일정 변경 일시를 정한 접수 중 종목 (일정 변경 뒤 7일 전액 환불 테스트에서 쓴다)
+	public static RaceCourseInfo openCourse(int raceCourseId, int raceId, int minAge, Integer maxAge,
+		LocalDate refundDeadline, LocalDateTime scheduleChangedAt) {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(60), now.minusDays(1), now.plusDays(30),
-			minAge, maxAge, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE, refundDeadline);
+			minAge, maxAge, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE, refundDeadline,
+			scheduleChangedAt);
 	}
 
 	// 접수가 이미 마감된 종목
 	public static RaceCourseInfo closedCourse(int raceCourseId, int raceId) {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(10), now.minusDays(30), now.minusDays(1),
-			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE, now.toLocalDate().plusDays(5));
+			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, KIT_PRICE, now.toLocalDate().plusDays(5),
+			null);
 	}
 }

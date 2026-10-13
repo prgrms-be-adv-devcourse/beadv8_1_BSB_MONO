@@ -20,6 +20,8 @@ import java.time.Period;
  * @param price              참가비 (원)
  * @param kitPrice           참가권에 포함된 키트 금액 (원). 키트가 없으면 0
  * @param refundDeadline     환불 기한 (날짜). 이날 23:59:59까지 취소하면 전액 환불한다 (정책 5장, ERD v4 race.refund_deadline)
+ * @param scheduleChangedAt  일정 변경 안내 일시. 판매 시작 뒤 대회 일시가 바뀌면 상품 서비스가 기록한다. 바뀐 적 없으면 null
+ *                           (ERD v4 race.schedule_changed_at)
  */
 public record RaceCourseInfo(
 	int raceCourseId,
@@ -33,11 +35,35 @@ public record RaceCourseInfo(
 	String courseName,
 	int price,
 	int kitPrice,
-	LocalDate refundDeadline
+	LocalDate refundDeadline,
+	LocalDateTime scheduleChangedAt
 ) {
-	// 환불 기한 날짜까지(그날 23:59:59 포함) 개인 사정으로 취소할 수 있다 (10/12 결정)
+	// 일정이 바뀐 뒤 전액 환불해 주는 날 수 (ERD v4 "schedule_changed_at부터 7일 동안은 기한과 상관없이 전액 환불")
+	public static final int SCHEDULE_CHANGE_REFUND_DAYS = 7;
+
+	/**
+	 * 전액 환불로 취소할 수 있는 날인지 (ERD v4 환불 판정)
+	 * 환불 기한 날짜까지(그날 23:59:59 포함, 10/12 결정)이거나, 일정이 바뀐 뒤 7일 안이면 기한과 상관없이 된다
+	 */
 	public boolean isRefundableOn(LocalDate today) {
-		return !today.isAfter(refundDeadline);
+		return !today.isAfter(refundDeadline) || isWithinScheduleChangeRefund(today);
+	}
+
+	/**
+	 * 일정 변경 뒤 전액 환불 기간 안인지. 환불 기한과 같이 날짜 단위로 센다
+	 * 첫날은 넣지 않는다(민법 157조 초일 불산입): 10/13 14:00에 바뀌면 10/14부터 7일째인 10/20 23:59:59까지다
+	 */
+	public boolean isWithinScheduleChangeRefund(LocalDate today) {
+		LocalDate lastDay = scheduleChangeRefundLastDay();
+		return lastDay != null && !today.isAfter(lastDay);
+	}
+
+	// 일정 변경 뒤 전액 환불 기간의 마지막 날 (그날 23:59:59까지). 일정이 바뀐 적 없으면 null
+	public LocalDate scheduleChangeRefundLastDay() {
+		if (scheduleChangedAt == null) {
+			return null;
+		}
+		return scheduleChangedAt.toLocalDate().plusDays(SCHEDULE_CHANGE_REFUND_DAYS);
 	}
 
 	// 구매자가 내는 참가권 한 장 값. 키트는 참가권과 함께 팔고 함께 취소한다 (ERD race_course.kit_price)

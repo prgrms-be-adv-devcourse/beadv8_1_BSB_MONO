@@ -9,10 +9,17 @@ import com.bukang.order.out.payout.RefundEligibilityPort;
  */
 public class StubRefundEligibilityPort implements RefundEligibilityPort {
 	private volatile boolean refundable = true;
+	private volatile LocalDate lastRaceDate;
 
 	@Override
 	public boolean isRefundable(LocalDate raceDate) {
+		lastRaceDate = raceDate;
 		return refundable;
+	}
+
+	// 마지막으로 물어본 대회 날짜 (어느 날짜로 정산 대상일을 따졌는지 확인할 때 쓴다)
+	public LocalDate lastRaceDate() {
+		return lastRaceDate;
 	}
 
 	public void setRefundable(boolean refundable) {
@@ -21,5 +28,6 @@ public class StubRefundEligibilityPort implements RefundEligibilityPort {
 
 	public void clear() {
 		refundable = true;
+		lastRaceDate = null;
 	}
 }
