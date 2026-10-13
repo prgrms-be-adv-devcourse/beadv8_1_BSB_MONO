@@ -1,6 +1,8 @@
 package com.bukang.order.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -28,10 +30,12 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.out.CartItemRepository;
 import com.bukang.order.out.CartRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
@@ -58,6 +62,10 @@ class ApiV1CartCheckoutTest {
 
 	@Autowired
 	private CartRepository cartRepository;
+
+	// 장바구니 빼기만 일부러 실패시킬 때 쓴다. 그 밖에는 진짜 저장소처럼 동작한다
+	@MockitoSpyBean
+	private CartItemRepository cartItemRepository;
 
 	@Autowired
 	private OrderRepository orderRepository;
@@ -178,6 +186,24 @@ class ApiV1CartCheckoutTest {
 		assertThat(orderRepository.count()).isEqualTo(1);
 		assertThat(statusOf(broken)).isEqualTo(ParticipationStatus.PENDING);
 		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(OTHER_COURSE_ID);
+	}
+
+	@Test
+	@DisplayName("주문한 종목을 장바구니에서 빼지 못해도 주문은 그대로 남고, 그 항목은 장바구니에 남는다")
+	void checkoutWhenCartRemovalFails() throws Exception {
+		addToCart(MEMBER_ID, COURSE_ID);
+		int participationId = apply(MEMBER_ID, COURSE_ID);
+		doThrow(new IllegalStateException("장바구니 잠금 대기 시간 초과 (테스트)"))
+			.when(cartItemRepository).deleteByCartIdAndRaceCourseId(anyInt(), anyInt());
+
+		checkout(MEMBER_ID, newKey(), participationId)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.orderedCount").value(1))
+			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"));
+
+		assertThat(orderRepository.count()).isEqualTo(1);
+		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.APPLIED);
+		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(COURSE_ID);
 	}
 
 	@Test

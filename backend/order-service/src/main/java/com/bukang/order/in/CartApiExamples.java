@@ -94,7 +94,7 @@ final class CartApiExamples {
 	static final String CHECKOUT_SUCCESS = """
 		{
 			"status": 200,
-			"message": "참가권 2건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
+			"message": "참가권 3건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
 			"data": {
 				"orderedCount": 1,
 				"results": [
@@ -132,6 +132,12 @@ final class CartApiExamples {
 						"participationId": 12,
 						"outcome": "SOLD_OUT",
 						"message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
+						"order": null
+					},
+					{
+						"participationId": 13,
+						"outcome": "FAILED",
+						"message": "접수 기간이 아닙니다.",
 						"order": null
 					}
 				]

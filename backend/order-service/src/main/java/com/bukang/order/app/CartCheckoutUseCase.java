@@ -21,6 +21,7 @@ import com.bukang.order.dto.CartCheckoutDto;
 import com.bukang.order.dto.CartCheckoutItemDto;
 import com.bukang.order.dto.CartCheckoutItemDto.Outcome;
 import com.bukang.order.out.CartItemRepository;
+import com.bukang.order.out.CartRepository;
 import com.bukang.order.out.ParticipationRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class CartCheckoutUseCase {
 	private static final String UNEXPECTED_MESSAGE = "처리하지 못했습니다. 같은 Idempotency-Key로 다시 시도해주세요.";
 
 	private final ParticipationRepository participationRepository;
+	private final CartRepository cartRepository;
 	private final CartItemRepository cartItemRepository;
 	private final OrderCreateUseCase orderCreateUseCase;
 	private final TransactionTemplate transactionTemplate;
@@ -76,21 +78,31 @@ public class CartCheckoutUseCase {
 		}
 	}
 
-	// 참가 신청 하나를 [결제하기]와 똑같이 처리하고, 주문했으면 같은 트랜잭션에서 그 종목을 장바구니에서 뺀다
+	/**
+	 * 참가 신청 하나를 [결제하기]와 똑같이 처리하고, 주문했으면 커밋한 뒤 그 종목을 장바구니에서 뺀다
+	 * 장바구니 빼기를 주문과 같은 트랜잭션에 두면, 빼기가 실패할 때 상품 서비스에 자리는 잡혔는데 주문만 롤백된다
+	 */
 	private CartCheckoutItemDto checkoutOne(int memberId, int participationId, String key, LocalDateTime now) {
+		CartCheckoutItemDto item = orderOne(memberId, participationId, key, now);
+		if (item.getOrder() != null) {
+			// 개인 예매 주문은 참가권 1장짜리라 주문 상품의 종목이 곧 장바구니에서 뺄 종목이다
+			removeFromCart(memberId, item.getOrder().getItems().getFirst().getRaceCourseId());
+		}
+		return item;
+	}
+
+	private CartCheckoutItemDto orderOne(int memberId, int participationId, String key, LocalDateTime now) {
 		try {
 			return transactionTemplate.execute(status -> {
 				OrderCreateResult result = orderCreateUseCase.create(memberId, participationId, key, now);
-				if (result.outcome() == OrderCreateResult.Outcome.SOLD_OUT) {
-					return new CartCheckoutItemDto(participationId, Outcome.SOLD_OUT,
+				return switch (result.outcome()) {
+					case CREATED -> new CartCheckoutItemDto(participationId, Outcome.CREATED,
+						OrderCreateResult.CREATED_MESSAGE, result.order());
+					case EXISTING -> new CartCheckoutItemDto(participationId, Outcome.EXISTING,
+						OrderCreateResult.EXISTING_MESSAGE, result.order());
+					case SOLD_OUT -> new CartCheckoutItemDto(participationId, Outcome.SOLD_OUT,
 						OrderCreateResult.SOLD_OUT_MESSAGE, null);
-				}
-				// 개인 예매 주문은 참가권 1장짜리라 주문 상품의 종목이 곧 장바구니에서 뺄 종목이다
-				int raceCourseId = result.order().getItems().getFirst().getRaceCourseId();
-				cartItemRepository.deleteByMemberIdAndRaceCourseId(memberId, raceCourseId);
-				boolean created = result.outcome() == OrderCreateResult.Outcome.CREATED;
-				return new CartCheckoutItemDto(participationId, created ? Outcome.CREATED : Outcome.EXISTING,
-					created ? OrderCreateResult.CREATED_MESSAGE : OrderCreateResult.EXISTING_MESSAGE, result.order());
+				};
 			});
 		} catch (BusinessException exception) {
 			// 이 항목만 롤백된다. 앞에서 주문한 항목은 이미 커밋되어 그대로 남는다
@@ -101,6 +113,17 @@ public class CartCheckoutUseCase {
 			log.error("장바구니 결제 중 항목을 처리하지 못했습니다. memberId={}, participationId={}", memberId, participationId,
 				exception);
 			return new CartCheckoutItemDto(participationId, Outcome.FAILED, UNEXPECTED_MESSAGE, null);
+		}
+	}
+
+	// 주문은 이미 커밋됐으므로 빼기에 실패해도 주문 결과는 그대로 둔다. 남은 항목은 회원이 직접 빼면 된다
+	private void removeFromCart(int memberId, int raceCourseId) {
+		try {
+			transactionTemplate.executeWithoutResult(status -> cartRepository.findByMemberId(memberId)
+				.ifPresent(cart -> cartItemRepository.deleteByCartIdAndRaceCourseId(cart.getId(), raceCourseId)));
+		} catch (RuntimeException exception) {
+			log.warn("주문한 종목을 장바구니에서 빼지 못했습니다. memberId={}, raceCourseId={}", memberId, raceCourseId,
+				exception);
 		}
 	}
 

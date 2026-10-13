@@ -9,15 +9,12 @@ import com.bukang.order.domain.CartItem;
 
 public interface CartItemRepository extends JpaRepository<CartItem, Integer> {
 	/**
-	 * 장바구니 결제로 주문한 종목을 그 회원의 장바구니에서 뺀다 (PRO-45)
+	 * 장바구니 결제로 주문한 종목을 장바구니에서 뺀다 (PRO-45)
 	 * 엔티티로 지우면 회원이 같은 항목을 동시에 지웠을 때 0행 삭제 오류로 주문까지 롤백되므로, 조건부 DELETE로 지운다.
 	 * 이미 없으면 0을 돌려줄 뿐이다
 	 */
+	// 장바구니와 종목으로 지워 유니크 인덱스(uk_cart_item_course)만 타고, 그 한 행만 잠근다
 	@Modifying(flushAutomatically = true)
-	@Query("""
-		delete from CartItem i
-		where i.raceCourseId = :raceCourseId
-			and i.cart.id in (select c.id from Cart c where c.memberId = :memberId)
-		""")
-	int deleteByMemberIdAndRaceCourseId(@Param("memberId") int memberId, @Param("raceCourseId") int raceCourseId);
+	@Query("delete from CartItem i where i.cart.id = :cartId and i.raceCourseId = :raceCourseId")
+	int deleteByCartIdAndRaceCourseId(@Param("cartId") int cartId, @Param("raceCourseId") int raceCourseId);
 }
