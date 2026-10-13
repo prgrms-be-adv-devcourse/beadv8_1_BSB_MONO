@@ -59,9 +59,7 @@ public class OrderCancelUseCase {
 		if (!course.isRefundableOn(now.toLocalDate())) {
 			throw new RefundNotAllowedException(refundPeriodPassedMessage(course));
 		}
-		// 정산 대상일은 상품 서비스의 지금 대회 일시로 따진다. 주문 상품의 대회 일시는 주문 때 복사한 값이라
-		// 일정이 미뤄졌으면 옛 날짜로 남아 있어, 일정 변경 뒤 7일 환불을 정산 시작으로 잘못 거절한다
-		if (!refundEligibilityPort.isRefundable(course.raceDate().toLocalDate())) {
+		if (!isBeforePayout(item.getRaceDate().toLocalDate(), course.raceDate().toLocalDate())) {
 			throw new RefundNotAllowedException("정산이 시작된 참가권이라 취소할 수 없습니다.");
 		}
 
@@ -76,9 +74,25 @@ public class OrderCancelUseCase {
 		return new CancelResult(order.toDto(), item.getAmount());
 	}
 
+	/**
+	 * 정산 대상일 전인지 두 날짜로 모두 묻는다. MVP는 회수가 없어, 정산에 들어간 참가권을 환불하면 판매자 지급과
+	 * 구매자 환불이 둘 다 나간다 (payout PayoutTargetDate)
+	 * - 주문 상품의 대회 일시: 정산이 판매 내역을 고를 때 쓰는 날짜다. 주문 때 복사해 일정이 바뀌어도 그대로라,
+	 *   대회가 미뤄졌으면 이 옛 날짜로 이미 정산됐을 수 있다
+	 * - 상품 서비스의 지금 대회 일시: 대회가 당겨졌으면 실제 대회가 이미 끝났을 수 있다
+	 * 일정이 바뀔 때 주문 상품의 대회 일시도 함께 고치면 한 날짜로 줄일 수 있다 (pending-items 코드 14)
+	 */
+	private boolean isBeforePayout(LocalDate copiedRaceDate, LocalDate currentRaceDate) {
+		if (!refundEligibilityPort.isRefundable(copiedRaceDate)) {
+			return false;
+		}
+		return copiedRaceDate.equals(currentRaceDate) || refundEligibilityPort.isRefundable(currentRaceDate);
+	}
+
+	// 일정 변경 뒤 전액 환불 기간이 환불 기한보다 늦게 끝났을 때만 그 기간을 함께 알린다 (먼저 끝났으면 헷갈리기만 한다)
 	private String refundPeriodPassedMessage(RaceCourseInfo course) {
 		LocalDate scheduleChangeLastDay = course.scheduleChangeRefundLastDay();
-		if (scheduleChangeLastDay == null) {
+		if (scheduleChangeLastDay == null || !scheduleChangeLastDay.isAfter(course.refundDeadline())) {
 			return "환불 기한(%s)이 지나 취소할 수 없습니다.".formatted(course.refundDeadline());
 		}
 		return "환불 기한(%s)과 일정 변경 뒤 전액 환불 기간(%s까지)이 지나 취소할 수 없습니다."
