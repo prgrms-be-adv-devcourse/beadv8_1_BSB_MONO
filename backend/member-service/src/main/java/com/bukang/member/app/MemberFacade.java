@@ -40,6 +40,12 @@ public class MemberFacade {
 		).toDto();
 	}
 
+	public MemberDto findMe(int memberId) {
+		return memberRepository.findById(memberId)
+			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."))
+			.toDto();
+	}
+
 	public boolean existsByEmail(String email) {
 		return memberRepository.existsByEmail(email);
 	}
