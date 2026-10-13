@@ -20,14 +20,16 @@ Gradle 멀티 모듈로 `common`·`jwt`(공통 라이브러리), `gateway`(API �
 | `nginx` | 입구 (`/api`는 `gateway`, 나머지는 `web`으로 넘김, 설정 `docker/nginx/default.conf`) | http://localhost |
 | `web` | 프론트엔드 Next.js (`../frontend` 이미지, nginx를 거쳐서만 접속) | - |
 | `gateway` | API 게이트웨이 (prod 프로파일, `/api` 요청을 각 서비스로 넘김) | http://localhost:8000 |
-| `member-service` | 회원 서비스 (prod 프로파일) | http://localhost:8080 |
-| `cash-service` | 캐시 서비스 (prod 프로파일) | http://localhost:8081 |
-| `payout-service` | 정산 서비스 (prod 프로파일) | http://localhost:8082 |
-| `file-service` | 파일 서비스 (prod 프로파일) | http://localhost:8083 |
-| `order-service` | 주문 서비스 (prod 프로파일) | http://localhost:8084 |
-| `product-service` | 상품 서비스 (prod 프로파일) | http://localhost:8085 |
+| `member-service` | 회원 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-member-service:8080`) |
+| `cash-service` | 캐시 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-cash-service:8081`) |
+| `payout-service` | 정산 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-payout-service:8082`) |
+| `file-service` | 파일 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-file-service:8083`) |
+| `order-service` | 주문 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-order-service:8084`) |
+| `product-service` | 상품 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-product-service:8085`) |
 
 앱 서비스(`nginx`, `web`, `gateway`, `member-service`, `cash-service`, `payout-service`, `file-service`, `order-service`, `product-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
+서비스 6개는 호스트에 포트를 열지 않고 `gateway`를 거쳐서만 부를 수 있습니다. 서비스는 `X-Member-Id` 헤더를 로그인한 회원으로 믿기 때문에,
+서비스 포트로 직접 오면 헤더를 위조할 수 있어서입니다. 서비스를 직접 부르며 확인하려면 컨테이너 대신 `bootRun`으로 띄웁니다.
 시작 순서는 서비스 6개 → `gateway` → `web` → `nginx`입니다. 앞 컨테이너가 healthy(포트가 열려 요청을 받을 수 있는 상태)가 된 뒤에 다음 컨테이너가 시작합니다.
 
 ### 개발 실행 (앱 컨테이너 제외)
@@ -59,7 +61,7 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `
    | `MYSQL_USER` / `MYSQL_PASS` / `MYSQL_DB` | `compose.yml`의 `bukang-db` 값과 동일 |
    | `JWT_SECRET` | 32자 이상의 임의 문자열 |
 
-2. IDE나 `bootRun`으로 실행 중인 서비스가 있으면 종료합니다. 같은 포트(80, 8000, 8080, 8081, 8082, 8083, 8084, 8085)를 사용합니다.
+2. IDE나 `bootRun`으로 실행 중인 게이트웨이가 있으면 종료합니다. 같은 포트(8000)를 사용합니다. 서비스 컨테이너는 호스트 포트를 쓰지 않아 `bootRun` 서비스와 겹치지 않습니다.
 
 3. 앱 이미지를 빌드하고 전체 컨테이너를 실행합니다.
 
