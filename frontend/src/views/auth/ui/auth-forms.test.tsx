@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AUTH_ERRORS } from '../model/schemas'
+import { SignupStepProvider } from '../model/signup-store'
 import { PasswordResetPage } from './FindAccountPages'
 import { LoginPage } from './LoginPage'
 import { SignupProfilePage } from './SignupPages'
@@ -49,7 +50,11 @@ describe('LoginPage', () => {
 describe('SignupProfilePage', () => {
   it('닉네임이 짧으면 오류가 뜨고 가입 완료 버튼이 꺼진다', async () => {
     const user = userEvent.setup()
-    render(<SignupProfilePage />)
+    render(
+      <SignupStepProvider>
+        <SignupProfilePage />
+      </SignupStepProvider>,
+    )
 
     await user.type(screen.getByLabelText('이름'), '김러너')
     await user.type(screen.getByLabelText('생년월일'), '1995.03.02')

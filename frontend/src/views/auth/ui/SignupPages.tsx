@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
@@ -26,46 +26,50 @@ import {
   type SignupAccountValues,
   type SignupProfileValues,
 } from '../model/schemas'
+import { useSignupStep } from '../model/signup-store'
+import { requiredTermsChecked, SIGNUP_TERMS } from '../model/signup-terms'
 import { CenterBody, StepIntro } from './parts'
 
 const STEPS = ['약관', '계정', '회원 정보']
 
-type Term = {
-  id: string
-  label: string
-  required: boolean
-  href?: '/terms/service' | '/terms/privacy' | '/terms/marketing'
-}
-
-const TERMS: Term[] = [
-  { id: 'service', label: '[필수] 서비스 이용약관', required: true, href: '/terms/service' },
-  { id: 'privacy', label: '[필수] 개인정보 수집 · 이용', required: true, href: '/terms/privacy' },
-  { id: 'age', label: '[필수] 만 14세 이상이에요', required: true },
-  { id: 'marketing', label: '[선택] 마케팅 정보 받기', required: false, href: '/terms/marketing' },
-]
-
 // 피그마 V2 · M04-0 약관 동의(바텀시트) → M04-1 계정(이메일 · 비밀번호) (+ M04-1E 입력 오류)
 // invalid는 시안 미리보기(?preview=error)용. 약관을 건너뛰고 M04-1E 오류를 띄운 채로 보여 준다.
+// 입력값과 약관 체크는 SignupStepProvider((auth) 레이아웃)에 남아 회원 정보 단계에서 돌아와도 그대로다.
 export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
   const router = useRouter()
-  const [termsOpen, setTermsOpen] = useState(!invalid)
-  const [checked, setChecked] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(TERMS.map((t) => [t.id, invalid])),
-  )
-  const allChecked = TERMS.every((t) => checked[t.id])
-  const requiredChecked = TERMS.every((t) => !t.required || checked[t.id])
-  const agreed = !termsOpen && requiredChecked
+  const terms = useSignupStep((s) => s.terms)
+  const termsAgreed = useSignupStep((s) => s.termsAgreed)
+  const setTerm = useSignupStep((s) => s.setTerm)
+  const setAllTerms = useSignupStep((s) => s.setAllTerms)
+  const agreeTerms = useSignupStep((s) => s.agreeTerms)
+  const account = useSignupStep((s) => s.account)
+  const setAccount = useSignupStep((s) => s.setAccount)
+
+  const [termsOpen, setTermsOpen] = useState(!invalid && !termsAgreed)
+  const allChecked = SIGNUP_TERMS.every((t) => terms[t.id])
+  const requiredChecked = requiredTermsChecked(terms)
+  const agreed = invalid || termsAgreed
+
   const {
     register,
     handleSubmit,
+    subscribe,
     formState: { errors, isValid },
   } = useForm<SignupAccountValues>({
     resolver: zodResolver(signupAccountSchema),
     mode: 'onTouched',
     defaultValues: invalid
       ? { email: 'runner@crewrun.kr', password: 'password1', passwordConfirm: 'password2' }
-      : { email: '', password: '', passwordConfirm: '' },
+      : account,
   })
+  // 입력할 때마다 스토어에 옮겨 둔다. 뒤로 왔다가 다시 와도 값이 남는다.
+  useEffect(() => {
+    if (invalid) return
+    return subscribe({
+      formState: { values: true },
+      callback: ({ values }) => setAccount(values),
+    })
+  }, [invalid, subscribe, setAccount])
   // TODO(api): ApiV1MemberController로 이메일 중복을 확인한다. 중복이면 AUTH_ERRORS.emailTaken.
   const onNext = handleSubmit(() => router.push('/signup/profile'))
 
@@ -123,7 +127,13 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
         onOpenChange={setTermsOpen}
         title="약관에 동의해 주세요"
         footer={
-          <Button size="l" disabled={!requiredChecked} onClick={() => setTermsOpen(false)}>
+          <Button
+            size="l"
+            disabled={!requiredChecked}
+            onClick={() => {
+              if (agreeTerms()) setTermsOpen(false)
+            }}
+          >
             동의하고 계속하기
           </Button>
         }
@@ -135,21 +145,19 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           <div className="rounded-[12px] bg-bg-subtle p-4">
             <Checkbox
               checked={allChecked}
-              onCheckedChange={(value) =>
-                setChecked(Object.fromEntries(TERMS.map((t) => [t.id, value])))
-              }
+              onCheckedChange={setAllTerms}
               label={<span className="font-bold">모두 동의해요 (선택 포함)</span>}
             />
           </div>
           <div className="flex flex-col px-1">
-            {TERMS.map((term) => (
+            {SIGNUP_TERMS.map((term) => (
               <div key={term.id} className="flex min-h-11 items-center justify-between py-3">
                 <Checkbox
-                  checked={checked[term.id]}
-                  onCheckedChange={(value) => setChecked((prev) => ({ ...prev, [term.id]: value }))}
+                  checked={terms[term.id]}
+                  onCheckedChange={(value) => setTerm(term.id, value)}
                   label={term.label}
                 />
-                {term.href && (
+                {'href' in term && (
                   <Link
                     href={term.href}
                     aria-label={`${term.label} 보기`}
@@ -173,16 +181,27 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
 // 피그마 V2 · M04-2 가입 · 회원 정보
 export function SignupProfilePage() {
   const router = useRouter()
+  const profile = useSignupStep((s) => s.profile)
+  const setProfile = useSignupStep((s) => s.setProfile)
   const {
     register,
     handleSubmit,
+    subscribe,
     formState: { errors, isValid },
   } = useForm<SignupProfileValues>({
     resolver: zodResolver(signupProfileSchema),
     mode: 'onTouched',
-    defaultValues: { name: '', birth: '', phone: '', nickname: '' },
+    defaultValues: profile,
   })
-  // TODO(api): ApiV1MemberController 가입에 계정 · 회원 정보를 함께 보낸다.
+  useEffect(
+    () =>
+      subscribe({
+        formState: { values: true },
+        callback: ({ values }) => setProfile(values),
+      }),
+    [subscribe, setProfile],
+  )
+  // TODO(api): ApiV1MemberController 가입에 스토어의 약관 · 계정과 회원 정보를 함께 보낸다.
   const onSubmit = handleSubmit(() => router.push('/'))
 
   return (
