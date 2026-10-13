@@ -379,7 +379,9 @@ class ApiV1CartCheckoutTest {
 					{ "raceCourseId": %d, "thirdPartyConsent": true,
 						"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 							"phone": "010-1234-5678", "emergencyContactName": "김가족",
-							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 					""".formatted(raceCourseId)))
 			.andExpect(status().isCreated())
 			.andReturn().getResponse().getContentAsString();
