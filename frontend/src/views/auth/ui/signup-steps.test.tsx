@@ -7,12 +7,16 @@ import { SignupStepProvider } from '../model/signup-store'
 import { SignupAccountPage, SignupProfilePage } from './SignupPages'
 
 const push = vi.fn()
+const replace = vi.fn()
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push, back: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push, back: vi.fn(), replace }),
   usePathname: () => '/signup',
 }))
 
-beforeEach(() => push.mockClear())
+beforeEach(() => {
+  push.mockClear()
+  replace.mockClear()
+})
 
 // (auth) 레이아웃처럼 Provider는 그대로 두고 안쪽 페이지만 바꿔 단계 이동을 흉내 낸다.
 function renderSignup() {
@@ -87,6 +91,33 @@ describe('회원가입 단계', () => {
 
     show('profile')
     expect(screen.getByLabelText('닉네임')).toHaveValue('달리는곰')
+  })
+
+  it('약관 시트를 동의 없이 닫아도 다음을 누르면 시트가 다시 열린다', async () => {
+    const user = userEvent.setup()
+    renderSignup()
+
+    await user.click(await screen.findByRole('button', { name: '닫기' }))
+    expect(screen.queryByRole('button', { name: '동의하고 계속하기' })).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('이메일'), 'runner@crewrun.kr')
+    await user.type(screen.getByLabelText('비밀번호'), 'password1')
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'password1')
+    await user.click(screen.getByRole('button', { name: '다음' }))
+
+    expect(await screen.findByRole('button', { name: '동의하고 계속하기' })).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('약관 동의와 계정 입력 없이 회원 정보 단계에 오면 첫 단계로 돌려보낸다', () => {
+    render(
+      <SignupStepProvider>
+        <SignupProfilePage />
+      </SignupStepProvider>,
+    )
+
+    expect(replace).toHaveBeenCalledWith('/signup')
+    expect(screen.queryByRole('button', { name: '가입 완료' })).not.toBeInTheDocument()
   })
 
   it('시안 미리보기(invalid)는 약관 없이 M04-1E 오류를 보여 준다', () => {

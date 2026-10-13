@@ -78,6 +78,8 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
   }
   // TODO(api): ApiV1MemberController로 이메일 중복을 확인한다. 중복이면 AUTH_ERRORS.emailTaken.
   const onNext = handleSubmit(() => router.push('/signup/profile'))
+  // 약관 시트를 동의 없이 닫았다면 "다음"이 시트를 다시 연다. 동의해야 다음 단계로 간다.
+  const onNextClick = termsAgreed || invalid ? onNext : () => setTermsOpen(true)
 
   return (
     <>
@@ -123,7 +125,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button size="l" disabled={!agreed || !isValid || invalid} onClick={onNext}>
+          <Button size="l" disabled={!isValid || invalid} onClick={onNextClick}>
             다음
           </Button>
         }
@@ -185,7 +187,20 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
 }
 
 // 피그마 V2 · M04-2 가입 · 회원 정보
+// 약관 동의와 계정 입력을 마치지 않고 들어오면(주소 직접 입력, 새로고침) 첫 단계로 돌려보낸다.
 export function SignupProfilePage() {
+  const router = useRouter()
+  const termsAgreed = useSignupStep((s) => s.termsAgreed)
+  const account = useSignupStep((s) => s.account)
+  const ready = termsAgreed && signupAccountSchema.safeParse(account).success
+  useEffect(() => {
+    if (!ready) router.replace('/signup')
+  }, [ready, router])
+
+  return ready ? <SignupProfileForm /> : null
+}
+
+function SignupProfileForm() {
   const router = useRouter()
   const profile = useSignupStep((s) => s.profile)
   const setProfile = useSignupStep((s) => s.setProfile)
