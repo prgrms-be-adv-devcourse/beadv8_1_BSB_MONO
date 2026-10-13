@@ -57,14 +57,26 @@ async function linear(apiKey, query, variables) {
 }
 
 async function attachPr(apiKey, issueId, pr) {
-  // 같은 URL은 Linear가 한 번만 붙인다. 본문을 고쳐 다시 돌아도 중복되지 않는다.
-  await linear(
-    apiKey,
-    `mutation($issueId: String!, $url: String!, $title: String) {
-      attachmentLinkURL(issueId: $issueId, url: $url, title: $title) { success }
-    }`,
-    { issueId, url: pr.html_url, title: `PR #${pr.number} ${pr.title}` },
-  )
+  // 같은 URL은 Linear가 한 번만 붙이고, 두 번째부터는 "already been linked" 오류를 낸다.
+  // PR 본문을 고치거나 머지할 때마다 다시 돌기 때문에 이 오류는 실패로 치지 않는다.
+  try {
+    await linear(
+      apiKey,
+      `mutation($issueId: String!, $url: String!, $title: String) {
+        attachmentLinkURL(issueId: $issueId, url: $url, title: $title) { success }
+      }`,
+      { issueId, url: pr.html_url, title: `PR #${pr.number} ${pr.title}` },
+    )
+  } catch (e) {
+    if (isAlreadyLinked(e)) {
+      return 'already linked'
+    }
+    throw e
+  }
+}
+
+function isAlreadyLinked(error) {
+  return /already been linked/i.test(error.message)
 }
 
 // fromTypes 상태인 이슈만 toType 상태(이름이 toName이면 그것, 없으면 첫 번째)로 옮긴다
@@ -150,3 +162,4 @@ module.exports.findClosing = findClosing
 module.exports.findToComplete = findToComplete
 module.exports.keyName = keyName
 module.exports.pickApiKey = pickApiKey
+module.exports.isAlreadyLinked = isAlreadyLinked
