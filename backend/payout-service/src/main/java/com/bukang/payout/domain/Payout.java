@@ -55,7 +55,7 @@ public class Payout extends BaseIdAndTime {
 
 	// 정산 내역을 만들 때 상품 서비스에서 받은 대회 이름. 영수증처럼 정산한 때의 이름을 남긴다
 	// 판매자 조회 때 상품 서비스를 부르지 않으려고 저장한다 (정산은 대회 다음 날 만들어져 그 뒤 이름이 바뀔 일은 드물다)
-	@Column(nullable = false, length = 100)
+	@Column(nullable = false, length = 200)
 	private String raceName;
 
 	// YYYY-MM. 정산 대상일이 속한 달
