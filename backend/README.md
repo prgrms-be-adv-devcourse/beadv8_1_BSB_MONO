@@ -2,7 +2,7 @@
 
 Spring Boot 4.1 / Java 25 백엔드입니다. 명령은 이 폴더(`backend/`)에서 실행합니다.
 
-Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080), `cash-service`(8081), `payout-service`(8082), `file-service`(8083), `order-service`(8084), `product-service`(8085)가 있습니다. 구조는 [`CLAUDE.md`](CLAUDE.md)를 참고합니다.
+Gradle 멀티 모듈로 `common`·`jwt`(공통 라이브러리), `gateway`(API 게이트웨이, 8000), `member-service`(8080), `cash-service`(8081), `payout-service`(8082), `file-service`(8083), `order-service`(8084), `product-service`(8085)가 있습니다. 구조는 [`CLAUDE.md`](CLAUDE.md)를 참고합니다.
 
 ## 실행 환경
 
@@ -17,6 +17,9 @@ Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080)
 | `bukang-elasticvue` | Elasticsearch 관리 화면 (Elasticvue) | http://localhost:8090 |
 | `bukang-redis` | Redis 8.2 | `localhost:6379` |
 | `bukang-s3mock` | 로컬 S3 대체재 (Adobe S3Mock, 버킷 `bukang-file`) | http://localhost:9090 |
+| `nginx` | 입구 (`/api`는 `gateway`, 나머지는 `web`으로 넘김, 설정 `docker/nginx/default.conf`) | http://localhost |
+| `web` | 프론트엔드 Next.js (`../frontend` 이미지, nginx를 거쳐서만 접속) | - |
+| `gateway` | API 게이트웨이 (prod 프로파일, `/api` 요청을 각 서비스로 넘김) | http://localhost:8000 |
 | `member-service` | 회원 서비스 (prod 프로파일) | http://localhost:8080 |
 | `cash-service` | 캐시 서비스 (prod 프로파일) | http://localhost:8081 |
 | `payout-service` | 정산 서비스 (prod 프로파일) | http://localhost:8082 |
@@ -24,11 +27,13 @@ Gradle 멀티 모듈로 `common`(공통 라이브러리), `member-service`(8080)
 | `order-service` | 주문 서비스 (prod 프로파일) | http://localhost:8084 |
 | `product-service` | 상품 서비스 (prod 프로파일) | http://localhost:8085 |
 
-앱 서비스(`member-service`, `cash-service`, `payout-service`, `file-service`, `order-service`, `product-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
+앱 서비스(`nginx`, `web`, `gateway`, `member-service`, `cash-service`, `payout-service`, `file-service`, `order-service`, `product-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
+시작 순서는 서비스 6개 → `gateway` → `web` → `nginx`입니다. 앞 컨테이너가 healthy(포트가 열려 요청을 받을 수 있는 상태)가 된 뒤에 다음 컨테이너가 시작합니다.
 
 ### 개발 실행 (앱 컨테이너 제외)
 
 IDE나 `./gradlew :member-service:bootRun`(또는 `:cash-service:bootRun`, `:payout-service:bootRun`, `:file-service:bootRun`, `:order-service:bootRun`, `:product-service:bootRun`)으로 서비스를 실행하면 Spring Boot가 `compose.yml`의 인프라 컨테이너를 자동으로 띄웁니다. 이미 실행 중이면 그대로 사용합니다.
+게이트웨이(`./gradlew :gateway:bootRun`, 8000)는 인프라를 쓰지 않으므로 컨테이너를 띄우지 않고, `localhost:8080~8085`의 서비스로 요청을 넘깁니다.
 여러 서비스가 같은 인프라를 쓰므로 서비스를 종료해도 컨테이너는 멈추지 않습니다(`lifecycle-management: start-only`). 정리할 때는 `docker compose down`을 실행합니다.
 
 IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `FileApplication`, `OrderApplication`, `ProductApplication`을 바로 실행하면 됩니다. 실행 위치(working directory)가 저장소 루트, `backend/`, 모듈 폴더 중 어디여도
@@ -54,13 +59,14 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `
    | `MYSQL_USER` / `MYSQL_PASS` / `MYSQL_DB` | `compose.yml`의 `bukang-db` 값과 동일 |
    | `JWT_SECRET` | 32자 이상의 임의 문자열 |
 
-2. IDE나 `bootRun`으로 실행 중인 서비스가 있으면 종료합니다. 같은 포트(8080, 8081, 8082, 8083, 8084, 8085)를 사용합니다.
+2. IDE나 `bootRun`으로 실행 중인 서비스가 있으면 종료합니다. 같은 포트(80, 8000, 8080, 8081, 8082, 8083, 8084, 8085)를 사용합니다.
 
 3. 앱 이미지를 빌드하고 전체 컨테이너를 실행합니다.
 
    ```bash
    docker compose --profile app up -d --build   # 서비스 + 인프라 실행 (인프라가 healthy가 된 뒤 서비스 시작)
    docker compose logs -f member-service        # 로그 확인 ("Started MemberApplication"이면 성공)
+   docker compose --profile app ps              # 상태 확인 (서비스·gateway가 healthy, nginx가 Up이면 http://localhost 접속)
    docker compose --profile app down            # 앱 포함 전체 중지 + 삭제
    ```
 
