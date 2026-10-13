@@ -28,14 +28,20 @@ type SignupStepState = {
   setProfile: (profile: SignupProfileValues) => void
 }
 
+/** 테스트·시안 미리보기에서 단계 중간부터 시작할 때 넘기는 값 */
+export type SignupStepInitial = Partial<
+  Pick<SignupStepState, 'terms' | 'termsAgreed' | 'account' | 'profile'>
+>
+
 export const { Provider: SignupStepProvider, useStore: useSignupStep } = createStoreContext(
   'SignupStep',
-  () =>
+  (initial: SignupStepInitial = {}) =>
     createStore<SignupStepState>()((set, get) => ({
       terms: termChecks(false),
       termsAgreed: false,
       account: { email: '', password: '', passwordConfirm: '' },
       profile: { name: '', birth: '', phone: '', nickname: '' },
+      ...initial,
       setTerm: (id, checked) =>
         set((s) => {
           const terms = { ...s.terms, [id]: checked }
