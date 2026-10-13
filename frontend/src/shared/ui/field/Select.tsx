@@ -79,39 +79,60 @@ export function Select<Value extends string>({
             />
           </BaseSelect.Icon>
         </BaseSelect.Trigger>
-        <BaseSelect.Portal>
-          <BaseSelect.Positioner
-            alignItemWithTrigger={false}
-            sideOffset={4}
-            className="z-50 outline-none"
-          >
-            <BaseSelect.Popup className="w-(--anchor-width) rounded-md bg-bg-surface p-1 shadow-md inset-ring inset-ring-border-default outline-none">
-              <BaseSelect.List className="max-h-(--available-height) overflow-y-auto">
-                {items.map((item) => (
-                  <BaseSelect.Item
-                    key={item.value}
-                    value={item.value}
-                    disabled={item.disabled}
-                    className={cn(
-                      OPTION,
-                      'data-selected:bg-bg-brand-subtle data-selected:text-text-brand',
-                      'data-disabled:text-text-disabled data-highlighted:bg-bg-subtle',
-                    )}
-                  >
-                    <BaseSelect.ItemText className="min-w-0 flex-1 truncate">
-                      {item.label}
-                    </BaseSelect.ItemText>
-                    <BaseSelect.ItemIndicator className="flex">
-                      <Icon name="Check" className="size-5" />
-                    </BaseSelect.ItemIndicator>
-                  </BaseSelect.Item>
-                ))}
-              </BaseSelect.List>
-            </BaseSelect.Popup>
-          </BaseSelect.Positioner>
-        </BaseSelect.Portal>
+        <SelectPopup items={items} />
       </BaseSelect.Root>
       {description && <Field.Description className={FIELD_HELPER}>{description}</Field.Description>}
     </Field.Root>
+  )
+}
+
+// Select/Menu: 트리거 아래에 붙는 선택지 목록. SortSelect도 같은 목록을 쓴다.
+export function SelectPopup<Value extends string>({
+  items,
+  align = 'center',
+  className,
+}: {
+  items: SelectItem<Value>[]
+  align?: 'start' | 'center' | 'end'
+  className?: string
+}) {
+  return (
+    <BaseSelect.Portal>
+      <BaseSelect.Positioner
+        alignItemWithTrigger={false}
+        align={align}
+        sideOffset={4}
+        className="z-50 outline-none"
+      >
+        <BaseSelect.Popup
+          className={cn(
+            'w-(--anchor-width) rounded-md bg-bg-surface p-1 shadow-md inset-ring inset-ring-border-default outline-none',
+            className,
+          )}
+        >
+          <BaseSelect.List className="max-h-(--available-height) overflow-y-auto">
+            {items.map((item) => (
+              <BaseSelect.Item
+                key={item.value}
+                value={item.value}
+                disabled={item.disabled}
+                className={cn(
+                  OPTION,
+                  'data-selected:bg-bg-brand-subtle data-selected:text-text-brand',
+                  'data-disabled:text-text-disabled data-highlighted:bg-bg-subtle',
+                )}
+              >
+                <BaseSelect.ItemText className="min-w-0 flex-1 truncate">
+                  {item.label}
+                </BaseSelect.ItemText>
+                <BaseSelect.ItemIndicator className="flex">
+                  <Icon name="Check" className="size-5" />
+                </BaseSelect.ItemIndicator>
+              </BaseSelect.Item>
+            ))}
+          </BaseSelect.List>
+        </BaseSelect.Popup>
+      </BaseSelect.Positioner>
+    </BaseSelect.Portal>
   )
 }

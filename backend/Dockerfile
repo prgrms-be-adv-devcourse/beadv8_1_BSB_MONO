@@ -14,17 +14,27 @@ RUN chmod +x gradlew
 
 # 모듈 소스를 복사한다. settings.gradle.kts에 등록된 모듈 폴더가 모두 있어야 Gradle이 설정 단계를 통과한다
 COPY common common
+COPY jwt jwt
+COPY gateway gateway
 COPY member-service member-service
 COPY cash-service cash-service
+COPY payout-service payout-service
+COPY file-service file-service
+COPY order-service order-service
+COPY product-service product-service
 
 # Gradle 캐시(~/.gradle)를 빌드 간에 유지해서, 의존성은 변경된 것만 새로 받는다
-# :<모듈>:bootJar 는 그 서비스와 의존하는 common만 빌드한다
+# :<모듈>:bootJar 는 그 서비스와 의존하는 라이브러리 모듈(common, jwt)만 빌드한다
 RUN --mount=type=cache,target=/root/.gradle ./gradlew :${MODULE}:bootJar --no-daemon
 
 # ── 2단계: 실행 (JRE 이미지에 jar만 복사) ──
 FROM eclipse-temurin:25-jre
 ARG MODULE
 WORKDIR /app
+
+# 컨테이너는 서버(EC2)·PC의 시간대와 상관없이 UTC로 돈다. JVM 시각을 한국 시간으로 맞춘다
+# (LocalDateTime으로 남기는 createDate·modifyDate, 배치 기준 시각이 MySQL(compose의 TZ: Asia/Seoul)과 같은 시계를 쓴다)
+ENV TZ=Asia/Seoul
 
 # root 대신 앱 전용 시스템 계정으로 실행 (앱이 탈취돼도 컨테이너 내 권한을 최소화)
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin spring
@@ -33,6 +43,6 @@ RUN useradd --system --no-create-home --shell /usr/sbin/nologin spring
 COPY --from=build /workspace/${MODULE}/build/libs/*.jar app.jar
 
 USER spring
-# 실제 포트는 서비스마다 다르다 (member-service 8080, cash-service 8081 / 각 application.yaml의 server.port)
-EXPOSE 8080 8081
+# 실제 포트는 서비스마다 다르다 (gateway 8000, member-service 8080, cash-service 8081, payout-service 8082, file-service 8083, order-service 8084, product-service 8085 / 각 application.yaml의 server.port)
+EXPOSE 8000 8080 8081 8082 8083 8084 8085
 ENTRYPOINT ["java", "-jar", "app.jar"]
