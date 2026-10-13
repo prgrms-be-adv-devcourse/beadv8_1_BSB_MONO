@@ -14,6 +14,7 @@ import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
 import com.bukang.product.domain.RaceCourse;
+import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.domain.exception.InvalidRaceException;
 import com.bukang.product.domain.exception.RaceAccessDeniedException;
 import com.bukang.product.domain.exception.RaceNotFoundException;
@@ -22,6 +23,7 @@ import com.bukang.product.dto.RaceCourseSaveRequestDto;
 import com.bukang.product.dto.RaceImageRequestDto;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.out.ProductSellerRepository;
+import com.bukang.product.out.RaceCourseRepository;
 import com.bukang.product.out.RaceRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ import lombok.RequiredArgsConstructor;
 public class RaceUpdateUseCase {
 	private final ProductSellerRepository productSellerRepository;
 	private final RaceRepository raceRepository;
+	private final RaceCourseRepository raceCourseRepository;
 	private final RaceRequestValidator raceRequestValidator;
 
 	public RaceSaveResult update(int memberId, int raceId, RaceSaveRequestDto request) {
@@ -87,6 +90,16 @@ public class RaceUpdateUseCase {
 		removedCourses.forEach(course -> refs.add(FileLinkRequestedEvent.Ref.of(FileRef.of(course), List.of())));
 
 		List<Integer> removedCourseIds = removedCourses.stream().map(RaceCourse::getId).toList();
-		return RaceSaveResult.of(race, removedCourseIds, new FileLinkRequestedEvent(memberId, refs));
+		RaceSaveResult saved = RaceSaveResult.of(race, removedCourseIds, new FileLinkRequestedEvent(memberId, refs));
+
+		// 정원을 늘려 남은 자리가 생기면 정원 마감을 접수 중으로 되돌린다 (DB의 최신 카운터로 판단)
+		// 엔티티의 카운터는 이 트랜잭션이 처음 읽은 값이라 그 사이 확보된 자리가 빠져 있을 수 있어 쓰지 않는다
+		saved.dto().getCourseIds().forEach(raceCourseRepository::refreshStatus);
+		// 위 UPDATE가 영속성 컨텍스트를 비웠으므로, 바뀐 종목 상태로 검색 문서를 다시 만든다
+		List<RaceCourseDocument> documents = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new)
+			.getCourses().stream()
+			.map(RaceCourseDocument::from)
+			.toList();
+		return new RaceSaveResult(saved.dto(), documents, saved.deletedDocumentIds(), saved.fileLink());
 	}
 }

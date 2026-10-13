@@ -3,8 +3,10 @@ package com.bukang.product.out;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,9 +15,17 @@ import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
 import com.bukang.product.domain.RaceSaleStatus;
 
+import jakarta.persistence.LockModeType;
+
 public interface RaceRepository extends JpaRepository<Race, Integer> {
 	// 판매자의 대회 (최근 등록 순)
 	List<Race> findAllBySellerOrderByIdDesc(ProductSeller seller);
+
+	// 대회 행을 공유 잠금으로 읽는다 (MySQL SELECT … FOR SHARE). 자리 확보가 판매 상태를 볼 때 쓴다
+	// 확보끼리는 서로 막지 않고, 대회 행을 바꾸는 요청이 있으면 커밋을 기다렸다가 최신 상태를 본다
+	@Lock(LockModeType.PESSIMISTIC_READ)
+	@Query("select r from Race r where r.id = :id")
+	Optional<Race> findByIdForShare(@Param("id") int id);
 
 	// 판매 상태 배치가 바꿀 대회 (판매 예정인데 판매 시작 일시가 지난 대회)
 	@Query("select r.id from Race r where r.saleStatus = :status and r.saleOpenAt <= :now")

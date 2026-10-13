@@ -230,4 +230,11 @@ public class Race extends BaseIdAndTime {
 	public boolean isSaleStarted(LocalDateTime now) {
 		return saleStatus != RaceSaleStatus.DRAFT && !now.isBefore(saleOpenAt);
 	}
+
+	// 개인 예매로 자리를 확보할 수 있는지: 판매 예정·판매 중이고, 개인 예매 오픈부터 접수 마감 전까지
+	// 판매 예정도 넣는 이유: 판매 시작 일시가 지나도 상태 배치가 판매 중으로 바꾸기까지 최대 5분 걸린다
+	public boolean isAcceptingIndividual(LocalDateTime now) {
+		return (saleStatus == RaceSaleStatus.SCHEDULED || saleStatus == RaceSaleStatus.ON_SALE)
+			&& !now.isBefore(individualOpenAt) && now.isBefore(applicationCloseAt);
+	}
 }

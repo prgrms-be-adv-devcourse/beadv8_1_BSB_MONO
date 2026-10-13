@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -13,10 +14,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
+import com.bukang.common.shared.race.event.HoldCancelEvent;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
+import com.bukang.product.domain.HoldReleaseReason;
 import com.bukang.product.domain.ProductMember;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.document.RaceCourseDocument;
+import com.bukang.product.dto.HoldRequestDto;
+import com.bukang.product.dto.HoldResultDto;
+import com.bukang.product.dto.HoldSellResult;
 import com.bukang.product.dto.RaceCourseInfoDto;
 import com.bukang.product.dto.RaceDetailDto;
 import com.bukang.product.dto.RacePageDto;
@@ -43,6 +49,7 @@ public class ProductFacade {
 	private final RaceSearchUseCase raceSearchUseCase;
 	private final RaceQueryUseCase raceQueryUseCase;
 	private final RaceSaleStatusUseCase raceSaleStatusUseCase;
+	private final RaceHoldUseCase raceHoldUseCase;
 	private final TransactionTemplate transactionTemplate;
 	private final RaceCourseDocumentRepository raceCourseDocumentRepository;
 	private final KafkaTemplate<String, String> kafkaTemplate;
@@ -88,6 +95,35 @@ public class ProductFacade {
 			raceSaleStartUseCase.startSale(memberId, raceId));
 		indexRaceCourses(result);
 		return result.dto();
+	}
+
+	// 주문 서비스의 [결제하기] 자리 확보 (내부 API)
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public HoldResultDto holdSeat(HoldRequestDto request) {
+		try {
+			return transactionTemplate.execute(status -> raceHoldUseCase.hold(request, LocalDateTime.now()));
+		} catch (DataIntegrityViolationException exception) {
+			// 같은 신청으로 동시에 확보를 요청해 늦은 쪽이 유니크 제약(application_id)에 걸렸다
+			// 늦은 쪽 트랜잭션은 카운터를 올린 것까지 롤백되었으므로, 먼저 잡힌 자리의 결과를 돌려준다
+			return transactionTemplate.execute(status ->
+				raceHoldUseCase.findExisting(request.getParticipationId()));
+		}
+	}
+
+	@Transactional
+	public HoldSellResult sellSeat(int participationId) {
+		return raceHoldUseCase.sell(participationId, LocalDateTime.now());
+	}
+
+	@Transactional
+	public boolean restoreSeat(int participationId) {
+		return raceHoldUseCase.restore(participationId, LocalDateTime.now());
+	}
+
+	// 대기열 활성 시간이 끝나 주문 서비스가 보낸 해제 요청 (Kafka product.hold.cancel)
+	@Transactional
+	public boolean cancelHold(HoldCancelEvent event) {
+		return raceHoldUseCase.release(event.participationId(), HoldReleaseReason.EXPIRED, LocalDateTime.now());
 	}
 
 	public RacePageDto searchRaces(RaceSearchCondition condition, int page, int size) {

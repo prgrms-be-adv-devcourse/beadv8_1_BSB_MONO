@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Objects;
 
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.DynamicUpdate;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
@@ -35,6 +36,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = PROTECTED)
 @Getter
 @Table(name = "race_course")
+// 바뀐 컬럼만 UPDATE한다. 판매자가 종목을 수정할 때 정원 변경 API(⑧-3)가 바꾼 종목 상태(OPEN·SOLD_OUT)를 덮어쓰지 않게 한다
+@DynamicUpdate
 @AttributeOverride(name = "id", column = @Column(name = "race_course_id"))
 @AttributeOverride(name = "createDate", column = @Column(name = "created_at", nullable = false, updatable = false))
 @AttributeOverride(name = "modifyDate", column = @Column(name = "updated_at", nullable = false))

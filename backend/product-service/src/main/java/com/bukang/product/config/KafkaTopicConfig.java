@@ -33,4 +33,11 @@ public class KafkaTopicConfig {
 			.partitions(PARTITIONS)
 			.build();
 	}
+
+	@Bean
+	public NewTopic productHoldCancelTopic() {
+		return TopicBuilder.name(KafkaTopics.PRODUCT_HOLD_CANCEL)
+			.partitions(PARTITIONS)
+			.build();
+	}
 }
