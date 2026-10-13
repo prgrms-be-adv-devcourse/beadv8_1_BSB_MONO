@@ -44,7 +44,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/order/orders")
 public class ApiV1OrderController {
-	private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 	private static final int MAX_PAGE_SIZE = 100;
 
 	private final OrderFacade orderFacade;
@@ -95,18 +94,19 @@ public class ApiV1OrderController {
 		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "중복 주문 방지 키. 같은 [결제하기] 재시도에는 같은 값을 보낸다 (예: UUID)",
 			example = "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43")
-		@RequestHeader(IDEMPOTENCY_KEY_HEADER) @Size(min = 1, max = 64, message = "Idempotency-Key는 1~64자로 보내주세요.")
+		@RequestHeader(IdempotencyKeyHeader.NAME)
+		@Size(min = 1, max = IdempotencyKeyHeader.MAX_LENGTH, message = IdempotencyKeyHeader.INVALID_MESSAGE)
 		String idempotencyKey,
 		@Valid @RequestBody OrderCreateRequestDto request
 	) {
 		OrderCreateResult result = orderFacade.create(request, idempotencyKey, memberId);
 		return switch (result.outcome()) {
 			case CREATED -> ResponseEntity.created(URI.create("/api/v1/order/orders/" + result.order().getId()))
-				.body(RsData.of(HttpStatus.CREATED, "자리를 확보했습니다. 결제 기한 안에 결제해주세요.", result.order()));
+				.body(RsData.of(HttpStatus.CREATED, OrderCreateResult.CREATED_MESSAGE, result.order()));
 			case EXISTING -> ResponseEntity.ok()
-				.body(RsData.of(HttpStatus.OK, "이미 처리한 주문 요청입니다.", result.order()));
+				.body(RsData.of(HttpStatus.OK, OrderCreateResult.EXISTING_MESSAGE, result.order()));
 			case SOLD_OUT -> ResponseEntity.status(HttpStatus.CONFLICT)
-				.body(RsData.of(HttpStatus.CONFLICT, "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.", null));
+				.body(RsData.of(HttpStatus.CONFLICT, OrderCreateResult.SOLD_OUT_MESSAGE, null));
 		};
 	}
 
