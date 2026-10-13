@@ -112,6 +112,15 @@ class GatewayRoutingTest {
 		assertThat(RECEIVED).isEmpty();
 	}
 
+	@Test
+	@DisplayName("서비스 응답에 HSTS 헤더를 붙여 브라우저가 HTTPS로만 접속하게 한다")
+	void addsHstsHeaderToServiceResponse() throws Exception {
+		HttpResponse<String> response = get("/api/v1/order/orders");
+
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(response.headers().firstValue("Strict-Transport-Security")).hasValue("max-age=31536000");
+	}
+
 	private HttpResponse<String> get(String path) throws IOException, InterruptedException {
 		HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + gatewayPort + path))
 			.header("Authorization", "Bearer " + jwtProvider.issueAccessToken(1L))

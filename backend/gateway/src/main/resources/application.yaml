@@ -22,6 +22,10 @@ spring:
           # 서비스 주소(gateway.services.*)는 프로파일별 yaml에 있다 (dev: localhost, prod: 컨테이너 이름)
           # 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿는다. 클라이언트가 보낸 값을 지우고 토큰 속 회원 ID로 다시 넣는 일은
           # JwtAuthenticationFilter가 한다 (default-filters로 지우면 필터가 넣은 값까지 지워질 수 있어 한곳에서 처리)
+          default-filters:
+            # 브라우저에 "이 사이트는 1년 동안 HTTPS로만 접속"하라고 알린다 (HSTS). HTTPS 응답에서만 효력이 있고 HTTP(로컬)에서는 무시된다
+            # 화면과 API가 Nginx 뒤 같은 주소라 화면에도 적용된다. 도메인 구성이 정해지지 않아 includeSubDomains는 넣지 않는다
+            - AddResponseHeader=Strict-Transport-Security, max-age=31536000
           routes:
             - id: member-service
               uri: ${gateway.services.member}
