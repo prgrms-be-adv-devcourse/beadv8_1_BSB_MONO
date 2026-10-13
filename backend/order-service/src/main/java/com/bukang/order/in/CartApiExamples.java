@@ -113,6 +113,13 @@ final class CartApiExamples {
 							"canceledAmount": 0,
 							"paymentDueAt": "2026-10-13T10:10:00",
 							"paidAt": null,
+							"shippingAddress": {
+								"recipientName": "김러너",
+								"recipientPhone": "010-1234-5678",
+								"zipcode": "04700",
+								"address": "서울 성동구 왕십리로 00",
+								"addressDetail": "101동 1001호"
+							},
 							"items": [
 								{
 									"id": 1,

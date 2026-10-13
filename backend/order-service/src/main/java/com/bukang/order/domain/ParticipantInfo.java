@@ -5,8 +5,11 @@ import static lombok.AccessLevel.PROTECTED;
 
 import java.time.LocalDate;
 
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -45,12 +48,20 @@ public class ParticipantInfo {
 	@Column(name = "tshirt_size", length = 10)
 	private String tshirtSize;
 
-	// 키트 배송 주소. 키트가 있는 종목만 받는다 (정책 3장 1-2 "키트를 배송하는 대회면 배송 주소도 받는다", PRO-123)
-	@Column(name = "shipping_address", length = 255)
-	private String shippingAddress;
+	// 키트 배송지. 키트가 있는 종목만 받는다 (정책 3장 1-2 "키트를 배송하는 대회면 배송 주소도 받는다", PRO-123)
+	// 주문을 만들 때 주문(orders)의 배송지 칸으로 옮긴다
+	@Embedded
+	@AttributeOverrides({
+		@AttributeOverride(name = "recipientName", column = @Column(name = "shipping_recipient_name", length = 50)),
+		@AttributeOverride(name = "recipientPhone", column = @Column(name = "shipping_recipient_phone", length = 20)),
+		@AttributeOverride(name = "zipcode", column = @Column(name = "shipping_zipcode", length = 10)),
+		@AttributeOverride(name = "address", column = @Column(name = "shipping_address", length = 255)),
+		@AttributeOverride(name = "addressDetail", column = @Column(name = "shipping_address_detail", length = 255))
+	})
+	private ShippingAddress shippingAddress;
 
-	// 배송 주소만 바꾼 참가자 정보. 키트가 없는 종목은 null을 넣어 주소를 남기지 않는다
-	public ParticipantInfo withShippingAddress(String newShippingAddress) {
+	// 배송지만 바꾼 참가자 정보. 키트가 없는 종목은 null을 넣어 배송지를 남기지 않는다
+	public ParticipantInfo withShippingAddress(ShippingAddress newShippingAddress) {
 		return new ParticipantInfo(name, birth, gender, phone, emergencyContactName, emergencyContactPhone, tshirtSize,
 			newShippingAddress);
 	}

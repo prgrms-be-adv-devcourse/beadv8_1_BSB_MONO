@@ -2,6 +2,7 @@ package com.bukang.order.out;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -23,4 +24,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 		order by i.id
 		""")
 	List<SoldEntryDto> findSoldEntries(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+	// 참가 신청으로 만든 주문의 ID. 참가 신청 하나에는 주문 상품이 하나뿐이다 (uk_order_item_participation)
+	@Query("select i.order.id from OrderItem i where i.participationId = :participationId")
+	Optional<Integer> findOrderIdByParticipationId(@Param("participationId") int participationId);
 }

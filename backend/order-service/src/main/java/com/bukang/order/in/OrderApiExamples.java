@@ -19,6 +19,13 @@ final class OrderApiExamples {
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": null,
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -51,6 +58,13 @@ final class OrderApiExamples {
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": null,
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -143,6 +157,13 @@ final class OrderApiExamples {
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:12:00",
 				"paidAt": null,
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -195,6 +216,13 @@ final class OrderApiExamples {
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": "2026-10-12T10:04:12",
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -274,6 +302,13 @@ final class OrderApiExamples {
 				"canceledAmount": 0,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": "2026-10-12T10:04:12",
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,
@@ -334,6 +369,13 @@ final class OrderApiExamples {
 				"canceledAmount": 60000,
 				"paymentDueAt": "2026-10-12T10:10:00",
 				"paidAt": "2026-10-12T10:04:12",
+				"shippingAddress": {
+					"recipientName": "김러너",
+					"recipientPhone": "010-1234-5678",
+					"zipcode": "04700",
+					"address": "서울 성동구 왕십리로 00",
+					"addressDetail": "101동 1001호"
+				},
 				"items": [
 					{
 						"id": 1,

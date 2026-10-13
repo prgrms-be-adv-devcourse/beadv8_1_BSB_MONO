@@ -3,6 +3,7 @@ package com.bukang.order.in;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,6 +40,7 @@ import com.bukang.order.domain.OrderItem;
 import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.domain.ShippingAddress;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.support.StubRaceCoursePort;
@@ -147,6 +149,48 @@ class ApiV1OrderTest {
 		assertThat(item.getRaceId()).isEqualTo(RACE_ID);
 		assertThat(item.getSellerId()).isEqualTo(StubRaceCoursePort.SELLER_ID);
 		assertThat(item.getAmount()).isEqualTo(ticketPrice);
+	}
+
+	@Test
+	@DisplayName("신청서에서 받은 키트 배송지가 주문에 그대로 옮겨진다 (ERD orders 배송지 칸)")
+	void createCopiesShippingAddress() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+
+		create(MEMBER_ID, participationId, newKey())
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.shippingAddress.recipientName").value("김러너"))
+			.andExpect(jsonPath("$.data.shippingAddress.recipientPhone").value("010-1234-5678"))
+			.andExpect(jsonPath("$.data.shippingAddress.zipcode").value("04700"))
+			.andExpect(jsonPath("$.data.shippingAddress.address").value("서울 성동구 왕십리로 00"))
+			.andExpect(jsonPath("$.data.shippingAddress.addressDetail").value("101동 1001호"));
+
+		ShippingAddress saved = orderRepository.findAll().getFirst().getShippingAddress();
+		assertThat(saved.getZipcode()).isEqualTo("04700");
+		assertThat(saved.getAddress()).isEqualTo("서울 성동구 왕십리로 00");
+	}
+
+	@Test
+	@DisplayName("주문을 만든 뒤 참가자 정보에서 배송지를 고치면 주문의 배송지도 바뀐다 (키트는 주문의 배송지로 보낸다)")
+	void changeParticipantUpdatesOrderShippingAddress() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
+
+		mockMvc.perform(put("/api/v1/order/participations/" + participationId + "/participant")
+				.header("X-Member-Id", MEMBER_ID)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{ "name": "김러너", "birth": "1994-06-25", "gender": "MALE", "phone": "010-1234-5678",
+						"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김가족", "recipientPhone": "010-9876-5432",
+							"zipcode": "48094", "address": "부산 해운대구 해운대로 00" } }
+					"""))
+			.andExpect(status().isOk());
+
+		ShippingAddress changed = orderRepository.findAll().getFirst().getShippingAddress();
+		assertThat(changed.getRecipientName()).isEqualTo("김가족");
+		assertThat(changed.getZipcode()).isEqualTo("48094");
+		assertThat(changed.getAddress()).isEqualTo("부산 해운대구 해운대로 00");
+		assertThat(changed.getAddressDetail()).isNull();
 	}
 
 	@Test
@@ -481,7 +525,8 @@ class ApiV1OrderTest {
 						"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 							"phone": "010-1234-5678", "emergencyContactName": "김가족",
 							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
-						"shippingAddress": "서울 성동구 왕십리로 00" } }
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 					""".formatted(raceCourseId)))
 			.andExpect(status().isCreated())
 			.andReturn().getResponse().getContentAsString();
