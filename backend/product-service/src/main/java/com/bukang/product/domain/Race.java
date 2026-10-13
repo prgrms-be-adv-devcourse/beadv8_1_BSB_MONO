@@ -101,7 +101,7 @@ public class Race extends BaseIdAndTime {
 	@Column(name = "sale_status", nullable = false, columnDefinition = "varchar(20)")
 	private RaceSaleStatus saleStatus;
 
-	// 일정 변경 안내 일시 (이날부터 7일 동안은 환불 기준일과 상관없이 전액 환불)
+	// 일정·장소 변경 안내 일시 (판매 시작 뒤 대회 일시나 장소를 바꾼 일시. 이날부터 7일 동안은 환불 기준일과 상관없이 전액 환불)
 	private LocalDateTime scheduleChangedAt;
 
 	private LocalDateTime canceledAt;
@@ -129,14 +129,22 @@ public class Race extends BaseIdAndTime {
 			checkScheduleChange("개인 예매 오픈", individualOpenAt, request.getIndividualOpenAt(), now);
 			checkScheduleChange("접수 마감", applicationCloseAt, request.getApplicationCloseAt(), now);
 		}
-		// 판매 시작 뒤 대회 일시가 바뀌면(앞당기기·늦추기 모두) 일정 변경 안내 일시를 기록한다
+		// 판매 시작 뒤 대회 일시(앞당기기·늦추기 모두)나 장소가 바뀌면 일정·장소 변경 안내 일시를 기록한다
 		// 이날부터 7일 동안은 환불 기준일과 상관없이 전액 환불된다 (ERD schedule_changed_at, 환불 판정은 주문 쪽)
+		// 장소도 참가 여부를 다시 생각하게 하는 변경이라 대회 일시와 같은 기준으로 환불한다
 		// 다시 바꾸면 마지막으로 바꾼 일시로 다시 7일을 센다
 		// 환불 기준일은 앞당길 수 없고 대회 날짜보다 늦을 수 없으므로, 대회일은 환불 기준일보다 앞으로는 당길 수 없다
-		if (saleStarted && !request.getRaceDate().equals(raceDate)) {
+		if (saleStarted && (!request.getRaceDate().equals(raceDate) || isPlaceChanged(request))) {
 			this.scheduleChangedAt = now;
 		}
 		apply(request);
+	}
+
+	// 장소는 화면에 보이는 주소와 검색 필터(시·도, 시·군·구) 중 하나라도 바뀌면 바뀐 것으로 본다
+	private boolean isPlaceChanged(RaceSaveRequestDto request) {
+		return !Objects.equals(location, request.getLocation())
+			|| !Objects.equals(regionSido, request.getRegionSido())
+			|| !Objects.equals(regionSigungu, request.getRegionSigungu());
 	}
 
 	// 이미 지난 일정은 바꿀 수 없고, 아직 오지 않은 일정도 지난 시각으로 옮길 수 없다

@@ -52,12 +52,13 @@ public class ApiV1RaceController {
 		@ApiResponse(responseCode = "201", description = "등록 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.REGISTER_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원 오류, 이미지 용도·개수 오류, "
+			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·티셔츠 사이즈 오류, 이미지 용도·개수 오류, "
 				+ "같은 파일 중복 또는 회원 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = RaceApiExamples.REGISTER_INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = RaceApiExamples.INVALID_BODY),
 				@ExampleObject(name = "날짜 순서 오류", value = RaceApiExamples.INVALID_SCHEDULE),
+				@ExampleObject(name = "키트 없는 종목의 티셔츠 사이즈", value = RaceApiExamples.TSHIRT_SIZE_WITHOUT_KIT),
 				@ExampleObject(name = "대표 이미지 없음", value = RaceApiExamples.THUMBNAIL_REQUIRED),
 				@ExampleObject(name = "같은 파일 중복", value = RaceApiExamples.DUPLICATE_FILE),
 				@ExampleObject(name = "회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE)
@@ -85,20 +86,22 @@ public class ApiV1RaceController {
 	@Operation(summary = "대회 수정",
 		description = "본인이 등록한 대회를 등록과 같은 모양의 요청으로 통째로 바꾼다. 종목은 courseId가 있으면 수정하고 없으면 추가하며, "
 			+ "요청에 없는 기존 종목은 뺀다. 이미지 목록도 통째로 바뀌어, 수정이 커밋된 뒤 file-service에 다시 연결을 요청한다. "
-			+ "판매가 시작된 뒤에는 참가비를 올리거나 환불 기준일을 앞당길 수 없고, 정원을 줄이거나 종목을 뺄 수 없다(정원은 늘리기만). "
+			+ "판매가 시작된 뒤에는 참가비를 올리거나 환불 기준일을 앞당길 수 없고, 정원을 줄이거나 티셔츠 사이즈를 바꾸거나 "
+			+ "종목을 뺄 수 없다(정원은 늘리기만). 종목의 참가 조건(거리·종목 구분·노면·제한 시간·나이 제한·키트 포함 여부)도 바꿀 수 없다. "
 			+ "판매 시작을 누른 뒤에는 이미 지난 판매 일정(크루 예매 시작·마감, 개인 예매 오픈, 접수 마감)을 바꾸거나 "
 			+ "일정을 지난 시각으로 옮길 수 없다(아직 오지 않은 일정은 앞당기거나 늦출 수 있다). "
-			+ "판매가 시작된 뒤 대회 일시를 바꾸면 일정 변경 안내 일시를 기록한다(이날부터 7일 동안 전액 환불).")
+			+ "판매가 시작된 뒤 대회 일시나 장소를 바꾸면 일정·장소 변경 안내 일시를 기록한다(이날부터 7일 동안 전액 환불).")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "수정 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.UPDATE_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원 오류, 이미지 용도·개수 오류, "
+			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·티셔츠 사이즈 오류, 이미지 용도·개수 오류, "
 				+ "같은 파일 중복, 이 대회의 종목이 아닌 종목 ID 또는 대회 ID·회원 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = RaceApiExamples.REGISTER_INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = RaceApiExamples.INVALID_BODY),
 				@ExampleObject(name = "날짜 순서 오류", value = RaceApiExamples.INVALID_SCHEDULE),
+				@ExampleObject(name = "키트 없는 종목의 티셔츠 사이즈", value = RaceApiExamples.TSHIRT_SIZE_WITHOUT_KIT),
 				@ExampleObject(name = "대표 이미지 없음", value = RaceApiExamples.THUMBNAIL_REQUIRED),
 				@ExampleObject(name = "같은 파일 중복", value = RaceApiExamples.DUPLICATE_FILE),
 				@ExampleObject(name = "이 대회의 종목이 아님", value = RaceApiExamples.COURSE_NOT_IN_RACE),
@@ -117,13 +120,15 @@ public class ApiV1RaceController {
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND))),
 		@ApiResponse(responseCode = "409",
 			description = "판매 시작 뒤 참가비 인상·환불 기준일 앞당김, 지난 판매 일정 변경·지난 시각으로 이동, "
-				+ "판매 시작 뒤 정원 줄이기 또는 종목 빼기",
+				+ "판매 시작 뒤 정원 줄이기·참가 조건 변경·티셔츠 사이즈 변경 또는 종목 빼기",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "참가비 인상", value = RaceApiExamples.PRICE_RAISED),
 				@ExampleObject(name = "환불 기준일 앞당김", value = RaceApiExamples.REFUND_DEADLINE_ADVANCED),
 				@ExampleObject(name = "지난 판매 일정 변경", value = RaceApiExamples.SCHEDULE_PASSED),
 				@ExampleObject(name = "판매 일정을 지난 시각으로", value = RaceApiExamples.SCHEDULE_TO_PAST),
 				@ExampleObject(name = "정원 줄이기", value = RaceApiExamples.QUOTA_DECREASED),
+				@ExampleObject(name = "참가 조건 변경", value = RaceApiExamples.COURSE_CONDITION_CHANGED),
+				@ExampleObject(name = "티셔츠 사이즈 변경", value = RaceApiExamples.TSHIRT_SIZE_CHANGED),
 				@ExampleObject(name = "종목 빼기", value = RaceApiExamples.COURSE_REMOVED)
 			}))
 	})

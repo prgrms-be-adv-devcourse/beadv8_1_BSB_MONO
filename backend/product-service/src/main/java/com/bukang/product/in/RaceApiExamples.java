@@ -68,6 +68,10 @@ final class RaceApiExamples {
 		{ "status": 400, "message": "크루 예매 마감 일시는 시작 일시보다 늦어야 합니다.", "data": null }
 		""";
 
+	static final String TSHIRT_SIZE_WITHOUT_KIT = """
+		{ "status": 400, "message": "키트가 없는 종목은 티셔츠 사이즈를 작성할 수 없습니다. (종목: 10K)", "data": null }
+		""";
+
 	static final String THUMBNAIL_REQUIRED = """
 		{ "status": 400, "message": "10K 종목의 대표 이미지를 1장 연결해주세요.", "data": null }
 		""";
@@ -110,6 +114,14 @@ final class RaceApiExamples {
 
 	static final String QUOTA_DECREASED = """
 		{ "status": 409, "message": "판매가 시작된 종목은 정원을 줄일 수 없습니다. (종목: 10K)", "data": null }
+		""";
+
+	static final String COURSE_CONDITION_CHANGED = """
+		{ "status": 409, "message": "판매가 시작된 종목은 참가 조건(거리)을 바꿀 수 없습니다. (종목: 10K)", "data": null }
+		""";
+
+	static final String TSHIRT_SIZE_CHANGED = """
+		{ "status": 409, "message": "판매가 시작된 종목은 티셔츠 사이즈를 바꿀 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
 	static final String SCHEDULE_PASSED = """
