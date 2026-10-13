@@ -424,6 +424,9 @@
     background-color: var(--color-bg-default);
     color: var(--color-text-primary);
     font-family: var(--font-sans);
+    /* 한국어는 단어 중간에서 줄을 바꾸지 않는다. 띄어쓰기 없이 긴 값(ID, URL)은 넘치지 않게 끊는다. */
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
 
   /* Tailwind v4는 버튼 커서를 default로 바꿔서, 눌리는 요소에 손가락 커서를 되돌린다. */
