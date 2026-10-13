@@ -130,6 +130,10 @@ final class RaceApiExamples {
 		{ "status": 409, "message": "취소된 대회는 수정할 수 없습니다.", "data": null }
 		""";
 
+	static final String UPDATE_CLOSED = """
+		{ "status": 409, "message": "판매가 끝난 대회는 수정할 수 없습니다.", "data": null }
+		""";
+
 	static final String CANCEL_SUCCESS = """
 		{
 			"status": 200,

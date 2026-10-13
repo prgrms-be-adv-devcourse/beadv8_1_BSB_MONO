@@ -47,6 +47,7 @@ import com.jayway.jsonpath.JsonPath;
  * - 판매 시작 일시 전(판매 예정)에는 참가비·키트 금액·정원·참가 조건·환불 기준일을 자유롭게 바꿀 수 있다
  * - 판매가 시작된 뒤에는 참가비·키트 금액 변경, 정원 줄이기, 참가 조건·티셔츠 사이즈 변경, 환불 기준일 앞당기기,
  *   종목 빼기가 409다
+ * - 취소된 대회와 판매가 끝난 대회(대회일 다음 날 0시부터)는 어떤 칸도 수정할 수 없다 (409)
  * - 이미 지난 판매 일정을 바꾸거나 일정을 지난 시각으로 옮기면 409다 (판매 시작 일시 전에도)
  * - 판매가 시작된 뒤 대회 일시·장소를 바꾸면 일정·장소 변경 일시를 남긴다 (판매 전에는 남기지 않는다)
  * - 수정이 커밋되면 파일 연결 메시지를 보내고 검색 문서를 다시 만들며, 정원을 늘리면 정원 마감 종목이 접수 중으로 돌아온다
@@ -391,6 +392,43 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 		assertThat(race.getTitle()).isEqualTo("2026 서울 하프 마라톤");
 	}
 
+	@Test
+	@DisplayName("대회일이 이틀 지난 판매 중 대회는 상태 배치가 판매 종료로 바꾸기 전이라도 대회명만 바꿔도 409이고 대회는 그대로다")
+	void rejectUpdateAfterRaceDate() throws Exception {
+		RegisteredRace finished = registerOnSale(finishedRace().build());
+		assertThat(findRace(finished.raceId()).getSaleStatus()).isEqualTo(RaceSaleStatus.ON_SALE);
+
+		update(finished.raceId(), finishedRace()
+			.title("끝난 뒤 바꾼 이름")
+			.course(sameCourse(finished.courseId()))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("판매가 끝난 대회는 수정할 수 없습니다."));
+
+		assertThat(findRace(finished.raceId()).getTitle()).isEqualTo("2026 서울 하프 마라톤");
+		// 등록 때 보낸 1건뿐이다
+		assertThat(fileLinkMessages()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("상태 배치가 판매 종료(CLOSED)로 바꾼 대회는 대회명만 바꿔도 409이고 대회는 그대로다")
+	void rejectUpdateOfClosedRace() throws Exception {
+		RegisteredRace finished = registerOnSale(finishedRace().build());
+		productFacade.refreshSaleStatuses();
+		assertThat(findRace(finished.raceId()).getSaleStatus()).isEqualTo(RaceSaleStatus.CLOSED);
+
+		update(finished.raceId(), finishedRace()
+			.title("끝난 뒤 바꾼 이름")
+			.course(sameCourse(finished.courseId()))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("판매가 끝난 대회는 수정할 수 없습니다."));
+
+		Race race = findRace(finished.raceId());
+		assertThat(race.getSaleStatus()).isEqualTo(RaceSaleStatus.CLOSED);
+		assertThat(race.getTitle()).isEqualTo("2026 서울 하프 마라톤");
+	}
+
 	// ---------- 판매 시작 뒤 수정: 허용되는 변경 ----------
 
 	@Test
@@ -698,6 +736,14 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 	// 판매 시작 일시 전인 판매 예정 대회의 일정 (개인 예매만 하루 뒤 오픈, 나머지는 sameRace()와 같다)
 	private RaceBuilder scheduledRace() {
 		return sameRace().individualOpenAt(now.plusDays(1));
+	}
+
+	// 대회일이 이틀 지난 대회의 일정 (개인 예매 오픈 5일 전, 접수 마감 3일 전). registerOnSale()로 만들면 판매 중이다
+	private RaceBuilder finishedRace() {
+		return race()
+			.raceDate(now.minusDays(2))
+			.individualOpenAt(now.minusDays(5))
+			.applicationCloseAt(now.minusDays(3));
 	}
 
 	// 이미 끝난 크루 예매(3일 전 시작, 2일 전 마감)를 더한다. 개인 예매 오픈(한 시간 전)은 크루 마감 다음 날 06:00 이후다
