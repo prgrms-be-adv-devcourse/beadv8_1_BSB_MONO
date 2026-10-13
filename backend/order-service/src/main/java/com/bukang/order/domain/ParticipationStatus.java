@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 참가 신청 상태 (ERD 추천안 v4 8쪽)
  * PENDING → APPLIED(자리 확보) → CONFIRMED(결제 완료). 확보 실패는 FAILED, 미결제 해제는 RELEASED, 취소는 CANCELED
+ * CANCELED는 결제한 참가권 취소(환불)와 [결제하기] 전 신청서 취소(PRO-122) 두 경우다. 둘을 가르려면 주문이 있는지 본다
  */
 @Getter
 @RequiredArgsConstructor

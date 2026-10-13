@@ -5,7 +5,6 @@ import static jakarta.persistence.EnumType.STRING;
 import static lombok.AccessLevel.PROTECTED;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -54,6 +53,11 @@ public class Payout extends BaseIdAndTime {
 	@Column(nullable = false)
 	private int raceId;
 
+	// 정산 내역을 만들 때 상품 서비스에서 받은 대회 이름. 영수증처럼 정산한 때의 이름을 남긴다
+	// 판매자 조회 때 상품 서비스를 부르지 않으려고 저장한다 (정산은 대회 다음 날 만들어져 그 뒤 이름이 바뀔 일은 드물다)
+	@Column(nullable = false, length = 200)
+	private String raceName;
+
 	// YYYY-MM. 정산 대상일이 속한 달
 	@Column(nullable = false, length = 7)
 	private String payoutMonth;
@@ -93,10 +97,11 @@ public class Payout extends BaseIdAndTime {
 	@OneToMany(mappedBy = "payout", cascade = ALL)
 	private List<PayoutItem> items = new ArrayList<>();
 
-	public Payout(int sellerId, int raceId, YearMonth payoutMonth, LocalDateTime settledAt,
+	public Payout(int sellerId, int raceId, String raceName, YearMonth payoutMonth, LocalDateTime settledAt,
 		BusinessDayCalendar calendar) {
 		this.sellerId = sellerId;
 		this.raceId = raceId;
+		this.raceName = raceName;
 		this.payoutMonth = payoutMonth.toString();
 		this.settledAt = settledAt;
 		this.status = PayoutStatus.CALCULATED;
@@ -116,7 +121,7 @@ public class Payout extends BaseIdAndTime {
 
 		// 수수료는 참가권 1장마다 원 미만을 버리고, 정산 내역의 수수료는 그 합이다 (payout.md 2-1)
 		salesAmount += price;
-		feeAmount += feeOf(price, feeRate);
+		feeAmount += item.getFeeAmount();
 		// 정책 공식(판매액 − 환불액 − 수수료)과 같은 모양으로 둔다. 세미는 refundAmount가 항상 0이다:
 		// 대상일 전 환불은 항목이 안 생기고, 대상일 후 환불은 막는다(PRO-28). 최종에서는 대상일~지급 사이 환불이
 		// 음수 정산 항목(PRO-32), 지급 뒤 환불은 회수(PRO-33)가 된다 (payout.md 2-2, 4-2)
@@ -166,9 +171,10 @@ public class Payout extends BaseIdAndTime {
 		this.scheduledPayDate = nextPayDateAfter(releasedAt.toLocalDate(), calendar);
 	}
 
-	// 해제일 "뒤"의 지급일: 이번 달 지급일이 해제일보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일
+	// date "뒤"의 지급일: 이번 달 지급일이 date보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일
 	// 20일이 주말이면 지급일이 밀리므로, 20일이 아니라 밀린 날과 비교한다 (12/20 일 해제 → 12/21 월)
-	private static LocalDate nextPayDateAfter(LocalDate date, BusinessDayCalendar calendar) {
+	// 보류 해제와 판매자 요약(지급 예정 정산 내역이 없을 때의 다음 정산일)이 같은 규칙을 쓴다
+	public static LocalDate nextPayDateAfter(LocalDate date, BusinessDayCalendar calendar) {
 		YearMonth month = YearMonth.from(date);
 		LocalDate thisMonthPayDay = payDayOf(month, calendar);
 		if (thisMonthPayDay.isAfter(date)) {
@@ -179,9 +185,5 @@ public class Payout extends BaseIdAndTime {
 
 	private static LocalDate payDayOf(YearMonth month, BusinessDayCalendar calendar) {
 		return calendar.nextOrSame(month.atDay(PAY_DAY_OF_MONTH));
-	}
-
-	private static long feeOf(long price, BigDecimal feeRate) {
-		return BigDecimal.valueOf(price).multiply(feeRate).setScale(0, RoundingMode.FLOOR).longValueExact();
 	}
 }

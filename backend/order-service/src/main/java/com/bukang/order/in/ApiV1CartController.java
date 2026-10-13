@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.order.app.CartAddResult;
 import com.bukang.order.app.CartFacade;
+import com.bukang.order.dto.CartCheckoutDto;
+import com.bukang.order.dto.CartCheckoutRequestDto;
 import com.bukang.order.dto.CartDto;
 import com.bukang.order.dto.CartItemAddRequestDto;
 import com.bukang.order.dto.CartItemDto;
@@ -28,9 +30,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Cart", description = "장바구니 조회, 참가권 담기, 빼기 API")
+@Tag(name = "Cart", description = "장바구니 조회, 참가권 담기, 빼기, 장바구니 결제 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/order/cart")
@@ -135,5 +138,63 @@ public class ApiV1CartController {
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "장바구니에서 뺐습니다.", cartFacade.removeItem(cartItemId, memberId)));
+	}
+
+	// 항목별 결과(주문함·매진·실패)는 200의 data에 담는다. 요청 자체가 잘못되면 자리를 확보하기 전에 4xx로 끝난다
+	@PostMapping("/checkout")
+	@Operation(summary = "장바구니 결제",
+		description = "장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. "
+			+ "항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. "
+			+ "매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). "
+			+ "결제는 주문마다 예치금 결제 API로 한다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "항목별 처리 결과 (일부 또는 전부 매진·실패여도 200)",
+			content = @Content(examples = {
+				@ExampleObject(name = "일부 주문", value = CartApiExamples.CHECKOUT_SUCCESS),
+				@ExampleObject(name = "주문 0건", value = CartApiExamples.CHECKOUT_NONE)
+			})),
+		@ApiResponse(responseCode = "400", description = "입력값·헤더 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "참가 신청 없음", value = CartApiExamples.CHECKOUT_EMPTY),
+				@ExampleObject(name = "10건 초과", value = CartApiExamples.CHECKOUT_TOO_MANY),
+				@ExampleObject(name = "참가 신청 ID 오류", value = CartApiExamples.CHECKOUT_INVALID_ID),
+				@ExampleObject(name = "같은 참가 신청 두 번", value = CartApiExamples.CHECKOUT_DUPLICATE),
+				@ExampleObject(name = "요청 본문 형식 오류", value = CartApiExamples.INVALID_BODY),
+				@ExampleObject(name = "Idempotency-Key 없음", value = CartApiExamples.MISSING_IDEMPOTENCY_KEY),
+				@ExampleObject(name = "Idempotency-Key 길이 오류", value = CartApiExamples.INVALID_IDEMPOTENCY_KEY),
+				@ExampleObject(name = "회원 ID 형식 오류", value = CartApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = CartApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CartApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "다른 회원의 참가 신청이 섞여 있음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CartApiExamples.PARTICIPATION_NOT_OWNER))),
+		@ApiResponse(responseCode = "404", description = "없는 참가 신청이 섞여 있음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CartApiExamples.PARTICIPATION_NOT_FOUND)))
+	})
+	public ResponseEntity<RsData<CartCheckoutDto>> checkout(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "중복 주문 방지 키. 같은 장바구니 결제 재시도에는 같은 값을 보낸다 (예: UUID)",
+			example = "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43")
+		@RequestHeader(IdempotencyKeyHeader.NAME)
+		@Size(min = 1, max = IdempotencyKeyHeader.MAX_LENGTH, message = IdempotencyKeyHeader.INVALID_MESSAGE)
+		String idempotencyKey,
+		@Valid @RequestBody CartCheckoutRequestDto request
+	) {
+		CartCheckoutDto result = cartFacade.checkout(request, idempotencyKey, memberId);
+		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, checkoutMessage(result), result));
+	}
+
+	// 하나도 주문하지 못했으면 결제를 안내하지 않는다
+	private String checkoutMessage(CartCheckoutDto result) {
+		if (result.getOrderedCount() == 0) {
+			return "주문한 참가권이 없습니다. 항목별 결과를 확인해주세요.";
+		}
+		return "참가권 %d건 중 %d건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요."
+			.formatted(result.getResults().size(), result.getOrderedCount());
 	}
 }

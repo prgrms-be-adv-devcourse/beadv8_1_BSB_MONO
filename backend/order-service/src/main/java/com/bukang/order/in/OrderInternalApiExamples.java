@@ -9,8 +9,8 @@ final class OrderInternalApiExamples {
 			"status": 200,
 			"message": "판매 내역을 조회했습니다.",
 			"data": [
-				{ "orderItemId": 1, "sellerId": 3, "raceId": 5, "price": 60000 },
-				{ "orderItemId": 4, "sellerId": 3, "raceId": 5, "price": 60000 }
+				{ "orderItemId": 1, "sellerId": 3, "raceId": 5, "price": 50000 },
+				{ "orderItemId": 4, "sellerId": 3, "raceId": 5, "price": 50000 }
 			]
 		}
 		""";

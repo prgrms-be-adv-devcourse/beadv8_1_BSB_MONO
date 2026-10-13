@@ -86,3 +86,4 @@ Conventional Commits (`feat:`, `fix:` …). husky가 lint-staged와 commitlint�
 ## 작업 관리
 
 Linear 이슈를 만들거나 고칠 때, 이슈 작업을 시작할 때, PR을 열 때는 `../docs/LINEAR.md`를 먼저 읽고 따른다.
+코드·문서를 고치는 작업을 시작하면 첫 수정 전에 `../docs/LINEAR.md`의 "작업 시작 체크"로 Linear 이슈 상태를 맞춘다.

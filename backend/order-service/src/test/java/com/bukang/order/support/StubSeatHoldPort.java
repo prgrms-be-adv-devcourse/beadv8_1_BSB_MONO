@@ -28,10 +28,15 @@ public class StubSeatHoldPort implements SeatHoldPort {
 	private final Map<Integer, LocalDateTime> expiresAt = new ConcurrentHashMap<>();
 	private final Map<Integer, Boolean> extended = new ConcurrentHashMap<>();
 	private final Set<Integer> sold = ConcurrentHashMap.newKeySet();
+	// 자리 확보 때 예상하지 못한 오류(타임아웃 등)를 낼 종목
+	private final Set<Integer> failingCourses = ConcurrentHashMap.newKeySet();
 
 	@Override
 	public SeatHoldResult hold(int raceCourseId, int participationId, int memberId) {
 		holdCalls.incrementAndGet();
+		if (failingCourses.contains(raceCourseId)) {
+			throw new IllegalStateException("상품 서비스 응답 없음 (테스트)");
+		}
 		boolean[] held = {true};
 		remainingSeats.computeIfPresent(raceCourseId, (id, remaining) -> {
 			if (remaining <= 0) {
@@ -91,8 +96,17 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		return restoredParticipations;
 	}
 
+	// 판매(HELD → SOLD)까지 끝난 자리인지
+	public boolean isSold(int participationId) {
+		return sold.contains(participationId);
+	}
+
 	public int extendCalls() {
 		return extendCalls.get();
+	}
+
+	public void failHold(int raceCourseId) {
+		failingCourses.add(raceCourseId);
 	}
 
 	public void setRemainingSeats(int raceCourseId, int seats) {
@@ -111,5 +125,6 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		expiresAt.clear();
 		extended.clear();
 		sold.clear();
+		failingCourses.clear();
 	}
 }

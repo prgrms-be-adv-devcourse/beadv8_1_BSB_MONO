@@ -52,6 +52,8 @@ public class MemberDataInit {
 		join("사용자1", "사용자1", "user1@crewrun.com", "010-1111-2225");
 		join("사용자2", "사용자2", "user2@crewrun.com", "010-1111-2226");
 		join("사용자3", "사용자3", "user3@crewrun.com", "010-1111-2227");
+		// 정산 샘플 데이터(payout-service PayoutDataInit)의 판매자. 판매자 역할은 아직 없어 일반 회원으로 만든다
+		join("판매자1", "판매자1", "seller1@crewrun.com", "010-1111-2228");
 	}
 
 	private void join(String name, String nickname, String email, String phone) {

@@ -1,5 +1,6 @@
 package com.bukang.order.in;
 
+import static com.bukang.order.out.race.RaceCourseInfo.SCHEDULE_CHANGE_REFUND_DAYS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -60,7 +62,7 @@ class ApiV1OrderCancelTest {
 	private static final int OTHER_MEMBER_ID = 2;
 	private static final int COURSE_ID = 10;
 	private static final int RACE_ID = 100;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -142,6 +144,106 @@ class ApiV1OrderCancelTest {
 			.andExpect(jsonPath("$.message").value("환불 기한(%s)이 지나 취소할 수 없습니다.".formatted(yesterday)));
 
 		assertNothingCanceled(paid);
+	}
+
+	@Test
+	@DisplayName("환불 기한이 지났어도 대회 일정이 바뀐 날(알린 날)부터 7일째 날까지는 취소하면 전액 환불된다")
+	void cancelWithinScheduleChangeRefund() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		// 6일 전에 바뀌었다 → 바뀐 날을 1일째로 세면 오늘이 7일째 날
+		setRefundDeadline(LocalDate.now().minusDays(10), LocalDateTime.now().minusDays(6));
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("취소했습니다. 예치금 %,d원을 돌려드렸습니다.".formatted(TICKET_PRICE)))
+			.andExpect(jsonPath("$.data.canceledAmount").value(TICKET_PRICE));
+
+		assertThat(seatHoldPort.restoredParticipations()).containsExactly(paid.participationId());
+		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
+	}
+
+	@Test
+	@DisplayName("일정 변경 뒤 8일째 날에는 환불 기한도 지났으면 409로 거절되고 아무것도 바뀌지 않는다")
+	void cancelAfterScheduleChangeRefund() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		LocalDate refundDeadline = LocalDate.now().minusDays(10);
+		// 7일 전에 바뀌었다 → 오늘이 8일째 날
+		LocalDateTime changedAt = LocalDateTime.now().minusDays(7);
+		setRefundDeadline(refundDeadline, changedAt);
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("환불 기한(%s)과 일정 변경 뒤 전액 환불 기간(%s까지)이 지나 취소할 수 없습니다."
+				.formatted(refundDeadline, changedAt.toLocalDate().plusDays(SCHEDULE_CHANGE_REFUND_DAYS - 1))));
+
+		assertNothingCanceled(paid);
+	}
+
+	@Test
+	@DisplayName("일정 변경 7일이 환불 기한보다 먼저 끝났으면 거절 메시지에는 환불 기한만 나온다")
+	void cancelAfterRefundDeadlineWithOldScheduleChange() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		LocalDate refundDeadline = LocalDate.now().minusDays(2);
+		setRefundDeadline(refundDeadline, LocalDateTime.now().minusDays(20));
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("환불 기한(%s)이 지나 취소할 수 없습니다.".formatted(refundDeadline)));
+	}
+
+	@Test
+	@DisplayName("대회가 미뤄져도 정산은 주문 때 복사한 옛 대회 날짜로 하므로, 그 날짜로 정산이 시작됐으면 7일 안이어도 거절한다")
+	void cancelPostponedRaceAlreadySettled() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		RaceCourseInfo before = raceCoursePort.findCourse(COURSE_ID).orElseThrow();
+		reschedule(before, before.raceDate().plusDays(14));
+		refundEligibilityPort.settle(before.raceDate().toLocalDate());
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+
+		assertNothingCanceled(paid);
+	}
+
+	@Test
+	@DisplayName("대회가 당겨져 바뀐 대회 날짜로 정산이 시작됐으면, 주문 때 복사한 날짜로는 아직이어도 거절한다")
+	void cancelAdvancedRaceAlreadySettled() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		RaceCourseInfo before = raceCoursePort.findCourse(COURSE_ID).orElseThrow();
+		LocalDateTime advanced = before.raceDate().minusDays(14);
+		reschedule(before, advanced);
+		refundEligibilityPort.settle(advanced.toLocalDate());
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+
+		assertNothingCanceled(paid);
+	}
+
+	@Test
+	@DisplayName("대회가 미뤄졌고 두 날짜 모두 정산 전이면 7일 안 취소는 환불되고, 정산 여부는 두 날짜로 모두 묻는다")
+	void cancelPostponedRaceBeforePayout() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		RaceCourseInfo before = raceCoursePort.findCourse(COURSE_ID).orElseThrow();
+		LocalDateTime postponed = before.raceDate().plusDays(14);
+		reschedule(before, postponed);
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isOk());
+
+		assertThat(refundEligibilityPort.askedRaceDates())
+			.containsExactly(before.raceDate().toLocalDate(), postponed.toLocalDate());
+	}
+
+	@Test
+	@DisplayName("정산 서비스에는 주문을 잠그기 전, DB 트랜잭션 밖에서 묻는다 (정산이 느려도 잠금·커넥션을 붙잡지 않는다)")
+	void asksPayoutOutsideTransaction() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isOk());
+
+		assertThat(refundEligibilityPort.askedInTransaction()).isNotEmpty().containsOnly(false);
 	}
 
 	@Test
@@ -254,6 +356,20 @@ class ApiV1OrderCancelTest {
 		raceCoursePort.put(course);
 	}
 
+	// 환불 기한이 지난 뒤 대회 일시를 바꿔, 일정 변경 뒤 7일 전액 환불 기간 안으로 만든다
+	private void reschedule(RaceCourseInfo before, LocalDateTime newRaceDate) {
+		raceCoursePort.put(new RaceCourseInfo(before.raceCourseId(), before.raceId(), newRaceDate,
+			before.applicationOpenAt(), before.applicationCloseAt(), before.minAge(), before.maxAge(),
+			before.sellerId(), before.courseName(), before.price(), before.kitIncluded(),
+			LocalDate.now().minusDays(1),
+			LocalDateTime.now().minusDays(1)));
+	}
+
+	private void setRefundDeadline(LocalDate refundDeadline, LocalDateTime scheduleChangedAt) {
+		raceCoursePort.put(
+			StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, refundDeadline, scheduleChangedAt));
+	}
+
 	private ResultActions cancel(int memberId, int orderId, int orderItemId) throws Exception {
 		return mockMvc.perform(post(BASE_URL + "/" + orderId + "/items/" + orderItemId + "/cancel")
 			.header("X-Member-Id", memberId));
@@ -265,7 +381,9 @@ class ApiV1OrderCancelTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{ "name": "%s", "birth": "1994-06-25", "gender": "MALE", "phone": "010-1234-5678",
-					"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" }
+					"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } }
 				""".formatted(name)));
 	}
 
@@ -305,7 +423,9 @@ class ApiV1OrderCancelTest {
 				{ "raceCourseId": %d, "thirdPartyConsent": true,
 					"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 						"phone": "010-1234-5678", "emergencyContactName": "김가족",
-						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 				""".formatted(COURSE_ID))));
 	}
 
