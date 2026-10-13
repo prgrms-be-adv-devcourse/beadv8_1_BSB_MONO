@@ -67,6 +67,16 @@ springdoc:
       version: v1
 
 # JWT 유효 기간 (서명 키 jwt.secret은 프로파일별 yaml에 있다)
+# refresh-token-expiration은 Refresh Token을 회전할 때마다 한 번에 늘리는 기간이다
 jwt:
   access-token-expiration: 30m
   refresh-token-expiration: 14d
+
+# Refresh Token 회전 정책 (RefreshTokenProperties). 회전은 member-service만 하므로 공용 jwt.*와 따로 둔다
+member:
+  auth:
+    refresh-token:
+      # 회전 직후 바로 전 토큰이 다시 와도 탈취로 보지 않는 시간 (탭 두 개, 동시 요청, 응답 유실)
+      reuse-grace: 5s
+      # 로그인부터 회전을 이어 갈 수 있는 최대 기간. 계속 써도 이 기간이 지나면 다시 로그인한다
+      max-lifetime: 30d

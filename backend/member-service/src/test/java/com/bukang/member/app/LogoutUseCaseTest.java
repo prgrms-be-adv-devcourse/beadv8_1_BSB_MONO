@@ -1,7 +1,7 @@
 package com.bukang.member.app;
 
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -10,7 +10,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +19,7 @@ import com.bukang.jwt.JwtProperties;
 import com.bukang.jwt.JwtProvider;
 import com.bukang.member.out.RefreshTokenRepository;
 
+// 같은 family일 때만 지우는 판단은 refresh-token-delete-family.lua가 한다 (RefreshTokenRepositoryTest)
 class LogoutUseCaseTest {
 	private static final JwtProperties PROPERTIES = new JwtProperties(
 		"jwt-test-secret-key-0000-0000-0000-0000", Duration.ofMinutes(30), Duration.ofDays(14));
@@ -38,35 +38,23 @@ class LogoutUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("Redis에 저장된 토큰과 같으면 Redis에서 지운다")
-	void deleteStoredToken() {
-		String refreshToken = jwtProvider.issueRefreshToken(MEMBER_ID);
-		given(refreshTokenRepository.findByMemberId(MEMBER_ID)).willReturn(Optional.of(refreshToken));
+	@DisplayName("토큰의 familyId로 Redis 기록 삭제를 요청한다")
+	void deletesByFamily() {
+		String refreshToken = jwtProvider.issueRefreshToken(MEMBER_ID, "family-1", NOW.plus(Duration.ofDays(14)));
 
 		logoutUseCase.logout(refreshToken);
 
-		verify(refreshTokenRepository).delete(MEMBER_ID);
-	}
-
-	@Test
-	@DisplayName("다른 기기에서 다시 로그인해 덮어써진 이전 토큰이면 지금 토큰을 지우지 않는다")
-	void keepNewerToken() {
-		JwtProvider earlierProvider = new JwtProvider(PROPERTIES, Clock.fixed(NOW.minusSeconds(60), ZoneOffset.UTC));
-		String oldToken = earlierProvider.issueRefreshToken(MEMBER_ID);
-		given(refreshTokenRepository.findByMemberId(MEMBER_ID))
-			.willReturn(Optional.of(jwtProvider.issueRefreshToken(MEMBER_ID)));
-
-		logoutUseCase.logout(oldToken);
-
-		verify(refreshTokenRepository, never()).delete(anyLong());
+		verify(refreshTokenRepository).deleteIfFamily(MEMBER_ID, "family-1");
 	}
 
 	@Test
 	@DisplayName("토큰이 없거나 유효하지 않으면 아무것도 지우지 않고 끝난다")
 	void ignoreMissingOrInvalidToken() {
 		logoutUseCase.logout(null);
+		logoutUseCase.logout(" ");
 		logoutUseCase.logout("not-a-jwt");
+		logoutUseCase.logout(jwtProvider.issueAccessToken(MEMBER_ID));
 
-		verify(refreshTokenRepository, never()).delete(anyLong());
+		verify(refreshTokenRepository, never()).deleteIfFamily(anyLong(), anyString());
 	}
 }

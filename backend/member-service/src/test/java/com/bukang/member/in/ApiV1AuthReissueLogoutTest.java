@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,17 +36,23 @@ import com.bukang.member.app.MemberFacade;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.RefreshTokenRepository;
+import com.bukang.member.out.RefreshTokenRepository.NewFamily;
+import com.bukang.member.out.RefreshTokenRepository.Rotation;
+import com.bukang.member.out.RotationOutcome;
+import com.bukang.member.out.RotationResult;
 import com.jayway.jsonpath.JsonPath;
 
 import jakarta.servlet.http.Cookie;
 
 // 테스트에서는 Redis 서버를 띄우지 않으므로 RefreshTokenRepository를 메모리 Map으로 흉내 낸다
+// 흉내는 컨트롤러·쿠키 흐름을 보려는 최소한이라 유예(GRACE)는 넣지 않는다. 판정 전체는 RefreshTokenRepositoryTest가 진짜 Redis로 확인한다
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ApiV1AuthReissueLogoutTest {
 	private static final String EMAIL = "runner1@crewrun.com";
 	private static final String PASSWORD = "password1234";
+	private static final String INVALID_MESSAGE = "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -63,17 +69,23 @@ class ApiV1AuthReissueLogoutTest {
 	@MockitoBean
 	private RefreshTokenRepository refreshTokenRepository;
 
-	private final Map<Long, String> redis = new HashMap<>();
+	private final Map<Long, Saved> redis = new HashMap<>();
 	private int memberId;
 
 	@BeforeEach
 	void setUp() {
-		willAnswer(invocation -> redis.put(invocation.getArgument(0), invocation.getArgument(1)))
-			.given(refreshTokenRepository).save(anyLong(), anyString(), any(Duration.class));
-		willAnswer(invocation -> Optional.ofNullable(redis.get(invocation.<Long>getArgument(0))))
-			.given(refreshTokenRepository).findByMemberId(anyLong());
-		willAnswer(invocation -> redis.remove(invocation.<Long>getArgument(0)))
-			.given(refreshTokenRepository).delete(anyLong());
+		willAnswer(invocation -> {
+			NewFamily family = invocation.getArgument(1);
+			return redis.put(invocation.getArgument(0),
+				new Saved(family.familyId(), family.jti(), family.familyExpiresAt()));
+		}).given(refreshTokenRepository).create(anyLong(), any(NewFamily.class));
+		willAnswer(invocation -> Optional.ofNullable(redis.get(invocation.<Long>getArgument(0)))
+			.map(Saved::familyExpiresAt))
+			.given(refreshTokenRepository).findFamilyExpiresAt(anyLong());
+		willAnswer(invocation -> rotate(invocation.getArgument(0), invocation.getArgument(1)))
+			.given(refreshTokenRepository).rotate(anyLong(), any(Rotation.class));
+		willAnswer(invocation -> deleteIfFamily(invocation.getArgument(0), invocation.getArgument(1)))
+			.given(refreshTokenRepository).deleteIfFamily(anyLong(), anyString());
 
 		memberId = memberFacade.join(new MemberJoinRequestDto(
 			EMAIL, PASSWORD, "김러너", "러너1", "010-1234-5678", LocalDate.of(1995, 4, 12), null
@@ -86,7 +98,7 @@ class ApiV1AuthReissueLogoutTest {
 	}
 
 	@Test
-	@DisplayName("유효한 Refresh Token 쿠키로 새 Access Token을 받는다")
+	@DisplayName("유효한 Refresh Token 쿠키로 새 Access Token은 본문으로, 새 Refresh Token은 쿠키로 받는다")
 	void reissue() throws Exception {
 		String refreshToken = loginAndGetRefreshToken();
 
@@ -98,6 +110,27 @@ class ApiV1AuthReissueLogoutTest {
 
 		String accessToken = JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
 		assertThat(jwtProvider.parse(accessToken, TokenType.ACCESS).memberId()).isEqualTo(memberId);
+
+		assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE))
+			.startsWith("refreshToken=")
+			.contains("Path=/api/v1/auth", "Secure", "HttpOnly", "SameSite=Lax");
+		String rotated = result.getResponse().getCookie("refreshToken").getValue();
+		assertThat(rotated).isNotEqualTo(refreshToken);
+		assertThat(jwtProvider.parse(rotated, TokenType.REFRESH).familyId())
+			.isEqualTo(jwtProvider.parse(refreshToken, TokenType.REFRESH).familyId());
+	}
+
+	@Test
+	@DisplayName("회전한 뒤 이전 Refresh Token을 다시 쓰면 401이고, 그 로그인은 끊긴다")
+	void reuseAfterRotationRejected() throws Exception {
+		String refreshToken = loginAndGetRefreshToken();
+		String rotated = reissue(refreshToken).andExpect(status().isOk())
+			.andReturn().getResponse().getCookie("refreshToken").getValue();
+
+		reissue(refreshToken)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value(INVALID_MESSAGE));
+		reissue(rotated).andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -113,11 +146,11 @@ class ApiV1AuthReissueLogoutTest {
 	void reissueWithInvalidToken() throws Exception {
 		reissue("not-a-jwt")
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.message").value("유효하지 않은 Refresh Token입니다. 다시 로그인해주세요."));
+			.andExpect(jsonPath("$.message").value(INVALID_MESSAGE));
 	}
 
 	@Test
-	@DisplayName("로그아웃하면 Redis의 토큰이 지워지고 쿠키가 만료되며, 이후 재발급은 401이다")
+	@DisplayName("로그아웃하면 Redis의 기록이 지워지고 쿠키가 만료되며, 이후 재발급은 401이다")
 	void logoutThenReissueRejected() throws Exception {
 		String refreshToken = loginAndGetRefreshToken();
 
@@ -134,7 +167,20 @@ class ApiV1AuthReissueLogoutTest {
 
 		reissue(refreshToken)
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.message").value("유효하지 않은 Refresh Token입니다. 다시 로그인해주세요."));
+			.andExpect(jsonPath("$.message").value(INVALID_MESSAGE));
+	}
+
+	@Test
+	@DisplayName("다른 기기에서 다시 로그인한 뒤 이전 기기가 로그아웃해도 새 로그인은 남는다")
+	void logoutWithOldFamilyKeepsNewLogin() throws Exception {
+		String oldDeviceToken = loginAndGetRefreshToken();
+		String newDeviceToken = loginAndGetRefreshToken();
+
+		mockMvc.perform(post("/api/v1/auth/logout").cookie(new Cookie("refreshToken", oldDeviceToken)))
+			.andExpect(status().isOk());
+
+		assertThat(redis).containsKey((long)memberId);
+		reissue(newDeviceToken).andExpect(status().isOk());
 	}
 
 	@Test
@@ -145,6 +191,36 @@ class ApiV1AuthReissueLogoutTest {
 			.andReturn();
 
 		assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE)).contains("Max-Age=0");
+	}
+
+	// refresh-token-rotate.lua를 컨트롤러 흐름에 필요한 만큼만 흉내 낸다 (유예 없음)
+	private RotationResult rotate(long id, Rotation rotation) {
+		Saved saved = redis.get(id);
+		if (saved == null) {
+			return new RotationResult(RotationOutcome.MISSING, null);
+		}
+		if (!saved.familyId().equals(rotation.familyId())) {
+			return new RotationResult(RotationOutcome.STALE, null);
+		}
+		if (saved.jti().equals(rotation.presentedJti())) {
+			redis.put(id, new Saved(saved.familyId(), rotation.newJti(), saved.familyExpiresAt()));
+			return new RotationResult(RotationOutcome.ROTATED, null);
+		}
+		redis.remove(id);
+		return new RotationResult(RotationOutcome.THEFT, null);
+	}
+
+	// refresh-token-delete-family.lua 흉내
+	private boolean deleteIfFamily(long id, String familyId) {
+		Saved saved = redis.get(id);
+		if (saved != null && saved.familyId().equals(familyId)) {
+			redis.remove(id);
+			return true;
+		}
+		return false;
+	}
+
+	private record Saved(String familyId, String jti, Instant familyExpiresAt) {
 	}
 
 	private String loginAndGetRefreshToken() throws Exception {

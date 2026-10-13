@@ -117,10 +117,15 @@ public class ApiV1AuthController {
 	}
 
 	@PostMapping("/reissue")
-	@Operation(summary = "토큰 재발급", description = "쿠키의 Refresh Token을 검증하고 Redis에 저장된 토큰과 같으면 "
-		+ "새 Access Token을 응답 본문으로 내려준다. Refresh Token은 바꾸지 않는다.")
+	@Operation(summary = "토큰 재발급", description = "쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 "
+		+ "새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). "
+		+ "이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 "
+		+ "지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "재발급 성공",
+			headers = @Header(name = HttpHeaders.SET_COOKIE,
+				description = "refreshToken=...; Path=/api/v1/auth; Max-Age=1209600; Secure; HttpOnly; SameSite=Lax "
+					+ "(Max-Age는 토큰 만료까지 남은 초. 로그인 30일 상한에 가까우면 14일보다 짧다)"),
 			content = @Content(examples = @ExampleObject(value = AuthApiExamples.REISSUE_SUCCESS))),
 		@ApiResponse(responseCode = "401", description = "Refresh Token 쿠키 없음, 만료 또는 유효하지 않음",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
@@ -133,8 +138,12 @@ public class ApiV1AuthController {
 		@Parameter(description = "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)")
 		@CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshToken
 	) {
-		String accessToken = memberFacade.reissueAccessToken(refreshToken);
-		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "토큰 재발급 성공", new TokenReissueResponseDto(accessToken)));
+		AuthTokens tokens = memberFacade.reissue(refreshToken);
+		// 회전한 Refresh Token을 같은 이름·경로의 쿠키로 내려줘 브라우저가 이전 쿠키를 바꿔 끼우게 한다
+		return ResponseEntity.ok()
+			.header(HttpHeaders.SET_COOKIE,
+				refreshTokenCookie(tokens.refreshToken(), tokens.refreshTokenExpiration()).toString())
+			.body(RsData.of(HttpStatus.OK, "토큰 재발급 성공", new TokenReissueResponseDto(tokens.accessToken())));
 	}
 
 	@PostMapping("/logout")

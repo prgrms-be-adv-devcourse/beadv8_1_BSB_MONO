@@ -1,8 +1,8 @@
 package com.bukang.member.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -18,6 +18,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -37,9 +38,11 @@ import com.bukang.member.app.MemberFacade;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.RefreshTokenRepository;
+import com.bukang.member.out.RefreshTokenRepository.NewFamily;
 import com.jayway.jsonpath.JsonPath;
 
 // 테스트에서는 Redis 서버를 띄우지 않으므로 RefreshTokenRepository는 목으로 바꿔 저장 호출만 확인한다
+// (Lua 스크립트 자체는 RefreshTokenRepositoryTest가 진짜 Redis로 확인한다)
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -77,7 +80,7 @@ class ApiV1AuthLoginTest {
 	}
 
 	@Test
-	@DisplayName("로그인하면 Access Token은 본문으로, Refresh Token은 httpOnly 쿠키로 받고 Redis에 저장된다")
+	@DisplayName("로그인하면 Access Token은 본문으로, Refresh Token은 httpOnly 쿠키로 받고 새 family로 Redis에 저장된다")
 	void loginIssuesTokens() throws Exception {
 		MvcResult result = login(EMAIL, PASSWORD)
 			.andExpect(status().isOk())
@@ -100,14 +103,22 @@ class ApiV1AuthLoginTest {
 		String refreshToken = result.getResponse().getCookie("refreshToken").getValue();
 		JwtClaims refreshClaims = jwtProvider.parse(refreshToken, TokenType.REFRESH);
 		assertThat(refreshClaims.memberId()).isEqualTo(memberId);
-		verify(refreshTokenRepository).save(memberId, refreshToken, Duration.ofDays(14));
+		assertThat(refreshClaims.familyId()).isNotBlank();
+
+		ArgumentCaptor<NewFamily> saved = ArgumentCaptor.forClass(NewFamily.class);
+		verify(refreshTokenRepository).create(eq((long)memberId), saved.capture());
+		assertThat(saved.getValue().familyId()).isEqualTo(refreshClaims.familyId());
+		assertThat(saved.getValue().jti()).isEqualTo(refreshClaims.jti());
+		assertThat(saved.getValue().token()).isEqualTo(refreshToken);
+		assertThat(Duration.between(saved.getValue().issuedAt(), saved.getValue().familyExpiresAt()))
+			.isEqualTo(Duration.ofDays(30));
 	}
 
 	@Test
 	@DisplayName("Redis에 저장하지 못해도 로그인은 성공하고 토큰을 받는다")
 	void loginSucceedsWhenRedisIsDown() throws Exception {
 		willThrow(new RedisConnectionFailureException("Redis 연결 실패"))
-			.given(refreshTokenRepository).save(anyLong(), anyString(), eq(Duration.ofDays(14)));
+			.given(refreshTokenRepository).create(anyLong(), any(NewFamily.class));
 
 		MvcResult result = login(EMAIL, PASSWORD)
 			.andExpect(status().isOk())
@@ -126,7 +137,7 @@ class ApiV1AuthLoginTest {
 			.andReturn();
 
 		assertThat(result.getResponse().getHeader(HttpHeaders.SET_COOKIE)).isNull();
-		verify(refreshTokenRepository, never()).save(anyLong(), anyString(), eq(Duration.ofDays(14)));
+		verify(refreshTokenRepository, never()).create(anyLong(), any(NewFamily.class));
 	}
 
 	private ResultActions login(String email, String password) throws Exception {

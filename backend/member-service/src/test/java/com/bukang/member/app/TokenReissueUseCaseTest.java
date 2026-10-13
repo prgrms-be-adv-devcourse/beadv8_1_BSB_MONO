@@ -2,8 +2,13 @@ package com.bukang.member.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -14,92 +19,161 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 
+import com.bukang.jwt.JwtClaims;
 import com.bukang.jwt.JwtProperties;
 import com.bukang.jwt.JwtProvider;
 import com.bukang.jwt.TokenType;
+import com.bukang.member.config.auth.RefreshTokenProperties;
 import com.bukang.member.domain.exception.InvalidRefreshTokenException;
+import com.bukang.member.dto.AuthTokens;
 import com.bukang.member.out.RefreshTokenRepository;
+import com.bukang.member.out.RefreshTokenRepository.Rotation;
+import com.bukang.member.out.RotationOutcome;
+import com.bukang.member.out.RotationResult;
 
+// 판정(ROTATED·GRACE·…) 자체는 RefreshTokenRepositoryTest가 진짜 Redis로 확인한다. 여기서는 판정에 따라 무엇을 돌려주는지 본다
 class TokenReissueUseCaseTest {
-	private static final JwtProperties PROPERTIES = new JwtProperties(
+	private static final JwtProperties JWT_PROPERTIES = new JwtProperties(
 		"jwt-test-secret-key-0000-0000-0000-0000", Duration.ofMinutes(30), Duration.ofDays(14));
-	private static final Instant NOW = Instant.parse("2026-10-13T00:00:00Z");
+	private static final RefreshTokenProperties REFRESH_PROPERTIES =
+		new RefreshTokenProperties(Duration.ofSeconds(5), Duration.ofDays(30));
+	private static final Instant LOGIN_AT = Instant.parse("2026-10-13T00:00:00Z");
+	private static final Instant NOW = LOGIN_AT.plus(Duration.ofDays(1));
 	private static final long MEMBER_ID = 7;
+	private static final String FAMILY_ID = "family-1";
 
-	private JwtProvider jwtProvider;
-	private RefreshTokenRepository refreshTokenRepository;
-	private TokenReissueUseCase tokenReissueUseCase;
+	private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+	private final JwtProvider jwtProvider = new JwtProvider(JWT_PROPERTIES, clock);
+	private RefreshTokenRepository repository;
+	private TokenReissueUseCase useCase;
+	private String presentedToken;
 
 	@BeforeEach
 	void setUp() {
-		jwtProvider = new JwtProvider(PROPERTIES, Clock.fixed(NOW, ZoneOffset.UTC));
-		refreshTokenRepository = mock(RefreshTokenRepository.class);
-		tokenReissueUseCase = new TokenReissueUseCase(jwtProvider, refreshTokenRepository);
+		repository = mock(RefreshTokenRepository.class);
+		useCase = new TokenReissueUseCase(jwtProvider, JWT_PROPERTIES, REFRESH_PROPERTIES, repository, clock);
+		presentedToken = jwtProvider.issueRefreshToken(MEMBER_ID, FAMILY_ID, NOW.plus(Duration.ofDays(13)));
+		given(repository.findFamilyExpiresAt(MEMBER_ID)).willReturn(Optional.of(LOGIN_AT.plus(Duration.ofDays(30))));
 	}
 
 	@Test
-	@DisplayName("Redis에 저장된 Refresh Token과 같으면 새 Access Token을 발급한다")
-	void reissue() {
-		String refreshToken = jwtProvider.issueRefreshToken(MEMBER_ID);
-		given(refreshTokenRepository.findByMemberId(MEMBER_ID)).willReturn(Optional.of(refreshToken));
+	@DisplayName("ROTATED: 새 Access Token과 같은 family의 새 Refresh Token(14일)을 돌려준다")
+	void returnsNewTokensWhenRotated() {
+		given(repository.rotate(eq(MEMBER_ID), any(Rotation.class)))
+			.willReturn(new RotationResult(RotationOutcome.ROTATED, null));
 
-		String accessToken = tokenReissueUseCase.reissue(refreshToken);
+		AuthTokens tokens = useCase.reissue(presentedToken);
 
-		assertThat(jwtProvider.parse(accessToken, TokenType.ACCESS).memberId()).isEqualTo(MEMBER_ID);
+		JwtClaims presented = jwtProvider.parse(presentedToken, TokenType.REFRESH);
+		JwtClaims issued = jwtProvider.parse(tokens.refreshToken(), TokenType.REFRESH);
+		assertThat(issued.familyId()).isEqualTo(FAMILY_ID);
+		assertThat(issued.jti()).isNotEqualTo(presented.jti());
+		assertThat(issued.expiresAt()).isEqualTo(NOW.plus(Duration.ofDays(14)));
+		assertThat(tokens.refreshTokenExpiration()).isEqualTo(Duration.ofDays(14));
+		assertThat(jwtProvider.parse(tokens.accessToken(), TokenType.ACCESS).memberId()).isEqualTo(MEMBER_ID);
+
+		Rotation rotation = sentRotation();
+		assertThat(rotation.familyId()).isEqualTo(FAMILY_ID);
+		assertThat(rotation.presentedJti()).isEqualTo(presented.jti());
+		assertThat(rotation.newJti()).isEqualTo(issued.jti());
+		assertThat(rotation.newToken()).isEqualTo(tokens.refreshToken());
+		assertThat(rotation.reuseGrace()).isEqualTo(Duration.ofSeconds(5));
 	}
 
 	@Test
-	@DisplayName("Refresh Token이 없으면 거절한다")
-	void rejectMissingToken() {
-		assertThatThrownBy(() -> tokenReissueUseCase.reissue(null))
+	@DisplayName("새 Refresh Token의 만료는 로그인 + 30일을 넘지 않는다")
+	void capsNewTokenAtFamilyExpiry() {
+		Instant familyExpiresAt = NOW.plus(Duration.ofDays(3));
+		given(repository.findFamilyExpiresAt(MEMBER_ID)).willReturn(Optional.of(familyExpiresAt));
+		given(repository.rotate(eq(MEMBER_ID), any(Rotation.class)))
+			.willReturn(new RotationResult(RotationOutcome.ROTATED, null));
+
+		AuthTokens tokens = useCase.reissue(presentedToken);
+
+		assertThat(jwtProvider.parse(tokens.refreshToken(), TokenType.REFRESH).expiresAt()).isEqualTo(familyExpiresAt);
+		assertThat(tokens.refreshTokenExpiration()).isEqualTo(Duration.ofDays(3));
+	}
+
+	@Test
+	@DisplayName("GRACE: 미리 만든 토큰 대신 Redis의 지금 토큰을 그대로 돌려준다")
+	void returnsCurrentTokenWithinGrace() {
+		String currentToken = jwtProvider.issueRefreshToken(MEMBER_ID, FAMILY_ID, NOW.plus(Duration.ofDays(14)));
+		given(repository.rotate(eq(MEMBER_ID), any(Rotation.class)))
+			.willReturn(new RotationResult(RotationOutcome.GRACE, currentToken));
+
+		AuthTokens tokens = useCase.reissue(presentedToken);
+
+		assertThat(tokens.refreshToken()).isEqualTo(currentToken);
+		assertThat(tokens.refreshTokenExpiration()).isEqualTo(Duration.ofDays(14));
+	}
+
+	@ParameterizedTest
+	@DisplayName("THEFT·STALE·MISSING이면 401로 거절한다")
+	@EnumSource(value = RotationOutcome.class, names = {"THEFT", "STALE", "MISSING"})
+	void rejectsWhenNotRotated(RotationOutcome outcome) {
+		given(repository.rotate(eq(MEMBER_ID), any(Rotation.class))).willReturn(new RotationResult(outcome, null));
+
+		assertThatThrownBy(() -> useCase.reissue(presentedToken))
 			.isInstanceOf(InvalidRefreshTokenException.class)
-			.hasMessage(TokenReissueUseCase.MISSING_MESSAGE);
+			.hasMessage(TokenReissueUseCase.INVALID_MESSAGE);
 	}
 
 	@Test
-	@DisplayName("만료된 Refresh Token은 만료 메시지로 거절한다")
-	void rejectExpiredToken() {
-		Clock fifteenDaysAgo = Clock.fixed(NOW.minus(Duration.ofDays(15)), ZoneOffset.UTC);
-		JwtProvider pastProvider = new JwtProvider(PROPERTIES, fifteenDaysAgo);
-		String expiredToken = pastProvider.issueRefreshToken(MEMBER_ID);
+	@DisplayName("Redis에 기록이 없으면 판정 전에 401로 거절한다")
+	void rejectsWhenNoFamilyStored() {
+		given(repository.findFamilyExpiresAt(MEMBER_ID)).willReturn(Optional.empty());
 
-		assertThatThrownBy(() -> tokenReissueUseCase.reissue(expiredToken))
+		assertThatThrownBy(() -> useCase.reissue(presentedToken))
+			.isInstanceOf(InvalidRefreshTokenException.class)
+			.hasMessage(TokenReissueUseCase.INVALID_MESSAGE);
+		verify(repository, never()).rotate(anyLong(), any(Rotation.class));
+	}
+
+	@Test
+	@DisplayName("family 최종 만료가 지났으면 만료 메시지로 거절한다")
+	void rejectsWhenFamilyExpired() {
+		given(repository.findFamilyExpiresAt(MEMBER_ID)).willReturn(Optional.of(NOW));
+
+		assertThatThrownBy(() -> useCase.reissue(presentedToken))
 			.isInstanceOf(InvalidRefreshTokenException.class)
 			.hasMessage(TokenReissueUseCase.EXPIRED_MESSAGE);
 	}
 
 	@Test
+	@DisplayName("Refresh Token이 없으면 거절한다")
+	void rejectMissingToken() {
+		assertThatThrownBy(() -> useCase.reissue(null))
+			.isInstanceOf(InvalidRefreshTokenException.class)
+			.hasMessage(TokenReissueUseCase.MISSING_MESSAGE);
+	}
+
+	@Test
+	@DisplayName("만료된 Refresh Token은 Redis를 보지 않고 만료 메시지로 거절한다")
+	void rejectExpiredToken() {
+		JwtProvider pastProvider = new JwtProvider(JWT_PROPERTIES, Clock.fixed(LOGIN_AT, ZoneOffset.UTC));
+		String expiredToken = pastProvider.issueRefreshToken(MEMBER_ID, FAMILY_ID, LOGIN_AT.plusSeconds(60));
+
+		assertThatThrownBy(() -> useCase.reissue(expiredToken))
+			.isInstanceOf(InvalidRefreshTokenException.class)
+			.hasMessage(TokenReissueUseCase.EXPIRED_MESSAGE);
+		verify(repository, never()).findFamilyExpiresAt(anyLong());
+	}
+
+	@Test
 	@DisplayName("Access Token을 Refresh Token 자리에 보내면 거절한다")
 	void rejectAccessToken() {
-		String accessToken = jwtProvider.issueAccessToken(MEMBER_ID);
-
-		assertThatThrownBy(() -> tokenReissueUseCase.reissue(accessToken))
+		assertThatThrownBy(() -> useCase.reissue(jwtProvider.issueAccessToken(MEMBER_ID)))
 			.isInstanceOf(InvalidRefreshTokenException.class)
 			.hasMessage(TokenReissueUseCase.INVALID_MESSAGE);
 	}
 
-	@Test
-	@DisplayName("Redis에 토큰이 없으면(로그아웃) 거절한다")
-	void rejectWhenNotStored() {
-		String refreshToken = jwtProvider.issueRefreshToken(MEMBER_ID);
-		given(refreshTokenRepository.findByMemberId(MEMBER_ID)).willReturn(Optional.empty());
-
-		assertThatThrownBy(() -> tokenReissueUseCase.reissue(refreshToken))
-			.isInstanceOf(InvalidRefreshTokenException.class)
-			.hasMessage(TokenReissueUseCase.INVALID_MESSAGE);
-	}
-
-	@Test
-	@DisplayName("Redis 값과 다르면(다른 기기에서 다시 로그인해 덮어써짐) 거절한다")
-	void rejectWhenOverwritten() {
-		JwtProvider earlierProvider = new JwtProvider(PROPERTIES, Clock.fixed(NOW.minusSeconds(60), ZoneOffset.UTC));
-		String oldToken = earlierProvider.issueRefreshToken(MEMBER_ID);
-		given(refreshTokenRepository.findByMemberId(MEMBER_ID))
-			.willReturn(Optional.of(jwtProvider.issueRefreshToken(MEMBER_ID)));
-
-		assertThatThrownBy(() -> tokenReissueUseCase.reissue(oldToken))
-			.isInstanceOf(InvalidRefreshTokenException.class)
-			.hasMessage(TokenReissueUseCase.INVALID_MESSAGE);
+	private Rotation sentRotation() {
+		ArgumentCaptor<Rotation> captor = ArgumentCaptor.forClass(Rotation.class);
+		verify(repository).rotate(eq(MEMBER_ID), captor.capture());
+		return captor.getValue();
 	}
 }
