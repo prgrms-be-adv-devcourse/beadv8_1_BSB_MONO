@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -154,6 +155,9 @@ class OrderPayExpiryConcurrencyTest {
 		assertThat(expiry.expiredOrders()).isEqualTo(ORDER_COUNT - paidCount);
 		assertThat(expiry.releasedParticipations()).isEqualTo(ORDER_COUNT - paidCount);
 		assertThat(walletPort.balance()).isEqualTo(BALANCE - TICKET_PRICE * paidCount);
+		// 만료가 이긴 주문은 차감을 시도조차 하지 않았다 (차감 뒤 돌려준 것이 아니다)
+		assertThat(walletPort.payCalls()).hasSize(paidCount);
+		assertThat(walletPort.canceledOrders()).isEmpty();
 	}
 
 	@Test
@@ -335,12 +339,13 @@ class OrderPayExpiryConcurrencyTest {
 
 	/**
 	 * 작업들을 스레드마다 하나씩 띄워 한꺼번에 출발시키고, 넣은 순서대로 결과나 예외를 돌려준다
-	 * 잠금을 기다리다 멈추면(교착) 시간 초과로 테스트가 실패한다
+	 * 잠금을 기다리다 멈추면(교착) 시간 초과로 테스트가 실패한다. 끝나지 않은 작업은 중단시켜 테스트가 멈추지 않게 한다
 	 */
 	private List<Outcome> runTogether(List<Callable<Object>> tasks) throws Exception {
 		CountDownLatch start = new CountDownLatch(1);
 		List<Outcome> outcomes = new ArrayList<>();
-		try (ExecutorService executor = Executors.newFixedThreadPool(tasks.size())) {
+		ExecutorService executor = Executors.newFixedThreadPool(tasks.size());
+		try {
 			List<Future<Object>> futures = tasks.stream()
 				.map(task -> executor.submit(() -> {
 					start.await();
@@ -353,8 +358,12 @@ class OrderPayExpiryConcurrencyTest {
 					outcomes.add(Outcome.success(future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)));
 				} catch (ExecutionException exception) {
 					outcomes.add(Outcome.failure(exception.getCause()));
+				} catch (TimeoutException exception) {
+					throw new AssertionError("%d초 안에 끝나지 않았습니다 (잠금 교착 의심)".formatted(TIMEOUT_SECONDS), exception);
 				}
 			}
+		} finally {
+			executor.shutdownNow();
 		}
 		return outcomes;
 	}
