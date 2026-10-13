@@ -80,8 +80,7 @@ export function AdminDashboardPage() {
           <StatTile
             tone="accent"
             label="지급 예정액 (판매자 2명)"
-            value="4,536,000"
-            unit="원"
+            value="₩4,536,000"
             className="flex-none"
           />
           <DataTable
