@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
   // 브라우저는 항상 /api/... 로 부른다.
   // - API_MOCKING=on : rewrites 없음 → src/app/api/[[...path]] 가 MSW 핸들러로 응답
   // - API_MOCKING=off: 여기서 BACKEND_URL로 넘긴다 (로컬·Vercel)
-  // - AWS: Nginx가 /api를 백엔드로 먼저 보내므로 이 규칙까지 오지 않는다
+  // - AWS: Nginx가 /api를 백엔드 게이트웨이로 먼저 보내므로 이 규칙까지 오지 않는다
   async rewrites() {
     if (env.API_MOCKING === 'on') return []
     return [{ source: '/api/:path*', destination: `${env.BACKEND_URL}/api/:path*` }]

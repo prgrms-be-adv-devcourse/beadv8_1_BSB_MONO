@@ -1,9 +1,9 @@
 # AWS(EC2 Docker Compose)용 이미지. Vercel 배포에는 쓰이지 않는다.
 #   docker build -t running-web .
-#   docker run -p 3000:3000 -e BACKEND_URL=http://bukang-app:8080 running-web
+#   docker run -p 3000:3000 -e BACKEND_URL=http://bukang-gateway:8000 running-web
 #
 # 빌드 시점 값(next.config에 고정): API_MOCKING, IMAGE_REMOTE_HOSTS, NEXT_PUBLIC_*
-# 실행 시점 값: BACKEND_URL (서버 컴포넌트가 백엔드를 직접 부를 때 쓰는 내부 주소)
+# 실행 시점 값: BACKEND_URL (서버 컴포넌트가 백엔드를 직접 부를 때 쓰는 내부 주소, 게이트웨이)
 
 ARG NODE_VERSION=24
 

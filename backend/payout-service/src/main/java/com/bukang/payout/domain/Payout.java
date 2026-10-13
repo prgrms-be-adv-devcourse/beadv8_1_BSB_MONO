@@ -5,7 +5,6 @@ import static jakarta.persistence.EnumType.STRING;
 import static lombok.AccessLevel.PROTECTED;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -15,6 +14,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.payout.domain.exception.PayoutHoldConflictException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -22,6 +22,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -51,6 +52,11 @@ public class Payout extends BaseIdAndTime {
 
 	@Column(nullable = false)
 	private int raceId;
+
+	// 정산 내역을 만들 때 상품 서비스에서 받은 대회 이름. 영수증처럼 정산한 때의 이름을 남긴다
+	// 판매자 조회 때 상품 서비스를 부르지 않으려고 저장한다 (정산은 대회 다음 날 만들어져 그 뒤 이름이 바뀔 일은 드물다)
+	@Column(nullable = false, length = 200)
+	private String raceName;
 
 	// YYYY-MM. 정산 대상일이 속한 달
 	@Column(nullable = false, length = 7)
@@ -82,18 +88,24 @@ public class Payout extends BaseIdAndTime {
 
 	private LocalDateTime paidAt;
 
+	// 낙관적 락: 지급 배치와 보류 API가 같은 정산 내역을 동시에 바꾸면 늦게 커밋한 쪽이 실패한다
+	// 없으면 배치가 읽은 CALCULATED를 근거로, 그 사이 걸린 HELD를 PAID로 덮어쓸 수 있다
+	@Version
+	private long version;
+
 	// 정산 항목은 추가만 한다. orphanRemoval을 켜면 리스트에서 빼는 것만으로 행이 지워지므로 쓰지 않는다
 	@OneToMany(mappedBy = "payout", cascade = ALL)
 	private List<PayoutItem> items = new ArrayList<>();
 
-	public Payout(int sellerId, int raceId, YearMonth payoutMonth, LocalDateTime settledAt,
+	public Payout(int sellerId, int raceId, String raceName, YearMonth payoutMonth, LocalDateTime settledAt,
 		BusinessDayCalendar calendar) {
 		this.sellerId = sellerId;
 		this.raceId = raceId;
+		this.raceName = raceName;
 		this.payoutMonth = payoutMonth.toString();
 		this.settledAt = settledAt;
 		this.status = PayoutStatus.CALCULATED;
-		this.scheduledPayDate = calendar.nextOrSame(payoutMonth.plusMonths(1).atDay(PAY_DAY_OF_MONTH));
+		this.scheduledPayDate = payDayOf(payoutMonth.plusMonths(1), calendar);
 	}
 
 	// 바깥에서 remove, clear로 정산 기록을 바꾸지 못하도록 읽기 전용으로 내보낸다 (추가는 addItem으로만)
@@ -109,7 +121,7 @@ public class Payout extends BaseIdAndTime {
 
 		// 수수료는 참가권 1장마다 원 미만을 버리고, 정산 내역의 수수료는 그 합이다 (payout.md 2-1)
 		salesAmount += price;
-		feeAmount += feeOf(price, feeRate);
+		feeAmount += item.getFeeAmount();
 		// 정책 공식(판매액 − 환불액 − 수수료)과 같은 모양으로 둔다. 세미는 refundAmount가 항상 0이다:
 		// 대상일 전 환불은 항목이 안 생기고, 대상일 후 환불은 막는다(PRO-28). 최종에서는 대상일~지급 사이 환불이
 		// 음수 정산 항목(PRO-32), 지급 뒤 환불은 회수(PRO-33)가 된다 (payout.md 2-2, 4-2)
@@ -122,7 +134,7 @@ public class Payout extends BaseIdAndTime {
 		this.payoutCode = "ST-%s-%04X".formatted(settledAt.format(CODE_DATE), getId() & 0xFFFF);
 	}
 
-	// 세미의 지급 완료는 실제 송금 없이 상태만 바꾸는 모의 지급이다 (payout.md 1장 지급 5번)
+	// 세미의 지급 완료는 실제 송금 없이 상태만 바꾸는 모의 지급이다 (payout.md 1장 지급 6번)
 	// 보류된 정산 내역은 지급 완료로 바꿀 수 없다. 배치가 CALCULATED만 고르지만, 잘못 불려도 여기서 막는다
 	public void pay(LocalDateTime paidAt) {
 		if (status != PayoutStatus.CALCULATED) {
@@ -133,7 +145,45 @@ public class Payout extends BaseIdAndTime {
 		this.paidAt = paidAt;
 	}
 
-	private static long feeOf(long price, BigDecimal feeRate) {
-		return BigDecimal.valueOf(price).multiply(feeRate).setScale(0, RoundingMode.FLOOR).longValueExact();
+	// 지급보류 걸기: 정산 예정(CALCULATED)일 때만 건다. 세미는 활성 보류를 하나만 둔다 (PRO-26)
+	// 보류 기록(PayoutHold)은 여기서만 만든다. 저장은 호출한 쪽이 한다
+	public PayoutHold hold(PayoutHoldReason reasonType, String reason, int heldBy, LocalDateTime heldAt) {
+		if (status == PayoutStatus.HELD) {
+			throw new PayoutHoldConflictException("이미 지급보류 중인 정산 내역입니다.");
+		}
+		if (status == PayoutStatus.PAID) {
+			throw new PayoutHoldConflictException("이미 지급 완료된 정산 내역입니다.");
+		}
+		this.status = PayoutStatus.HELD;
+		return new PayoutHold(this, reasonType, reason, heldBy, heldAt);
+	}
+
+	// 지급보류 풀기: 정산 예정으로 돌리고 지급 예정일을 해제일 뒤 돌아오는 지급일로 다시 정한다 (payout.md 2-6)
+	// 지급 배치는 상태와 지급 예정일만 보므로, 보류 기록을 보지 않아도 다음 지급일에 지급된다
+	public void release(PayoutHold hold, int releasedBy, LocalDateTime releasedAt, BusinessDayCalendar calendar) {
+		// ==로 비교하지 않는다. LAZY로 읽은 hold.getPayout()은 Hibernate 프록시라 같은 행이어도 this와 다른 객체다
+		// 프록시의 getId()는 DB를 읽지 않고 들고 있는 ID를 돌려준다
+		if (hold.getPayout().getId() != getId()) {
+			throw new IllegalArgumentException("이 정산 내역의 지급보류가 아닙니다. payoutId=%d".formatted(getId()));
+		}
+		hold.markReleased(releasedBy, releasedAt);
+		this.status = PayoutStatus.CALCULATED;
+		this.scheduledPayDate = nextPayDateAfter(releasedAt.toLocalDate(), calendar);
+	}
+
+	// date "뒤"의 지급일: 이번 달 지급일이 date보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일
+	// 20일이 주말이면 지급일이 밀리므로, 20일이 아니라 밀린 날과 비교한다 (12/20 일 해제 → 12/21 월)
+	// 보류 해제와 판매자 요약(지급 예정 정산 내역이 없을 때의 다음 정산일)이 같은 규칙을 쓴다
+	public static LocalDate nextPayDateAfter(LocalDate date, BusinessDayCalendar calendar) {
+		YearMonth month = YearMonth.from(date);
+		LocalDate thisMonthPayDay = payDayOf(month, calendar);
+		if (thisMonthPayDay.isAfter(date)) {
+			return thisMonthPayDay;
+		}
+		return payDayOf(month.plusMonths(1), calendar);
+	}
+
+	private static LocalDate payDayOf(YearMonth month, BusinessDayCalendar calendar) {
+		return calendar.nextOrSame(month.atDay(PAY_DAY_OF_MONTH));
 	}
 }

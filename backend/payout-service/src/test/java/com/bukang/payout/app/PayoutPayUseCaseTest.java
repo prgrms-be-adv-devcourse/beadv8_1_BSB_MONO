@@ -14,7 +14,9 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
+import com.bukang.payout.domain.PayoutHoldReason;
 import com.bukang.payout.domain.PayoutStatus;
+import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
 
 import jakarta.persistence.EntityManager;
@@ -29,6 +31,9 @@ class PayoutPayUseCaseTest {
 	private PayoutRepository payoutRepository;
 
 	@Autowired
+	private PayoutHoldRepository payoutHoldRepository;
+
+	@Autowired
 	private EntityManager entityManager;
 
 	private PayoutPayUseCase useCase() {
@@ -38,7 +43,8 @@ class PayoutPayUseCaseTest {
 	// 9월분(2026-09)은 10/20, 10월분(2026-10)은 11/20이 지급 예정일이다
 	private Payout savePayout(int sellerId, YearMonth payoutMonth) {
 		LocalDateTime settledAt = payoutMonth.atDay(29).atTime(3, 0);
-		return payoutRepository.save(new Payout(sellerId, 10, payoutMonth, settledAt, new BusinessDayCalendar()));
+		return payoutRepository.save(new Payout(sellerId, 10, "테스트 대회", payoutMonth, settledAt,
+			new BusinessDayCalendar()));
 	}
 
 	@Test
@@ -77,11 +83,8 @@ class PayoutPayUseCaseTest {
 	@DisplayName("지급보류(HELD)인 정산 내역은 지급 예정일이 지나도 PAID로 바뀌지 않는다")
 	void doesNotPayHeld() {
 		Payout held = savePayout(1, YearMonth.of(2026, 9));
-		// 보류를 거는 기능(payout.hold)은 PRO-26 범위라, 여기서는 상태만 HELD로 바꿔 둔다
-		entityManager.createQuery("update Payout p set p.status = :held where p.id = :id")
-			.setParameter("held", PayoutStatus.HELD)
-			.setParameter("id", held.getId())
-			.executeUpdate();
+		payoutHoldRepository.save(held.hold(PayoutHoldReason.ACCOUNT_NOT_REGISTERED, null, 99, NOW.minusDays(5)));
+		entityManager.flush();
 		entityManager.clear();
 
 		useCase().run(PAY_DATE, NOW);

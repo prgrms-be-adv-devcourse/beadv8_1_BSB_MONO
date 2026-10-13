@@ -1,0 +1,38 @@
+spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DB}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASS}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        show_sql: false
+        format_sql: false
+    open-in-view: false
+
+  kafka:
+    bootstrap-servers:
+      - ${KAFKA_BOOTSTRAP_SERVERS}
+
+# 다른 서비스는 실제 내부 API로 부른다. compose.yml의 앱 컨테이너끼리는 컨테이너 이름으로 접속한다
+order:
+  clients:
+    payout:
+      mode: http
+      base-url: http://bukang-payout-service:8082
+
+# 운영에서는 API 구조가 외부에 노출되지 않도록 Swagger 비활성화
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    com:
+      bukang: info

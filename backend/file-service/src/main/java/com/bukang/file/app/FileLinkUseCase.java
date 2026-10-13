@@ -22,7 +22,8 @@ import com.bukang.file.out.StoredFileRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 업로드를 마친 파일을 대상(대회 등)에 연결한다. 대상 서비스가 저장할 때 동기 호출로 부른다.
+ * 업로드를 마친 파일을 대상(대회 등)에 연결한다. 대상 서비스가 저장할 때 동기 호출(InternalV1FileController)이나
+ * 커밋 뒤 Kafka 메시지(FileKafkaConsumer)로 부른다.
  * 요청한 목록이 그 대상의 파일 전체가 되도록 맞추므로, 같은 요청을 다시 보내도 결과가 같다.
  */
 @Service

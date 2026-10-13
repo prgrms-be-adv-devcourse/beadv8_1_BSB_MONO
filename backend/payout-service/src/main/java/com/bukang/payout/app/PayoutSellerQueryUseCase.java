@@ -1,0 +1,78 @@
+package com.bukang.payout.app;
+
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.List;
+
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.bukang.payout.domain.BusinessDayCalendar;
+import com.bukang.payout.domain.Payout;
+import com.bukang.payout.domain.PayoutItemPaging;
+import com.bukang.payout.domain.PayoutQueryPeriod;
+import com.bukang.payout.domain.PayoutStatus;
+import com.bukang.payout.dto.PageDto;
+import com.bukang.payout.dto.PayoutDto;
+import com.bukang.payout.dto.PayoutItemDto;
+import com.bukang.payout.dto.PayoutSummaryDto;
+import com.bukang.payout.dto.SellerPayoutHoldDto;
+import com.bukang.payout.out.PayoutHoldRepository;
+import com.bukang.payout.out.PayoutItemRepository;
+import com.bukang.payout.out.PayoutRepository;
+
+import lombok.RequiredArgsConstructor;
+
+/**
+ * 판매자의 정산 조회 (payout.md 1장 조회 · 보관)
+ * 모든 조회는 판매자 ID로 범위를 묶어, 다른 판매자의 정산은 ID를 알아도 보이지 않는다
+ */
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class PayoutSellerQueryUseCase {
+	private final PayoutRepository payoutRepository;
+	private final PayoutItemRepository payoutItemRepository;
+	private final PayoutHoldRepository payoutHoldRepository;
+	private final BusinessDayCalendar businessDayCalendar;
+
+	public List<PayoutDto> payouts(int sellerId, YearMonth fromMonth, YearMonth toMonth) {
+		PayoutQueryPeriod.checkPayoutMonths(fromMonth, toMonth);
+		return payoutRepository
+			.findBySellerIdAndPayoutMonthBetweenOrderByPayoutMonthDescIdDesc(
+				sellerId, fromMonth.toString(), toMonth.toString())
+			.stream()
+			.map(PayoutDto::from)
+			.toList();
+	}
+
+	// 정렬은 쿼리에 고정(정산 대상일 최근 순)했으므로 Pageable에는 정렬을 넣지 않는다
+	public PageDto<PayoutItemDto> items(int sellerId, LocalDate from, LocalDate to, int page, int size) {
+		PayoutQueryPeriod.checkDetailDays(from, to);
+		PayoutItemPaging.check(page, size);
+		return PageDto.from(
+			payoutItemRepository.findSellerItems(sellerId, from, to, PageRequest.of(page, size)),
+			PayoutItemDto::from);
+	}
+
+	public List<SellerPayoutHoldDto> holds(int sellerId, LocalDate from, LocalDate to) {
+		PayoutQueryPeriod.checkDetailDays(from, to);
+		return payoutHoldRepository.findSellerHolds(sellerId, from.atStartOfDay(), to.plusDays(1).atStartOfDay())
+			.stream()
+			.map(SellerPayoutHoldDto::from)
+			.toList();
+	}
+
+	public PayoutSummaryDto summary(int sellerId, LocalDate today) {
+		// 지급 예정일이 지났는데 아직 CALCULATED라면(배치 실행을 놓침) 그 날짜를 그대로 보여 준다. 다음 배치에서 지급된다
+		LocalDate nextPayDate = payoutRepository
+			.findFirstBySellerIdAndStatusOrderByScheduledPayDateAsc(sellerId, PayoutStatus.CALCULATED)
+			.map(Payout::getScheduledPayDate)
+			.orElseGet(() -> Payout.nextPayDateAfter(today, businessDayCalendar));
+
+		long scheduledPayoutAmount = payoutRepository.sumPayoutAmount(sellerId, PayoutStatus.CALCULATED, nextPayDate);
+		long heldCount = payoutRepository.countBySellerIdAndStatus(sellerId, PayoutStatus.HELD);
+		return new PayoutSummaryDto(nextPayDate, scheduledPayoutAmount, heldCount);
+	}
+}
