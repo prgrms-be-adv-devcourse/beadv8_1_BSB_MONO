@@ -14,6 +14,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -33,6 +34,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import com.bukang.jwt.JwtProperties;
 import com.bukang.jwt.JwtProvider;
 import com.sun.net.httpserver.HttpServer;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 
 // 모든 서비스 주소를 가짜 서버 하나로 돌려 두고, 게이트웨이가 토큰을 검사해 회원 ID를 넘기는지 확인한다
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -161,7 +165,7 @@ class GatewayAuthenticationTest {
 	@DisplayName("Refresh Token을 Access Token 자리에 쓰면 401로 응답한다")
 	void rejectsRefreshToken() throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/order/orders")
-			.header("Authorization", "Bearer " + jwtProvider.issueRefreshToken(42L)));
+			.header("Authorization", "Bearer " + refreshToken(42L)));
 
 		assertUnauthorized(response, "유효하지 않은 토큰입니다.");
 	}
@@ -246,6 +250,18 @@ class GatewayAuthenticationTest {
 			.POST(HttpRequest.BodyPublishers.noBody()));
 
 		assertUnauthorized(response, "로그인이 필요합니다.");
+	}
+
+	// 게이트웨이는 Refresh Token을 발급하지 않으므로, 발급 규칙(jti·familyId 등)에 기대지 않고 type만 REFRESH인 토큰을 직접 서명한다
+	private String refreshToken(long memberId) {
+		Instant now = Instant.now();
+		return Jwts.builder()
+			.subject(String.valueOf(memberId))
+			.claim("type", "REFRESH")
+			.issuedAt(Date.from(now))
+			.expiration(Date.from(now.plus(Duration.ofDays(1))))
+			.signWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8)))
+			.compact();
 	}
 
 	private void assertUnauthorized(HttpResponse<String> response, String message) {

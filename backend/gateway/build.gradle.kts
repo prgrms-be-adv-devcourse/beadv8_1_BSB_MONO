@@ -21,4 +21,6 @@ dependencies {
 	implementation(project(":jwt"))
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	// 테스트에서 JwtProvider가 만들지 않는 모양의 토큰(Refresh 등)을 직접 서명해 만든다
+	testImplementation("io.jsonwebtoken:jjwt-api:0.13.0")
 }
