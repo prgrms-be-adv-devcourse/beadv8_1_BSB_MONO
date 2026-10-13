@@ -58,8 +58,11 @@ class PayoutCreateUseCaseTest {
 	}
 
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
-		return new PayoutCreateUseCase(payoutRepository, payoutHoldRepository, soldEntriesReturning(entries),
-			sellerAccountPort, RACE_NAMES, new BusinessDayCalendar());
+		// 테스트 전체가 트랜잭션 하나라 묶음별 트랜잭션은 보이지 않는다 (묶음별 트랜잭션은 PayoutCreateUseCaseTransactionTest)
+		PayoutGroupCreator payoutGroupCreator =
+			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar());
+		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntriesReturning(entries),
+			sellerAccountPort, RACE_NAMES);
 	}
 
 	@Test

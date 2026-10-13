@@ -2,8 +2,10 @@ package com.bukang.order.app;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItem;
@@ -30,6 +32,7 @@ import lombok.RequiredArgsConstructor;
  * 주문 상품 CANCELED, 주문 PARTIAL_CANCELED/CANCELED, 참가 신청 CANCELED
  * → 자리 되돌리기(B) → 예치금 환불(D). 정산 대상일이 지난 참가권은 정산 서비스(E)가 거절한다
  * 외부 호출은 모두 주문 상품·참가 신청 단위로 멱등이라, 중간에 실패해 롤백되면 같은 취소를 다시 요청하면 된다
+ * 트랜잭션은 이 클래스가 단계마다 연다. 바깥 트랜잭션 없이 부른다 (OrderFacade.cancelItem)
  */
 @Service
 @RequiredArgsConstructor
@@ -40,28 +43,42 @@ public class OrderCancelUseCase {
 	private final RefundEligibilityPort refundEligibilityPort;
 	private final SeatHoldPort seatHoldPort;
 	private final WalletPort walletPort;
+	private final TransactionTemplate transactionTemplate;
 
 	public record CancelResult(OrderDto order, int refundedAmount) {
 	}
 
+	/**
+	 * 두 단계로 취소한다. 다른 서비스에 묻는 판정(종목 정보, 정산 대상일)은 잠금과 DB 커넥션을 쥐기 전에 하고,
+	 * 그다음 주문을 잠가 상태를 다시 확인한 뒤 바꾼다. 정산 서비스가 느려도 주문 행 잠금이 그동안 붙잡히지 않는다
+	 * 판정과 잠금 사이에 같은 상품이 먼저 취소되면 잠근 뒤의 확인(checkCancelable)이 409로 막는다
+	 */
 	public CancelResult cancel(int memberId, int orderId, int orderItemId, LocalDateTime now) {
-		// 주문을 먼저 잠근다. 같은 상품 취소가 동시에 와도 한 요청씩 처리되어 환불이 한 번만 일어난다
-		Order order = orderRepository.findByIdForUpdate(orderId)
-			.orElseThrow(() -> new OrderNotFoundException("존재하지 않는 주문입니다."));
-		if (!order.isOwnedBy(memberId)) {
-			throw new OrderAccessDeniedException("본인의 주문만 취소할 수 있습니다.");
-		}
-		OrderItem item = order.findItem(orderItemId);
-		item.checkCancelable();
-
-		RaceCourseInfo course = raceCoursePort.findCourse(item.getRaceCourseId())
+		CancelTarget target = transactionTemplate.execute(status -> readTarget(memberId, orderId, orderItemId));
+		RaceCourseInfo course = raceCoursePort.findCourse(target.raceCourseId())
 			.orElseThrow(() -> new RaceCourseNotFoundException("존재하지 않는 종목입니다."));
 		if (!course.isRefundableOn(now.toLocalDate())) {
 			throw new RefundNotAllowedException(refundPeriodPassedMessage(course));
 		}
-		if (!isBeforePayout(item.getRaceDate().toLocalDate(), course.raceDate().toLocalDate())) {
+		if (!isBeforePayout(target.copiedRaceDate(), course.raceDate().toLocalDate())) {
 			throw new RefundNotAllowedException("정산이 시작된 참가권이라 취소할 수 없습니다.");
 		}
+		return transactionTemplate.execute(status -> cancelLocked(memberId, orderId, orderItemId, now));
+	}
+
+	// 판정에 필요한 값만 잠그지 않고 읽는다. 없는 주문·남의 주문·결제 전 상품은 다른 서비스를 부르기 전에 거른다
+	private CancelTarget readTarget(int memberId, int orderId, int orderItemId) {
+		Order order = findOwnedOrder(orderRepository.findById(orderId), memberId);
+		OrderItem item = order.findItem(orderItemId);
+		item.checkCancelable();
+		return new CancelTarget(item.getRaceCourseId(), item.getRaceDate().toLocalDate());
+	}
+
+	private CancelResult cancelLocked(int memberId, int orderId, int orderItemId, LocalDateTime now) {
+		// 주문을 먼저 잠근다. 같은 상품 취소가 동시에 와도 한 요청씩 처리되어 환불이 한 번만 일어난다
+		Order order = findOwnedOrder(orderRepository.findByIdForUpdate(orderId), memberId);
+		OrderItem item = order.findItem(orderItemId);
+		item.checkCancelable();
 
 		// 참가 신청도 잠근다. 참가자 정보 수정과 겹쳐도 CANCELED가 옛 상태로 덮이지 않는다 (잠금 순서: 주문 → 참가 신청)
 		Participation participation = participationRepository.findByIdForUpdate(item.getParticipationId())
@@ -72,6 +89,18 @@ public class OrderCancelUseCase {
 		seatHoldPort.restore(item.getParticipationId());
 		walletPort.refund(order.getId(), item.getId(), item.getAmount());
 		return new CancelResult(order.toDto(), item.getAmount());
+	}
+
+	private Order findOwnedOrder(Optional<Order> found, int memberId) {
+		Order order = found.orElseThrow(() -> new OrderNotFoundException("존재하지 않는 주문입니다."));
+		if (!order.isOwnedBy(memberId)) {
+			throw new OrderAccessDeniedException("본인의 주문만 취소할 수 있습니다.");
+		}
+		return order;
+	}
+
+	// 잠그기 전에 읽어 둔 판정 재료. 주문 상품의 대회 날짜는 주문 때 복사한 값이라 잠근 뒤에도 바뀌지 않는다
+	private record CancelTarget(int raceCourseId, LocalDate copiedRaceDate) {
 	}
 
 	/**

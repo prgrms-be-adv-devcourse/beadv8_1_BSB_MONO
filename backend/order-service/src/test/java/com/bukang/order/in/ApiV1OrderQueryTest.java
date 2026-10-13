@@ -159,7 +159,7 @@ class ApiV1OrderQueryTest {
 			.andExpect(jsonPath("$.data.canceledAmount").value(0))
 			.andExpect(jsonPath("$.data.items[0].itemName").value("테스트 대회 종목 " + FIRST_COURSE_ID))
 			.andExpect(jsonPath("$.data.items[0].unitPrice")
-				.value(StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE));
+				.value(StubRaceCoursePort.PRICE));
 
 		mockMvc.perform(get(BASE_URL + "/" + orderId).header("X-Member-Id", OTHER_MEMBER_ID))
 			.andExpect(status().isForbidden())
@@ -182,7 +182,9 @@ class ApiV1OrderQueryTest {
 				{ "raceCourseId": %d, "thirdPartyConsent": true,
 					"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 						"phone": "010-1234-5678", "emergencyContactName": "김가족",
-						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 				""".formatted(raceCourseId))));
 		int orderId = read(mockMvc.perform(post(BASE_URL)
 			.header("X-Member-Id", memberId)

@@ -17,9 +17,11 @@ import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.dto.OrderDto;
 import com.bukang.order.dto.OrderSummaryDto;
+import com.bukang.order.dto.ShippingAddressDto;
 import com.bukang.order.out.race.RaceCourseInfo;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
@@ -86,6 +88,10 @@ public class Order extends BaseIdAndTime {
 	@Column(name = "deadline_extended_at")
 	private LocalDateTime deadlineExtendedAt;
 
+	// 키트 배송지 (ERD v5 orders.recipient_name ~ address_detail). 신청서에서 받은 값을 주문할 때 옮긴다. 키트가 없으면 null
+	@Embedded
+	private ShippingAddress shippingAddress;
+
 	// 주문 목록(PRO-43)에서 주문마다 상품을 따로 읽지 않도록 여러 주문의 상품을 한 번에 읽는다
 	@BatchSize(size = 100)
 	@OneToMany(mappedBy = "order", cascade = ALL)
@@ -103,9 +109,15 @@ public class Order extends BaseIdAndTime {
 	public static Order forParticipation(Participation participation, RaceCourseInfo course, String idempotencyKey,
 		LocalDateTime paymentDueAt) {
 		Order order = new Order(participation.getMemberId(), course.raceId(), idempotencyKey, paymentDueAt);
+		order.shippingAddress = ShippingAddress.copyOf(participation.getParticipant().getShippingAddress());
 		order.items.add(OrderItem.ticket(order, participation, course));
 		order.totalAmount = order.items.stream().mapToInt(OrderItem::getAmount).sum();
 		return order;
+	}
+
+	// 참가자 정보에서 배송지를 고치면 주문의 배송지도 같이 바꾼다. 키트는 주문의 배송지로 보낸다 (ERD orders·delivery)
+	public void changeShippingAddress(ShippingAddress newShippingAddress) {
+		this.shippingAddress = ShippingAddress.copyOf(newShippingAddress);
 	}
 
 	// 저장해 ID를 받은 뒤 부른다
@@ -200,6 +212,7 @@ public class Order extends BaseIdAndTime {
 			canceledAmount,
 			paymentDueAt,
 			paidAt,
+			ShippingAddressDto.from(shippingAddress),
 			items.stream().map(OrderItem::toDto).toList()
 		);
 	}

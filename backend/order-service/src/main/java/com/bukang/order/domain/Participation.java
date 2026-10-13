@@ -6,6 +6,7 @@ import static lombok.AccessLevel.PROTECTED;
 import java.time.LocalDateTime;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.exception.ParticipationNotCancelableException;
 import com.bukang.order.domain.exception.ParticipationNotEditableException;
 import com.bukang.order.domain.exception.ParticipationNotPayableException;
 import com.bukang.order.dto.ParticipantInfoDto;
@@ -151,6 +152,23 @@ public class Participation extends BaseIdAndTime {
 		}
 		changeStatus(ParticipationStatus.CANCELED);
 		this.canceledAt = canceledAt;
+	}
+
+	// [결제하기] 전에 신청서를 버렸다. 끝난 신청이 되어 같은 대회의 다른 종목으로 다시 신청할 수 있다 (PRO-122)
+	// 자리를 잡은 뒤(결제 대기)는 상품 서비스의 자리를 풀어야 해서 여기서 받지 않는다. 결제하지 않으면 기한 뒤 자동으로 풀린다
+	public void cancelBeforePayment(LocalDateTime canceledAt) {
+		switch (status) {
+			case PENDING -> {
+				changeStatus(ParticipationStatus.CANCELED);
+				this.canceledAt = canceledAt;
+			}
+			case APPLIED -> throw new ParticipationNotCancelableException(
+				"결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다.");
+			case CONFIRMED -> throw new ParticipationNotCancelableException(
+				"결제한 참가권은 주문 상품 취소로 취소해주세요.");
+			default -> throw new ParticipationNotCancelableException(
+				"이미 끝난 신청입니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
 	}
 
 	// 결제 기한을 늘릴 수 있는지: 결제 대기(APPLIED)여야 한다. 상품 서비스에 연장을 요청하기 전에 확인한다

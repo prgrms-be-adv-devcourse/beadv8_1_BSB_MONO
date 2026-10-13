@@ -109,10 +109,17 @@ final class CartApiExamples {
 							"buyerId": 1,
 							"raceId": 1,
 							"status": "CREATED",
-							"totalAmount": 60000,
+							"totalAmount": 50000,
 							"canceledAmount": 0,
 							"paymentDueAt": "2026-10-13T10:10:00",
 							"paidAt": null,
+							"shippingAddress": {
+								"recipientName": "김러너",
+								"recipientPhone": "010-1234-5678",
+								"zipcode": "04700",
+								"address": "서울 성동구 왕십리로 00",
+								"addressDetail": "101동 1001호"
+							},
 							"items": [
 								{
 									"id": 1,
@@ -120,9 +127,9 @@ final class CartApiExamples {
 									"raceCourseId": 1,
 									"sellerId": 1,
 									"itemName": "2026 서울 하프 마라톤 10K",
-									"unitPrice": 60000,
+									"unitPrice": 50000,
 									"quantity": 1,
-									"amount": 60000,
+									"amount": 50000,
 									"status": "ORDERED"
 								}
 							]
