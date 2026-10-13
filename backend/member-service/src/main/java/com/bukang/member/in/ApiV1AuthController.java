@@ -7,10 +7,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,8 +32,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -51,7 +45,6 @@ public class ApiV1AuthController {
 	static final String REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth";
 
 	private final MemberFacade memberFacade;
-	private final SecurityContextRepository securityContextRepository;
 
 	// ResponseEntity.created()의 201은 springdoc이 추론하지 못하므로 응답 코드를 직접 명시한다
 	// 에러 응답은 GlobalExceptionHandler가 RsData(data: null) 형식으로 반환한다
@@ -98,15 +91,9 @@ public class ApiV1AuthController {
 				examples = @ExampleObject(value = AuthApiExamples.LOGIN_FAILED)))
 	})
 	public ResponseEntity<RsData<MemberLoginResponseDto>> login(
-		@Valid @RequestBody MemberLoginRequestDto memberLoginRequestDto,
-		HttpServletRequest request,
-		HttpServletResponse response
+		@Valid @RequestBody MemberLoginRequestDto memberLoginRequestDto
 	) {
 		MemberLoginResult result = memberFacade.login(memberLoginRequestDto);
-
-		// 게이트웨이 토큰 검사(PRO-20)가 붙기 전까지는 기존 API가 세션으로 로그인 상태를 확인하므로 세션 저장도 유지한다
-		SecurityContext context = SecurityContextHolder.getContext();
-		securityContextRepository.saveContext(context, request, response);
 
 		AuthTokens tokens = result.tokens();
 		return ResponseEntity.ok()
@@ -158,14 +145,9 @@ public class ApiV1AuthController {
 	})
 	public ResponseEntity<RsData<Void>> logout(
 		@Parameter(description = "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)")
-		@CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshToken,
-		HttpServletRequest request,
-		HttpServletResponse response
+		@CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshToken
 	) {
 		memberFacade.logout(refreshToken);
-
-		// 게이트웨이 토큰 검사(PRO-20) 전까지 로그인이 세션에도 저장되므로 세션도 함께 끝낸다
-		new SecurityContextLogoutHandler().logout(request, response, null);
 
 		return ResponseEntity.ok()
 			.header(HttpHeaders.SET_COOKIE, refreshTokenCookie("", Duration.ZERO).toString())

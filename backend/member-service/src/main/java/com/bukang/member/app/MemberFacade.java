@@ -2,8 +2,6 @@ package com.bukang.member.app;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,13 +45,13 @@ public class MemberFacade {
 	}
 
 	public MemberLoginResult login(MemberLoginRequestDto memberLoginRequestDto) {
-		Authentication authentication = authenticationManager.authenticate(
+		// 이메일·비밀번호 확인만 한다. 로그인 상태는 세션이 아니라 토큰으로 유지하므로 인증 결과를 저장하지 않는다
+		authenticationManager.authenticate(
 			new UsernamePasswordAuthenticationToken(
 				memberLoginRequestDto.getEmail(),
 				memberLoginRequestDto.getPassword()
 			)
 		);
-		SecurityContextHolder.getContext().setAuthentication(authentication);
 
 		Member member = memberRepository.findByEmail(memberLoginRequestDto.getEmail())
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
