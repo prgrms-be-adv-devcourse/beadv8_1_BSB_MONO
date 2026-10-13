@@ -32,7 +32,7 @@ public class FileKafkaConsumer {
 	private static final String RETRY_ATTEMPTS = "3";
 	private static final long RETRY_DELAY_MILLIS = 1000L;
 	private static final double RETRY_MULTIPLIER = 2.0;
-	// 마지막까지 실패한 메시지를 보낼 토픽 접미사 (예: race.file.link.requested.dlt, 기본값은 -dlt)
+	// 마지막까지 실패한 메시지를 보낼 토픽 접미사 (예: race.filelink.requested.dlt, 기본값은 -dlt)
 	// FileKafkaDltConsumer가 DLT 토픽 이름을 만들 때 같은 값을 쓴다
 	static final String DLT_TOPIC_SUFFIX = ".dlt";
 	// DLT는 FileKafkaDltConsumer가 받으므로, @RetryableTopic이 기본으로 띄우는 DLT 리스너는 시작하지 않는다

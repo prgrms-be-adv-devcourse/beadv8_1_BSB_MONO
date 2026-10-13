@@ -92,7 +92,7 @@ public class ProductFacade {
 		}
 	}
 
-	// file-service에 이미지 연결 메시지를 보낸다 (race.file.link.requested)
+	// file-service에 이미지 연결 메시지를 보낸다 (race.filelink.requested)
 	// 같은 대회의 메시지가 순서대로 처리되도록 대회 ID를 key로 보낸다 (같은 key는 같은 파티션)
 	// 보내지 못하면 이미 커밋된 대회를 되돌릴 수 없어 에러 로그에 메시지를 남긴다
 	// 연결되지 않은 파일은 하루 뒤 file-service 정리 배치가 지우므로, 그 전에 로그의 메시지를 다시 보내야 한다
