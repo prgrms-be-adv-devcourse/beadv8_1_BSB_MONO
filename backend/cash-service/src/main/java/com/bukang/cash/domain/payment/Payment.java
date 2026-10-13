@@ -32,7 +32,7 @@ public class Payment extends BaseIdAndTime {
 	@ManyToOne(fetch = LAZY, optional = false)
 	private Wallet wallet;
 
-	private long amount;
+	private int amount;
 
 	@Enumerated(STRING)
 	@Column(nullable = false, length = 20)
@@ -45,7 +45,7 @@ public class Payment extends BaseIdAndTime {
 	private String idempotencyKey;
 	private LocalDateTime completedAt;
 
-	public Payment(int orderId, Wallet wallet, long amount, String idempotencyKey) {
+	public Payment(int orderId, Wallet wallet, int amount, String idempotencyKey) {
 		this.orderId = orderId;
 		this.wallet = wallet;
 		this.amount = amount;
