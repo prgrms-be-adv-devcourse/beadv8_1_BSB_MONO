@@ -1,4 +1,4 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.member;
 
 import java.time.LocalDateTime;
 

@@ -1,7 +1,10 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.wallet;
 
 import static jakarta.persistence.FetchType.LAZY;
 
+import com.bukang.cash.domain.charge.WalletCharge;
+import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.withdrawal.WalletWithdrawal;
 import com.bukang.common.global.jpa.entity.BaseManualIdAndTime;
 
 import jakarta.persistence.Entity;

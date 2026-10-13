@@ -1,16 +1,16 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.payment;
 
 import static jakarta.persistence.EnumType.STRING;
 import static jakarta.persistence.FetchType.LAZY;
 
 import java.time.LocalDateTime;
 
+import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;

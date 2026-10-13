@@ -7,6 +7,14 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.bukang.cash.domain.charge.WalletCharge;
+import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.wallet.LedgerRefType;
+import com.bukang.cash.domain.wallet.LedgerType;
+import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.cash.domain.wallet.WalletLedger;
+import com.bukang.cash.domain.withdrawal.WalletWithdrawal;
+
 class WalletTest {
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 12, 10, 0);
 

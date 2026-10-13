@@ -1,4 +1,4 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.withdrawal;
 
 public enum WithdrawalStatus {
 	REQUESTED,

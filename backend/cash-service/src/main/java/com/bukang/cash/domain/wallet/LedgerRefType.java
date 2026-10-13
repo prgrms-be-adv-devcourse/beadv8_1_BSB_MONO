@@ -1,4 +1,4 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.wallet;
 
 /**
  * 장부의 돈 이동을 일으킨 원인 객체 종류 (docs/erd/cash.md의 ref_type_code)

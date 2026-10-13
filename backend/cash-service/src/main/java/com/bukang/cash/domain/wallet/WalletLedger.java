@@ -1,8 +1,9 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.wallet;
 
 import static jakarta.persistence.EnumType.STRING;
 import static jakarta.persistence.FetchType.LAZY;
 
+import com.bukang.cash.domain.member.CashMember;
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 
 import jakarta.persistence.Column;

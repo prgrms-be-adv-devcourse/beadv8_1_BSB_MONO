@@ -1,4 +1,4 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.wallet;
 
 /**
  * 예치금 장부 거래 유형 (docs/erd/cash.md의 "ledger_type 값")

@@ -1,4 +1,4 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.charge;
 
 public enum ChargeStatus {
 	REQUESTED,

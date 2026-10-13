@@ -2,8 +2,8 @@ package com.bukang.cash.app;
 
 import org.springframework.stereotype.Service;
 
-import com.bukang.cash.domain.Wallet;
 import com.bukang.cash.domain.exception.WalletNotFoundException;
+import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.out.WalletRepository;
 
 import lombok.RequiredArgsConstructor;
