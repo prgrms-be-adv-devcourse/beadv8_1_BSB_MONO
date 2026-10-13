@@ -8,11 +8,11 @@ package com.bukang.common.shared.kafka;
  */
 public final class KafkaTopics {
 	// 회원 이벤트 (member-service가 발행하고 다른 서비스가 구독한다)
-	public static final String MEMBER_MEMBER_JOINED = "queuing.member.joined";
-	public static final String MEMBER_MODIFIED = "queuing.member.modified";
+	public static final String MEMBER_MEMBER_JOINED = "member.member.joined";
+	public static final String MEMBER_MODIFIED = "member.member.modified";
 
 	// 캐시 회원 복제본을 처음 저장한 뒤 지갑을 만든다 (cash → cash)
-	public static final String CASH_MEMBER_CREATED = "queuing.cashmember.created";
+	public static final String CASH_MEMBER_CREATED = "cash.member.created";
 
 	public static final String PRODUCT_MEMBER_JOINED = "product.member.joined";
 	public static final String PRODUCT_SELLER_CHANGED = "product.seller.changed";
