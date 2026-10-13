@@ -1,4 +1,4 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.payment;
 
 public enum PaymentStatus {
 	PENDING,

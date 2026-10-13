@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
 
-import com.bukang.cash.domain.CashMember;
+import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.out.CashKafkaPublisher;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.common.shared.cash.event.CashMemberCreatedEvent;

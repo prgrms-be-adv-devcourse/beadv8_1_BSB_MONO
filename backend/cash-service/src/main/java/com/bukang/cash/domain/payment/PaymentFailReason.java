@@ -1,4 +1,4 @@
-package com.bukang.cash.domain;
+package com.bukang.cash.domain.payment;
 
 // 결제 상태가 FAILED일 때만 채운다
 public enum PaymentFailReason {

@@ -2,8 +2,8 @@ package com.bukang.cash.app;
 
 import org.springframework.stereotype.Service;
 
-import com.bukang.cash.domain.CashMember;
-import com.bukang.cash.domain.Wallet;
+import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.WalletRepository;
 
