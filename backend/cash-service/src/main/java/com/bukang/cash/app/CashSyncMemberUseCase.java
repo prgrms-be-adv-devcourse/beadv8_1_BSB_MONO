@@ -5,10 +5,10 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 
 import com.bukang.cash.domain.CashMember;
-import com.bukang.cash.domain.event.CashTopics;
 import com.bukang.cash.out.CashKafkaPublisher;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.common.shared.cash.event.CashMemberCreatedEvent;
+import com.bukang.common.shared.kafka.KafkaTopics;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,7 +27,7 @@ public class CashSyncMemberUseCase {
 
 		if (isNew) {
 			cashKafkaPublisher.publish(
-				CashTopics.CASH_MEMBER_CREATED,
+				KafkaTopics.CASH_MEMBER_CREATED,
 				String.valueOf(cashMember.getId()),
 				new CashMemberCreatedEvent(cashMember.getId())
 			);
