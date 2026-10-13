@@ -237,6 +237,16 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
+	@DisplayName("정산 서비스에는 주문을 잠그기 전, DB 트랜잭션 밖에서 묻는다 (정산이 느려도 잠금·커넥션을 붙잡지 않는다)")
+	void asksPayoutOutsideTransaction() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isOk());
+
+		assertThat(refundEligibilityPort.askedInTransaction()).isNotEmpty().containsOnly(false);
+	}
+
+	@Test
 	@DisplayName("같은 상품 취소를 두 번 보내면 두 번째는 409이고 환불은 한 번만 일어난다")
 	void cancelTwice() throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);

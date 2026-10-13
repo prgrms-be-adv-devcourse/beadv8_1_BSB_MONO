@@ -379,6 +379,10 @@ final class OrderApiExamples {
 		}
 		""";
 
+	static final String PAYOUT_UNAVAILABLE = """
+		{ "status": 503, "message": "정산 서비스에 연결하지 못했습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
+		""";
+
 	static final String PAYOUT_STARTED = """
 		{ "status": 409, "message": "정산이 시작된 참가권이라 취소할 수 없습니다.", "data": null }
 		""";

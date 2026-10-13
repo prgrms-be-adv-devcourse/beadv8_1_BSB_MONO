@@ -107,7 +107,8 @@ backend/
 │   └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
 │                              race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보·연장·판매),
 │                              wallet/(WalletPort 예치금 결제·환원·환불), payout/(RefundEligibilityPort 환불 가능 여부)
-│                              상품(B)·예치금(D)·정산(E) 서비스와 연결 전이라 Fake*Adapter가 가짜 응답을 준다
+│                              상품(B)·예치금(D)은 연결 전이라 Fake*Adapter가 가짜 응답을 준다. 정산(E)은 order.clients.payout.mode가
+│                              http면 HttpRefundEligibilityAdapter(RestClient, 2초 제한, 실패 시 503)로 부른다 (prod=http, 그 밖=fake)
 └── product-service/ com.bukang.product
     └── ProductApplication     (뼈대만 있음)
 ```
