@@ -147,11 +147,11 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
-	@DisplayName("환불 기한이 지났어도 대회 일정이 바뀐 다음 날부터 7일째 날까지는 취소하면 전액 환불된다")
+	@DisplayName("환불 기한이 지났어도 대회 일정이 바뀐 날(알린 날)부터 7일째 날까지는 취소하면 전액 환불된다")
 	void cancelWithinScheduleChangeRefund() throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);
-		// 7일 전에 바뀌었다 → 바뀐 다음 날부터 세면 오늘이 7일째 날
-		setRefundDeadline(LocalDate.now().minusDays(10), LocalDateTime.now().minusDays(7));
+		// 6일 전에 바뀌었다 → 바뀐 날을 1일째로 세면 오늘이 7일째 날
+		setRefundDeadline(LocalDate.now().minusDays(10), LocalDateTime.now().minusDays(6));
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isOk())
@@ -167,13 +167,14 @@ class ApiV1OrderCancelTest {
 	void cancelAfterScheduleChangeRefund() throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);
 		LocalDate refundDeadline = LocalDate.now().minusDays(10);
-		LocalDateTime changedAt = LocalDateTime.now().minusDays(8);
+		// 7일 전에 바뀌었다 → 오늘이 8일째 날
+		LocalDateTime changedAt = LocalDateTime.now().minusDays(7);
 		setRefundDeadline(refundDeadline, changedAt);
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("환불 기한(%s)과 일정 변경 뒤 전액 환불 기간(%s까지)이 지나 취소할 수 없습니다."
-				.formatted(refundDeadline, changedAt.toLocalDate().plusDays(SCHEDULE_CHANGE_REFUND_DAYS))));
+				.formatted(refundDeadline, changedAt.toLocalDate().plusDays(SCHEDULE_CHANGE_REFUND_DAYS - 1))));
 
 		assertNothingCanceled(paid);
 	}

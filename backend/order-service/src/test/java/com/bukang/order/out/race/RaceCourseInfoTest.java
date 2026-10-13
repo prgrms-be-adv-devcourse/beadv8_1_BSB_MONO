@@ -62,17 +62,18 @@ class RaceCourseInfoTest {
 	}
 
 	@Test
-	@DisplayName("일정이 바뀌면 환불 기한이 지났어도 바뀐 다음 날부터 7일째 날까지(그날 포함) 전액 환불되고, 8일째부터는 안 된다")
+	@DisplayName("일정이 바뀌면 환불 기한이 지났어도 바뀐 날(알린 날)을 1일째로 7일째 날까지 전액 환불되고, 8일째부터는 안 된다")
 	void refundableAfterScheduleChange() {
-		// 환불 기한(11/5)이 지난 11/8 14:00에 대회 일정이 바뀌었다 → 11/9부터 7일째인 11/15까지
+		// 환불 기한(11/5)이 지난 11/8 14:00에 대회 일정이 바뀌었다 → 11/8이 1일째, 7일째인 11/14까지
 		LocalDateTime changedAt = LocalDateTime.of(2026, 11, 8, 14, 0);
 		RaceCourseInfo course = courseChangedAt(changedAt);
 
 		assertThat(course.isRefundableOn(LocalDate.of(2026, 11, 8))).isTrue();
-		assertThat(course.isRefundableOn(LocalDate.of(2026, 11, 15))).isTrue();
-		assertThat(course.isRefundableOn(LocalDate.of(2026, 11, 16))).isFalse();
-		assertThat(course.isWithinScheduleChangeRefund(LocalDate.of(2026, 11, 15))).isTrue();
-		assertThat(course.isWithinScheduleChangeRefund(LocalDate.of(2026, 11, 16))).isFalse();
+		assertThat(course.isRefundableOn(LocalDate.of(2026, 11, 14))).isTrue();
+		assertThat(course.isRefundableOn(LocalDate.of(2026, 11, 15))).isFalse();
+		assertThat(course.isWithinScheduleChangeRefund(LocalDate.of(2026, 11, 14))).isTrue();
+		assertThat(course.isWithinScheduleChangeRefund(LocalDate.of(2026, 11, 15))).isFalse();
+		assertThat(course.scheduleChangeRefundLastDay()).isEqualTo(LocalDate.of(2026, 11, 14));
 	}
 
 	@Test

@@ -38,7 +38,7 @@ public record RaceCourseInfo(
 	LocalDate refundDeadline,
 	LocalDateTime scheduleChangedAt
 ) {
-	// 일정이 바뀐 뒤 전액 환불해 주는 날 수 (ERD v4 "schedule_changed_at부터 7일 동안은 기한과 상관없이 전액 환불")
+	// 일정이 바뀐 뒤 전액 환불해 주는 날 수 (정책 5장 4-4 "알린 날부터 7일 동안", ERD v4 race.schedule_changed_at)
 	public static final int SCHEDULE_CHANGE_REFUND_DAYS = 7;
 
 	/**
@@ -51,7 +51,7 @@ public record RaceCourseInfo(
 
 	/**
 	 * 일정 변경 뒤 전액 환불 기간 안인지. 환불 기한과 같이 날짜 단위로 센다
-	 * 첫날은 넣지 않는다(민법 157조 초일 불산입): 10/13 14:00에 바뀌면 10/14부터 7일째인 10/20 23:59:59까지다
+	 * 정책 5장 4-4 "알린 날부터 7일 동안"대로 알린 날(일정 변경 일시)을 1일째로 센다: 10/13 14:00에 바뀌면 10/19 23:59:59까지다
 	 */
 	public boolean isWithinScheduleChangeRefund(LocalDate today) {
 		LocalDate lastDay = scheduleChangeRefundLastDay();
@@ -63,7 +63,7 @@ public record RaceCourseInfo(
 		if (scheduleChangedAt == null) {
 			return null;
 		}
-		return scheduleChangedAt.toLocalDate().plusDays(SCHEDULE_CHANGE_REFUND_DAYS);
+		return scheduleChangedAt.toLocalDate().plusDays(SCHEDULE_CHANGE_REFUND_DAYS - 1);
 	}
 
 	// 구매자가 내는 참가권 한 장 값. 키트는 참가권과 함께 팔고 함께 취소한다 (ERD race_course.kit_price)
