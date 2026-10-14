@@ -89,7 +89,7 @@ public class OrderExpiryUseCase {
 	 */
 	private Expired expireLocked(int orderId, LocalDateTime now) {
 		Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
-		// 조회와 잠금 사이에 결제됐거나, 기한을 늘려 아직 기한 전이면 건너뛴다
+		// 조회와 잠금 사이에 결제됐으면 건너뛴다
 		if (order == null || !order.isOverdue(now)) {
 			return new Expired(false, false);
 		}
