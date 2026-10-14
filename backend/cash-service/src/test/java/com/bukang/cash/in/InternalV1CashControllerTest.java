@@ -22,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.cash.config.CashWalletProperties;
 import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.payment.PaymentStatus;
 import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.LedgerType;
 import com.bukang.cash.domain.wallet.Wallet;
@@ -134,6 +135,9 @@ class InternalV1CashControllerTest {
 
 		assertBalance(CUSTOMER_ID, 10_000);
 		assertBalance(cashWalletProperties.holdingMemberId(), 0);
+		assertThat(countLedgersForOrder(ORDER_ID)).as("결제 2줄 + 취소 반대 2줄").isEqualTo(4);
+		assertThat(paymentRepository.findByOrderId(ORDER_ID).orElseThrow().getStatus())
+			.isEqualTo(PaymentStatus.CANCELED);
 	}
 
 	@Test
@@ -178,6 +182,12 @@ class InternalV1CashControllerTest {
 
 	private void assertBalance(int holderId, int expected) {
 		assertThat(walletRepository.findById(holderId).orElseThrow().getBalance()).isEqualTo(expected);
+	}
+
+	private long countLedgersForOrder(int orderId) {
+		return walletLedgerRepository.findAll().stream()
+			.filter(ledger -> ledger.getRefTypeCode() == LedgerRefType.Order && ledger.getRefId() == orderId)
+			.count();
 	}
 
 	private Wallet createWallet(int memberId, String nickname) {
