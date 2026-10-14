@@ -34,6 +34,11 @@ export function LoginPage({ failed = false, next }: { failed?: boolean; next?: s
       ? { email: 'runner@crewrun.kr', password: 'password1' }
       : { email: '', password: '' },
   })
+  // 서버가 준 로그인 실패 문구는 입력을 고치면 지운다 (칸별 입력 검사 문구는 그대로 둔다).
+  // 요청 중에 지우면 성공해도 화면 이동 콜백이 불리지 않으므로 실패했을 때만 지운다.
+  const clearLoginError = () => {
+    if (login.isError) login.reset()
+  }
   return (
     <>
       <AppHeader type="sub" title="로그인" />
@@ -55,7 +60,7 @@ export function LoginPage({ failed = false, next }: { failed?: boolean; next?: s
               autoComplete="email"
               placeholder="이메일"
               error={errors.email?.message}
-              {...register('email')}
+              {...register('email', { onChange: clearLoginError })}
             />
             <TextField
               aria-label="비밀번호"
@@ -66,7 +71,7 @@ export function LoginPage({ failed = false, next }: { failed?: boolean; next?: s
                 errors.password?.message ??
                 (failed ? AUTH_ERRORS.loginFailed : loginErrorMessage(login.error))
               }
-              {...register('password')}
+              {...register('password', { onChange: clearLoginError })}
             />
             <Button
               type="submit"

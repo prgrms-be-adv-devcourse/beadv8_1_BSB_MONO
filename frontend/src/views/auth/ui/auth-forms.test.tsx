@@ -95,6 +95,27 @@ describe('LoginPage', () => {
     expect(getAuthStatus()).not.toBe('authenticated')
   })
 
+  it('로그인 실패 문구는 비밀번호를 고치면 사라진다', async () => {
+    server.use(
+      http.post('*/api/v1/auth/login', () =>
+        HttpResponse.json(
+          { status: 401, message: '이메일 또는 비밀번호가 올바르지 않습니다.', data: null },
+          { status: 401 },
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    render(withQueryClient(<LoginPage />))
+
+    await fillLogin(user, 'wrong-password1')
+    await user.click(screen.getByRole('button', { name: '로그인' }))
+    expect(await screen.findByText(AUTH_ERRORS.loginFailed)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('비밀번호'), '2')
+
+    expect(screen.queryByText(AUTH_ERRORS.loginFailed)).not.toBeInTheDocument()
+  })
+
   it('next가 있으면 로그인 뒤 그 경로로 간다', async () => {
     server.use(
       http.post('*/api/v1/auth/login', () => HttpResponse.json(memberMock.getLoginResponseMock())),
