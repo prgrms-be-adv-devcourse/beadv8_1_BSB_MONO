@@ -5,7 +5,9 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
+import com.bukang.cash.config.CashWalletProperties;
 import com.bukang.cash.domain.exception.PaymentAlreadyFinalizedException;
+import com.bukang.cash.domain.exception.WalletNotFoundException;
 import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.payment.PaymentFailReason;
 import com.bukang.cash.domain.payment.PaymentStatus;
@@ -26,20 +28,33 @@ public class CashCompleteOrderPaymentUseCase {
 	private final PaymentRepository paymentRepository;
 	private final WalletRepository walletRepository;
 	private final WalletLedgerRepository walletLedgerRepository;
+	private final CashWalletProperties cashWalletProperties;
 
 	public CashPaymentDto completeOrderPayment(int orderId, int customerId, int salePrice) {
-		//1.지갑 잠금
-		//orderId로 결제 행 조회
-		//orderId없다면 새로 만들고 결제 시작
-		Wallet customerWallet = cashSupport.findWalletByHolderId(customerId);
-		Wallet holdingWallet = cashSupport.findHoldingWallet();
+		// 1. 보관 지갑 주인(보관 회원)의 ID를 설정에서 가져온다
+		int holdingMemberId = cashWalletProperties.holdingMemberId();
 
-		int firstId = Math.min(customerWallet.getId(), holdingWallet.getId());
-		int secondId = Math.max(customerWallet.getId(), holdingWallet.getId());
-		Wallet first = walletRepository.findByIdForUpdate(firstId).orElseThrow();
-		Wallet second = walletRepository.findByIdForUpdate(secondId).orElseThrow();
-		customerWallet = customerWallet.getId() == firstId ? first : second;
-		holdingWallet = holdingWallet.getId() == firstId ? first : second;
+		// 2. 잠글 순서를 정한다
+		//    결제·환원·환불이 지갑 두 개를 서로 다른 순서로 잠그면 교착 상태가 생기므로,
+		//    항상 ID가 작은 쪽부터 잠근다. 결제·환원·환불 모두 같은 기준(여기서는 회원 ID)으로 순서를 정해야 한다.
+		int firstId = Math.min(customerId, holdingMemberId);
+		int secondId = Math.max(customerId, holdingMemberId);
+
+		// 3. 정한 순서대로 지갑을 잠근다 (SELECT ... FOR UPDATE)
+		//    잠그기 전에 지갑을 따로 읽지 않으므로, 잠그면서 처음으로 최신 잔액을 읽는다
+		//    다른 요청은 이 트랜잭션이 커밋될 때까지 같은 지갑을 바꾸지 못하고 기다린다.
+		//    지갑 ID가 회원 ID와 항상 같을 때만 올바르다.
+		//    지갑 ID가 자동 증가(BaseIdAndTime)라면 다른 회원의 지갑을 잠글 수 있으므로,
+		//    회원 ID로 잠그는 findByMemberIdForUpdate를 써야 한다.
+		Wallet first = walletRepository.findByIdForUpdate(firstId)
+			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
+		Wallet second = walletRepository.findByIdForUpdate(secondId)
+			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
+
+		// 4. 잠근 지갑 중 어느 쪽이 고객 지갑이고 어느 쪽이 보관 지갑인지 짝지어 준다
+		//    이후 차감·적립은 반드시 이 잠근 객체로 한다.
+		Wallet customerWallet = customerId == firstId ? first : second;
+		Wallet holdingWallet = holdingMemberId == firstId ? first : second;
 
 		Optional<Payment> existingPayment = cashSupport.findByOrderId(orderId);
 		Payment payment = existingPayment.isPresent()
