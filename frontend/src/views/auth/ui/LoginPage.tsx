@@ -8,6 +8,8 @@ import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
+import { useLogin } from '@/features/auth'
+import { ApiError } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import { Button, FOCUS_RING, Logo, TextField } from '@/shared/ui'
 
@@ -19,6 +21,7 @@ const LINK = cn('rounded-sm', FOCUS_RING)
 // failed는 시안 미리보기(?preview=error)용. 실패 문구를 띄운 채로 보여 준다.
 export function LoginPage({ failed = false }: { failed?: boolean }) {
   const router = useRouter()
+  const login = useLogin()
   const {
     register,
     handleSubmit,
@@ -38,10 +41,9 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
         <form
           className="flex flex-col items-center px-6"
           noValidate
-          onSubmit={handleSubmit(() => {
-            // TODO(api): ApiV1AuthController 로그인에 연결한다. 실패하면 AUTH_ERRORS.loginFailed를 띄운다.
-            router.push('/')
-          })}
+          onSubmit={handleSubmit((values) =>
+            login.mutate(values, { onSuccess: () => router.push('/') }),
+          )}
         >
           <Logo className="h-11 w-[150px]" />
           <p className="mt-3 text-center text-heading-s">러닝 대회, 여기서 바로 신청해요</p>
@@ -59,10 +61,18 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
               type="password"
               autoComplete="current-password"
               placeholder="비밀번호"
-              error={errors.password?.message ?? (failed ? AUTH_ERRORS.loginFailed : undefined)}
+              error={
+                errors.password?.message ??
+                (failed ? AUTH_ERRORS.loginFailed : loginErrorMessage(login.error))
+              }
               {...register('password')}
             />
-            <Button type="submit" size="l" className="w-full" disabled={!isValid}>
+            <Button
+              type="submit"
+              size="l"
+              className="w-full"
+              disabled={!isValid || login.isPending}
+            >
               로그인
             </Button>
             <LinkRow
@@ -93,6 +103,13 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
       <BottomNav />
     </>
   )
+}
+
+/** 로그인 실패 문구. 401(이메일·비밀번호 불일치)은 시안(M03-E) 문구, 그 밖에는 서버 문구를 보여 준다. */
+function loginErrorMessage(error: Error | null): string | undefined {
+  if (!error) return undefined
+  if (error instanceof ApiError && error.status === 401) return AUTH_ERRORS.loginFailed
+  return (error instanceof ApiError && error.serverMessage) || AUTH_ERRORS.loginUnavailable
 }
 
 type RowLink = {
