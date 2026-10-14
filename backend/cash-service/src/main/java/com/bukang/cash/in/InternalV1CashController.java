@@ -12,6 +12,8 @@ import com.bukang.cash.app.CashFacade;
 import com.bukang.cash.dto.CashCancelPaymentRequestDto;
 import com.bukang.cash.dto.CashPaymentDto;
 import com.bukang.cash.dto.CashPaymentRequestDto;
+import com.bukang.cash.dto.CashRefundDto;
+import com.bukang.cash.dto.CashRefundRequestDto;
 import com.bukang.common.global.rsdata.RsData;
 
 import jakarta.validation.Valid;
@@ -43,5 +45,14 @@ public class InternalV1CashController {
 	) {
 		cashFacade.cancelPayment(orderId, request.getMemberId());
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "결제를 취소했습니다.", null));
+	}
+
+	@PostMapping("/payments/{orderId}/refund")
+	public ResponseEntity<RsData<CashRefundDto>> refund(
+		@PathVariable int orderId,
+		@Valid @RequestBody CashRefundRequestDto request
+	) {
+		CashRefundDto result = cashFacade.refund(orderId, request.getMemberId());
+		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "환불했습니다.", result));
 	}
 }
