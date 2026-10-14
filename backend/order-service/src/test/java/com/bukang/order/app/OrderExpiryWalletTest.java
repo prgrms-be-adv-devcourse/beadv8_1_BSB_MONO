@@ -145,7 +145,7 @@ class OrderExpiryWalletTest {
 		assertThat(walletPort.chargedOrders()).isEmpty();
 		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.EXPIRED);
 		assertThat(participationStatusOf(orderId)).isEqualTo(ParticipationStatus.RELEASED);
-		// 판매된 채 남았을 수 있는 자리는 복구하고, 결제하지 않은 자리는 커밋 뒤 풀어 달라고 알린다 (PRO-166)
+		// 판매된 채 남았을 수 있는 자리는 복구하고, 결제하지 않은 자리는 만료 트랜잭션 안에서 풀어 달라고 알린다 (PRO-166)
 		int participationId = participationIdOf(orderId);
 		assertThat(seatHoldPort.restoredParticipations()).containsExactly(participationId);
 		assertThat(seatHoldPort.releasedParticipations()).containsExactly(participationId);
@@ -163,7 +163,7 @@ class OrderExpiryWalletTest {
 		assertThat(first).isEqualTo(new OrderExpiryUseCase.ExpiryResult(0, 0, 1));
 		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.CREATED);
 		assertThat(participationStatusOf(orderId)).isEqualTo(ParticipationStatus.APPLIED);
-		// 만료가 롤백됐으니 자리 해제 알림도 가지 않는다 (커밋 뒤에만 보낸다)
+		// 결제 취소가 실패해 만료하지 않았으니 자리 해제 알림도 보내지 않는다 (해제는 만료 트랜잭션 안에서 보낸다)
 		assertThat(seatHoldPort.releasedParticipations()).isEmpty();
 
 		walletPort.setCancelFails(false);
