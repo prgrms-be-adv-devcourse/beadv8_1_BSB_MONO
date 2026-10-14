@@ -15,8 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 public class NoSoldEntryAdapter implements SoldEntryPort {
 	@Override
-	public List<SoldEntry> findSoldEntries(LocalDate raceDate) {
-		log.warn("주문 서비스 연결 전이라 정산할 참가권이 없습니다. raceDate={}", raceDate);
+	public List<SoldEntry> findSoldEntries(LocalDate fromRaceDate, LocalDate toRaceDate) {
+		log.warn("주문 서비스 연결 전이라 정산할 참가권이 없습니다. raceDate={} ~ {}", fromRaceDate, toRaceDate);
 		return List.of();
 	}
 }
