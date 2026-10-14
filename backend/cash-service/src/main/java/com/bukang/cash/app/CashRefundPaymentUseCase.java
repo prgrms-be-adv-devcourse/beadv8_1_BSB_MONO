@@ -3,6 +3,7 @@ package com.bukang.cash.app;
 import org.springframework.stereotype.Service;
 
 import com.bukang.cash.app.CashSupport.LockedWallets;
+import com.bukang.cash.domain.exception.PaymentMemberMismatchException;
 import com.bukang.cash.domain.exception.PaymentNotRefundableException;
 import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.payment.PaymentStatus;
@@ -29,6 +30,11 @@ public class CashRefundPaymentUseCase {
 
 		Payment payment = cashSupport.findByOrderId(orderId)
 			.orElseThrow(() -> new PaymentNotRefundableException("환불할 결제가 없습니다."));
+
+		// 결제 행의 실제 주인(지갑)과 요청받은 회원이 다르면 거절한다 (다른 회원 지갑으로 환불되는 것을 막음)
+		if (payment.getWallet().getId() != customerWallet.getId()) {
+			throw new PaymentMemberMismatchException("결제한 회원과 요청한 회원이 다릅니다.");
+		}
 
 		// 이미 환원·환불됐으면 그대로 끝 (멱등) — 환원과 환불이 동시에 와도 한쪽만 반영된다
 		if (payment.getStatus() == PaymentStatus.CANCELED || payment.getStatus() == PaymentStatus.REFUNDED) {
