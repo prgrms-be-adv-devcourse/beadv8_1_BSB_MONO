@@ -13,7 +13,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "api:generate": "orval",
+    "api:generate": "node -e \"require('fs').rmSync('src/shared/api/generated',{recursive:true,force:true})\" && orval",
+    "api:pull": "node scripts/pull-openapi.mjs",
     "prepare": "cd .. && husky frontend/.husky",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
+    "@faker-js/faker": "^10.6.0",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
     "@storybook/addon-docs": "^10.6.1",
     "@storybook/addon-themes": "^10.6.1",

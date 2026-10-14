@@ -25,3 +25,41 @@ describe('customFetch', () => {
     expect(error).toMatchObject({ status: 409, body: { message: 'nope' } })
   })
 })
+
+describe('customFetch 옵션과 오류', () => {
+  it('idempotencyKey를 Idempotency-Key 헤더로 보낸다', async () => {
+    let received: string | null = null
+    server.use(
+      http.post('*/api/v1/order/orders', ({ request }) => {
+        received = request.headers.get('Idempotency-Key')
+        return HttpResponse.json({ status: 201, message: 'ok', data: null }, { status: 201 })
+      }),
+    )
+
+    await customFetch('http://localhost/api/v1/order/orders', {
+      method: 'POST',
+      idempotencyKey: 'key-1',
+    })
+    expect(received).toBe('key-1')
+  })
+
+  it('RsData 오류 응답이면 서버 문구와 오류 코드를 ApiError에 담는다', async () => {
+    server.use(
+      http.get('*/api/v1/product/races/:raceId', () =>
+        HttpResponse.json(
+          { status: 404, message: '존재하지 않는 대회입니다.', data: null, code: 'RACE_NOT_FOUND' },
+          { status: 404 },
+        ),
+      ),
+    )
+
+    const error = await customFetch('http://localhost/api/v1/product/races/999').catch(
+      (e: unknown) => e,
+    )
+    expect(error).toMatchObject({
+      status: 404,
+      serverMessage: '존재하지 않는 대회입니다.',
+      code: 'RACE_NOT_FOUND',
+    })
+  })
+})
