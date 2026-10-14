@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { SAMPLE_PARTICIPANT, useBookingFlow } from '@/features/booking'
+import { getRaceDetail, RACE_DETAIL } from '@/entities/race'
+import { formatNumber } from '@/shared/lib'
 import {
   Alert,
   BottomCta,
@@ -18,6 +21,9 @@ import {
   Stepper,
   type IconName,
 } from '@/shared/ui'
+
+import { splitPayment } from '../lib/deposit'
+import { useHoldCountdown } from '../model/use-hold-countdown'
 
 export type CheckoutState = 'default' | 'offline' | 'timeout' | 'soldout' | 'failed'
 
@@ -55,19 +61,44 @@ const RESULT: Record<
   },
 }
 
-// 자리를 잡아 두는 시간 (정책 3장: 10분)
-const HOLD_SECONDS = 10 * 60
+// TODO(api): 예치금 잔액 조회로 바꾼다. 지금은 시안 예시 값.
+const SAMPLE_DEPOSIT_BALANCE = 40_000
+
+// ?preview=offline 시안에서 보여 주는 남은 시간 (5분 10초)
+const OFFLINE_PREVIEW_SECONDS = 310
+
+const won = (amount: number) => `${formatNumber(amount)}원`
 
 // 피그마 V2 · M07 결제 · 부족분 충전 (+ 연결 끊김, M07-1~3 결과)
-// TODO(api): 주문 생성·예치금 계산·토스페이먼츠 충전을 붙인다. 금액은 시안 예시 값.
+// 앞 단계에서 고른 종목과 참가자 정보는 예매 흐름 스토어에서 읽는다.
+// 스토어가 비어 있으면(바로 들어오거나 새로고침, ?preview= 시안) 시안 예시 값을 보여 준다.
+// TODO(api): 주문 생성·예치금 계산·토스페이먼츠 충전을 붙인다.
 export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
   const router = useRouter()
-  // 필수 동의는 사용자가 직접 체크한다. 연결 끊김은 이미 동의하고 결제를 누른 뒤라 체크된 채로 둔다.
-  const [agreed, setAgreed] = useState(state === 'offline')
-  const remaining = useCountdown(state === 'offline' ? 310 : 522)
+  const offline = state === 'offline'
+  const selection = useBookingFlow((s) => s.selection)
+  const participant = useBookingFlow((s) => s.participant) ?? SAMPLE_PARTICIPANT
+  const holdExpiresAt = useBookingFlow((s) => s.holdExpiresAt)
+  const startHold = useBookingFlow((s) => s.startHold)
+  // 필수 동의는 결제 화면에 들어올 때마다 사용자가 직접 체크한다.
+  // 연결 끊김은 이미 동의하고 결제를 누른 뒤라 체크된 채로 둔다.
+  const [agreed, setAgreed] = useState(offline)
 
-  if (state === 'timeout' || state === 'soldout' || state === 'failed') {
-    const result = RESULT[state]
+  // 결제 단계에 들어오면 자리를 잡는다. 이미 잡아 둔 자리가 있으면 그 마감 시각을 이어서 쓴다.
+  useEffect(() => {
+    if (state === 'default') startHold()
+  }, [state, startHold])
+  // 연결 끊김 시안은 스토어를 건드리지 않고 시안의 남은 시간에서 센다.
+  const [offlineExpiresAt] = useState(() =>
+    offline ? Date.now() + OFFLINE_PREVIEW_SECONDS * 1000 : null,
+  )
+  const expiresAt = offline ? offlineExpiresAt : holdExpiresAt
+  const remaining = useHoldCountdown(expiresAt)
+  // 남은 시간이 다 되면 시간 초과(M07-1) 화면으로 바꾼다.
+  const view = expiresAt !== null && remaining === 0 ? 'timeout' : state
+
+  if (view === 'timeout' || view === 'soldout' || view === 'failed') {
+    const result = RESULT[view]
     return (
       <>
         <AppHeader type="sub" title="결제" close backHref="/" />
@@ -86,7 +117,10 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
     )
   }
 
-  const offline = state === 'offline'
+  const race = (selection && getRaceDetail(selection.raceId)) ?? RACE_DETAIL
+  const option = race.options.find((o) => o.id === selection?.optionId) ?? race.options[0]
+  const refundDeadline = race.schedule.find((row) => row.label === '전액 환불 기한')?.value
+  const payment = splitPayment(option.price, SAMPLE_DEPOSIT_BALANCE)
 
   return (
     <>
@@ -116,15 +150,17 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
 
           <div className="flex flex-col gap-1">
             <p className="text-body-s text-text-secondary">
-              2026 용감한 쿠키RUN in 서울 · 10K · 김러너
+              {race.title} · {option.name} · {participant.name}
             </p>
-            <p className="text-[32px] leading-11 font-bold tracking-[-0.015em]">45,000원</p>
+            <p className="text-[32px] leading-11 font-bold tracking-[-0.015em]">
+              {won(option.price)}
+            </p>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-border-default pt-4">
-            <KeyValue label="예치금에서" value="40,000원" />
-            <KeyValue label="충전 (최소 1만 원)" value="+10,000원" />
-            <KeyValue label="결제 뒤 남는 예치금" value="5,000원" />
+            <KeyValue label="예치금에서" value={won(payment.fromDeposit)} />
+            <KeyValue label="충전 (최소 1만 원)" value={`+${won(payment.charge)}`} />
+            <KeyValue label="결제 뒤 남는 예치금" value={won(payment.balanceAfter)} />
             <p className="text-caption text-text-tertiary">
               1만 원보다 적게 모자라면 1만 원을 충전해요. 결제가 안 돼도 충전한 돈은 예치금으로
               남아요.
@@ -141,11 +177,11 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2 rounded-[12px] px-4 pt-3 pb-4 inset-ring inset-ring-border-default">
               <p className="text-body-s text-text-secondary">
-                환불 규정 · 10/31 (토) 23:59까지 전액 환불
+                환불 규정 · {refundDeadline}까지 전액 환불
               </p>
-              <KeyValue label="환불 기한 10/31 (토) 23:59까지" value="전액 환불" />
-              <KeyValue label="환불 기한이 지난 뒤" value="개인 사정 환불 불가" />
-              <KeyValue label="대회 취소 · 일정 변경" value="전액 환불" />
+              {race.refund.map((row) => (
+                <KeyValue key={row.label} label={row.label} value={row.value} />
+              ))}
             </div>
             <Checkbox
               checked={agreed}
@@ -159,21 +195,16 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
         className="sticky bottom-0 z-10"
         primary={
           <Button size="l" disabled={!agreed} onClick={() => router.push('/checkout/complete')}>
-            {offline ? '다시 시도하기' : '10,000원 충전하고 결제'}
+            {offline
+              ? '다시 시도하기'
+              : payment.charge > 0
+                ? `${won(payment.charge)} 충전하고 결제`
+                : `${won(option.price)} 결제`}
           </Button>
         }
       />
     </>
   )
-}
-
-function useCountdown(initial: number) {
-  const [seconds, setSeconds] = useState(Math.min(initial, HOLD_SECONDS))
-  useEffect(() => {
-    const id = setInterval(() => setSeconds((s) => Math.max(0, s - 1)), 1000)
-    return () => clearInterval(id)
-  }, [])
-  return seconds
 }
 
 function formatTimer(seconds: number) {
