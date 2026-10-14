@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.out.seat.SeatExtendResult;
 import com.bukang.order.out.seat.SeatHoldPort;
 import com.bukang.order.out.seat.SeatHoldResult;
@@ -25,6 +26,9 @@ public class StubSeatHoldPort implements SeatHoldPort {
 	private final AtomicInteger holdCalls = new AtomicInteger();
 	private final AtomicInteger extendCalls = new AtomicInteger();
 	private final List<Integer> restoredParticipations = new CopyOnWriteArrayList<>();
+	private final List<Integer> releasedParticipations = new CopyOnWriteArrayList<>();
+	private volatile boolean restoreFails;
+	private volatile boolean releaseFails;
 	private final Map<Integer, LocalDateTime> expiresAt = new ConcurrentHashMap<>();
 	private final Map<Integer, Boolean> extended = new ConcurrentHashMap<>();
 	private final Set<Integer> sold = ConcurrentHashMap.newKeySet();
@@ -88,11 +92,40 @@ public class StubSeatHoldPort implements SeatHoldPort {
 
 	@Override
 	public void restore(int participationId) {
+		if (restoreFails) {
+			throw new IllegalStateException("상품 서비스 응답 없음 (테스트)");
+		}
 		restoredParticipations.add(participationId);
+	}
+
+	// 자리 해제 메시지를 보내지 못하게 한다 (Kafka 장애)
+	public void failRelease(boolean fails) {
+		this.releaseFails = fails;
+	}
+
+	// 자리 복구가 실패하게 한다 (상품 서비스 장애)
+	public void failRestore(boolean fails) {
+		this.restoreFails = fails;
 	}
 
 	public List<Integer> restoredParticipations() {
 		return restoredParticipations;
+	}
+
+	// 결제하지 않은 자리를 풀어 달라는 알림 (B의 해제처럼 판매한 자리는 그대로 둔다)
+	@Override
+	public void release(int participationId) {
+		if (releaseFails) {
+			throw new ExternalServiceUnavailableException("상품 서비스에 연결하지 못했습니다. (테스트)");
+		}
+		releasedParticipations.add(participationId);
+		if (!sold.contains(participationId)) {
+			expiresAt.remove(participationId);
+		}
+	}
+
+	public List<Integer> releasedParticipations() {
+		return releasedParticipations;
 	}
 
 	// 판매(HELD → SOLD)까지 끝난 자리인지
@@ -121,6 +154,9 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		holdCalls.set(0);
 		extendCalls.set(0);
 		restoredParticipations.clear();
+		releasedParticipations.clear();
+		restoreFails = false;
+		releaseFails = false;
 		expiresAt.clear();
 		extended.clear();
 		sold.clear();

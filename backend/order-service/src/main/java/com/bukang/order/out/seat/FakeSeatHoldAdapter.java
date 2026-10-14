@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 가짜 어댑터: 상품 서비스를 띄우지 않고 개발할 때, 종목마다 정원 100석을 메모리에 두고 주문이 보낸 기한까지 자리를 내준다
- * 확보한 자리의 기한을 기억해 2분 연장(한 번)과 기한 안 판매까지 흉내 낸다. 자리를 되돌려 놓지는 않는다
+ * 확보한 자리의 기한을 기억해 2분 연장(한 번)과 기한 안 판매, 판매하지 않은 자리 해제까지 흉내 낸다. 판매 복구는 하지 않는다
  * 앱을 다시 켜면 처음으로 돌아간다. order.clients.product.mode=fake(기본값)일 때만 쓰고, http면 HttpSeatHoldAdapter가 부른다
  */
 @Slf4j
@@ -47,7 +47,7 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 		if (!held[0]) {
 			return SeatHoldResult.soldOut();
 		}
-		holds.put(participationId, new Hold(expiresAt, false));
+		holds.put(participationId, new Hold(raceCourseId, expiresAt, false));
 		return SeatHoldResult.held(expiresAt);
 	}
 
@@ -62,7 +62,7 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 			if (!LocalDateTime.now().isBefore(hold.expiresAt())) {
 				return hold;
 			}
-			Hold extended = new Hold(hold.expiresAt().plusMinutes(EXTEND_MINUTES), true);
+			Hold extended = new Hold(hold.raceCourseId(), hold.expiresAt().plusMinutes(EXTEND_MINUTES), true);
 			result[0] = SeatExtendResult.extended(extended.expiresAt());
 			return extended;
 		});
@@ -89,6 +89,17 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 		log.debug("가짜 정원 복구 participationId={}", participationId);
 	}
 
-	private record Hold(LocalDateTime expiresAt, boolean extended) {
+	// 판매하지 않은 자리만 정원으로 되돌린다 (B의 해제와 같은 규칙)
+	@Override
+	public void release(int participationId) {
+		Hold hold = holds.remove(participationId);
+		if (hold == null || sold.contains(participationId)) {
+			return;
+		}
+		remainingSeats.computeIfPresent(hold.raceCourseId(), (id, seats) -> seats + 1);
+		log.debug("가짜 자리 해제 participationId={}", participationId);
+	}
+
+	private record Hold(int raceCourseId, LocalDateTime expiresAt, boolean extended) {
 	}
 }

@@ -22,4 +22,8 @@ public interface SeatHoldPort {
 
 	// 결제한 참가권을 취소하면 자리를 판매 가능 정원으로 되돌린다 (SOLD → RESTORED). 여러 번 불러도 한 번만 되돌린다
 	void restore(int participationId);
+
+	// 결제하지 않고 기한이 지난 자리를 풀어 달라고 알린다 (HELD → RELEASED). B는 자리를 스스로 풀지 않는다 (10/14 정함)
+	// 답을 기다리지 않는 알림(Kafka product.hold.cancel)이고, 이미 판매·해제된 자리면 B가 아무것도 하지 않는다 (멱등)
+	void release(int participationId);
 }

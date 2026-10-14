@@ -12,6 +12,7 @@ import java.util.List;
 import org.hibernate.annotations.BatchSize;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.event.OrderExpiredEvent;
 import com.bukang.order.domain.exception.OrderItemNotFoundException;
 import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
@@ -151,12 +152,14 @@ public class Order extends BaseIdAndTime {
 	}
 
 	// 결제하지 않고 기한이 지났다. 예치금 결제 취소를 부른 뒤에 바꾼다 (OrderExpiryUseCase)
+	// 상품 서비스에 자리를 풀어 달라고 알리도록 이벤트를 발행한다. 보내지 못하면 예외로 만료가 롤백된다 (OrderExpiredEventListener)
 	public void expire(LocalDateTime now) {
 		if (!isOverdue(now)) {
 			throw new IllegalStateException(
 				"결제 기한이 지난 결제 대기 주문만 만료할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
 		}
 		this.status = OrderStatus.EXPIRED;
+		publishEvent(new OrderExpiredEvent(getId(), participationId()));
 	}
 
 	// 예치금 차감과 자리 판매가 끝났다. 주문과 주문 상품을 함께 결제 완료로 바꾼다

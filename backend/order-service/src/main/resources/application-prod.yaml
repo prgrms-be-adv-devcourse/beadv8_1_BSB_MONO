@@ -21,9 +21,8 @@ spring:
 # 다른 서비스는 실제 내부 API로 부른다. compose.yml의 앱 컨테이너끼리는 컨테이너 이름으로 접속한다
 order:
   clients:
-    # 결제하지 않은 자리를 풀어 달라는 Kafka(product.hold.cancel) 발행을 붙인 뒤 http로 켠다 (그 전에 켜면 상품 자리가 묶인다)
     product:
-      mode: fake
+      mode: http
       base-url: http://bukang-product-service:8085
     payout:
       mode: http

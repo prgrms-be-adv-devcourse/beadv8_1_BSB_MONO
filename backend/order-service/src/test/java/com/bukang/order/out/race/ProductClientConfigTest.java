@@ -1,6 +1,7 @@
 package com.bukang.order.out.race;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.util.List;
 
@@ -11,10 +12,14 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.kafka.core.KafkaTemplate;
 
+import com.bukang.common.global.json.JsonConverter;
 import com.bukang.order.out.seat.FakeSeatHoldAdapter;
 import com.bukang.order.out.seat.HttpSeatHoldAdapter;
 import com.bukang.order.out.seat.SeatHoldPort;
+
+import tools.jackson.databind.json.JsonMapper;
 
 class ProductClientConfigTest {
 	// 실제 앱처럼 "2s" 같은 기간 값을 Duration으로 바꾸는 Spring Boot 변환기를 쓴다
@@ -22,6 +27,8 @@ class ProductClientConfigTest {
 		.withInitializer(context -> context.getBeanFactory()
 			.setConversionService(ApplicationConversionService.getSharedInstance()))
 		.withUserConfiguration(ProductClientConfig.class, FakeRaceCourseAdapter.class, FakeSeatHoldAdapter.class)
+		.withBean(KafkaTemplate.class, () -> mock(KafkaTemplate.class))
+		.withBean(JsonConverter.class, () -> new JsonConverter(JsonMapper.builder().build()))
 		.withPropertyValues("order.clients.timeout=2s", "order.clients.product.base-url=http://localhost:8085");
 
 	@Test
@@ -34,13 +41,13 @@ class ProductClientConfigTest {
 	}
 
 	@Test
-	@DisplayName("운영(prod)은 자리 해제 메시지 발행을 붙이기 전까지 가짜로 두고, 주소는 컨테이너 이름으로 미리 둔다")
-	void prodProfile() throws Exception {
+	@DisplayName("운영(prod) 설정은 실제 상품 서비스를 컨테이너 이름으로 부른다 (자리 해제 메시지 발행을 붙여 http로 켬)")
+	void prodProfileUsesHttp() throws Exception {
 		List<PropertySource<?>> prod = new YamlPropertySourceLoader()
 			.load("prod", new ClassPathResource("application-prod.yaml"));
 
 		assertThat(prod).anySatisfy(source -> {
-			assertThat(source.getProperty("order.clients.product.mode")).isEqualTo("fake");
+			assertThat(source.getProperty("order.clients.product.mode")).isEqualTo("http");
 			assertThat(source.getProperty("order.clients.product.base-url"))
 				.isEqualTo("http://bukang-product-service:8085");
 		});
