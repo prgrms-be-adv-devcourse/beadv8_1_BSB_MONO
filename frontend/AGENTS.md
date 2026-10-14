@@ -63,6 +63,12 @@ src/
 - 가져올 때는 `@/shared/api`의 서비스별 묶음을 쓴다: `productApi`(요청 함수·훅), `productModel`(타입), `productZod`.
 - 응답은 `RsData{status, message, data, code?}`로 감싸여 온다. `customFetch`는 본문을 그대로 돌려주고, data는 `unwrapData`로 꺼낸다(`select: unwrapData`).
   2xx가 아니면 `ApiError`(`serverMessage`, `code`)를 던진다.
+- 인증: Access Token은 브라우저 메모리(`shared/api/access-token.ts`)에만 두고 `customFetch`가 `Authorization: Bearer`로 붙인다.
+  Refresh Token은 서버가 내려 주는 httpOnly 쿠키(`Path=/api/v1/auth`)라 프론트가 만지지 않는다.
+  - 401이면 재발급(`POST /api/v1/auth/reissue`)을 한 번만(single-flight) 보내고 원래 요청을 한 번 다시 보낸다. 재발급도 실패하면 로그아웃 상태.
+  - 새로고침하면 토큰이 사라지므로 `features/auth`의 `AuthSessionRestorer`(app Provider)가 앱 시작 때 재발급으로 되살린다.
+  - 서버 컴포넌트는 토큰을 붙일 수 없다. 로그인이 필요한 데이터는 클라이언트에서 불러온다.
+  - 로그인 상태는 `useAuthStatus()`(`pending`·`authenticated`·`anonymous`), 로그인·로그아웃은 `useLogin`·`useLogout`.
 - 주문 생성·장바구니 결제는 `{ idempotencyKey: createIdempotencyKey() }`를 요청 옵션으로 넘겨 `Idempotency-Key` 헤더를 붙인다.
 - 생성된 MSW 목(명세의 응답 예시)은 `shared/mocks/handlers.ts`에 등록한다. 테스트도 같은 핸들러를 쓴다.
 - 서버 데이터는 TanStack Query(초기 데이터는 RSC). Zustand에 서버 데이터를 넣지 않는다.
@@ -85,7 +91,8 @@ src/
 
 ## 미정 사항
 
-- 인증 방식 (소셜 로그인 예정). `src/proxy.ts`, `shared/api/fetcher.ts`의 `TODO(auth)` 참고.
+- 소셜 로그인은 아직 없다.
+- `src/proxy.ts`의 `TODO(auth)`: Refresh Token 쿠키는 `Path=/api/v1/auth`라 `/seller`·`/admin` 요청에 실리지 않아 쿠키 유무로 막을 수 없다.
 
 ## 커밋
 
