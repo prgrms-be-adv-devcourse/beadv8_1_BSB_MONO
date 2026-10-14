@@ -58,6 +58,8 @@ public class MemberJoinUseCase {
 			birthDate,
 			gender
 		);
-		return memberRepository.save(newMember);
+		Member savedMember = memberRepository.save(newMember);
+		savedMember.publishJoinedEvent();
+		return savedMember;
 	}
 }
