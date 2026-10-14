@@ -33,11 +33,12 @@ import com.jayway.jsonpath.JsonPath;
 /**
  * 대회 조회 API(⑧-2)를 확인한다.
  * - 대회 상세(GET /api/v1/product/races/{raceId}): 대회·판매자·종목(남은 자리·티셔츠 사이즈) 필드,
- *   작성 중·취소된 대회는 등록한 판매자만 보고 다른 사람에게는 없는 대회(404)로 보이는지, 없는 대회 404, 형식 오류 400
- * - 내 대회(GET /api/v1/product/races/mine): 작성 중을 포함한 최근 등록 순, 종목 정원·결제 대기·판매 수가 자리 확보·판매·복구로
+ *   판매 예정 대회는 등록하자마자 누구나 보고, 취소된 대회는 등록한 판매자만 보고 다른 사람에게는 없는 대회(404)로 보이는지,
+ *   없는 대회 404, 형식 오류 400
+ * - 내 대회(GET /api/v1/product/races/mine): 최근 등록 순, 종목 정원·결제 대기·판매 수가 자리 확보·판매·복구로
  *   바뀌는지, 승인된 판매자가 아니면 403, 헤더 없음 401
  * - 주문용 종목 정보(GET /internal/v1/product/courses/{raceCourseId}): 주문 서비스 RaceCourseInfo 13필드
- *   (applicationOpenAt = 개인 예매 오픈, courseName = "대회명 종목명")와 추가 필드, 작성 중 대회의 종목은 404,
+ *   (applicationOpenAt = 개인 예매 오픈, courseName = "대회명 종목명")와 추가 필드, 판매 예정 대회의 종목도 200,
  *   취소된 대회의 종목은 200(saleStatus CANCELED)
  */
 class ApiV1RaceQueryTest extends ProductIntegrationTest {
@@ -147,8 +148,9 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 		LocalDateTime now = LocalDateTime.now();
 		productSellerRepository.save(new ProductSeller(INDIVIDUAL_SELLER_ID, member, SellerType.INDIVIDUAL, null, null,
 			"이러너", SellerStatus.APPROVED, now, now));
-		RegisteredRace registered = register(INDIVIDUAL_SELLER_MEMBER_ID, race().build());
-		postAs(RACES + registered.raceId() + "/sale", INDIVIDUAL_SELLER_MEMBER_ID).andExpect(status().isOk());
+		RaceBuilder builder = race();
+		RegisteredRace registered = register(INDIVIDUAL_SELLER_MEMBER_ID,
+			builder.individualOpenAt(builder.now().plusDays(1)).build());
 
 		getAs(RACES + registered.raceId(), null)
 			.andExpect(status().isOk())
@@ -182,28 +184,20 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("작성 중 대회는 등록한 판매자(9001)만 200이고 헤더 없음·다른 판매자(9002)·판매자 아닌 회원(9999)은 404, "
-		+ "판매 시작을 눌러 판매 예정이 되면 헤더 없이도 200이다")
-	void draftRaceVisibleOnlyToOwner() throws Exception {
+	@DisplayName("개인 예매가 내일 열리는 대회는 등록하자마자 판매 예정이고, 헤더 없음·등록한 판매자(9001)·다른 판매자(9002)·"
+		+ "판매자 아닌 회원(9999) 모두 200으로 본다")
+	void scheduledRaceVisibleToEveryone() throws Exception {
 		RaceBuilder builder = race();
-		// 개인 예매가 내일 열려, 판매 시작을 누르면 판매 예정이 된다
 		RegisteredRace registered = register(builder.individualOpenAt(builder.now().plusDays(1)).build());
 		String path = RACES + registered.raceId();
 
-		getAs(path, SELLER_MEMBER_ID)
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.raceId").value(registered.raceId()))
-			.andExpect(jsonPath("$.data.saleStatus").value("DRAFT"))
-			.andExpect(jsonPath("$.data.courses[0].raceCourseId").value(registered.courseId()));
-		expectRaceNotFound(getAs(path, null));
-		expectRaceNotFound(getAs(path, OTHER_SELLER_MEMBER_ID));
-		expectRaceNotFound(getAs(path, NOT_SELLER_MEMBER_ID));
-
-		startSale(registered.raceId());
-
-		getAs(path, null)
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.saleStatus").value("SCHEDULED"));
+		for (Integer memberId : new Integer[] {null, SELLER_MEMBER_ID, OTHER_SELLER_MEMBER_ID, NOT_SELLER_MEMBER_ID}) {
+			getAs(path, memberId)
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.raceId").value(registered.raceId()))
+				.andExpect(jsonPath("$.data.saleStatus").value("SCHEDULED"))
+				.andExpect(jsonPath("$.data.courses[0].raceCourseId").value(registered.courseId()));
+		}
 	}
 
 	@Test
@@ -252,9 +246,11 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 	// ---------- 내 대회 ----------
 
 	@Test
-	@DisplayName("내 대회는 작성 중을 포함해 최근 등록 순(세 번째·두 번째·첫 번째)으로 나오고 다른 판매자(9002)의 대회는 빠진다")
+	@DisplayName("내 대회는 판매 예정·판매 중을 가리지 않고 최근 등록 순(세 번째·두 번째·첫 번째)으로 나오고 "
+		+ "다른 판매자(9002)의 대회는 빠진다")
 	void findMineInRecentOrder() throws Exception {
-		RegisteredRace first = register(race().title("첫 번째 대회").build());
+		RaceBuilder firstBuilder = race().title("첫 번째 대회");
+		RegisteredRace first = register(firstBuilder.individualOpenAt(firstBuilder.now().plusDays(1)).build());
 		RegisteredRace second = registerOnSale(race().title("두 번째 대회").build());
 		RaceBuilder builder = race().title("세 번째 대회");
 		LocalDateTime now = builder.now();
@@ -264,7 +260,9 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 			.applicationCloseAt(now.plusDays(18))
 			.course(course().name("하프").type(CourseType.HALF).distanceKm("21.1").price(60_000).quota(0, 70))
 			.build());
-		RegisteredRace others = register(OTHER_SELLER_MEMBER_ID, race().title("다른 판매자 대회").build());
+		RaceBuilder othersBuilder = race().title("다른 판매자 대회");
+		RegisteredRace others = register(OTHER_SELLER_MEMBER_ID,
+			othersBuilder.individualOpenAt(othersBuilder.now().plusDays(1)).build());
 
 		ResultActions result = getAs(MINE, SELLER_MEMBER_ID)
 			.andExpect(status().isOk())
@@ -273,7 +271,7 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 			.andExpect(jsonPath("$.data", hasSize(3)))
 			.andExpect(jsonPath("$.data[*].raceId", contains(third.raceId(), second.raceId(), first.raceId())))
 			.andExpect(jsonPath("$.data[*].title", contains("세 번째 대회", "두 번째 대회", "첫 번째 대회")))
-			.andExpect(jsonPath("$.data[*].saleStatus", contains("DRAFT", "ON_SALE", "DRAFT")))
+			.andExpect(jsonPath("$.data[*].saleStatus", contains("SCHEDULED", "ON_SALE", "SCHEDULED")))
 			.andExpect(jsonPath("$.data[0].courses", hasSize(1)))
 			.andExpect(jsonPath("$.data[0].courses[0].raceCourseId").value(third.courseId()))
 			.andExpect(jsonPath("$.data[0].courses[0].name").value("하프"))
@@ -436,19 +434,14 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("작성 중 대회의 종목 정보는 404이고, 판매 시작을 눌러 판매 예정(개인 예매 내일 오픈)이 되면 200이며 "
+	@DisplayName("판매 예정(개인 예매 내일 오픈) 대회의 종목 정보도 200이며 "
 		+ "courseName은 '2026 서울 하프 마라톤 10K', 키트 없는 종목이라 kitPrice 0·티셔츠 사이즈 없음이다")
-	void findDraftCourseInfo() throws Exception {
+	void findScheduledCourseInfo() throws Exception {
 		RaceBuilder builder = race();
 		LocalDateTime individualOpenAt = builder.now().plusDays(1);
 		RegisteredRace registered = register(builder.individualOpenAt(individualOpenAt).build());
-		String path = COURSES + registered.courseId();
 
-		expectCourseNotFound(getAs(path, null));
-
-		startSale(registered.raceId());
-
-		ResultActions result = getAs(path, null)
+		ResultActions result = getAs(COURSES + registered.courseId(), null)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.raceCourseId").value(registered.courseId()))
 			.andExpect(jsonPath("$.data.saleStatus").value("SCHEDULED"))

@@ -7,10 +7,10 @@ final class RaceApiExamples {
 	static final String REGISTER_SUCCESS = """
 		{
 			"status": 201,
-			"message": "대회가 작성 중으로 저장되었습니다. 판매 시작을 눌러야 2026-10-13 10:00부터 판매됩니다.",
+			"message": "대회를 등록했습니다. 2026-10-13 10:00에 판매가 자동으로 시작됩니다.",
 			"data": {
 				"raceId": 1,
-				"saleStatus": "DRAFT",
+				"saleStatus": "SCHEDULED",
 				"saleOpenAt": "2026-10-13T10:00:00",
 				"courseIds": [1]
 			}
@@ -23,35 +23,9 @@ final class RaceApiExamples {
 			"message": "대회를 수정했습니다.",
 			"data": {
 				"raceId": 1,
-				"saleStatus": "DRAFT",
-				"saleOpenAt": "2026-10-13T10:00:00",
-				"courseIds": [1, 2]
-			}
-		}
-		""";
-
-	static final String SALE_SCHEDULED = """
-		{
-			"status": 200,
-			"message": "2026-10-13 10:00에 판매가 시작됩니다.",
-			"data": {
-				"raceId": 1,
 				"saleStatus": "SCHEDULED",
 				"saleOpenAt": "2026-10-13T10:00:00",
-				"courseIds": [1]
-			}
-		}
-		""";
-
-	static final String SALE_STARTED = """
-		{
-			"status": 200,
-			"message": "판매를 시작했습니다.",
-			"data": {
-				"raceId": 1,
-				"saleStatus": "ON_SALE",
-				"saleOpenAt": "2026-10-13T10:00:00",
-				"courseIds": [1]
+				"courseIds": [1, 2]
 			}
 		}
 		""";
@@ -66,6 +40,14 @@ final class RaceApiExamples {
 
 	static final String INVALID_SCHEDULE = """
 		{ "status": 400, "message": "크루 예매 마감 일시는 시작 일시보다 늦어야 합니다.", "data": null }
+		""";
+
+	static final String SALE_OPEN_PASSED = """
+		{
+			"status": 400,
+			"message": "판매 시작 일시가 이미 지났습니다. 크루 예매 시작·개인 예매 오픈 일시를 지금보다 늦게 작성해주세요.",
+			"data": null
+		}
 		""";
 
 	static final String TSHIRT_SIZE_WITHOUT_KIT = """
@@ -130,10 +112,6 @@ final class RaceApiExamples {
 
 	static final String SCHEDULE_TO_PAST = """
 		{ "status": 409, "message": "개인 예매 오픈 일시를 지난 시각으로 바꿀 수 없습니다.", "data": null }
-		""";
-
-	static final String NOT_DRAFT = """
-		{ "status": 409, "message": "작성 중인 대회만 판매를 시작할 수 있습니다.", "data": null }
 		""";
 
 	static final String COURSE_REMOVED = """

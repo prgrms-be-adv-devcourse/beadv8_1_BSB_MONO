@@ -45,7 +45,6 @@ public class ProductFacade {
 	private final ProductSyncSellerUseCase productSyncSellerUseCase;
 	private final RaceRegisterUseCase raceRegisterUseCase;
 	private final RaceUpdateUseCase raceUpdateUseCase;
-	private final RaceSaleStartUseCase raceSaleStartUseCase;
 	private final RaceSearchUseCase raceSearchUseCase;
 	private final RaceQueryUseCase raceQueryUseCase;
 	private final RaceSaleStatusUseCase raceSaleStatusUseCase;
@@ -66,7 +65,7 @@ public class ProductFacade {
 		return productSyncSellerUseCase.syncSeller(event);
 	}
 
-	// 대회 저장(등록·수정·판매 시작)은 DB에 커밋한 뒤에 검색 색인과 파일 연결 메시지 발행을 한다
+	// 대회 저장(등록·수정)은 DB에 커밋한 뒤에 검색 색인과 파일 연결 메시지 발행을 한다
 	// 롤백된 저장을 색인하거나, 롤백된 대회에 파일을 연결하지 않기 위해서다
 	// NOT_SUPPORTED: 이 메서드는 트랜잭션 없이 실행한다 (클래스에 붙은 readOnly 트랜잭션을 쓰지 않는다)
 	// transactionTemplate.execute(): 넘긴 람다만 새 트랜잭션으로 실행하고, execute()가 값을 돌려주기 전에 커밋한다
@@ -74,7 +73,7 @@ public class ProductFacade {
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public RaceSaveDto registerRace(int memberId, RaceSaveRequestDto request) {
 		RaceSaveResult result = transactionTemplate.execute(status ->
-			raceRegisterUseCase.register(memberId, request));
+			raceRegisterUseCase.register(memberId, request, LocalDateTime.now()));
 		indexRaceCourses(result);
 		publishFileLink(result);
 		return result.dto();
@@ -89,24 +88,13 @@ public class ProductFacade {
 		return result.dto();
 	}
 
-	// 이미지는 바뀌지 않으므로 검색 문서(판매 상태)만 다시 색인한다
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	public RaceSaveDto startRaceSale(int memberId, int raceId) {
-		RaceSaveResult result = transactionTemplate.execute(status ->
-			raceSaleStartUseCase.startSale(memberId, raceId));
-		indexRaceCourses(result);
-		return result.dto();
-	}
-
 	// 판매자가 대회를 취소한다. 커밋한 뒤 검색 문서를 다시 색인하고(공개 목록에서 빠짐), 주문 서비스에 취소를 알린다
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public RaceSaveDto cancelRace(int memberId, int raceId) {
 		RaceCancelResult result = transactionTemplate.execute(status ->
 			raceCancelUseCase.cancel(memberId, raceId, LocalDateTime.now()));
 		indexRaceCourses(result.saved());
-		if (result.cancelEvent() != null) {
-			publish(KafkaTopics.ORDER_RACE_CANCEL, String.valueOf(raceId), result.cancelEvent(), "대회 취소");
-		}
+		publish(KafkaTopics.ORDER_RACE_CANCEL, String.valueOf(raceId), result.cancelEvent(), "대회 취소");
 		return result.saved().dto();
 	}
 

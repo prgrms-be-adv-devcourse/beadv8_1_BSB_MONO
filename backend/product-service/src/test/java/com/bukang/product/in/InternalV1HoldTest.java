@@ -204,7 +204,7 @@ class InternalV1HoldTest extends ProductIntegrationTest {
 	@DisplayName("개인 예매가 하루 뒤 열리는 판매 예정(SCHEDULED) 대회의 종목을 확보하면 409 '접수 기간이 아닙니다.'")
 	void rejectBeforeIndividualOpen() throws Exception {
 		LocalDateTime openAt = LocalDateTime.now().withNano(0).plusDays(1);
-		RegisteredRace registered = registerOnSale(race().individualOpenAt(openAt).build());
+		RegisteredRace registered = register(race().individualOpenAt(openAt).build());
 		assertThat(raceRepository.findById(registered.raceId()).orElseThrow().getSaleStatus())
 			.isEqualTo(RaceSaleStatus.SCHEDULED);
 
@@ -233,19 +233,14 @@ class InternalV1HoldTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("판매를 시작하지 않은(작성 중) 대회의 종목과 없는 종목(999999)은 404 '존재하지 않는 종목입니다.'")
-	void rejectDraftOrUnknownCourse() throws Exception {
-		int draftCourseId = register(race().build()).courseId();
-
-		hold(draftCourseId, PARTICIPATION_ID)
+	@DisplayName("없는 종목(999999)을 확보하면 404 '존재하지 않는 종목입니다.'이고 자리 행을 만들지 않는다")
+	void rejectUnknownCourse() throws Exception {
+		hold(UNKNOWN_COURSE_ID, PARTICIPATION_ID)
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.status").value(404))
 			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."));
-		hold(UNKNOWN_COURSE_ID, OTHER_PARTICIPATION_ID)
-			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."));
 
-		assertNothingHeld(draftCourseId);
+		assertThat(participationHoldRepository.count()).isZero();
 	}
 
 	@Test
