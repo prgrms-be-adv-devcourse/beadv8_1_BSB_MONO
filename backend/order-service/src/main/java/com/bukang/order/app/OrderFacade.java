@@ -18,7 +18,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class OrderFacade {
 	private final OrderCreateUseCase orderCreateUseCase;
-	private final OrderDeadlineExtendUseCase orderDeadlineExtendUseCase;
 	private final OrderQueryUseCase orderQueryUseCase;
 	private final OrderPayUseCase orderPayUseCase;
 	private final OrderCancelUseCase orderCancelUseCase;
@@ -30,10 +29,6 @@ public class OrderFacade {
 	}
 
 	@Transactional
-	public OrderDto extendDeadline(int orderId, int memberId) {
-		return orderDeadlineExtendUseCase.extend(memberId, orderId, LocalDateTime.now());
-	}
-
 	public OrderPageDto findMine(int memberId, LocalDate from, LocalDate to, int page, int size) {
 		return orderQueryUseCase.findMine(memberId, from, to, page, size);
 	}

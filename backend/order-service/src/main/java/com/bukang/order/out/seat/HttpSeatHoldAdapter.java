@@ -19,7 +19,6 @@ import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.race.event.HoldCancelEvent;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
-import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.ParticipationNotPayableException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
 import com.bukang.order.out.InternalHttpClients;
@@ -35,7 +34,7 @@ import lombok.extern.slf4j.Slf4j;
  * POST /internal/v1/product/holds/{participationId}/restore → {restored}
  * 매진·기한 지남은 B가 오류가 아니라 200과 결과로 준다. 세 요청 모두 참가 신청 ID로 멱등이라,
  * 응답을 못 받으면(시간 초과·5xx) 주문을 바꾸지 않고 503으로 끝내 같은 요청을 다시 하게 한다
- * 결제 안 한 자리 해제는 API가 아니라 Kafka(product.hold.cancel)로 알리고(PRO-166), 결제 기한 연장 API는 없다(10/14 연장 없음)
+ * 결제 안 한 자리 해제는 API가 아니라 Kafka(product.hold.cancel)로 알린다(PRO-166)
  * 등록은 ProductClientConfig가 한다 (order.clients.product.mode=http)
  */
 @Slf4j
@@ -46,7 +45,6 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 	static final String RESTORE_PATH = "/internal/v1/product/holds/{participationId}/restore";
 	static final String UNAVAILABLE_MESSAGE = "상품 서비스에 연결하지 못했습니다. 잠시 뒤 다시 시도해주세요.";
 	static final String HOLD_REJECTED_MESSAGE = "자리를 확보할 수 없는 신청입니다.";
-	static final String NOT_EXTENDABLE_MESSAGE = "결제 기한은 늘릴 수 없습니다.";
 	// 자리 해제 메시지를 브로커가 받았는지 기다리는 최대 시간 (만료 처리 한 건이 이보다 오래 붙잡히지 않게)
 	static final Duration RELEASE_TIMEOUT = Duration.ofSeconds(3);
 
@@ -88,12 +86,6 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 			throw new ExternalServiceUnavailableException(UNAVAILABLE_MESSAGE);
 		}
 		return body.held() ? SeatHoldResult.held(body.expiresAt()) : SeatHoldResult.soldOut();
-	}
-
-	// B에 연장 API가 없다 (10/14 김호빈님과 연장 없음으로 정함). 연장 기능을 지우기 전까지 늘릴 수 없다고 답한다
-	@Override
-	public SeatExtendResult extend(int participationId) {
-		throw new OrderNotExtendableException(NOT_EXTENDABLE_MESSAGE);
 	}
 
 	@Override

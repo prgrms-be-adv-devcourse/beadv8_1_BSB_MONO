@@ -14,7 +14,6 @@ import org.hibernate.annotations.BatchSize;
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 import com.bukang.order.domain.event.OrderExpiredEvent;
 import com.bukang.order.domain.exception.OrderItemNotFoundException;
-import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.dto.OrderDto;
 import com.bukang.order.dto.OrderSummaryDto;
@@ -84,10 +83,6 @@ public class Order extends BaseIdAndTime {
 
 	@Column(name = "paid_at")
 	private LocalDateTime paidAt;
-
-	// 결제 기한을 늘린 시각. 늘리기는 주문당 한 번이라 값이 있으면 다시 늘리지 않는다 (정책 4장 결제 2분 연장)
-	@Column(name = "deadline_extended_at")
-	private LocalDateTime deadlineExtendedAt;
 
 	// 키트 배송지 (ERD v5 orders.recipient_name ~ address_detail). 신청서에서 받은 값을 주문할 때 옮긴다. 키트가 없으면 null
 	@Embedded
@@ -191,26 +186,6 @@ public class Order extends BaseIdAndTime {
 	// 개인 예매 주문은 참가 신청 1건짜리다 (결제 1건 = 참가 신청 1건)
 	public int participationId() {
 		return items.getFirst().getParticipationId();
-	}
-
-	// 기한을 늘릴 수 있는지: 결제 대기 중이고, 아직 늘리지 않았고, 기한 전이어야 한다
-	public void checkExtendable(LocalDateTime now) {
-		if (status != OrderStatus.CREATED) {
-			throw new OrderNotExtendableException(
-				"결제 대기 중인 주문만 결제 기한을 늘릴 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
-		}
-		if (deadlineExtendedAt != null) {
-			throw new OrderNotExtendableException("결제 기한은 한 번만 늘릴 수 있습니다.");
-		}
-		if (!now.isBefore(paymentDueAt)) {
-			throw new OrderNotExtendableException("결제 기한이 지났습니다.");
-		}
-	}
-
-	public void extendDeadline(LocalDateTime newPaymentDueAt, LocalDateTime now) {
-		checkExtendable(now);
-		this.paymentDueAt = newPaymentDueAt;
-		this.deadlineExtendedAt = now;
 	}
 
 	public boolean isOwnedBy(int memberId) {

@@ -31,7 +31,6 @@ import org.springframework.web.client.RestClient;
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
-import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.ParticipationNotPayableException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
 
@@ -140,15 +139,6 @@ class HttpSeatHoldAdapterTest {
 		adapter.restore(1001);
 		adapter.restore(1001);
 		assertThatThrownBy(() -> adapter.restore(1001)).isInstanceOf(ExternalServiceUnavailableException.class);
-		server.verify();
-	}
-
-	@Test
-	@DisplayName("연장: 상품에 연장 API가 없어 부르지 않고 늘릴 수 없다고(409) 알린다")
-	void extend() {
-		assertThatThrownBy(() -> adapter.extend(1001))
-			.isInstanceOf(OrderNotExtendableException.class)
-			.hasMessage(HttpSeatHoldAdapter.NOT_EXTENDABLE_MESSAGE);
 		server.verify();
 	}
 
