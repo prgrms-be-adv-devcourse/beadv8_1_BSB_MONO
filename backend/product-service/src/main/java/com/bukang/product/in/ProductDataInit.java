@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 개발용 기본 회원·판매자 복제본
- * 상품 서비스는 회원·판매자를 Kafka 메시지(product.member.joined, product.seller.changed)로 받아 복제본에 저장한다.
+ * 상품 서비스는 회원·판매자를 Kafka 메시지(queuing.member.joined, product.seller.changed)로 받아 복제본에 저장한다.
  * dev DB를 비우면 복제본도 비어 대회를 등록할 수 없으므로(403), 메시지를 받은 것처럼 같은 저장 경로
  * (ProductFacade.syncMember·syncSeller)로 넣는다.
  * 회원 ID는 member-service MemberDataInit의 가입 순서(system 1, holding 2, 관리자 3, 사용자1~3 4~6, 판매자1 7)를 따른다.

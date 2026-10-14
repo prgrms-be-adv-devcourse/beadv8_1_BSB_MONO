@@ -2,19 +2,18 @@ package com.bukang.common.shared.kafka;
 
 /**
  * Kafka 토픽 이름을 모두 이곳에 모은다 (생산자와 소비자가 같은 상수를 쓴다)
- * 토픽 이름 값은 서비스마다 쓰던 그대로 두었다. 형식이 두 가지라 회원 쪽과 맞출 때 하나로 정한다.
- * - queuing.<도메인>.<이벤트>: 한 토픽을 여러 서비스가 groupId를 달리해 구독한다 (회원, 캐시)
- * - <받는 서비스>.<도메인>.<이벤트>: 같은 이벤트도 받는 서비스마다 토픽을 나눈다 (상품)
+ * 같은 이벤트는 토픽 하나로 보내고, 받는 서비스마다 groupId를 달리해 구독한다 (그룹마다 모든 메시지를 받는다).
+ * 회원 토픽은 queuing.<도메인>.<이벤트>(.claude/rules/kafka-topic-convention.md)로 맞췄고, 나머지는 쓰던 이름 그대로다.
+ * 공용 토픽을 @RetryableTopic으로 받는 서비스는 재시도·DLT 토픽 접미사에 서비스 이름을 넣어, 다른 서비스와 겹치지 않게 한다.
  */
 public final class KafkaTopics {
-	// 회원 이벤트 (member-service가 발행하고 다른 서비스가 구독한다)
-	public static final String MEMBER_MEMBER_JOINED = "member.member.joined";
-	public static final String MEMBER_MODIFIED = "member.member.modified";
+	// 회원 이벤트 (member-service가 발행하고 캐시·상품 서비스가 구독한다)
+	public static final String MEMBER_MEMBER_JOINED = "queuing.member.joined";
+	public static final String MEMBER_MODIFIED = "queuing.member.modified";
 
 	// 캐시 회원 복제본을 처음 저장한 뒤 지갑을 만든다 (cash → cash)
 	public static final String CASH_MEMBER_CREATED = "cash.member.created";
-
-	public static final String PRODUCT_MEMBER_JOINED = "product.member.joined";
+	// 판매자 정보가 바뀌었다. 상품 서비스가 판매자 복제본에 저장한다
 	public static final String PRODUCT_SELLER_CHANGED = "product.seller.changed";
 	// 대회·종목을 저장한 뒤 이미지 연결을 요청한다 (product → file)
 	public static final String RACE_FILE_LINK_REQUESTED = "race.filelink.requested";

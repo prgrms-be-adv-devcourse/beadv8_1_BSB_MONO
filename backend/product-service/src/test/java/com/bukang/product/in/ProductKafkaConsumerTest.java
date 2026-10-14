@@ -50,7 +50,7 @@ class ProductKafkaConsumerTest extends ProductIntegrationTest {
 	@Autowired
 	private ProductKafkaConsumer productKafkaConsumer;
 
-	// ---------- 회원 (product.member.joined) ----------
+	// ---------- 회원 (queuing.member.joined) ----------
 
 	@Test
 	@DisplayName("회원 8001 가입 메시지를 처음 받으면 닉네임과 가입·수정 시각(2026-10-01 09:00)을 원본 값 그대로 저장한다")
