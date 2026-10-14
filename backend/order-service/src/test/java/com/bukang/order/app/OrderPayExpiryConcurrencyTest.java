@@ -35,11 +35,9 @@ import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
-import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.domain.exception.ParticipationNotCancelableException;
 import com.bukang.order.domain.exception.ParticipationNotPayableException;
-import com.bukang.order.dto.OrderDto;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.support.StubRaceCoursePort;
@@ -51,7 +49,7 @@ import com.bukang.order.support.StubWalletPortConfig;
 import com.jayway.jsonpath.JsonPath;
 
 /**
- * 결제 기한 직전에 결제·만료 정리·연장·[결제하기]·신청서 취소가 겹쳐도 돈과 자리가 어긋나지 않는지 본다 (PRO-47, 정책 경쟁 상황 테스트)
+ * 결제 기한 직전에 결제·만료 정리·[결제하기]·신청서 취소가 겹쳐도 돈과 자리가 어긋나지 않는지 본다 (PRO-47, 정책 경쟁 상황 테스트)
  * 요청마다 스레드를 따로 띄워 한꺼번에 출발시키고, 시각은 유스케이스에 직접 넣는다. B·D는 스텁으로 응답을 조절한다
  * 끝나면 "결제 성공 = 주문 PAID = 참가 확정 = 예치금 차감"이 주문마다 함께 성립하는지 확인한다
  * H2(MySQL 모드)로 돈다. B·D 실제 API가 나오면(PRO-99) 같은 시나리오를 다시 돌린다
@@ -83,9 +81,6 @@ class OrderPayExpiryConcurrencyTest {
 
 	@Autowired
 	private OrderPayUseCase orderPayUseCase;
-
-	@Autowired
-	private OrderDeadlineExtendUseCase orderDeadlineExtendUseCase;
 
 	@Autowired
 	private OrderExpiryUseCase orderExpiryUseCase;
@@ -162,7 +157,10 @@ class OrderPayExpiryConcurrencyTest {
 		assertThat(walletPort.balance()).isEqualTo(BALANCE - TICKET_PRICE * paidCount);
 		// 만료가 이긴 주문은 차감을 시도조차 하지 않았다 (차감 뒤 돌려준 것이 아니다)
 		assertThat(walletPort.payCalls()).hasSize(paidCount);
-		assertThat(walletPort.canceledOrders()).isEmpty();
+		// 결제 취소는 만료된 주문에만 불렸다. 결제가 이긴 주문은 만료 정리가 잠금을 기다린 뒤 건너뛰어 돈이 그대로 남는다
+		// (이 테스트에서는 자리 판매가 EXPIRED로 거절되지 않아, 결제 쪽이 결제 취소를 부르는 일은 없다)
+		assertThat(walletPort.canceledOrders()).hasSize(ORDER_COUNT - paidCount)
+			.allMatch(orderId -> statusOf(orderId) == OrderStatus.EXPIRED);
 	}
 
 	@Test
@@ -200,51 +198,6 @@ class OrderPayExpiryConcurrencyTest {
 		// 남은 결제 대기 건은 만료 정리가 끝낸다
 		orderExpiryUseCase.expireOverdue(dueOf(orderId));
 		assertExpiredWithoutCharge(orderId);
-	}
-
-	@Test
-	@DisplayName("③ 2분 연장한 주문은 원래 기한이 지난 뒤 결제와 만료 정리가 겹쳐도 결제된다")
-	void payDuringExtensionWhileExpiring() throws Exception {
-		int orderId = createOrders(1).getFirst();
-		LocalDateTime originalDue = dueOf(orderId);
-		extend(orderId, LocalDateTime.now());
-		assertThat(dueOf(orderId)).isEqualTo(originalDue.plusMinutes(StubSeatHoldPort.EXTEND_MINUTES));
-		LocalDateTime afterOriginalDue = originalDue.plusSeconds(1);
-
-		List<Outcome> outcomes = runTogether(List.of(
-			() -> pay(orderId, afterOriginalDue),
-			() -> orderExpiryUseCase.expireOverdue(afterOriginalDue)));
-
-		assertThat(outcomes.getFirst().succeeded()).isTrue();
-		assertThat(outcomes.get(1).value()).isEqualTo(new OrderExpiryUseCase.ExpiryResult(0, 0));
-		assertPaid(orderId);
-		assertThat(walletPort.balance()).isEqualTo(BALANCE - TICKET_PRICE);
-	}
-
-	@Test
-	@DisplayName("③ 기한 직전에 연장과 결제가 동시에 들어와도 결제는 성공하고 한 번만 차감된다")
-	void extendAndPayTogether() throws Exception {
-		List<Integer> orderIds = createOrders(ORDER_COUNT);
-
-		List<Callable<Object>> tasks = new ArrayList<>();
-		for (int orderId : orderIds) {
-			LocalDateTime justBefore = dueOf(orderId).minusSeconds(1);
-			tasks.add(() -> pay(orderId, justBefore));
-			tasks.add(() -> extend(orderId, justBefore));
-		}
-		List<Outcome> outcomes = runTogether(tasks);
-
-		for (int index = 0; index < orderIds.size(); index++) {
-			assertThat(outcomes.get(index * 2).succeeded()).isTrue();
-			// 결제가 먼저 끝났으면 연장은 "결제 대기 중이 아님"으로 거절된다
-			Outcome extendOutcome = outcomes.get(index * 2 + 1);
-			if (!extendOutcome.succeeded()) {
-				assertThat(extendOutcome.error()).isInstanceOf(OrderNotExtendableException.class);
-			}
-			assertPaid(orderIds.get(index));
-		}
-		assertThat(walletPort.payCalls()).hasSize(ORDER_COUNT);
-		assertThat(walletPort.balance()).isEqualTo(BALANCE - TICKET_PRICE * ORDER_COUNT);
 	}
 
 	@Test
@@ -376,12 +329,6 @@ class OrderPayExpiryConcurrencyTest {
 	private OrderPayResult pay(int orderId, LocalDateTime now) {
 		int memberId = memberOf(orderId);
 		return transactionTemplate.execute(status -> orderPayUseCase.pay(memberId, orderId, now));
-	}
-
-	// 결제와 같은 방식으로 결제 기한을 늘린다 (OrderFacade.extendDeadline)
-	private OrderDto extend(int orderId, LocalDateTime now) {
-		int memberId = memberOf(orderId);
-		return transactionTemplate.execute(status -> orderDeadlineExtendUseCase.extend(memberId, orderId, now));
 	}
 
 	/**

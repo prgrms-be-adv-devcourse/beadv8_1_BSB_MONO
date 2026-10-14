@@ -74,6 +74,10 @@ public class RaceRequestValidator {
 		if (course.getMaxAge() != null && course.getMaxAge() < course.getMinAge()) {
 			throw new InvalidRaceException(withCourse("참가 최대 나이는 최소 나이 이상이어야 합니다.", course));
 		}
+		// 키트 금액은 참가비 안에 들어 있는 금액이다
+		if (course.getKitPrice() > course.getPrice()) {
+			throw new InvalidRaceException(withCourse("키트 금액은 참가비보다 클 수 없습니다.", course));
+		}
 		if (!hasCrewSale && course.getCrewQuota() > 0) {
 			throw new InvalidRaceException(withCourse("크루 예매가 없는 대회는 크루 정원을 0으로 작성해주세요.", course));
 		}

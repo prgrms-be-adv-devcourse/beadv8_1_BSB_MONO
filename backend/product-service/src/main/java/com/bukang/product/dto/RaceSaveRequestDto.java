@@ -14,7 +14,7 @@ import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-// 판매 시작 일시(saleOpenAt)는 받지 않는다. 크루 예매 시작·개인 예매 오픈 중 이른 시각으로 서버가 채운다
+// 판매 시작일(saleOpenDate)은 받지 않는다. 크루 예매 시작·개인 예매 오픈 중 이른 날짜로 서버가 채운다
 @Schema(description = "대회 등록·수정 요청 (수정할 때도 대회 전체를 보낸다)")
 @AllArgsConstructor
 @Getter
@@ -46,14 +46,15 @@ public class RaceSaveRequestDto {
 	@NotNull(message = "대회 일시를 작성해주세요.")
 	private final LocalDateTime raceDate;
 
-	@Schema(description = "크루 예매 시작 일시 (비우면 크루 모집 없이 개인 예매만)", example = "2026-10-13T10:00:00")
+	@Schema(description = "크루 예매 시작 일시 (비우면 크루 모집 없이 개인 예매만). 이 날짜가 판매 시작일이 되며, 오늘로부터 이틀 뒤부터",
+		example = "2026-10-13T10:00:00")
 	private final LocalDateTime crewSaleStartAt;
 
 	@Schema(description = "크루 예매 마감 일시 (크루 예매 시작보다 늦게)", example = "2026-10-14T10:00:00")
 	private final LocalDateTime crewSaleEndAt;
 
-	@Schema(description = "개인 예매 오픈 일시 (크루 예매가 있으면 크루 마감일 다음 날 06:00 이후)",
-		example = "2026-10-15T10:00:00")
+	@Schema(description = "개인 예매 오픈 일시 (크루 예매가 있으면 크루 마감일 다음 날 06:00 이후). "
+		+ "크루 예매가 없으면 이 날짜가 판매 시작일이 되며, 오늘로부터 이틀 뒤부터", example = "2026-10-15T10:00:00")
 	@NotNull(message = "개인 예매 오픈 일시를 작성해주세요.")
 	private final LocalDateTime individualOpenAt;
 

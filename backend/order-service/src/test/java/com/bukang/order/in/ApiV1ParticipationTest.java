@@ -212,6 +212,16 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
+	@DisplayName("판매자가 취소한 대회는 접수 기간 안이어도 409 \"취소된 대회입니다.\"로 신청을 막는다")
+	void applyCanceledRace() throws Exception {
+		raceCoursePort.put(StubRaceCoursePort.canceled(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null)));
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("취소된 대회입니다."));
+	}
+
+	@Test
 	@DisplayName("접수 기간이 아니면 409, 없는 종목이면 404다")
 	void applyNotAccepting() throws Exception {
 		raceCoursePort.put(StubRaceCoursePort.closedCourse(COURSE_ID, RACE_ID));

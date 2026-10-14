@@ -1,41 +1,139 @@
-import { defineConfig } from 'orval'
+import { readFileSync } from 'node:fs'
+import { defineConfig, type Options } from 'orval'
+
+/** 서비스 이름 → 로컬 포트. api:pull(scripts/pull-openapi.mjs)도 같은 파일을 읽는다. */
+const SERVICES: Record<string, number> = JSON.parse(readFileSync('./openapi/services.json', 'utf8'))
+
+type Service = string
 
 /**
- * 백엔드(springdoc) OpenAPI 명세로 API 코드를 생성한다. 아직 명세가 없어서 실행하지 않는다.
+ * 백엔드 서비스별 OpenAPI 명세로 API 코드를 만든다.
  *
- *   OPENAPI_URL=http://localhost:8080/v3/api-docs pnpm api:generate
+ *   pnpm api:generate   # openapi/<서비스>.json → src/shared/api/generated/<서비스>/
+ *   pnpm api:pull       # 로컬에서 띄운 서비스의 /v3/api-docs로 openapi/<서비스>.json을 새로 받는다
  *
- * 결과는 src/shared/api/generated/ 에 태그별로 나뉜다.
- * - <tag>.ts       : 요청 함수 + TanStack Query 훅
- * - <tag>.msw.ts   : MSW 핸들러 (src/shared/mocks/handlers.ts에 등록)
- * - <tag>.zod.ts   : 폼 검증에 쓸 zod 스키마
+ * 명세는 openapi/ 에 파일로 둔다. 백엔드를 띄우지 않아도 생성할 수 있고, 명세가 바뀐 것을 PR diff로 볼 수 있다.
+ *
+ * 결과 (서비스마다 한 폴더)
+ * - <서비스>.ts         : 요청 함수 + TanStack Query 훅 (customFetch를 지나며 RsData의 data만 돌려준다)
+ * - <서비스>.schemas.ts : 요청·응답 타입
+ * - <서비스>.msw.ts     : MSW 핸들러 (src/shared/mocks/handlers.ts에 등록). 명세의 응답 예시를 그대로 돌려준다
+ * - <서비스>.zod.ts     : 폼 검증에 쓸 zod 스키마
  */
-const input = process.env.OPENAPI_URL ?? 'http://localhost:8080/v3/api-docs'
 
-export default defineConfig({
-  api: {
-    input,
+interface Operation {
+  operationId?: string
+  parameters?: { in?: string; name?: string }[]
+  responses?: Record<string, { content?: Record<string, { schema?: unknown }> }>
+}
+
+interface Spec {
+  paths?: Record<string, Partial<Record<string, Operation>>>
+  components?: { schemas?: Record<string, unknown> }
+}
+
+/**
+ * 성공 응답에 스키마가 없는 API를 보충한다 (openapi/supplements/<서비스>.json).
+ *
+ * 백엔드가 성공 응답을 @ApiResponse(content = @Content(examples = ...))로만 적으면 springdoc이
+ * 반환 타입(RsData<XxxDto>) 스키마를 넣지 않는다. 백엔드에서 useReturnTypeSchema = true를 붙이면
+ * springdoc이 같은 이름(RsDataXxxDto)의 스키마를 만들므로, 그때 보충 파일에서 그 API를 지운다.
+ */
+interface Supplement {
+  responses: Record<string, Record<string, { wrapper: string; data: unknown }>>
+  schemas: Record<string, unknown>
+}
+
+function readSupplement(service: Service): Supplement | undefined {
+  try {
+    return JSON.parse(readFileSync(`./openapi/supplements/${service}.json`, 'utf8')) as Supplement
+  } catch {
+    return undefined
+  }
+}
+
+/** 게이트웨이가 토큰을 보고 넣어 주는 헤더. 프론트가 보내지 않으므로 요청 함수 인자에서 뺀다. */
+const GATEWAY_HEADERS = new Set(['x-member-id'])
+
+const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete']
+
+function transform(service: Service, spec: Spec): Spec {
+  const supplement = readSupplement(service)
+  const schemas = { ...spec.components?.schemas, ...supplement?.schemas }
+  spec.components = { ...spec.components, schemas }
+
+  for (const pathItem of Object.values(spec.paths ?? {})) {
+    for (const method of HTTP_METHODS) {
+      const operation = pathItem[method]
+      if (!operation) continue
+
+      operation.parameters = operation.parameters?.filter(
+        (p) => !(p.in === 'header' && GATEWAY_HEADERS.has(p.name?.toLowerCase() ?? '')),
+      )
+
+      const patches = supplement?.responses[operation.operationId ?? ''] ?? {}
+      for (const [code, { wrapper, data }] of Object.entries(patches)) {
+        schemas[wrapper] = {
+          type: 'object',
+          properties: {
+            status: { type: 'integer', format: 'int32' },
+            message: { type: 'string' },
+            data,
+          },
+        }
+        const content = operation.responses?.[code]?.content?.['application/json']
+        if (content) content.schema = { $ref: `#/components/schemas/${wrapper}` }
+      }
+    }
+  }
+  return spec
+}
+
+function serviceConfig(service: Service): Options {
+  return {
+    input: {
+      target: `./openapi/${service}.json`,
+      override: {
+        transformer: (spec) => transform(service, spec as Spec) as typeof spec,
+      },
+    },
     output: {
-      mode: 'tags-split',
-      target: 'src/shared/api/generated',
-      schemas: 'src/shared/api/generated/model',
+      mode: 'split',
+      target: `src/shared/api/generated/${service}/${service}.ts`,
       client: 'react-query',
       httpClient: 'fetch',
-      mock: true,
-      clean: true,
+      mock: { generators: [{ type: 'msw', useExamples: true, delay: false }] },
       override: {
         mutator: { path: 'src/shared/api/fetcher.ts', name: 'customFetch' },
         fetch: { includeHttpResponseReturnType: false },
       },
     },
-  },
-  apiZod: {
-    input,
-    output: {
-      mode: 'tags-split',
-      target: 'src/shared/api/generated',
-      client: 'zod',
-      fileExtension: '.zod.ts',
+  }
+}
+
+function zodConfig(service: Service): Options {
+  return {
+    input: {
+      target: `./openapi/${service}.json`,
+      override: {
+        transformer: (spec) => transform(service, spec as Spec) as typeof spec,
+      },
     },
-  },
-})
+    output: {
+      mode: 'single',
+      target: `src/shared/api/generated/${service}/${service}.zod.ts`,
+      client: 'zod',
+    },
+  }
+}
+
+const services = Object.keys(SERVICES)
+
+export default defineConfig(
+  Object.fromEntries(
+    services.flatMap((service) => [
+      [service, serviceConfig(service)],
+      [`${service}Zod`, zodConfig(service)],
+    ]),
+  ),
+)

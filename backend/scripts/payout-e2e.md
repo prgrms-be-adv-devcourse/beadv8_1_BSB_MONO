@@ -54,7 +54,7 @@ node scripts/payout-e2e.mjs         # backend/에서 실행. Node 18 이상 (fet
 | 4 | 판매자 정산 내역 | 정산 `GET /api/v1/payout/seller/payouts` (`X-Member-Id: 1`) | A: 매출 120,000 / 수수료 6,600 / 지급액 113,400, C: 60,000 / 3,300 / 56,700. 둘 다 CALCULATED, B는 없음 |
 | 4-1 | 정산 항목 | `GET /seller/payout-items` | 참가권 1장 = 1행. 정산 대상일은 A 오늘, C 대회 다음 날. 결제 전 · 취소분은 없음 |
 | 5 | 환불 막기 | 정산 `GET /internal/v1/payout/refund-eligibility`, 주문 취소 | 오늘 대회는 true, 어제 대회는 false. 정산된 참가권 취소는 409 |
-| 6 | 지급보류 · 해제 | 정산 `POST /payouts/{id}/holds`, `/holds/{id}/release` (`X-Member-Id: 3`) | 보류 201, 다시 보류 409, 상태 HELD → 해제 200, CALCULATED |
+| 6 | 지급보류 · 해제 | 정산 `POST /payouts/{id}/holds`, `/holds/{id}/release` (`X-Member-Id: 3`) | 보류 201, 다시 보류 409, 상태 HELD → 해제 200, CALCULATED. 해제 뒤 지급 예정일 = 원래 지급 예정일과 해제일 뒤 첫 지급일 중 늦은 날 (PRO-128) |
 | 7 | 지급 배치 | 정산 `POST /api/v1/payout/dev/batches/pay?today=` | 지급 예정일 전날은 그대로, 당일에 PAID |
 
 수수료는 참가권마다 5.5%를 원 단위 내림으로 계산해 더한다 (`PayoutItem`).
@@ -62,6 +62,8 @@ node scripts/payout-e2e.mjs         # backend/에서 실행. Node 18 이상 (fet
 ## 실행 결과 (2026-10-13)
 
 `34 passed, 0 failed`. 출력 요약. 대회 ID는 실행마다 바뀐다.
+PRO-128 수정 **전** 실행이다. 해제 뒤 지급일이 `NOTE`였고, C가 10/20으로 앞당겨졌다 (아래 "고친 문제").
+수정 뒤에는 해제 뒤 지급일이 검사(`PASS`/`FAIL`)로 바뀌어 검사가 1개 늘고, C는 원래 지급 예정일 11/20을 유지해 A와 함께 지급된다.
 
 ```
 조회 범위 2026-10-06 ~ 2026-10-12, 생성 2, 실패 0 (건너뜀은 dev DB의 기존 묶음)
@@ -81,9 +83,9 @@ C 보류 → 해제(10/13): 지급 예정일 11/20 → 10/20
   (`FakeRefundEligibilityAdapter`)은 아직 가짜 어댑터다. 계좌 미등록 자동 보류는 이 시나리오로 확인하지 못한다.
 - 게이트웨이(8000)를 거치지 않고 서비스 포트로 직접 부른다. PRO-20 전에는 게이트웨이가 `X-Member-Id`를 지워 401이 된다.
 
-## 알려진 문제
+## 고친 문제
 
-- **보류를 풀면 지급일이 원래보다 앞당겨질 수 있다** ([PRO-128](https://linear.app/programmers-05/issue/PRO-128)).
-  해제는 지급일을 "해제일 뒤 첫 지급일"로 다시 정하고 원래 지급 예정일과 비교하지 않는다 (`Payout.release`).
+- **보류를 풀면 지급일이 원래보다 앞당겨질 수 있었다** ([PRO-128](https://linear.app/programmers-05/issue/PRO-128), 2026-10-14 수정).
+  해제가 지급일을 "해제일 뒤 첫 지급일"로 다시 정하면서 원래 지급 예정일과 비교하지 않았다 (`Payout.release`).
   위 실행에서 같은 날 정산된 A · C 중 보류됐다 풀린 C가 보류되지 않은 A보다 한 달 먼저(10/20) 지급됐다.
-  PRO-128에서 "원래 지급 예정일과 해제일 뒤 첫 지급일 중 늦은 날"로 고치기로 했고, 그때 스크립트의 `NOTE`를 검사로 바꾼다.
+  지금은 "원래 지급 예정일과 해제일 뒤 첫 지급일 중 늦은 날"로 정하고, 스크립트가 이를 검사한다.
