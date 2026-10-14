@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import com.bukang.cash.config.CashWalletProperties;
 import com.bukang.cash.app.CashSupport.LockedWallets;
 import com.bukang.cash.domain.exception.PaymentAlreadyFinalizedException;
-import com.bukang.cash.domain.exception.WalletNotFoundException;
+import com.bukang.cash.domain.exception.PaymentMemberMismatchException;
 import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.payment.PaymentFailReason;
 import com.bukang.cash.domain.payment.PaymentStatus;
@@ -37,7 +37,12 @@ public class CashCompleteOrderPaymentUseCase {
 			? existingPayment.get()
 			: paymentRepository.save(new Payment(orderId, customerWallet, salePrice));
 
-		//2.orderId 존재할떄 상태 검증
+		//2.결제 행의 실제 주인(지갑)과 요청받은 회원이 다르면 거절한다 (다른 회원 지갑으로 결제·취소·환불되는 것을 막음)
+		if (payment.getWallet().getId() != customerWallet.getId()) {
+			throw new PaymentMemberMismatchException("결제한 회원과 요청한 회원이 다릅니다.");
+		}
+
+		//3.orderId 존재할떄 상태 검증
 		//Complete : 이미 끝
 		//이미 CANCELED(주문 후 실패 해서 결제 취소) / REFUNDED(환불에서): 이미 처리됨 → 그대로 끝 (멱등)
 		//Failed이거나 방금 생성된 주문이면 여기까지 내려옴
@@ -48,20 +53,20 @@ public class CashCompleteOrderPaymentUseCase {
 			throw new PaymentAlreadyFinalizedException("이미 취소·환불된 결제입니다.");
 		}
 
-		//3.잔액 확인
+		//4.잔액 확인
 		//예치금 부족 시 충전 요청 (지금 결제 상태 FAILED로 바꾸고 부족 금액 반환/ 커밋, 충전은 프론트가 따로 요청)
 		if (customerWallet.getBalance() < salePrice) {
 			payment.markFailed(PaymentFailReason.INSUFFICIENT_BALANCE);
 			return CashPaymentDto.insufficient(salePrice - customerWallet.getBalance());
 		}
 
-		//4.예치금 차감, 장부 2줄 작성
+		//5.예치금 차감, 장부 2줄 작성
 		walletLedgerRepository.save(
 			customerWallet.debit(salePrice, LedgerType.사용__주문결제, LedgerRefType.Order, orderId));
 		walletLedgerRepository.save(
 			holdingWallet.credit(salePrice, LedgerType.임시보관__주문결제, LedgerRefType.Order, orderId));
 
-		//5.결제 상태 Complete
+		//6.결제 상태 Complete
 		payment.markCompleted(LocalDateTime.now());
 		return CashPaymentDto.paid();
 	}
