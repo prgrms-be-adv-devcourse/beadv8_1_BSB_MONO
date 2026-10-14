@@ -90,7 +90,7 @@
     <ul class="hint">
       <li>회원 메시지(queuing.member.joined)를 먼저 보냅니다. 캐시 서비스도 받는 공용 토픽이라, 캐시 서비스가 떠 있으면 캐시 회원도 함께 만들어집니다. 회원 복제본(PRODUCT_MEMBER)이 없으면 판매자 메시지는 다시 시도 없이 건너뜁니다(product-service 에러 로그에만 남음).</li>
       <li>그다음 판매자 메시지(queuing.seller.changed, status APPROVED)를 보냅니다.</li>
-      <li>같은 메시지를 다시 보내도 결과가 같습니다(원본 값으로 덮어씀). 깨진 JSON이나 모르는 enum 값은 다시 시도 없이 &lt;토픽&gt;.product.dlt로 갑니다.</li>
+      <li>같은 메시지를 다시 보내도 결과가 같습니다(원본 값으로 덮어씀). 회원 메시지는 저장된 수정 시각(modifyDate)보다 이르면 건너뜁니다. 깨진 JSON이나 모르는 enum 값은 다시 시도 없이 &lt;토픽&gt;.product.dlt로 갑니다.</li>
       <li>날짜는 LocalDateTime 형식(yyyy-MM-ddTHH:mm:ss, 시간대 없음)입니다. 아래 값은 이 페이지를 연 시각입니다.</li>
     </ul>
     <div class="columns">

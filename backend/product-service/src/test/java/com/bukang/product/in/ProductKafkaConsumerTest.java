@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
+import com.bukang.common.shared.member.event.MemberModifiedEvent;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
@@ -24,7 +25,7 @@ import com.bukang.product.support.ProductIntegrationTest;
 /**
  * 회원·판매자 메시지를 받아 복제본(ProductMember, ProductSeller)에 저장하는지 확인한다.
  * 테스트 프로파일은 Kafka 리스너가 꺼져 있으므로, 브로커 없이 리스너 메서드에 JSON 문자열을 직접 넘긴다.
- * 처음 저장, 같은 메시지 두 번(멱등), 늦게 온 옛 메시지(마지막에 받은 값으로 덮어씀),
+ * 처음 저장, 같은 메시지 두 번(멱등), 회원 변경, 늦게 온 옛 회원 메시지(건너뜀)·옛 판매자 메시지(마지막에 받은 값으로 덮어씀),
  * 회원 복제본 없이 온 판매자 메시지(건너뜀), 깨진 JSON·모르는 Enum 값(IllegalArgumentException)을 본다.
  * 기본으로 준비된 회원 9001·9002, 판매자 7001·7002와 겹치지 않게 회원 8001·8002, 판매자 8101·8102를 쓴다.
  */
@@ -36,10 +37,14 @@ class ProductKafkaConsumerTest extends ProductIntegrationTest {
 	private static final int SECOND_SELLER_ID = 8102;
 
 	private static final LocalDateTime JOINED_AT = LocalDateTime.of(2026, 10, 1, 9, 0);
+	private static final LocalDateTime RENAMED_AT = LocalDateTime.of(2026, 10, 5, 9, 0);
+	private static final LocalDateTime RENAMED_AGAIN_AT = LocalDateTime.of(2026, 10, 7, 9, 0);
 	private static final LocalDateTime REQUESTED_AT = LocalDateTime.of(2026, 10, 2, 10, 0);
 	private static final LocalDateTime REVIEWED_AT = LocalDateTime.of(2026, 10, 3, 15, 30);
 
 	private static final String NICKNAME = "새러너";
+	private static final String RENAMED_NICKNAME = "바뀐러너";
+	private static final String RENAMED_AGAIN_NICKNAME = "또바뀐러너";
 	private static final String BUSINESS_NAME = "(주)새달리기";
 	private static final String BUSINESS_NUMBER = "234-56-78901";
 	private static final String REPRESENTATIVE_NAME = "박대표";
@@ -50,7 +55,7 @@ class ProductKafkaConsumerTest extends ProductIntegrationTest {
 	@Autowired
 	private ProductKafkaConsumer productKafkaConsumer;
 
-	// ---------- 회원 (queuing.member.joined) ----------
+	// ---------- 회원 (queuing.member.joined, queuing.member.modified) ----------
 
 	@Test
 	@DisplayName("회원 8001 가입 메시지를 처음 받으면 닉네임과 가입·수정 시각(2026-10-01 09:00)을 원본 값 그대로 저장한다")
@@ -84,16 +89,56 @@ class ProductKafkaConsumerTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("수정 시각 10/05 메시지 뒤에 10/01 옛 메시지가 늦게 오면 마지막에 받은 옛 닉네임과 수정 시각으로 덮어쓴다")
-	void lateOlderMemberMessageOverwrites() {
-		LocalDateTime renamedAt = JOINED_AT.plusDays(4);
-		productKafkaConsumer.handleMemberJoined(memberJoined(NEW_MEMBER_ID, renamedAt, "바뀐러너"));
+	@DisplayName("회원 8001 가입 뒤 변경 메시지(수정 시각 10/05)를 받으면 닉네임과 수정 시각을 바꾸고 가입 시각은 그대로 둔다")
+	void memberModifiedOverwritesNickname() {
+		joinMember(NEW_MEMBER_ID);
+
+		productKafkaConsumer.handleMemberModified(memberModified(NEW_MEMBER_ID, RENAMED_AT, RENAMED_NICKNAME));
+
+		ProductMember member = findMember(NEW_MEMBER_ID);
+		assertThat(member.getNickname()).isEqualTo(RENAMED_NICKNAME);
+		assertThat(member.getModifyDate()).isEqualTo(RENAMED_AT);
+		assertThat(member.getCreateDate()).isEqualTo(JOINED_AT);
+	}
+
+	@Test
+	@DisplayName("변경 메시지(10/05)가 가입 메시지(10/01)보다 먼저 처리되면 늦게 온 가입 메시지는 건너뛰어 바뀐 닉네임이 남는다")
+	void lateJoinedMessageAfterModifiedIsSkipped() {
+		productKafkaConsumer.handleMemberModified(memberModified(NEW_MEMBER_ID, RENAMED_AT, RENAMED_NICKNAME));
 
 		productKafkaConsumer.handleMemberJoined(memberJoined(NEW_MEMBER_ID, JOINED_AT, NICKNAME));
 
 		ProductMember member = findMember(NEW_MEMBER_ID);
-		assertThat(member.getNickname()).isEqualTo(NICKNAME);
-		assertThat(member.getModifyDate()).isEqualTo(JOINED_AT);
+		assertThat(member.getNickname()).isEqualTo(RENAMED_NICKNAME);
+		assertThat(member.getModifyDate()).isEqualTo(RENAMED_AT);
+	}
+
+	@Test
+	@DisplayName("변경 메시지(10/05)를 받은 뒤 다음 변경 메시지(10/07)가 오면 그대로 반영한다")
+	void laterMemberModifiedIsApplied() {
+		joinMember(NEW_MEMBER_ID);
+		productKafkaConsumer.handleMemberModified(memberModified(NEW_MEMBER_ID, RENAMED_AT, RENAMED_NICKNAME));
+
+		productKafkaConsumer.handleMemberModified(
+			memberModified(NEW_MEMBER_ID, RENAMED_AGAIN_AT, RENAMED_AGAIN_NICKNAME));
+
+		ProductMember member = findMember(NEW_MEMBER_ID);
+		assertThat(member.getNickname()).isEqualTo(RENAMED_AGAIN_NICKNAME);
+		assertThat(member.getModifyDate()).isEqualTo(RENAMED_AGAIN_AT);
+	}
+
+	@Test
+	@DisplayName("변경 메시지 두 개가 10/07 → 10/05 순서로 바뀌어 오면 늦게 온 10/05 메시지는 건너뛰어 10/07 닉네임이 남는다")
+	void lateOlderMemberModifiedIsSkipped() {
+		joinMember(NEW_MEMBER_ID);
+		productKafkaConsumer.handleMemberModified(
+			memberModified(NEW_MEMBER_ID, RENAMED_AGAIN_AT, RENAMED_AGAIN_NICKNAME));
+
+		productKafkaConsumer.handleMemberModified(memberModified(NEW_MEMBER_ID, RENAMED_AT, RENAMED_NICKNAME));
+
+		ProductMember member = findMember(NEW_MEMBER_ID);
+		assertThat(member.getNickname()).isEqualTo(RENAMED_AGAIN_NICKNAME);
+		assertThat(member.getModifyDate()).isEqualTo(RENAMED_AGAIN_AT);
 	}
 
 	@Test
@@ -249,6 +294,10 @@ class ProductKafkaConsumerTest extends ProductIntegrationTest {
 
 	private String memberJoined(int memberId, LocalDateTime modifyDate, String nickname) {
 		return jsonConverter.toJson(new MemberJoinedEvent(memberId, JOINED_AT, modifyDate, nickname));
+	}
+
+	private String memberModified(int memberId, LocalDateTime modifyDate, String nickname) {
+		return jsonConverter.toJson(new MemberModifiedEvent(memberId, JOINED_AT, modifyDate, nickname));
 	}
 
 	// 등록 신청 메시지: 심사 전이라 심사 일시가 없다
