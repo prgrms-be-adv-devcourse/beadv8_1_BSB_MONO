@@ -9,7 +9,6 @@ import { Button, DataTable, Dialog, FOCUS_RING, Select, StatTile } from '@/share
 type Settlement = {
   id: string
   seller: string
-  kind: string
   amount: string
   hold: string
   status: string
@@ -22,7 +21,6 @@ const SETTLEMENTS: Settlement[] = [
   {
     id: 'ST-20261120-0A3F',
     seller: '데브시스터즈러닝',
-    kind: '1차 정산',
     amount: '₩1,920,000',
     hold: '—',
     status: '지급 예정',
@@ -31,7 +29,6 @@ const SETTLEMENTS: Settlement[] = [
   {
     id: 'ST-20261120-1C07',
     seller: '춘천러닝클럽',
-    kind: '1차 정산',
     amount: '₩860,000',
     hold: 'HD-20261027-01A2 · 정산 계좌 미등록',
     status: '지급보류',
@@ -40,7 +37,6 @@ const SETTLEMENTS: Settlement[] = [
   {
     id: 'ST-20261120-2D91',
     seller: '나이트런컴퍼니',
-    kind: '최종 정산',
     amount: '₩2,616,000',
     hold: '—',
     status: '지급 예정',
@@ -84,7 +80,6 @@ export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: bo
           columns={[
             { key: 'id', header: '정산 ID', width: 'w-40', render: (r) => r.id },
             { key: 'seller', header: '판매자', width: 'w-36.5', render: (r) => r.seller },
-            { key: 'kind', header: '구분', width: 'w-22.5', render: (r) => r.kind },
             {
               key: 'amount',
               header: '지급액',

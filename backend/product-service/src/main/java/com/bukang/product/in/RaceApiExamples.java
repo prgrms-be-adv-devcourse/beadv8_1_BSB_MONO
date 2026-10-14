@@ -7,11 +7,11 @@ final class RaceApiExamples {
 	static final String REGISTER_SUCCESS = """
 		{
 			"status": 201,
-			"message": "대회가 작성 중으로 저장되었습니다. 판매 시작을 눌러야 2026-10-13 10:00부터 판매됩니다.",
+			"message": "대회를 등록했습니다. 10월 20일 0시부터 판매 중으로 표시되고, 개인 예매는 10월 20일 09:00에 열립니다.",
 			"data": {
 				"raceId": 1,
-				"saleStatus": "DRAFT",
-				"saleOpenAt": "2026-10-13T10:00:00",
+				"saleStatus": "SCHEDULED",
+				"saleOpenDate": "2026-10-20",
 				"courseIds": [1]
 			}
 		}
@@ -23,35 +23,9 @@ final class RaceApiExamples {
 			"message": "대회를 수정했습니다.",
 			"data": {
 				"raceId": 1,
-				"saleStatus": "DRAFT",
-				"saleOpenAt": "2026-10-13T10:00:00",
-				"courseIds": [1, 2]
-			}
-		}
-		""";
-
-	static final String SALE_SCHEDULED = """
-		{
-			"status": 200,
-			"message": "2026-10-13 10:00에 판매가 시작됩니다.",
-			"data": {
-				"raceId": 1,
 				"saleStatus": "SCHEDULED",
-				"saleOpenAt": "2026-10-13T10:00:00",
-				"courseIds": [1]
-			}
-		}
-		""";
-
-	static final String SALE_STARTED = """
-		{
-			"status": 200,
-			"message": "판매를 시작했습니다.",
-			"data": {
-				"raceId": 1,
-				"saleStatus": "ON_SALE",
-				"saleOpenAt": "2026-10-13T10:00:00",
-				"courseIds": [1]
+				"saleOpenDate": "2026-10-20",
+				"courseIds": [1, 2]
 			}
 		}
 		""";
@@ -68,8 +42,20 @@ final class RaceApiExamples {
 		{ "status": 400, "message": "크루 예매 마감 일시는 시작 일시보다 늦어야 합니다.", "data": null }
 		""";
 
+	static final String SALE_OPEN_TOO_SOON = """
+		{
+			"status": 400,
+			"message": "판매 시작일은 오늘로부터 이틀 뒤(10월 16일)부터 정할 수 있습니다. 크루 예매 시작·개인 예매 오픈 일시를 확인해주세요.",
+			"data": null
+		}
+		""";
+
 	static final String TSHIRT_SIZE_WITHOUT_KIT = """
 		{ "status": 400, "message": "키트가 없는 종목은 티셔츠 사이즈를 작성할 수 없습니다. (종목: 10K)", "data": null }
+		""";
+
+	static final String KIT_PRICE_OVER_PRICE = """
+		{ "status": 400, "message": "키트 금액은 참가비보다 클 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
 	static final String THUMBNAIL_REQUIRED = """
@@ -104,8 +90,12 @@ final class RaceApiExamples {
 		{ "status": 404, "message": "존재하지 않는 대회입니다.", "data": null }
 		""";
 
-	static final String PRICE_RAISED = """
-		{ "status": 409, "message": "판매가 시작된 종목은 참가비를 올릴 수 없습니다. (종목: 10K)", "data": null }
+	static final String PRICE_CHANGED = """
+		{ "status": 409, "message": "판매가 시작된 종목은 참가비를 바꿀 수 없습니다. (종목: 10K)", "data": null }
+		""";
+
+	static final String KIT_PRICE_CHANGED = """
+		{ "status": 409, "message": "판매가 시작된 종목은 키트 금액을 바꿀 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
 	static final String REFUND_DEADLINE_ADVANCED = """
@@ -132,16 +122,20 @@ final class RaceApiExamples {
 		{ "status": 409, "message": "개인 예매 오픈 일시를 지난 시각으로 바꿀 수 없습니다.", "data": null }
 		""";
 
-	static final String NOT_DRAFT = """
-		{ "status": 409, "message": "작성 중인 대회만 판매를 시작할 수 있습니다.", "data": null }
-		""";
-
 	static final String COURSE_REMOVED = """
 		{ "status": 409, "message": "판매가 시작된 대회는 종목을 뺄 수 없습니다. (종목: 10K)", "data": null }
 		""";
 
 	static final String UPDATE_CANCELED = """
 		{ "status": 409, "message": "취소된 대회는 수정할 수 없습니다.", "data": null }
+		""";
+
+	static final String UPDATE_CLOSED = """
+		{ "status": 409, "message": "판매가 끝난 대회는 수정할 수 없습니다.", "data": null }
+		""";
+
+	static final String SALE_OPEN_SCHEDULE_CHANGED = """
+		{ "status": 409, "message": "판매가 시작된 대회는 개인 예매 오픈 일시를 바꿀 수 없습니다.", "data": null }
 		""";
 
 	static final String CANCEL_SUCCESS = """
@@ -151,7 +145,7 @@ final class RaceApiExamples {
 			"data": {
 				"raceId": 1,
 				"saleStatus": "CANCELED",
-				"saleOpenAt": "2026-10-13T10:00:00",
+				"saleOpenDate": "2026-10-20",
 				"courseIds": [1]
 			}
 		}
@@ -183,7 +177,10 @@ final class RaceApiExamples {
 						"regionSigungu": "성동구",
 						"raceDate": "2026-11-01T08:00:00",
 						"saleStatus": "ON_SALE",
-						"saleOpenAt": "2026-10-13T10:00:00",
+						"saleOpenDate": "2026-10-20",
+						"crewSaleStartAt": null,
+						"crewSaleEndAt": null,
+						"individualOpenAt": "2026-10-20T09:00:00",
 						"applicationCloseAt": "2026-10-31T18:00:00",
 						"minPrice": 45000,
 						"courses": [
@@ -232,7 +229,7 @@ final class RaceApiExamples {
 					"title": "2026 용감한 쿠키RUN in 서울",
 					"raceDate": "2026-11-01T08:00:00",
 					"saleStatus": "ON_SALE",
-					"saleOpenAt": "2026-10-13T10:00:00",
+					"saleOpenDate": "2026-10-20",
 					"applicationCloseAt": "2026-10-31T18:00:00",
 					"courses": [
 						{
@@ -263,10 +260,10 @@ final class RaceApiExamples {
 				"regionSigungu": "성동구",
 				"raceDate": "2026-11-01T08:00:00",
 				"saleStatus": "ON_SALE",
-				"saleOpenAt": "2026-10-13T10:00:00",
+				"saleOpenDate": "2026-10-20",
 				"crewSaleStartAt": null,
 				"crewSaleEndAt": null,
-				"individualOpenAt": "2026-10-13T10:00:00",
+				"individualOpenAt": "2026-10-20T09:00:00",
 				"applicationCloseAt": "2026-10-31T18:00:00",
 				"refundDeadline": "2026-10-31",
 				"refundPolicy": "환불 기한까지 취소하면 전액 환불됩니다.",

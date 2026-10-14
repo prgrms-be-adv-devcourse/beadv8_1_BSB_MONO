@@ -162,7 +162,10 @@ class OrderPayExpiryConcurrencyTest {
 		assertThat(walletPort.balance()).isEqualTo(BALANCE - TICKET_PRICE * paidCount);
 		// 만료가 이긴 주문은 차감을 시도조차 하지 않았다 (차감 뒤 돌려준 것이 아니다)
 		assertThat(walletPort.payCalls()).hasSize(paidCount);
-		assertThat(walletPort.canceledOrders()).isEmpty();
+		// 결제 취소는 만료된 주문에만 불렸다. 결제가 이긴 주문은 만료 정리가 잠금을 기다린 뒤 건너뛰어 돈이 그대로 남는다
+		// (이 테스트에서는 자리 판매가 EXPIRED로 거절되지 않아, 결제 쪽이 결제 취소를 부르는 일은 없다)
+		assertThat(walletPort.canceledOrders()).hasSize(ORDER_COUNT - paidCount)
+			.allMatch(orderId -> statusOf(orderId) == OrderStatus.EXPIRED);
 	}
 
 	@Test
@@ -216,9 +219,11 @@ class OrderPayExpiryConcurrencyTest {
 			() -> orderExpiryUseCase.expireOverdue(afterOriginalDue)));
 
 		assertThat(outcomes.getFirst().succeeded()).isTrue();
-		assertThat(outcomes.get(1).value()).isEqualTo(new OrderExpiryUseCase.ExpiryResult(0, 0));
+		assertThat(outcomes.get(1).value()).isEqualTo(new OrderExpiryUseCase.ExpiryResult(0, 0, 0));
 		assertPaid(orderId);
 		assertThat(walletPort.balance()).isEqualTo(BALANCE - TICKET_PRICE);
+		// 늘린 기한 안이라 만료 정리는 결제 취소를 부르지 않았다 (불렀다면 D가 이 주문의 결제를 막는다)
+		assertThat(walletPort.cancelCalls()).isEmpty();
 	}
 
 	@Test

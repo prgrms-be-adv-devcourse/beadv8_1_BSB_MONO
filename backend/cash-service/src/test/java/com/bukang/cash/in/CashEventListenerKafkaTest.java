@@ -47,7 +47,7 @@ class CashEventListenerKafkaTest {
 	}
 
 	@Test
-	@DisplayName("member.member.joined 토픽에 메시지를 보내면 CashEventListener가 받아 CashMember를 저장한다")
+	@DisplayName("queuing.member.joined 토픽에 메시지를 보내면 CashEventListener가 받아 CashMember를 저장한다")
 	void handleMemberJoined() {
 		int memberId = 1001;
 		String message = """

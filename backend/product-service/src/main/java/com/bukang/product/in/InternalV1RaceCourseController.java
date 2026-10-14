@@ -35,16 +35,16 @@ public class InternalV1RaceCourseController {
 	@GetMapping("/{raceCourseId}")
 	@Operation(summary = "주문용 종목 정보 조회",
 		description = "참가 신청·결제·취소에 필요한 종목과 대회 정보를 돌려준다. 필드 이름은 주문 서비스 RaceCourseInfo와 같다. "
+			+ "title은 대회명, course는 종목명, courseName은 주문 상품명으로 남길 '대회명 종목명'이다. "
 			+ "price가 구매자가 내는 참가권 한 장 값이고 kitPrice는 그 안에 포함된 키트 금액이다(더하지 않는다). "
-			+ "scheduleChangedAt은 판매 시작 뒤 대회 일시·장소를 바꾼 일시로, 이날부터 7일 동안 전액 환불이다. "
-			+ "작성 중인 대회의 종목은 공개 전이라 없는 종목(404)으로 응답한다.")
+			+ "scheduleChangedAt은 판매 시작 뒤 대회 일시·장소를 바꾼 일시로, 이날부터 7일 동안 전액 환불이다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = RaceInternalApiExamples.COURSE_INFO_SUCCESS))),
 		@ApiResponse(responseCode = "400", description = "종목 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceInternalApiExamples.INVALID_VALUE_TYPE))),
-		@ApiResponse(responseCode = "404", description = "없는 종목 또는 작성 중인 대회의 종목",
+		@ApiResponse(responseCode = "404", description = "없는 종목",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceInternalApiExamples.COURSE_NOT_FOUND)))
 	})

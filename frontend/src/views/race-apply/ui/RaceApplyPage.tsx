@@ -146,7 +146,13 @@ export function RaceApplyPage({ race, optionId }: { race: RaceDetail; optionId?:
         open={replaceOpen}
         onOpenChange={setReplaceOpen}
         title="장바구니의 대회를 바꿀까요?"
-        body="장바구니에는 대회 1개만 담을 수 있어요. 담아 둔 「2026 JTBC 서울마라톤 · 10K」를 빼고 이 대회를 담아요."
+        body={
+          <>
+            장바구니에는 대회 1개만 담을 수 있어요.
+            <br />
+            담아 둔 「2026 JTBC 서울마라톤 · 10K」를 빼고 이 대회를 담아요.
+          </>
+        }
         confirmLabel="바꾸기"
         cancelLabel="그대로 두기"
         onConfirm={() => router.push('/cart')}

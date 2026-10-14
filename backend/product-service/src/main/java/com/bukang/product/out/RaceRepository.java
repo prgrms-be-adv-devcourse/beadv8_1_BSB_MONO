@@ -1,5 +1,6 @@
 package com.bukang.product.out;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -17,15 +18,15 @@ import com.bukang.product.domain.RaceSaleStatus;
 
 import jakarta.persistence.LockModeType;
 
-// 잠그는 순서: 대회 행을 잡는 요청(판매 시작·수정·취소·자리 확보)은 모두 대회 행을 먼저, 종목 행을 나중에 잠근다
+// 잠그는 순서: 대회 행을 잡는 요청(수정·취소·자리 확보)은 모두 대회 행을 먼저, 종목 행을 나중에 잠근다
 // 순서가 엇갈리면 MySQL에서 두 트랜잭션이 서로 상대의 잠금을 기다리다 한쪽이 교착으로 롤백된다
 public interface RaceRepository extends JpaRepository<Race, Integer> {
 	// 판매자의 대회 (최근 등록 순)
 	List<Race> findAllBySellerOrderByIdDesc(ProductSeller seller);
 
-	// 대회 행을 잠그고 읽는다 (SELECT … FOR UPDATE). 판매 시작·수정·취소가 쓴다
+	// 대회 행을 잠그고 읽는다 (SELECT … FOR UPDATE). 수정·취소가 쓴다
 	// 같은 대회에서 겹치면 차례로 처리되어, 나중 요청이 최신 상태(예: 방금 취소됨)를 보고 막힌다
-	// 잠그지 않고 읽으면 옛 상태로 판단해, 취소된 대회를 판매 시작으로 덮어쓰거나 수정할 수 있다
+	// 잠그지 않고 읽으면 옛 상태로 판단해, 취소된 대회를 수정할 수 있다
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select r from Race r where r.id = :id")
 	Optional<Race> findByIdForUpdate(@Param("id") int id);
@@ -42,9 +43,9 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 	@Query("select r from Race r where r.id in :ids")
 	List<Race> findAllByIdForShare(@Param("ids") Collection<Integer> ids);
 
-	// 판매 상태 배치가 바꿀 대회 (판매 예정인데 판매 시작 일시가 지난 대회)
-	@Query("select r.id from Race r where r.saleStatus = :status and r.saleOpenAt <= :now")
-	List<Integer> findIdsToOpen(@Param("status") RaceSaleStatus status, @Param("now") LocalDateTime now);
+	// 판매 상태 배치가 바꿀 대회 (판매 예정인데 판매 시작일이 된 대회)
+	@Query("select r.id from Race r where r.saleStatus = :status and r.saleOpenDate <= :today")
+	List<Integer> findIdsToOpen(@Param("status") RaceSaleStatus status, @Param("today") LocalDate today);
 
 	// 판매 상태 배치가 바꿀 대회 (대회일이 지난 판매 예정·판매 중 대회)
 	@Query("select r.id from Race r where r.saleStatus in :statuses and r.raceDate < :before")
@@ -52,7 +53,7 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 		@Param("before") LocalDateTime before);
 
 	// 아래 두 UPDATE는 ID를 읽을 때의 조건을 UPDATE에서 한 번 더 확인한다 (조건부 UPDATE)
-	// ID를 읽은 뒤 판매자가 대회일·판매 시작 일시를 미뤘거나 상태를 바꿨으면 그 대회는 건너뛴다
+	// ID를 읽은 뒤 판매자가 대회일·판매 시작일을 미뤘거나 상태를 바꿨으면 그 대회는 건너뛴다
 	// 엔티티를 거치지 않으므로 수정 일시(updated_at)도 직접 채운다
 
 	// 대회일이 지난 판매 예정·판매 중 대회 → 판매 종료
@@ -72,10 +73,11 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 	int cancel(@Param("id") int id, @Param("statuses") Collection<RaceSaleStatus> statuses,
 		@Param("today") LocalDateTime today, @Param("now") LocalDateTime now);
 
-	// 판매 시작 일시가 지난 판매 예정 대회 → 판매 중
+	// 판매 시작일이 된 판매 예정 대회 → 판매 중
 	@Modifying(clearAutomatically = true)
 	@Query("update Race r set r.saleStatus = com.bukang.product.domain.RaceSaleStatus.ON_SALE, r.modifyDate = :now "
 		+ "where r.id in :ids and r.saleStatus = com.bukang.product.domain.RaceSaleStatus.SCHEDULED "
-		+ "and r.saleOpenAt <= :now")
-	int openSale(@Param("ids") Collection<Integer> ids, @Param("now") LocalDateTime now);
+		+ "and r.saleOpenDate <= :today")
+	int openSale(@Param("ids") Collection<Integer> ids, @Param("today") LocalDate today,
+		@Param("now") LocalDateTime now);
 }

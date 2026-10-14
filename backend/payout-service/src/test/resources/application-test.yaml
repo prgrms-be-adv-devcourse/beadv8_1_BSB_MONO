@@ -20,3 +20,8 @@ logging:
   level:
     com.bukang: debug
     org.hibernate.SQL: debug
+
+# 테스트는 주문 서비스를 띄우지 않는다. 어댑터를 만들 수 있게 주소만 둔다 (배치 테스트는 가짜 포트, 어댑터 테스트는 MockRestServiceServer)
+payout:
+  services:
+    order: http://localhost:8084

@@ -90,7 +90,6 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
         <div className="flex flex-1 flex-col gap-3">
           <Segmented
             label="참가 대회"
-            size="l"
             value={tab}
             onChange={setTab}
             items={[

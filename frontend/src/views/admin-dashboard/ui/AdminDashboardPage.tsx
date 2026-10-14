@@ -65,7 +65,6 @@ export function AdminDashboardPage() {
         <Link href="/admin/holds" className={cn('flex flex-1 rounded-lg', FOCUS_RING)}>
           <StatTile label="지급보류 중" value="2" unit="건" />
         </Link>
-        <StatTile label="회수 대기" value="1" unit="건" />
       </div>
 
       <div className="flex flex-wrap items-start gap-6">
@@ -81,8 +80,7 @@ export function AdminDashboardPage() {
           <StatTile
             tone="accent"
             label="지급 예정액 (판매자 2명)"
-            value="4,536,000"
-            unit="원"
+            value="₩4,536,000"
             className="flex-none"
           />
           <DataTable
