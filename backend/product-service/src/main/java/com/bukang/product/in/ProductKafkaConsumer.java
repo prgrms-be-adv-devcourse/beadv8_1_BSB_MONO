@@ -8,13 +8,14 @@ import org.springframework.stereotype.Component;
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
+import com.bukang.common.shared.race.event.HoldCancelEvent;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.product.app.ProductFacade;
 
 import lombok.RequiredArgsConstructor;
 
 /**
- * 회원·판매자 이벤트를 받아 복제본(ProductMember, ProductSeller)에 저장한다
+ * 회원·판매자 이벤트를 받아 복제본(ProductMember, ProductSeller)에 저장하고, 주문 서비스의 임시 확보 해제 요청을 처리한다
  * 메시지는 JSON 문자열로 받아 JsonConverter로 바꾼다.
  * 처리 중 예외가 나면 재시도 토픽으로 보내 간격을 늘려 가며 다시 시도하고, 그래도 실패하면 <토픽>.dlt로 보낸다.
  * DLT 메시지는 ProductKafkaDltConsumer가 받는다.
@@ -71,5 +72,20 @@ public class ProductKafkaConsumer {
 	)
 	public void handleSellerChanged(String payload) {
 		productFacade.syncSeller(jsonConverter.fromJson(payload, SellerChangedEvent.class));
+	}
+
+	// 대기열 활성 시간이 끝나 결제하지 않은 자리를 해제한다 (주문 서비스가 보낸다)
+	@KafkaListener(topics = KafkaTopics.PRODUCT_HOLD_CANCEL, groupId = GROUP_ID, concurrency = CONCURRENCY)
+	@RetryableTopic(
+		attempts = RETRY_ATTEMPTS,
+		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
+		// 깨진 JSON은 다시 해도 실패하므로 재시도 없이 바로 DLT로 보낸다
+		exclude = IllegalArgumentException.class,
+		numPartitions = PARTITIONS,
+		dltTopicSuffix = DLT_TOPIC_SUFFIX,
+		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
+	)
+	public void handleHoldCancel(String payload) {
+		productFacade.cancelHold(jsonConverter.fromJson(payload, HoldCancelEvent.class));
 	}
 }

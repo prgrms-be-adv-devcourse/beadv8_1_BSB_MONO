@@ -1,6 +1,6 @@
 package com.bukang.cash.dto;
 
-import com.bukang.cash.domain.Wallet;
+import com.bukang.cash.domain.wallet.Wallet;
 
 /**
  * 지갑 잔액 조회 응답

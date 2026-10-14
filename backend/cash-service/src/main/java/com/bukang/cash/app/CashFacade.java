@@ -5,8 +5,8 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.bukang.cash.domain.CashMember;
-import com.bukang.cash.domain.Wallet;
+import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.dto.WalletBalanceDto;
 
 import lombok.RequiredArgsConstructor;

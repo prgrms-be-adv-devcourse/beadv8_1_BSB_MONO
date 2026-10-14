@@ -1,10 +1,13 @@
 package com.bukang.product.in;
 
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.bukang.common.global.rsdata.RsData;
@@ -23,7 +26,30 @@ public class ProductExceptionHandler {
 			.body(RsData.of(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.", null));
 	}
 
-	// 경로 변수·헤더의 숫자 형식 오류 (예: 회원 ID에 문자)
+	// 컨트롤러 파라미터에 직접 붙인 검증(예: 페이지 크기 @Max) 실패. 첫 번째 오류 메시지를 응답한다
+	@ExceptionHandler(HandlerMethodValidationException.class)
+	public ResponseEntity<RsData<Void>> handlerMethodValidationException(HandlerMethodValidationException exception) {
+		String message = exception.getAllErrors().stream()
+			.findFirst()
+			.map(MessageSourceResolvable::getDefaultMessage)
+			.orElse("요청 값이 올바르지 않습니다.");
+		return ResponseEntity
+			.status(HttpStatus.BAD_REQUEST)
+			.body(RsData.of(HttpStatus.BAD_REQUEST, message, null));
+	}
+
+	// 필수 쿼리 파라미터 누락. 어떤 값이 빠졌는지 알 수 있게 이름을 넣는다
+	@ExceptionHandler(MissingServletRequestParameterException.class)
+	public ResponseEntity<RsData<Void>> missingServletRequestParameterException(
+		MissingServletRequestParameterException exception
+	) {
+		return ResponseEntity
+			.status(HttpStatus.BAD_REQUEST)
+			.body(RsData.of(HttpStatus.BAD_REQUEST,
+				"필수 요청 값(%s)이 없습니다.".formatted(exception.getParameterName()), null));
+	}
+
+	// 경로 변수·헤더·쿼리 파라미터의 형식 오류 (예: 회원 ID에 문자, 없는 정렬 값)
 	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
 	public ResponseEntity<RsData<Void>> methodArgumentTypeMismatchException(
 		MethodArgumentTypeMismatchException exception
