@@ -21,7 +21,12 @@ class PayoutHoldTest {
 
 	// 2026-09: 지급 예정일 10/20
 	private Payout newPayout() {
-		return new Payout(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
+		return newPayout(YearMonth.of(2026, 9));
+	}
+
+	// 지급 예정일은 정산 월 다음 달 20일이다 (2026-10 → 11/20)
+	private Payout newPayout(YearMonth payoutMonth) {
+		return new Payout(1, 10, "테스트 대회", payoutMonth, payoutMonth.atDay(26).atTime(3, 0), CALENDAR);
 	}
 
 	private PayoutHold hold(Payout payout) {
@@ -84,17 +89,19 @@ class PayoutHoldTest {
 	}
 
 	// 2026-10-20 화, 2026-11-20 금, 2026-12-20 일 → 12/21 월, 2027-01-20 수
-	@ParameterizedTest(name = "{0} 해제 → {1} 지급")
+	// 정산 월 2026-09의 원래 지급 예정일은 10/20, 2026-10은 11/20이다
+	@ParameterizedTest(name = "정산 월 {0}, {1} 해제 → {2} 지급")
 	@CsvSource({
-		"2026-10-15, 2026-10-20", // 이번 달 지급일이 아직 안 왔다
-		"2026-10-20, 2026-11-20", // 지급일 당일 해제는 다음 달 (payout.md 2-6)
-		"2026-10-21, 2026-11-20", // 이번 달 지급일이 지났다
-		"2026-12-20, 2026-12-21", // 이번 달 지급일(20일 일요일)이 월요일로 밀려 아직 안 왔다
-		"2026-12-21, 2027-01-20" // 밀린 지급일 당일 해제는 다음 달
+		"2026-09, 2026-10-15, 2026-10-20", // 이번 달 지급일이 아직 안 왔다
+		"2026-09, 2026-10-20, 2026-11-20", // 지급일 당일 해제는 다음 달 (payout.md 2-6)
+		"2026-09, 2026-10-21, 2026-11-20", // 이번 달 지급일이 지났다
+		"2026-09, 2026-12-20, 2026-12-21", // 이번 달 지급일(20일 일요일)이 월요일로 밀려 아직 안 왔다
+		"2026-09, 2026-12-21, 2027-01-20", // 밀린 지급일 당일 해제는 다음 달
+		"2026-10, 2026-10-15, 2026-11-20" // 원래 지급 예정일(11/20) 전에 풀려도 앞당기지 않는다 (PRO-128)
 	})
-	@DisplayName("보류를 풀면 지급 예정일을 해제일 뒤 돌아오는 지급일로 다시 정한다")
-	void releaseReschedulesPayDate(LocalDate releaseDate, LocalDate expectedPayDate) {
-		Payout payout = newPayout();
+	@DisplayName("보류를 풀면 지급 예정일을 해제일 뒤 돌아오는 지급일로 다시 정하되, 원래 지급 예정일보다 앞당기지 않는다")
+	void releaseReschedulesPayDate(YearMonth payoutMonth, LocalDate releaseDate, LocalDate expectedPayDate) {
+		Payout payout = newPayout(payoutMonth);
 		PayoutHold hold = hold(payout);
 
 		payout.release(hold, ADMIN_ID, releaseDate.atTime(9, 0), CALENDAR);
