@@ -252,6 +252,10 @@ export function RaceDetailPage({
             <Button size="l" disabled>
               이미 신청했어요
             </Button>
+          ) : race.phase !== 'open' ? (
+            <Button size="l" disabled>
+              {race.phase === 'upcoming' ? '아직 접수 전이에요' : '접수가 마감됐어요'}
+            </Button>
           ) : optionId === '' ? (
             <Button size="l" disabled>
               {race.options.length === 0 ? '신청할 수 있는 종목이 없어요' : '정원이 모두 찼어요'}
