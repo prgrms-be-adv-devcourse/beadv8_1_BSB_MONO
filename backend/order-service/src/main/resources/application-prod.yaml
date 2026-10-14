@@ -24,6 +24,9 @@ order:
     payout:
       mode: http
       base-url: http://bukang-payout-service:8082
+    cash:
+      mode: http
+      base-url: http://bukang-cash-service:8081
 
 # 운영에서는 API 구조가 외부에 노출되지 않도록 Swagger 비활성화
 springdoc:
