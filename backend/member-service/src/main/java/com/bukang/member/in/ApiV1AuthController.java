@@ -47,16 +47,17 @@ public class ApiV1AuthController {
 	private final MemberFacade memberFacade;
 
 	// ResponseEntity.created()의 201은 springdoc이 추론하지 못하므로 응답 코드를 직접 명시한다
-	// 에러 응답은 GlobalExceptionHandler가 RsData(data: null) 형식으로 반환한다
+	// 에러 응답은 GlobalExceptionHandler가 RsData(code: 오류 코드, data: null) 형식으로 반환한다
 	@PostMapping("/join")
 	@Operation(summary = "회원가입", description = "이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "가입 성공",
 			content = @Content(examples = @ExampleObject(value = AuthApiExamples.JOIN_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "입력값 검증 실패 또는 요청 본문 형식 오류",
+		@ApiResponse(responseCode = "400", description = "입력값 검증 실패, 요청 본문 형식 오류 또는 만 14세 미만",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = AuthApiExamples.JOIN_INVALID_INPUT),
-				@ExampleObject(name = "요청 본문 형식 오류", value = AuthApiExamples.INVALID_BODY)
+				@ExampleObject(name = "요청 본문 형식 오류", value = AuthApiExamples.INVALID_BODY),
+				@ExampleObject(name = "만 14세 미만", value = AuthApiExamples.JOIN_UNDER_AGE)
 			})),
 		@ApiResponse(responseCode = "409", description = "이메일, 닉네임 또는 휴대폰 번호 중복",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {

@@ -117,7 +117,7 @@ class ApiV1OrderCancelTest {
 			.andExpect(jsonPath("$.data.items[0].status").value("CANCELED"));
 
 		assertThat(seatHoldPort.restoredParticipations()).containsExactly(paid.participationId());
-		assertThat(walletPort.refundedOrderItems()).containsExactly(paid.orderItemId());
+		assertThat(walletPort.refundCalls()).containsExactly(new StubWalletPort.Call(paid.orderId(), MEMBER_ID));
 		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
 		Participation participation = participationRepository.findById(paid.participationId()).orElseThrow();
 		assertThat(participation.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
@@ -144,6 +144,20 @@ class ApiV1OrderCancelTest {
 			.andExpect(jsonPath("$.message").value("환불 기한(%s)이 지나 취소할 수 없습니다.".formatted(yesterday)));
 
 		assertNothingCanceled(paid);
+	}
+
+	@Test
+	@DisplayName("판매자가 대회를 취소했으면 환불 기한이 지났어도 결제한 참가권을 취소하면 전액 환불된다")
+	void cancelCanceledRaceAfterRefundDeadline() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		raceCoursePort.put(StubRaceCoursePort.canceled(
+			StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, LocalDate.now().minusDays(10))));
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.canceledAmount").value(TICKET_PRICE));
+
+		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
 	}
 
 	@Test
@@ -256,7 +270,7 @@ class ApiV1OrderCancelTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 취소한 상품입니다."));
 
-		assertThat(walletPort.refundedOrderItems()).hasSize(1);
+		assertThat(walletPort.refundCalls()).hasSize(1);
 		assertThat(seatHoldPort.restoredParticipations()).hasSize(1);
 	}
 
@@ -344,7 +358,7 @@ class ApiV1OrderCancelTest {
 	}
 
 	private void assertNothingCanceled(Paid paid) {
-		assertThat(walletPort.refundedOrderItems()).isEmpty();
+		assertThat(walletPort.refundCalls()).isEmpty();
 		assertThat(seatHoldPort.restoredParticipations()).isEmpty();
 		assertThat(orderRepository.findById(paid.orderId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(participationRepository.findById(paid.participationId()).orElseThrow().getStatus())

@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,7 +65,7 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 	// ---------- 공개 조건, 한 줄 ----------
 
 	@Test
-	@DisplayName("검색어 없이 조회하면 판매 중 대회와 판매 예정(개인 예매 내일 오픈) 대회가 나오고, "
+	@DisplayName("검색어 없이 조회하면 판매 중 대회와 판매 예정(개인 예매 이틀 뒤 오픈) 대회가 나오고, "
 		+ "접수 마감이 하루 지난 판매 중 대회는 빠진다")
 	void listsOnlyPublicRaces() throws Exception {
 		LocalDateTime now = LocalDateTime.now().withNano(0);
@@ -72,7 +73,7 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 			.applicationCloseAt(now.plusDays(5))
 			.build());
 		RegisteredRace scheduled = register(race().title("판매 예정 대회")
-			.individualOpenAt(now.plusDays(1))
+			.individualOpenAt(now.plusDays(2))
 			.applicationCloseAt(now.plusDays(8))
 			.build());
 		// 사흘 전에 개인 예매가 열려 판매 중이지만, 접수 마감이 하루 지났다
@@ -132,8 +133,13 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 		String body = bodyOf(result);
 		assertThat(dateTimeAt(body, "$.data.races[1].raceDate")).isEqualTo(now.plusDays(20));
 		assertThat(dateTimeAt(body, "$.data.races[1].applicationCloseAt")).isEqualTo(now.plusDays(18));
-		// 크루 예매가 없으면 개인 예매 오픈(기본 한 시간 전)이 판매 시작 일시다
-		assertThat(dateTimeAt(body, "$.data.races[1].saleOpenAt")).isEqualTo(now.minusHours(1));
+		// 크루 예매가 없으면 개인 예매 오픈(기본 한 시간 전) 날짜가 판매 시작일이다
+		// 구매자 화면용으로 크루 예매 기간(없으면 null)과 개인 예매 오픈 일시도 준다
+		assertThat(LocalDate.parse(JsonPath.<String>read(body, "$.data.races[1].saleOpenDate")))
+			.isEqualTo(now.minusHours(1).toLocalDate());
+		assertThat(dateTimeAt(body, "$.data.races[1].individualOpenAt")).isEqualTo(now.minusHours(1));
+		assertThat((Object)JsonPath.read(body, "$.data.races[1].crewSaleStartAt")).isNull();
+		assertThat((Object)JsonPath.read(body, "$.data.races[1].crewSaleEndAt")).isNull();
 
 		// 종목 3개가 모두 맞는 검색어도 대회는 한 줄이다
 		expectRacesInOrder(search("keyword", "춘천"), multi);
@@ -568,7 +574,7 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 		LocalDateTime now = LocalDateTime.now().withNano(0);
 		RegisteredRace onSale = registerOnSale(race().title("서울 가을 마라톤").build());
 		RegisteredRace scheduled = register(race().title("서울 겨울 마라톤")
-			.individualOpenAt(now.plusDays(1))
+			.individualOpenAt(now.plusDays(2))
 			.build());
 		registerOnSale(race().title("서울 여름 마라톤")
 			.individualOpenAt(now.minusDays(3))

@@ -169,6 +169,45 @@ class InternalV1CashControllerTest {
 		assertBalance(CUSTOMER_ID, 10_000);
 	}
 
+	@Test
+	@DisplayName("결제 완료된 주문을 환불하면 고객 잔액이 돌아오고, 응답에 환불 금액이 담긴다")
+	void refundCompletedPayment() throws Exception {
+		pay(ORDER_ID, CUSTOMER_ID, 3_000).andExpect(status().isOk());
+
+		refund(ORDER_ID, CUSTOMER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.amount").value(3_000));
+
+		assertBalance(CUSTOMER_ID, 10_000);
+		assertBalance(cashWalletProperties.holdingMemberId(), 0);
+		assertThat(countLedgersForOrder(ORDER_ID)).as("결제 2줄 + 환불 반대 2줄").isEqualTo(4);
+		assertThat(paymentRepository.findByOrderId(ORDER_ID).orElseThrow().getStatus())
+			.isEqualTo(PaymentStatus.REFUNDED);
+	}
+
+	@Test
+	@DisplayName("같은 주문을 두 번 환불해도 잔액은 한 번만 바뀐다")
+	void refundIsIdempotent() throws Exception {
+		pay(ORDER_ID, CUSTOMER_ID, 3_000).andExpect(status().isOk());
+
+		refund(ORDER_ID, CUSTOMER_ID).andExpect(status().isOk());
+		refund(ORDER_ID, CUSTOMER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.amount").value(3_000));
+
+		assertBalance(CUSTOMER_ID, 10_000);
+	}
+
+	@Test
+	@DisplayName("결제가 끝난 적 없는 주문을 환불하면 거절된다")
+	void refundRejectsUnpaidOrder() throws Exception {
+		refund(ORDER_ID, CUSTOMER_ID)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("환불할 결제가 없습니다."));
+
+		assertBalance(CUSTOMER_ID, 10_000);
+	}
+
 	private ResultActions pay(int orderId, int memberId, int amount) throws Exception {
 		return mockMvc.perform(post("/internal/v1/cash/payments/" + orderId)
 			.contentType(MediaType.APPLICATION_JSON)
@@ -181,6 +220,14 @@ class InternalV1CashControllerTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"memberId\": %d}".formatted(memberId)));
 	}
+
+	private ResultActions refund(int orderId, int memberId) throws Exception {
+		return mockMvc.perform(post("/internal/v1/cash/payments/" + orderId + "/refund")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"memberId\": %d}".formatted(memberId)));
+	}
+
+
 	private void assertBalance(int holderId, int expected) {
 		assertThat(walletRepository.findById(holderId).orElseThrow().getBalance()).isEqualTo(expected);
 	}

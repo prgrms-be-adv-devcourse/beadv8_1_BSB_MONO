@@ -60,7 +60,7 @@ public class OrderPayUseCase {
 
 		if (seatHoldPort.sell(order.participationId()) == SeatSellResult.EXPIRED) {
 			// 차감은 됐는데 자리가 기한을 넘겼다. 돈을 돌려주고 결제를 거절한다. 주문은 만료 정리가 EXPIRED로 끝낸다
-			walletPort.cancelPayment(order.getId());
+			walletPort.cancelPayment(order.getId(), memberId);
 			throw new OrderNotPayableException("결제 기한이 지나 결제하지 못했습니다. 빠져나간 예치금은 돌려드렸습니다.");
 		}
 

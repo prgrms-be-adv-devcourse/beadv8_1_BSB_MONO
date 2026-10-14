@@ -14,14 +14,16 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 주문 서비스에 주는 종목 정보 (내부 API). 앞 13개 필드는 주문 서비스 RaceCourseInfo와 이름·뜻이 같다.
- * 뒤 필드는 주문 서비스가 아직 쓰지 않지만, 판매 상태·남은 자리·티셔츠 사이즈 확인에 쓸 수 있게 함께 준다.
+ * 주문 서비스에 주는 종목 정보 (내부 API). 주문 서비스 RaceCourseInfo에 있는 필드는 이름·뜻이 같다.
+ * 나머지 필드(대회명·종목명, 판매 상태·남은 자리·티셔츠 사이즈 등)는 주문 서비스가 아직 쓰지 않지만 함께 준다.
  */
 @AllArgsConstructor
 @Getter
 public class RaceCourseInfoDto {
 	private final int raceCourseId;
 	private final int raceId;
+	// 대회명 (race.title)
+	private final String title;
 	private final LocalDateTime raceDate;
 	// 개인 예매 오픈 일시 (race.individual_open_at)
 	private final LocalDateTime applicationOpenAt;
@@ -29,6 +31,8 @@ public class RaceCourseInfoDto {
 	private final int minAge;
 	private final Integer maxAge;
 	private final int sellerId;
+	// 종목명 (race_course.name)
+	private final String course;
 	// 주문 상품명으로 남길 이름 ("대회명 종목명")
 	private final String courseName;
 	// 구매자가 내는 참가권 한 장 값. 키트 금액은 이 안에 들어 있다
@@ -47,11 +51,11 @@ public class RaceCourseInfoDto {
 
 	public static RaceCourseInfoDto from(RaceCourse course) {
 		Race race = course.getRace();
-		return new RaceCourseInfoDto(course.getId(), race.getId(), race.getRaceDate(), race.getIndividualOpenAt(),
-			race.getApplicationCloseAt(), course.getMinAge(), course.getMaxAge(), race.getSeller().getId(),
-			race.getTitle() + " " + course.getName(), course.getPrice(), course.getKitPrice(),
-			race.getRefundDeadline(), race.getScheduleChangedAt(), race.getSaleStatus(), course.getStatus(),
-			course.individualRemaining(), course.crewRemaining(), course.isKitIncluded(),
+		return new RaceCourseInfoDto(course.getId(), race.getId(), race.getTitle(), race.getRaceDate(),
+			race.getIndividualOpenAt(), race.getApplicationCloseAt(), course.getMinAge(), course.getMaxAge(),
+			race.getSeller().getId(), course.getName(), race.getTitle() + " " + course.getName(), course.getPrice(),
+			course.getKitPrice(), race.getRefundDeadline(), race.getScheduleChangedAt(), race.getSaleStatus(),
+			course.getStatus(), course.individualRemaining(), course.crewRemaining(), course.isKitIncluded(),
 			course.getTshirtSizeOption());
 	}
 }

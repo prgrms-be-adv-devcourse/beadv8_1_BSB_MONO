@@ -36,6 +36,7 @@ public class CartUseCase {
 	public CartAddResult addItem(int memberId, int raceCourseId, LocalDateTime now) {
 		RaceCourseInfo course = raceCoursePort.findCourse(raceCourseId)
 			.orElseThrow(() -> new RaceCourseNotFoundException("존재하지 않는 종목입니다."));
+		ParticipationApplyUseCase.checkNotCanceled(course);
 		// 접수가 끝난 종목은 결제할 수 없으니 담지도 않는다. 접수 시작 전 종목은 미리 담아 둘 수 있다
 		if (!course.isBeforeClose(now)) {
 			throw new ApplicationPeriodException("접수가 마감된 종목은 담을 수 없습니다.");

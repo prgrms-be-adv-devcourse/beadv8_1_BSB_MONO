@@ -1,5 +1,6 @@
 package com.bukang.product.out;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -42,9 +43,9 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 	@Query("select r from Race r where r.id in :ids")
 	List<Race> findAllByIdForShare(@Param("ids") Collection<Integer> ids);
 
-	// 판매 상태 배치가 바꿀 대회 (판매 예정인데 판매 시작 일시가 지난 대회)
-	@Query("select r.id from Race r where r.saleStatus = :status and r.saleOpenAt <= :now")
-	List<Integer> findIdsToOpen(@Param("status") RaceSaleStatus status, @Param("now") LocalDateTime now);
+	// 판매 상태 배치가 바꿀 대회 (판매 예정인데 판매 시작일이 된 대회)
+	@Query("select r.id from Race r where r.saleStatus = :status and r.saleOpenDate <= :today")
+	List<Integer> findIdsToOpen(@Param("status") RaceSaleStatus status, @Param("today") LocalDate today);
 
 	// 판매 상태 배치가 바꿀 대회 (대회일이 지난 판매 예정·판매 중 대회)
 	@Query("select r.id from Race r where r.saleStatus in :statuses and r.raceDate < :before")
@@ -52,7 +53,7 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 		@Param("before") LocalDateTime before);
 
 	// 아래 두 UPDATE는 ID를 읽을 때의 조건을 UPDATE에서 한 번 더 확인한다 (조건부 UPDATE)
-	// ID를 읽은 뒤 판매자가 대회일·판매 시작 일시를 미뤘거나 상태를 바꿨으면 그 대회는 건너뛴다
+	// ID를 읽은 뒤 판매자가 대회일·판매 시작일을 미뤘거나 상태를 바꿨으면 그 대회는 건너뛴다
 	// 엔티티를 거치지 않으므로 수정 일시(updated_at)도 직접 채운다
 
 	// 대회일이 지난 판매 예정·판매 중 대회 → 판매 종료
@@ -72,10 +73,11 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 	int cancel(@Param("id") int id, @Param("statuses") Collection<RaceSaleStatus> statuses,
 		@Param("today") LocalDateTime today, @Param("now") LocalDateTime now);
 
-	// 판매 시작 일시가 지난 판매 예정 대회 → 판매 중
+	// 판매 시작일이 된 판매 예정 대회 → 판매 중
 	@Modifying(clearAutomatically = true)
 	@Query("update Race r set r.saleStatus = com.bukang.product.domain.RaceSaleStatus.ON_SALE, r.modifyDate = :now "
 		+ "where r.id in :ids and r.saleStatus = com.bukang.product.domain.RaceSaleStatus.SCHEDULED "
-		+ "and r.saleOpenAt <= :now")
-	int openSale(@Param("ids") Collection<Integer> ids, @Param("now") LocalDateTime now);
+		+ "and r.saleOpenDate <= :today")
+	int openSale(@Param("ids") Collection<Integer> ids, @Param("today") LocalDate today,
+		@Param("now") LocalDateTime now);
 }

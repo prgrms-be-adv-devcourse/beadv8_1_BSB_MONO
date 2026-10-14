@@ -13,6 +13,8 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/races/cookierun/apply',
 }))
 
+const FIVE_K = RACE_DETAIL.options.find((o) => o.id === '5k')!
+
 beforeEach(() => push.mockClear())
 
 // 결제 화면이 읽을 스토어 값을 그대로 꺼내 본다.
@@ -27,7 +29,7 @@ describe('참가 신청 · 참가자 정보', () => {
     const user = userEvent.setup()
     render(
       <BookingFlowProvider>
-        <RaceApplyPage race={RACE_DETAIL} optionId="5k" />
+        <RaceApplyPage race={RACE_DETAIL} option={FIVE_K} />
         <StoreProbe />
       </BookingFlowProvider>,
     )

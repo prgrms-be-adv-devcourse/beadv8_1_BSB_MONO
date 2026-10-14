@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { SAMPLE_PARTICIPANT, useBookingFlow } from '@/features/booking'
-import { getRaceDetail, RACE_DETAIL } from '@/entities/race'
+import { RACE_DETAIL } from '@/entities/race'
 import { formatNumber } from '@/shared/lib'
 import {
   Alert,
@@ -135,7 +135,8 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
     )
   }
 
-  const race = (selection && getRaceDetail(selection.raceId)) ?? RACE_DETAIL
+  // TODO(api): PRO-151에서 selection.raceId로 대회 상세 API를 불러 쓴다. 지금은 시안 예시 대회.
+  const race = RACE_DETAIL
   const option = race.options.find((o) => o.id === selection?.optionId) ?? race.options[0]
   const payment = splitPayment(option.price, SAMPLE_DEPOSIT_BALANCE)
 
