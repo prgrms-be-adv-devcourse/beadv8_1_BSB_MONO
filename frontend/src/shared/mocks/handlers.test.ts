@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { customFetch } from '@/shared/api'
 
-import { setMockLoggedIn } from './mock-session'
+import { MOCK_LOGGED_IN_COOKIE } from './mock-session'
 
 // 생성된 목이 등록됐는지 확인한다 (API_MOCKING=on 개발 서버도 같은 handlers를 쓴다)
 describe('생성된 MSW 핸들러', () => {
@@ -21,37 +21,58 @@ describe('생성된 MSW 핸들러', () => {
   })
 })
 
-// 가짜 응답 모드에서 로그인 상태를 진짜처럼 흉내 내는지 확인한다
+// 가짜 응답 모드에서 로그인 상태를 진짜처럼(Refresh Token 쿠키로) 흉내 내는지 확인한다.
+// Node의 MSW는 응답 쿠키를 저장하지 않으므로, 브라우저처럼 받은 쿠키를 다음 요청에 직접 붙인다.
 describe('인증 목', () => {
-  const post = (path: string) => fetch(`http://localhost/api/v1/auth/${path}`, { method: 'POST' })
+  const post = (path: string, cookie?: string) =>
+    fetch(`http://localhost/api/v1/auth/${path}`, {
+      method: 'POST',
+      headers: cookie ? { Cookie: cookie } : {},
+    })
+  /** Set-Cookie에서 "이름=값"만 꺼낸다 (브라우저가 다음 요청에 붙이는 모양) */
+  const cookieOf = (response: Response) => response.headers.get('set-cookie')?.split(';')[0] ?? ''
+  const accessTokenOf = async (response: Response) =>
+    ((await response.json()) as { data: { accessToken: string } }).data.accessToken
 
-  it('로그인하지 않았으면 재발급이 401이다', async () => {
+  it('쿠키 없이 재발급하면 401이다', async () => {
     expect((await post('reissue')).status).toBe(401)
   })
 
-  it('로그인하면 재발급이 새 Access Token을 준다', async () => {
-    await fetch('http://localhost/api/v1/auth/login', {
+  it('로그인하면 진짜처럼 httpOnly Refresh Token 쿠키를 심는다', async () => {
+    const login = await fetch('http://localhost/api/v1/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'runner1@crewrun.com', password: 'password1' }),
     })
 
-    const first = await post('reissue')
-    const second = await post('reissue')
-
-    expect(first.status).toBe(200)
-    const firstToken = ((await first.json()) as { data: { accessToken: string } }).data.accessToken
-    const secondToken = ((await second.json()) as { data: { accessToken: string } }).data
-      .accessToken
-    expect(firstToken).not.toBe(secondToken)
+    const setCookie = login.headers.get('set-cookie') ?? ''
+    expect(setCookie).toMatch(/^mockRefreshToken=mock-refresh-/)
+    expect(setCookie).toContain('Path=/api/v1/auth')
+    expect(setCookie).toContain('HttpOnly')
+    expect(setCookie).toContain('SameSite=Lax')
   })
 
-  it('로그아웃하면 재발급이 다시 401이다', async () => {
-    setMockLoggedIn(true)
-    expect((await post('reissue')).status).toBe(200)
+  it('로그인 쿠키로 재발급하면 매번 새 Access Token과 새 쿠키를 준다', async () => {
+    const login = await fetch('http://localhost/api/v1/auth/login', { method: 'POST' })
 
-    await post('logout')
+    const first = await post('reissue', cookieOf(login))
+    const second = await post('reissue', cookieOf(first))
 
-    expect((await post('reissue')).status).toBe(401)
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+    expect(cookieOf(first)).not.toBe(cookieOf(login))
+    expect(await accessTokenOf(first)).not.toBe(await accessTokenOf(second))
+  })
+
+  it('MOCK_LOGGED_IN_COOKIE를 붙이면 로그인된 채로 재발급할 수 있다', async () => {
+    expect((await post('reissue', MOCK_LOGGED_IN_COOKIE)).status).toBe(200)
+  })
+
+  it('로그아웃하면 Max-Age=0으로 쿠키를 지운다', async () => {
+    const logout = await post('logout', MOCK_LOGGED_IN_COOKIE)
+
+    expect(logout.headers.get('set-cookie')).toMatch(
+      /^mockRefreshToken=; Max-Age=0;.*Path=\/api\/v1\/auth/,
+    )
   })
 })

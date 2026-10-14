@@ -1,8 +1,8 @@
 // 테스트 전용 묶음. 앱 코드에서 가져오지 않는다 (msw/node가 번들에 들어간다).
 // 다른 층의 테스트는 shared 안쪽 파일을 직접 가져올 수 없어(FSD 규칙) 여기로 모은다.
 export { server } from '@/shared/mocks/node'
-// 가짜 응답 모드의 "가짜 로그인됨" 표시. 켜 두면 기본 재발급 목이 성공한다.
-export { setMockLoggedIn } from '@/shared/mocks/mock-session'
+// 가짜 응답 모드의 Refresh Token 쿠키. 요청에 Cookie 헤더로 붙이면 기본 재발급 목이 성공한다.
+export { MOCK_LOGGED_IN_COOKIE } from '@/shared/mocks/mock-session'
 
 // orval이 만든 응답 예시 목: productMock.getSearchResponseMock() 등
 export * as cashMock from '@/shared/api/generated/cash/cash.msw'
