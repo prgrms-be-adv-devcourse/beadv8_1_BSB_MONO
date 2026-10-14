@@ -51,11 +51,13 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
 ### 1. yaml · gradle 검토 (+ Redis Testcontainers)
 
 - 완료(10/14, PRO-172): 모듈 뼈대 `1bc5a73`(포트 8086, yaml 4개, compose · Dockerfile 등록), 게이트웨이 라우팅 `fcded5e`(`/api/v1/queue/**`)
-- 할 일: 실제 Redis로 ZSet · Lua를 확인할 수단을 넣는다.
+- 완료(10/15): 진짜 Redis를 띄우는 테스트 수단을 넣고, 연결만 SET/GET으로 확인했다. ZSet · Lua 테스트는 스크립트를 만드는 3단계 · 5단계에서 쓴다.
   - member-service처럼 `com.redis:testcontainers-redis` + `testcontainers-junit-jupiter`. Lua는 가짜(mock) Redis로 검증할 수 없다(`member-service/.../RefreshTokenRepositoryTest.java:23`).
-  - [미정] Docker가 없을 때: 건너뛰기(`@Testcontainers(disabledWithoutDocker = true)`, product · file 방식) / 실패시키기(옵션 없음, member 방식)
+  - [결정됨] Docker가 없으면 실패시킨다(옵션 없는 `@Testcontainers`, member 방식). 팀원 PC는 고려하지 않는다(사용자 10/15). 전체 build는 이미 member 테스트 때문에 Docker가 필요하다.
+  - [결정됨] 연결 확인 테스트 `out/RedisConnectionTest`(`redis:8.2`에 SET/GET)는 3단계 뒤에도 계속 둔다(사용자 10/15).
+- yaml 4개(application, dev, prod, test)는 검토 결과 고칠 곳이 없다.
 - Kafka(2단계 복제 수신)와 JPA(2단계 복제 테이블)는 둘 다 쓰므로 그대로 둔다.
-- 확인: `./gradlew :queue-service:build`, `./gradlew checkstyleMain checkstyleTest`
+- 확인(10/15): 사용자가 `RedisConnectionTest`를 실행해 통과, `./gradlew :queue-service:checkstyleMain :queue-service:checkstyleTest` 경고 0건
 
 ### 2. 상품 일정 이벤트 발행 → 대기열 복제본 수신
 
@@ -67,6 +69,7 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
 - [결정됨] 상품의 상태 배치가 판매 상태를 바꾸면, 상품이 Kafka 생산자로서 대기열에 동기화 메시지를 보낸다.
   - 상태는 등록 때 `SCHEDULED`이고, 5분마다 도는 상태 배치가 `ON_SALE`로 바꾼다(`RaceSaleStatusScheduler`, `ProductFacade.java:149-161`). 이 메시지가 없으면 복제본은 `SCHEDULED`에 머물러 대기열이 열리지 않는다.
   - 알려진 한계: 개인 예매 오픈이 판매 시작일 0시 정각이면, 상태 배치(5분 주기)가 `ON_SALE`로 바꾸고 메시지가 올 때까지 최대 5분쯤 줄을 설 수 없다. 상품은 같은 이유로 자리 확보 판정에 `SCHEDULED`도 넣었다(`Race.java:289`).
+    - [결정됨] 막지 않는다. 자정을 예매 시작 시각으로 잡는 판매자는 드문 엣지 케이스라, 실제 운영에서 문제가 생기면 그때 대응한다(사용자 10/14).
 - 상품 쪽 (사용자 담당): 커밋 뒤 메시지를 보낸다. 지금 상품은 일정 메시지를 보내지 않는다(등록 · 수정은 `race.filelink.requested`, 취소는 `order.race.cancel`만).
 - 대기열 쪽: [결정됨] `in/QueueKafkaConsumer`가 `@KafkaListener`로 받아 복제 테이블에 저장한다.
 - [제안] 세부 (B1~B8)
@@ -81,6 +84,12 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
     - [제안] 행마다 자기 `updated_at`으로 비교한다(사용자 안을 넓힌 것): 대회 칸은 `race.updated_at`, 종목 칸은 종목마다 `race_course.updated_at`. 그러면 대회만 바뀐 수정과 종목만 바뀐 수정을 모두 가린다.
       - 남는 경우는 종목 삭제다. 삭제하면 대회 · 남은 종목의 `updated_at`이 바뀌지 않는다. 다만 종목은 판매 시작일 전에만 뺄 수 있다(`RaceCourse.java:187-191`, `Race.java:268-270`). 그때는 아직 `SCHEDULED`라 대기열이 열리지 않았고, 판매 시작일 0시 상태 배치 메시지(`race.updated_at` 갱신)가 종목 목록을 바로잡는다.
     - 참고: key가 `raceId`라 같은 대회 메시지는 한 파티션 안에서 순서가 지켜진다. 순서가 뒤집히는 것은 실패한 메시지가 재시도 토픽을 거칠 때다.
+    - 확인(10/15, 코드와 Hibernate 7.4.5 소스를 읽어 확인, 테스트 실행은 안 함): 대회 칸만 고치면 `race.updated_at`만, 종목 칸만 고치면 그 종목의 `race_course.updated_at`만 바뀐다. `Race`에 `@Version`이 없어 종목 변경이 대회로 전파되지 않는다. `race_course.updated_at`은 자리 확보 · 판매 · 해제 · 복구 때도 바뀐다(`RaceCourseRepository.java:28-50`).
+    - 알려진 한계: 취소 · 상태 배치는 대회 행 잠금을 잡기 전에 시각을 정한다(`ProductFacade.java:93,152`). 같은 대회의 수정과 겹치면 `race.updated_at`이 거꾸로 가서, 대기열이 새 메시지(취소 · `ON_SALE`)를 옛것으로 보고 건너뛸 수 있다.
+      - [결정됨] 막지 않는다. 같은 대회의 수정과 취소를 잠금 대기 시간(밀리초) 안에 겹쳐 누르는 것은 사람의 동작이 아니다. 대기열에서 `updated_at`은 다른 칸(판매 상태 · 일정)이 옛 값으로 덮이지 않게 하는 비교용 값일 뿐이고, 판매 상태의 원본은 상품이다(사용자 10/15).
+    - 사용자 안(10/15): 대회 메시지와 종목 메시지를 나눈다(토픽 · 리스너를 대회용 · 종목용으로 나누고, 행마다 자기 `updated_at`으로 비교). [미정] 채택 여부는 2단계에서 B1과 함께 정한다.
+      - 나누면 종목 삭제 메시지가 따로 필요하다(스냅숏은 목록을 통째로 바꿔 빠진 종목이 저절로 지워진다).
+      - 두 토픽 사이의 순서는 보장되지 않는다. 종목 메시지가 대회 메시지보다 먼저 올 수 있어 복제 테이블에 외래 키를 걸지 않고, 진입 판정은 둘 다 있어야 통과로 한다.
   - B6 재시도 · DLT: `QueueKafkaConsumer`도 `@RetryableTopic` 3번(1초 → 2초), `IllegalArgumentException`은 바로 DLT로 둔다. DLT는 로그만 남기는 전용 컨슈머(이름 예: `QueueKafkaDltConsumer`)가 받는다. 설정은 상품 컨슈머를 참고한다(`ProductKafkaConsumer.java:34-37,54-64`, `ProductKafkaDltConsumer.java:28-47`).
   - B7 대기열 전에 등록된 대회: 세미는 더미 대회를 새로 등록해 채운다. "전체 다시 보내기"는 필요하면 최종에서 만든다.
   - B8 복제 테이블에 없는 대회 · 종목으로 등록: 404로 막는다. 상품 API로 대신 조회하지 않는다(복제를 고른 이유와 같음).
@@ -215,3 +224,10 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
   - 상품 상태 배치가 판매 상태를 바꾸면 상품이 Kafka로 대기열에 동기화 메시지를 보낸다.
   - 진입 조건은 `ON_SALE` + `individualOpenAt ≤ now < applicationCloseAt`. `ON_SALE`은 판매자에게만 보이는 상태이고, 구매자 예매하기 버튼은 `individualOpenAt`부터 보인다.
 - 사용자 질문: "종목의 `updated_at`을 기준으로 두면?" → 종목 `updated_at`만으로는 대회 칸 변경을 못 가린다. 행마다 자기 `updated_at`으로 비교하는 안을 [제안]으로 B5에 적었다.
+
+### 2026-10-15 B5 `updated_at` 확인
+
+- 사용자 요청: 대회만 고치면 대회 `updated_at`만, 종목만 고치면 종목 `updated_at`만 바뀌는지 확인 → 맞다(B5 확인 줄).
+- 사용자 안: 동기화 컨슈머를 대회용 · 종목용으로 나누기 → B5 아래에 [미정]으로 적었다.
+- Claude가 찾은 한계: 취소 · 상태 배치가 수정과 겹치면 `race.updated_at`이 거꾸로 갈 수 있다 → 사용자 결정: 막지 않는다(사람이 낼 수 없는 겹침, `updated_at`은 비교용 값일 뿐).
+- 사용자 결정(10/14): 개인 예매 오픈이 판매 시작일 0시 정각일 때의 최대 5분 지연도 막지 않는다(2단계 알려진 한계).
