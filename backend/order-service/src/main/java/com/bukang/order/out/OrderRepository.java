@@ -18,7 +18,7 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 	// 같은 Idempotency-Key로 이미 만든 주문 (uk_order_idempotency와 같은 기준)
 	Optional<Order> findByBuyerIdAndIdempotencyKey(int buyerId, String idempotencyKey);
 
-	// 결제 기한 늘리기가 같은 주문에 동시에 들어오면 한 요청씩 처리한다 (한 번만 늘리기)
+	// 결제·취소·만료 정리가 같은 주문에 동시에 들어오면 한 요청씩 처리한다
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select o from Order o where o.id = :id")
 	Optional<Order> findByIdForUpdate(@Param("id") int id);

@@ -32,7 +32,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -445,84 +444,12 @@ class ApiV1OrderTest {
 	}
 
 	@Test
-	@DisplayName("결제 기한을 늘리면 주문·참가 신청의 기한이 함께 2분 늘고, 두 번째 요청은 409다")
-	void extendDeadline() throws Exception {
-		int participationId = applyAndGetId(MEMBER_ID);
-		int orderId = createAndGetId(MEMBER_ID, participationId, newKey());
-		LocalDateTime due = orderRepository.findById(orderId).orElseThrow().getPaymentDueAt();
-		LocalDateTime extendedDue = due.plusMinutes(StubSeatHoldPort.EXTEND_MINUTES);
-
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.message").value("결제 기한을 2분 늘렸습니다."))
-			.andExpect(jsonPath("$.data.status").value("CREATED"));
-
-		Order order = orderRepository.findById(orderId).orElseThrow();
-		assertThat(order.getPaymentDueAt()).isEqualTo(extendedDue);
-		assertThat(order.getDeadlineExtendedAt()).isNotNull();
-		assertThat(participationRepository.findById(participationId).orElseThrow().getPaymentDueAt())
-			.isEqualTo(extendedDue);
-
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제 기한은 한 번만 늘릴 수 있습니다."));
-		assertThat(seatHoldPort.extendCalls()).isEqualTo(1);
-
-		// 늘린 기한 전에는 정리되지 않는다
-		orderExpiryUseCase.expireOverdue(due);
-		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
-	}
-
-	@Test
-	@DisplayName("기한이 지났거나 이미 만료된 주문은 늘리지 않고 상품 서비스도 부르지 않는다")
-	void extendDeadlineAfterDue() throws Exception {
-		int orderId = createAndGetId(MEMBER_ID, applyAndGetId(MEMBER_ID), newKey());
-		Order order = orderRepository.findById(orderId).orElseThrow();
-		ReflectionTestUtils.setField(order, "paymentDueAt", LocalDateTime.now().minusSeconds(1));
-		orderRepository.save(order);
-
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제 기한이 지났습니다."));
-
-		orderExpiryUseCase.expireOverdue(LocalDateTime.now());
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제 대기 중인 주문만 결제 기한을 늘릴 수 있습니다(현재 상태: 기한 만료)."));
-		assertThat(seatHoldPort.extendCalls()).isZero();
-	}
-
-	@Test
-	@DisplayName("참가 신청이 결제 대기가 아니면 상품 서비스에 연장을 요청하지 않고 409다")
-	void extendDeadlineWhenParticipationNotApplied() throws Exception {
-		int participationId = applyAndGetId(MEMBER_ID);
-		int orderId = createAndGetId(MEMBER_ID, participationId, newKey());
-		Participation participation = participationRepository.findById(participationId).orElseThrow();
-		ReflectionTestUtils.setField(participation, "status", ParticipationStatus.RELEASED);
-		participationRepository.save(participation);
-
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message")
-				.value("결제 대기 중인 신청만 결제 기한을 늘릴 수 있습니다(현재 상태: 미결제 해제)."));
-		assertThat(seatHoldPort.extendCalls()).isZero();
-	}
-
-	@Test
-	@DisplayName("다른 회원의 주문은 403, 없는 주문은 404다")
-	void extendDeadlineNotOwnerOrMissing() throws Exception {
+	@DisplayName("결제 기한 늘리기 API는 없다 (10/14 연장 없음으로 정함)")
+	void deadlineExtensionRemoved() throws Exception {
 		int orderId = createAndGetId(MEMBER_ID, applyAndGetId(MEMBER_ID), newKey());
 
-		extend(OTHER_MEMBER_ID, orderId)
-			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 주문만 결제 기한을 늘릴 수 있습니다."));
-		extend(MEMBER_ID, 999999)
-			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."));
-	}
-
-	private ResultActions extend(int memberId, int orderId) throws Exception {
-		return mockMvc.perform(post(BASE_URL + "/" + orderId + "/deadline-extension").header("X-Member-Id", memberId));
+		mockMvc.perform(post(BASE_URL + "/" + orderId + "/deadline-extension").header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isNotFound());
 	}
 
 	private Integer createStatusAfter(CountDownLatch start, int memberId, int participationId) throws Exception {

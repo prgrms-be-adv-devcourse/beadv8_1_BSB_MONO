@@ -10,18 +10,20 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.bukang.order.domain.Order;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.seat.SeatHoldPort;
 import com.bukang.order.out.wallet.WalletPort;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 결제 기한(10분, 연장 시 +2분)이 지난 결제 대기 건을 정리한다 (정책 4장 결제, ERD 추천안 v4 9쪽 6번)
+ * 결제 기한(10분)이 지난 결제 대기 건을 정리한다 (정책 4장 결제, ERD 추천안 v4 9쪽 6번)
  * 주문마다 예치금 결제 취소(D) → 주문 CREATED → EXPIRED, 참가 신청 APPLIED → RELEASED
  * 결제 취소를 부르는 이유: D 결제가 커밋된 뒤 주문 쪽이 롤백되면(판매 호출 오류, 커밋 실패, 서버 재시작, 응답 시간 초과)
  * 돈만 빠진 결제 대기 주문이 남는다. 그 주문은 결국 여기로 오므로, 결제하지 않은 주문까지 모두 불러 돌려받는다
  * (결제하지 않은 주문이면 D가 "돌려줄 것 없음"으로 끝내고 뒤늦게 온 결제를 막는다, 10/13 김소희님 요청)
- * 자리 해제·정원 복구는 상품 서비스(B)가 자기 expires_at으로 한다고 가정한다 (#66은 주문이 해제 메시지를 보내는 안, 정해지면 반영)
+ * 자리: 판매된 채 남은 자리는 복구(HTTP)하고, 결제하지 않은 자리는 Kafka product.hold.cancel로 풀어 달라고 알린다
+ * (B는 기한 지난 자리를 스스로 풀지 않는다, 10/14 김호빈님과 정함, PRO-166)
  * 여기의 payment_due_at은 화면·정리용 사본이라, 정리가 몇 분 늦어도 결제 판정에는 영향이 없다 (판정 원본은 B)
  */
 @Slf4j
@@ -35,6 +37,7 @@ public class OrderExpiryUseCase {
 	private final ParticipationRepository participationRepository;
 	private final OrderRepository orderRepository;
 	private final WalletPort walletPort;
+	private final SeatHoldPort seatHoldPort;
 	private final TransactionTemplate transactionTemplate;
 
 	/**
@@ -79,18 +82,21 @@ public class OrderExpiryUseCase {
 	}
 
 	/**
-	 * 주문 → 참가 신청 순서로 잠근다. 결제(OrderPayUseCase)·기한 늘리기(OrderDeadlineExtendUseCase)와 같은 순서라
+	 * 주문 → 참가 신청 순서로 잠근다. 결제(OrderPayUseCase)와 같은 순서라
 	 * 기한 직전에 겹쳐도 서로 기다리다 멈추지 않는다
 	 * 결제 취소는 주문을 잠근 채 부른다. 결제가 차감을 마치고 자리를 파는 사이에 결제 취소가 끼어들면
 	 * 돈은 돌려줬는데 주문은 결제 완료로 남기 때문이다. 결제 중이면 잠금을 기다렸다가, 결제가 끝난 주문이면 건너뛴다
 	 */
 	private Expired expireLocked(int orderId, LocalDateTime now) {
 		Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
-		// 조회와 잠금 사이에 결제됐거나, 기한을 늘려 아직 기한 전이면 건너뛴다
+		// 조회와 잠금 사이에 결제됐으면 건너뛴다
 		if (order == null || !order.isOverdue(now)) {
 			return new Expired(false, false);
 		}
 		walletPort.cancelPayment(order.getId(), order.getBuyerId());
+		// 결제·판매 뒤 주문 저장이 롤백돼 판매된 채 남은 자리를 되돌린다. 판매되지 않은 자리면 B가 아무것도 하지 않는다
+		// 결제하지 않은 자리(HELD)는 해제 메시지로 푼다 (Order.expire → OrderExpiredEventListener, 보내지 못하면 롤백·다시)
+		seatHoldPort.restore(order.participationId());
 		order.expire(now);
 		boolean participationReleased = participationRepository.findByIdForUpdate(order.participationId())
 			.map(participation -> participation.markReleased(now))
