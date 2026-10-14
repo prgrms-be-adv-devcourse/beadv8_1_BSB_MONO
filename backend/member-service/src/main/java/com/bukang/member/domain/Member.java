@@ -17,12 +17,19 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Getter
 // nickname은 BaseMember(복제본과 공유)에 있어 unique, 길이, NOT NULL을 원본 테이블에서만 건다
+// 길이 16은 가장 긴 닉네임(영문·숫자 16자)에 맞춘다 (BE-013)
+// unique 제약은 이름을 붙여, DB 중복 에러에서 어느 칸인지 구별한다 (BE-014, MemberJoinUseCase)
 @Table(name = "MEMBER_MEMBER", uniqueConstraints = {
-	@UniqueConstraint(columnNames = "nickname")
+	@UniqueConstraint(name = "uk_member_email", columnNames = "email"),
+	@UniqueConstraint(name = "uk_member_nickname", columnNames = "nickname"),
+	@UniqueConstraint(name = "uk_member_phone_hash", columnNames = "phone_hash")
 })
-@AttributeOverride(name = "nickname", column = @Column(name = "nickname", nullable = false, length = 30))
+@AttributeOverride(name = "nickname", column = @Column(name = "nickname", nullable = false, length = 16))
 public class Member extends SourceMember {
 	private static final int MIN_JOIN_AGE = 14;
+	// 닉네임 칸 수 범위. 한글 2자·영문 4자 ~ 한글 8자·영문 16자 (BE-013)
+	public static final int NICKNAME_MIN_WIDTH = 4;
+	public static final int NICKNAME_MAX_WIDTH = 16;
 
 	public Member(
 		String email,
@@ -40,6 +47,15 @@ public class Member extends SourceMember {
 	// 만 나이 기준. 생일 당일부터 한 살 더한다
 	public static boolean isJoinableAge(LocalDate birthDate, LocalDate today) {
 		return Period.between(birthDate, today).getYears() >= MIN_JOIN_AGE;
+	}
+
+	// 한글 완성형(가~힣)은 화면에서 영문보다 두 배쯤 넓어 2칸, 그 밖의 글자는 1칸으로 센다 ("러너abc" = 7칸)
+	public static int nicknameWidth(String nickname) {
+		int width = 0;
+		for (char character : nickname.toCharArray()) {
+			width += (character >= '가' && character <= '힣') ? 2 : 1;
+		}
+		return width;
 	}
 
 	public MemberDto toDto() {
