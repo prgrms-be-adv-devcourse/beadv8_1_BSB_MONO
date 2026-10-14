@@ -1,6 +1,10 @@
 package com.bukang.cash.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -18,10 +22,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.cash.config.CashWalletProperties;
+import com.bukang.cash.domain.exception.PaymentNotRefundableException;
 import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.payment.PaymentStatus;
 import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.LedgerType;
@@ -47,7 +55,7 @@ class CashRefundPaymentUseCaseTest {
 	private CashMemberRepository cashMemberRepository;
 	@Autowired
 	private WalletRepository walletRepository;
-	@Autowired
+	@MockitoSpyBean
 	private WalletLedgerRepository walletLedgerRepository;
 	@Autowired
 	private PaymentRepository paymentRepository;
@@ -56,10 +64,55 @@ class CashRefundPaymentUseCaseTest {
 
 	@AfterEach
 	void tearDown() {
+		reset(walletLedgerRepository);
 		paymentRepository.deleteAll();
 		walletLedgerRepository.deleteAll();
 		walletRepository.deleteAll();
 		cashMemberRepository.deleteAll();
+	}
+
+	@Test
+	@DisplayName("FAILED 상태인 결제 행은 환불을 거절한다")
+	void refundRejectsFailedPayment() {
+		int orderId = 800;
+		int amount = 3_000;
+		Wallet customerWallet = createCustomerWallet(10_000);
+		createHoldingWallet();
+		Payment payment = paymentRepository.save(new Payment(orderId, customerWallet, amount));
+		ReflectionTestUtils.setField(payment, "status", PaymentStatus.FAILED);
+		paymentRepository.saveAndFlush(payment);
+
+		assertThatThrownBy(() -> cashFacade.refund(orderId, CUSTOMER_ID))
+			.isInstanceOf(PaymentNotRefundableException.class);
+
+		assertBalance(CUSTOMER_ID, 10_000);
+		assertThat(countLedgersForOrder(orderId)).isZero();
+	}
+
+	@Test
+	@DisplayName("환불 중 두 번째 장부 저장이 실패하면 지갑·장부·상태가 모두 롤백된다")
+	void refundRollsBackOnFailure() {
+		int orderId = 900;
+		int amount = 3_000;
+		createCustomerWallet(10_000);
+		createHoldingWallet();
+		cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+
+		doThrow(new RuntimeException("강제 실패(테스트용): 보관 지갑 반환 저장 실패"))
+			.when(walletLedgerRepository)
+			.save(argThat((WalletLedger ledger) ->
+				ledger != null && ledger.getLedgerType() == LedgerType.임시보관반환__주문취소));
+
+		assertThatThrownBy(() -> cashFacade.refund(orderId, CUSTOMER_ID))
+			.isInstanceOf(RuntimeException.class)
+			.hasMessageContaining("강제 실패");
+
+		assertBalance(CUSTOMER_ID, 7_000);
+		assertBalance(cashWalletProperties.holdingMemberId(), 3_000);
+		assertThat(countLedgersForOrder(orderId)).as("결제 2줄만 있고 환불 시도분은 롤백됐어야 한다").isEqualTo(2);
+		assertThat(paymentRepository.findByOrderId(orderId).orElseThrow().getStatus())
+			.as("상태도 COMPLETED로 그대로 남아야 한다")
+			.isEqualTo(PaymentStatus.COMPLETED);
 	}
 
 	@Test
