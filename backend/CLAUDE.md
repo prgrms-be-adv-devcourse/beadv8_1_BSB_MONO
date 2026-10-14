@@ -37,7 +37,7 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 
 ```bash
 ./gradlew build                          # 전체 모듈 컴파일 + 테스트 + 패키징 (CI: .github/workflows/backend-ci.yml)
-./gradlew :gateway:bootRun               # 게이트웨이 실행 (8000, localhost:8080~8085로 라우팅)
+./gradlew :gateway:bootRun               # 게이트웨이 실행 (8000, localhost:8080~8086로 라우팅)
 ./gradlew :member-service:bootRun        # 회원 서비스 실행 (dev 프로파일, compose.yml 인프라 자동 실행)
 ./gradlew :cash-service:bootRun          # 캐시 서비스 실행 (8081)
 ./gradlew :payout-service:bootRun        # 정산 서비스 실행 (8082)

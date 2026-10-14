@@ -43,7 +43,8 @@ import io.jsonwebtoken.security.Keys;
 @ActiveProfiles("test")
 class GatewayAuthenticationTest {
 
-	private static final List<String> SERVICES = List.of("member", "cash", "payout", "file", "order", "product");
+	private static final List<String> SERVICES =
+		List.of("member", "cash", "payout", "file", "order", "product", "queue");
 	private static final String MEMBER_ID_HEADER = "X-Member-Id";
 	// 가짜 서버가 받은 X-Member-Id 헤더 값 (없으면 "없음")
 	private static final List<String> RECEIVED_MEMBER_IDS = new CopyOnWriteArrayList<>();

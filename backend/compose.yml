@@ -84,6 +84,8 @@ services:
         condition: service_healthy
       product-service:
         condition: service_healthy
+      queue-service:
+        condition: service_healthy
 
   member-service:
     build:

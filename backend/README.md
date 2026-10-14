@@ -31,12 +31,12 @@ Gradle 멀티 모듈로 `common`·`jwt`(공통 라이브러리), `gateway`(API �
 앱 서비스(`nginx`, `web`, `gateway`, `member-service`, `cash-service`, `payout-service`, `file-service`, `order-service`, `product-service`, `queue-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
 서비스 7개는 호스트에 포트를 열지 않고 `gateway`를 거쳐서만 부를 수 있습니다. 서비스는 `X-Member-Id` 헤더를 로그인한 회원으로 믿기 때문에,
 서비스 포트로 직접 오면 헤더를 위조할 수 있어서입니다. 서비스를 직접 부르며 확인하려면 컨테이너 대신 `bootRun`으로 띄웁니다.
-시작 순서는 서비스 6개 → `gateway` → `web` → `nginx`입니다. 앞 컨테이너가 healthy(포트가 열려 요청을 받을 수 있는 상태)가 된 뒤에 다음 컨테이너가 시작합니다.
+시작 순서는 서비스 7개 → `gateway` → `web` → `nginx`입니다. 앞 컨테이너가 healthy(포트가 열려 요청을 받을 수 있는 상태)가 된 뒤에 다음 컨테이너가 시작합니다.
 
 ### 개발 실행 (앱 컨테이너 제외)
 
 IDE나 `./gradlew :member-service:bootRun`(또는 `:cash-service:bootRun`, `:payout-service:bootRun`, `:file-service:bootRun`, `:order-service:bootRun`, `:product-service:bootRun`, `:queue-service:bootRun`)으로 서비스를 실행하면 Spring Boot가 `compose.yml`의 인프라 컨테이너를 자동으로 띄웁니다. 이미 실행 중이면 그대로 사용합니다.
-게이트웨이(`./gradlew :gateway:bootRun`, 8000)는 인프라를 쓰지 않으므로 컨테이너를 띄우지 않고, `localhost:8080~8085`의 서비스로 요청을 넘깁니다.
+게이트웨이(`./gradlew :gateway:bootRun`, 8000)는 인프라를 쓰지 않으므로 컨테이너를 띄우지 않고, `localhost:8080~8086`의 서비스로 요청을 넘깁니다.
 여러 서비스가 같은 인프라를 쓰므로 서비스를 종료해도 컨테이너는 멈추지 않습니다(`lifecycle-management: start-only`). 정리할 때는 `docker compose down`을 실행합니다.
 
 IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `FileApplication`, `OrderApplication`, `ProductApplication`, `QueueApplication`을 바로 실행하면 됩니다. 실행 위치(working directory)가 저장소 루트, `backend/`, 모듈 폴더 중 어디여도
