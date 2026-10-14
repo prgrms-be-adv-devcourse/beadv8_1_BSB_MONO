@@ -66,4 +66,11 @@ public class StubRaceCoursePort implements RaceCoursePort {
 			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, true, now.toLocalDate().plusDays(5),
 			null);
 	}
+
+	// 같은 종목을 판매자가 취소한 대회로 바꾼다 (B saleStatus = CANCELED)
+	public static RaceCourseInfo canceled(RaceCourseInfo course) {
+		return new RaceCourseInfo(course.raceCourseId(), course.raceId(), course.raceDate(), course.applicationOpenAt(),
+			course.applicationCloseAt(), course.minAge(), course.maxAge(), course.sellerId(), course.courseName(),
+			course.price(), course.kitIncluded(), course.refundDeadline(), course.scheduleChangedAt(), true);
+	}
 }

@@ -42,6 +42,7 @@ public class ParticipationApplyUseCase {
 
 	public Participation apply(int memberId, int raceCourseId, ParticipantInfo participant, LocalDateTime now) {
 		RaceCourseInfo course = findCourse(raceCourseId);
+		checkNotCanceled(course);
 		if (!course.isAccepting(now)) {
 			throw new ApplicationPeriodException("접수 기간이 아닙니다.");
 		}
@@ -86,6 +87,7 @@ public class ParticipationApplyUseCase {
 			throw new ParticipationChangeRetryException("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.");
 		}
 		RaceCourseInfo course = findCourse(participation.getRaceCourseId());
+		checkNotCanceled(course);
 		if (!course.isBeforeClose(now)) {
 			throw new ApplicationPeriodException("접수가 마감되어 참가자 정보를 고칠 수 없습니다.");
 		}
@@ -138,6 +140,13 @@ public class ParticipationApplyUseCase {
 		if (!course.allowsAge(participant.getBirth())) {
 			throw new AgeRestrictionException("참가할 수 있는 나이가 아닙니다(대회 당일 %s, 신청자 만 %d세)."
 				.formatted(course.ageRangeLabel(), course.ageOnRaceDay(participant.getBirth())));
+		}
+	}
+
+	// 취소된 대회는 접수 기간 문구 대신 취소됐다고 알린다 (취소된 대회는 isAccepting·isBeforeClose도 거짓이다)
+	static void checkNotCanceled(RaceCourseInfo course) {
+		if (course.canceled()) {
+			throw new ApplicationPeriodException("취소된 대회입니다.");
 		}
 	}
 }
