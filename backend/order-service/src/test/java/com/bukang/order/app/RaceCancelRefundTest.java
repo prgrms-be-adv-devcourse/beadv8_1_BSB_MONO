@@ -1,6 +1,7 @@
 package com.bukang.order.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -34,6 +35,8 @@ import com.bukang.order.domain.OrderItemStatus;
 import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.domain.event.OrderRaceCanceledEvent;
+import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
+import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.in.RaceCanceledNotificationListener;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
@@ -129,8 +132,9 @@ class RaceCancelRefundTest {
 		assertThat(walletPort.refundCalls())
 			.containsExactlyInAnyOrder(new StubWalletPort.Call(first, 1), new StubWalletPort.Call(second, 2));
 		assertThat(walletPort.refundedAmounts()).containsExactly(StubRaceCoursePort.PRICE, StubRaceCoursePort.PRICE);
-		// 결제 대기 주문은 만료 정리가, 다른 대회 주문은 그대로 둔다
+		// 결제 대기 주문은 결제를 막아 두고(만료 정리가 끝낸다), 다른 대회 주문은 그대로 둔다
 		assertThat(statusOf(waiting)).isEqualTo(OrderStatus.CREATED);
+		assertThat(walletPort.cancelCalls()).containsExactly(new StubWalletPort.Call(waiting, 3));
 		assertThat(statusOf(otherRace)).isEqualTo(OrderStatus.PAID);
 		// 자리는 되돌리지 않는다 (취소된 대회는 다시 팔지 않는다)
 		assertThat(seatHoldPort.restoredParticipations()).isEmpty();
@@ -192,6 +196,38 @@ class RaceCancelRefundTest {
 		assertThat(result).isEqualTo(
 			new RaceCancelRefundUseCase.RefundResult(0, RaceCancelRefundUseCase.MAX_CONSECUTIVE_FAILURES));
 		assertThat(walletPort.refundCalls()).hasSize(RaceCancelRefundUseCase.MAX_CONSECUTIVE_FAILURES);
+	}
+
+	@Test
+	@DisplayName("결제 응답을 못 받아 결제 대기로 남은 주문은 결제를 취소해 돈을 돌려받고, 대회 취소 뒤 다시 결제해도 거절된다")
+	void blocksLatePaymentOfWaitingOrder() throws Exception {
+		int orderId = createOrder(1, COURSE_ID);
+		walletPort.setPayTimesOut(true);
+		assertThatThrownBy(() -> pay(1, orderId)).isInstanceOf(ExternalServiceUnavailableException.class);
+		walletPort.setPayTimesOut(false);
+		assertThat(walletPort.balance()).isEqualTo(BALANCE - StubRaceCoursePort.PRICE);
+
+		raceCancelRefundUseCase.refundAll(RACE_ID, LocalDateTime.now());
+
+		assertThat(walletPort.balance()).isEqualTo(BALANCE);
+		assertThatThrownBy(() -> pay(1, orderId)).isInstanceOf(OrderNotPayableException.class);
+		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.CREATED);
+		verify(notificationListener, never()).notifyBuyer(any());
+	}
+
+	@Test
+	@DisplayName("다시 해도 안 되는 실패(D 거절 등)는 그 주문만 실패로 세고, 연달아 나도 멈추지 않고 나머지를 환불한다")
+	void keepsGoingAfterRejectedRefunds() throws Exception {
+		int count = RaceCancelRefundUseCase.MAX_CONSECUTIVE_FAILURES + 2;
+		for (int memberId = 1; memberId <= count; memberId++) {
+			paidOrder(memberId, COURSE_ID);
+		}
+		walletPort.setRefundRejects(true);
+
+		RaceCancelRefundUseCase.RefundResult result = raceCancelRefundUseCase.refundAll(RACE_ID, LocalDateTime.now());
+
+		assertThat(result).isEqualTo(new RaceCancelRefundUseCase.RefundResult(0, count));
+		assertThat(walletPort.refundCalls()).hasSize(count);
 	}
 
 	@Test

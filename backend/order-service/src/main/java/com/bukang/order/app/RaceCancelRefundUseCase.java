@@ -9,7 +9,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItem;
+import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.Participation;
+import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.domain.exception.ParticipationNotFoundException;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
@@ -23,7 +25,9 @@ import lombok.extern.slf4j.Slf4j;
  * 주문마다: 주문 잠금 → 결제한 주문 상품 CANCELED, 주문 CANCELED → 참가 신청 CANCELED → 예치금 환불(D, 주문 ID 멱등)
  * 환불 기한·정산 대상일은 보지 않는다. 대회 취소는 기한과 상관없이 전액 환불이고, 정산은 대회 취소로 보류된다 (PRO-34)
  * 자리는 되돌리지 않는다. 취소된 대회는 다시 팔지 않고, 결제 대기 자리는 상품 서비스가 취소할 때 함께 푼다
- * 결제 대기 주문은 그대로 둔다. 상품이 자리를 풀었으므로 결제하면 판매가 거절되고, 기한이 지나면 만료 정리가 끝낸다
+ * 결제 대기 주문은 예치금 결제를 취소해 둔다(D, 주문 ID 멱등). 결제가 차감·판매 뒤 응답을 못 받아 결제 대기로 남았으면
+ * 상품은 이미 판 자리라 다시 결제할 때 판매를 허락하므로, D에서 막지 않으면 취소된 대회의 참가권이 결제된다.
+ * 빠져나간 돈도 이때 돌려받는다. 주문은 결제 대기로 두고, 기한이 지나면 만료 정리가 끝낸다
  */
 @Slf4j
 @Service
@@ -31,7 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 public class RaceCancelRefundUseCase {
 	// 한 번에 읽을 주문 ID 수. 대회 하나의 주문이 많아도 ID 목록을 한꺼번에 메모리에 올리지 않는다
 	static final int BATCH_SIZE = 100;
-	// 이만큼 연달아 환불에 실패하면 예치금 서비스 장애로 보고 멈춘다. 남은 주문은 재시도 토픽이 간격을 두고 다시 처리한다
+	// 예치금 서비스에 이만큼 연달아 닿지 못하면(503) 장애로 보고 멈춘다. 남은 주문은 재시도 토픽이 간격을 두고 다시 처리한다
 	// (장애 중에 주문마다 시간 초과 2초를 기다리면 Kafka가 소비자를 내보내 같은 메시지를 바로 다시 처리한다)
 	static final int MAX_CONSECUTIVE_FAILURES = 5;
 
@@ -43,7 +47,8 @@ public class RaceCancelRefundUseCase {
 	/**
 	 * @param refundedOrders 이번에 취소·환불한 주문 수
 	 * @param failedOrders   환불(D 장애 등)에 실패해 결제 완료로 남긴 주문 수. 같은 대회 취소를 다시 처리하면 이어서 환불한다
-	 *                       연달아 실패해 중간에 멈추면 1 이상이다 (보지 못한 주문은 세지 않는다)
+	 *                       예치금 장애로 중간에 멈추면 1 이상이다 (보지 못한 주문은 세지 않는다)
+	 *                       결제 대기 주문의 결제 취소에 실패한 것도 센다
 	 */
 	public record RefundResult(int refundedOrders, int failedOrders) {
 	}
@@ -69,15 +74,22 @@ public class RaceCancelRefundUseCase {
 						refunded++;
 					}
 					consecutiveFailures = 0;
-				} catch (RuntimeException exception) {
+				} catch (ExternalServiceUnavailableException exception) {
 					failed++;
 					consecutiveFailures++;
 					log.warn("취소된 대회의 주문을 환불하지 못했습니다. raceId={}, orderId={}, cause={}",
 						raceId, orderId, exception.toString());
 					if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-						log.warn("환불이 {}건 연달아 실패해 멈추고 나중에 다시 처리합니다. raceId={}", consecutiveFailures, raceId);
+						log.warn("예치금 서비스에 {}건 연달아 닿지 못해 멈추고 나중에 다시 처리합니다. raceId={}",
+							consecutiveFailures, raceId);
 						break;
 					}
+				} catch (RuntimeException exception) {
+					// 다시 해도 안 될 수 있는 실패(D가 거절 등)는 그 주문만 실패로 세고 다음 주문을 계속 환불한다
+					failed++;
+					consecutiveFailures = 0;
+					log.warn("취소된 대회의 주문을 환불하지 못했습니다. raceId={}, orderId={}, cause={}",
+						raceId, orderId, exception.toString());
 				}
 			}
 		}
@@ -89,6 +101,11 @@ public class RaceCancelRefundUseCase {
 	private boolean refundLocked(int orderId, LocalDateTime now) {
 		Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
 		if (order == null) {
+			return false;
+		}
+		if (order.getStatus() == OrderStatus.CREATED) {
+			// 결제 대기 주문: 뒤늦은 결제를 막고, 응답을 못 받아 빠져나간 돈이 있으면 돌려받는다
+			walletPort.cancelPayment(order.getId(), order.getBuyerId());
 			return false;
 		}
 		List<OrderItem> canceledItems = order.cancelPaidItems(now);
