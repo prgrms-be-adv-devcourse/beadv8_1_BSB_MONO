@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -43,9 +45,12 @@ import com.jayway.jsonpath.JsonPath;
 
 /**
  * 대회 수정(PUT /api/v1/product/races/{raceId})을 확인한다.
- * - 판매 시작 일시 전(판매 예정)에는 참가비·정원·참가 조건·환불 기준일을 자유롭게 바꿀 수 있다
- * - 판매가 시작된 뒤에는 참가비 인상, 정원 줄이기, 참가 조건·티셔츠 사이즈 변경, 환불 기준일 앞당기기, 종목 빼기가 409다
- * - 이미 지난 판매 일정을 바꾸거나 일정을 지난 시각으로 옮기면 409다 (판매 시작 일시 전에도)
+ * - 판매 시작일 전(판매 예정)에는 참가비·키트 금액·정원·참가 조건·환불 기준일을 자유롭게 바꿀 수 있다
+ *   판매 시작일이 바뀌면 등록과 같이 오늘로부터 이틀 뒤부터만 된다 (400)
+ * - 판매가 시작된 뒤(판매 시작일 0시부터)에는 판매 시작일을 정하는 일정(크루 예매 시작, 크루 예매가 없으면 개인 예매 오픈)
+ *   변경, 참가비·키트 금액 변경, 정원 줄이기, 참가 조건·티셔츠 사이즈 변경, 환불 기준일 앞당기기, 종목 빼기가 409다
+ * - 취소된 대회와 판매가 끝난 대회(대회일 다음 날 0시부터)는 어떤 칸도 수정할 수 없다 (409)
+ * - 이미 지난 판매 일정을 바꾸거나 일정을 지난 시각으로 옮기면 409다 (판매 시작일 전에도)
  * - 판매가 시작된 뒤 대회 일시·장소를 바꾸면 일정·장소 변경 일시를 남긴다 (판매 전에는 남기지 않는다)
  * - 수정이 커밋되면 파일 연결 메시지를 보내고 검색 문서를 다시 만들며, 정원을 늘리면 정원 마감 종목이 접수 중으로 돌아온다
  */
@@ -59,13 +64,13 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 	// ---------- 판매 시작 전 수정 ----------
 
 	@Test
-	@DisplayName("판매 예정(개인 예매 하루 뒤 오픈) 대회는 참가비 인상(45,000→60,000원), 정원 축소(100→50), "
-		+ "참가 조건·환불 기준일·개인 예매 오픈(하루 뒤→이틀 뒤)을 모두 바꿀 수 있다")
+	@DisplayName("판매 예정(개인 예매 이틀 뒤 오픈) 대회는 참가비 인상(45,000→60,000원), 키트 금액(0→5,000원), "
+		+ "정원 축소(100→50), 참가 조건·환불 기준일·개인 예매 오픈(이틀 뒤→사흘 뒤)을 모두 바꿀 수 있다")
 	void updateAnythingBeforeSaleOpen() throws Exception {
 		RegisteredRace registered = register(scheduledRace().build());
 
 		RaceSaveRequestDto request = scheduledRace()
-			.individualOpenAt(now.plusDays(2))
+			.individualOpenAt(now.plusDays(3))
 			.refundDeadline(now.plusDays(5).toLocalDate())
 			.course(sameCourse(registered.courseId())
 				.price(60_000)
@@ -89,6 +94,7 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 
 		RaceCourse course = findCourse(registered.courseId());
 		assertThat(course.getPrice()).isEqualTo(60_000);
+		assertThat(course.getKitPrice()).isEqualTo(5_000);
 		assertThat(course.getIndividualQuota()).isEqualTo(50);
 		assertThat(course.getCourseType()).isEqualTo(CourseType.HALF);
 		assertThat(course.getSurface()).isEqualTo(CourseSurface.TRAIL);
@@ -101,9 +107,9 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 		assertThat(course.getTshirtSizeOption()).containsExactly(TshirtSize.M, TshirtSize.L);
 		Race race = findRace(registered.raceId());
 		assertThat(race.getRefundDeadline()).isEqualTo(now.plusDays(5).toLocalDate());
-		assertThat(race.getIndividualOpenAt()).isEqualTo(now.plusDays(2));
-		// 판매 시작 일시는 바뀐 개인 예매 오픈으로 다시 채운다
-		assertThat(race.getSaleOpenAt()).isEqualTo(now.plusDays(2));
+		assertThat(race.getIndividualOpenAt()).isEqualTo(now.plusDays(3));
+		// 판매 시작일은 바뀐 개인 예매 오픈 날짜로 다시 채운다
+		assertThat(race.getSaleOpenDate()).isEqualTo(now.plusDays(3).toLocalDate());
 		assertThat(race.getSaleStatus()).isEqualTo(RaceSaleStatus.SCHEDULED);
 	}
 
@@ -126,7 +132,7 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("판매 예정 대회의 개인 예매 오픈(하루 뒤)을 한 시간 전으로 옮기면 409이고 일정은 그대로다")
+	@DisplayName("판매 예정 대회의 개인 예매 오픈(이틀 뒤)을 한 시간 전으로 옮기면 409이고 일정은 그대로다")
 	void rejectMovingScheduleToPastWhenScheduled() throws Exception {
 		RegisteredRace registered = register(scheduledRace().build());
 
@@ -138,24 +144,59 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 			.andExpect(jsonPath("$.status").value(409))
 			.andExpect(jsonPath("$.message").value("개인 예매 오픈 일시를 지난 시각으로 바꿀 수 없습니다."));
 
-		assertThat(findRace(registered.raceId()).getIndividualOpenAt()).isEqualTo(now.plusDays(1));
+		assertThat(findRace(registered.raceId()).getIndividualOpenAt()).isEqualTo(now.plusDays(2));
+	}
+
+	@Test
+	@DisplayName("판매 예정 대회의 개인 예매 오픈(이틀 뒤)을 내일로 당겨 판매 시작일이 이틀 뒤보다 빨라지면 400이고 일정은 그대로다")
+	void rejectSaleOpenDateBeforeTwoDaysWhenScheduled() throws Exception {
+		RegisteredRace registered = register(scheduledRace().build());
+
+		update(registered.raceId(), scheduledRace()
+			.individualOpenAt(now.plusDays(1))
+			.course(sameCourse(registered.courseId()))
+			.build())
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value(("판매 시작일은 오늘로부터 이틀 뒤(%s)부터 정할 수 있습니다. "
+				+ "크루 예매 시작·개인 예매 오픈 일시를 확인해주세요.")
+				.formatted(now.toLocalDate().plusDays(2).format(DateTimeFormatter.ofPattern("M월 d일")))));
+
+		Race race = findRace(registered.raceId());
+		assertThat(race.getIndividualOpenAt()).isEqualTo(now.plusDays(2));
+		assertThat(race.getSaleOpenDate()).isEqualTo(now.plusDays(2).toLocalDate());
 	}
 
 	// ---------- 판매 시작 뒤 수정: 막히는 변경 ----------
 
-	@Test
-	@DisplayName("판매 중 종목의 참가비를 45,000원에서 50,000원으로 올리면 409이고, 저장되지 않아 파일 연결 메시지도 없다")
-	void rejectPriceRaiseAfterSaleStarted() throws Exception {
+	@ParameterizedTest(name = "45,000원 → {0}원")
+	@ValueSource(ints = {50_000, 40_000})
+	@DisplayName("판매 중 종목의 참가비를 올리거나 내리면 409이고, 저장되지 않아 파일 연결 메시지도 없다")
+	void rejectPriceChangeAfterSaleStarted(int newPrice) throws Exception {
 		RegisteredRace registered = registerOnSale(sameRace().build());
 
-		update(registered.raceId(), sameRace().course(sameCourse(registered.courseId()).price(50_000)).build())
+		update(registered.raceId(), sameRace().course(sameCourse(registered.courseId()).price(newPrice)).build())
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.status").value(409))
-			.andExpect(jsonPath("$.message").value("판매가 시작된 종목은 참가비를 올릴 수 없습니다. (종목: 10K)"));
+			.andExpect(jsonPath("$.message").value("판매가 시작된 종목은 참가비를 바꿀 수 없습니다. (종목: 10K)"));
 
 		assertThat(findCourse(registered.courseId()).getPrice()).isEqualTo(45_000);
 		// 등록 때 보낸 1건뿐이다
 		assertThat(fileLinkMessages()).hasSize(1);
+	}
+
+	@ParameterizedTest(name = "5,000원 → {0}원")
+	@ValueSource(ints = {6_000, 0})
+	@DisplayName("판매 중 종목의 키트 금액을 올리거나 내리면 409이다")
+	void rejectKitPriceChangeAfterSaleStarted(int newKitPrice) throws Exception {
+		RegisteredRace registered = registerOnSale(sameRace().course(course().kit(5_000)).build());
+
+		update(registered.raceId(), sameRace()
+			.course(sameCourse(registered.courseId()).kit(newKitPrice))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("판매가 시작된 종목은 키트 금액을 바꿀 수 없습니다. (종목: 10K)"));
+
+		assertThat(findCourse(registered.courseId()).getKitPrice()).isEqualTo(5_000);
 	}
 
 	@Test
@@ -248,8 +289,8 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("판매 중 대회의 이미 지난 개인 예매 오픈(한 시간 전)을 두 시간 전으로 바꾸면 409이다")
-	void rejectPassedIndividualOpenChange() throws Exception {
+	@DisplayName("크루 예매가 없는 판매 중 대회는 판매 시작일을 정하는 개인 예매 오픈(한 시간 전)을 두 시간 전으로 바꾸면 409이다")
+	void rejectIndividualOpenChangeAfterSaleStarted() throws Exception {
 		RegisteredRace registered = registerOnSale(sameRace().build());
 
 		update(registered.raceId(), sameRace()
@@ -257,14 +298,14 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 			.course(sameCourse(registered.courseId()))
 			.build())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 지난 개인 예매 오픈 일시는 바꿀 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("판매가 시작된 대회는 개인 예매 오픈 일시를 바꿀 수 없습니다."));
 
 		assertThat(findRace(registered.raceId()).getIndividualOpenAt()).isEqualTo(now.minusHours(1));
 	}
 
 	@Test
-	@DisplayName("판매 중 대회의 이미 지난 크루 예매 시작(3일 전)을 한 시간 늦추면 409이다")
-	void rejectPassedCrewSaleStartChange() throws Exception {
+	@DisplayName("크루 예매가 있는 판매 중 대회는 판매 시작일을 정하는 크루 예매 시작(3일 전)을 한 시간 늦추면 409이다")
+	void rejectCrewSaleStartChangeAfterSaleStarted() throws Exception {
 		RegisteredRace registered = registerOnSale(withPassedCrewSale(sameRace()).build());
 
 		update(registered.raceId(), sameRace()
@@ -272,9 +313,52 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 			.course(sameCourse(registered.courseId()))
 			.build())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 지난 크루 예매 시작 일시는 바꿀 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("판매가 시작된 대회는 크루 예매 시작 일시를 바꿀 수 없습니다."));
 
 		assertThat(findRace(registered.raceId()).getCrewSaleStartAt()).isEqualTo(now.minusDays(3));
+	}
+
+	@Test
+	@DisplayName("판매 중 대회의 이미 지난 크루 예매 마감(2일 전)을 한 시간 늦추면 409이다")
+	void rejectPassedCrewSaleEndChange() throws Exception {
+		RegisteredRace registered = registerOnSale(withPassedCrewSale(sameRace()).build());
+
+		update(registered.raceId(), sameRace()
+			.crewSale(now.minusDays(3), now.minusDays(2).plusHours(1))
+			.course(sameCourse(registered.courseId()))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("이미 지난 크루 예매 마감 일시는 바꿀 수 없습니다."));
+
+		assertThat(findRace(registered.raceId()).getCrewSaleEndAt()).isEqualTo(now.minusDays(2));
+	}
+
+	@Test
+	@DisplayName("판매 시작일이 오늘이면 개인 예매가 오늘 23:59에 열려 아직 예매 전이어도 판매 중이고, "
+		+ "참가비와 개인 예매 오픈을 바꾸면 409이다")
+	void lockFromSaleOpenDateBeforeIndividualOpen() throws Exception {
+		LocalDateTime openAt = now.toLocalDate().atTime(23, 59);
+		RegisteredRace registered = registerOnSale(sameRace().individualOpenAt(openAt).build());
+		assertThat(findRace(registered.raceId()).getSaleStatus()).isEqualTo(RaceSaleStatus.ON_SALE);
+
+		update(registered.raceId(), sameRace()
+			.individualOpenAt(openAt)
+			.course(sameCourse(registered.courseId()).price(40_000))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("판매가 시작된 종목은 참가비를 바꿀 수 없습니다. (종목: 10K)"));
+
+		update(registered.raceId(), sameRace()
+			.individualOpenAt(openAt.plusDays(1))
+			.course(sameCourse(registered.courseId()))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("판매가 시작된 대회는 개인 예매 오픈 일시를 바꿀 수 없습니다."));
+
+		Race race = findRace(registered.raceId());
+		assertThat(race.getIndividualOpenAt()).isEqualTo(openAt);
+		assertThat(race.getSaleOpenDate()).isEqualTo(now.toLocalDate());
+		assertThat(findCourse(registered.courseId()).getPrice()).isEqualTo(45_000);
 	}
 
 	@Test
@@ -372,22 +456,57 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 		assertThat(race.getTitle()).isEqualTo("2026 서울 하프 마라톤");
 	}
 
+	@Test
+	@DisplayName("대회일이 이틀 지난 판매 중 대회는 상태 배치가 판매 종료로 바꾸기 전이라도 대회명만 바꿔도 409이고 대회는 그대로다")
+	void rejectUpdateAfterRaceDate() throws Exception {
+		RegisteredRace finished = registerOnSale(finishedRace().build());
+		assertThat(findRace(finished.raceId()).getSaleStatus()).isEqualTo(RaceSaleStatus.ON_SALE);
+
+		update(finished.raceId(), finishedRace()
+			.title("끝난 뒤 바꾼 이름")
+			.course(sameCourse(finished.courseId()))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("판매가 끝난 대회는 수정할 수 없습니다."));
+
+		assertThat(findRace(finished.raceId()).getTitle()).isEqualTo("2026 서울 하프 마라톤");
+		// 등록 때 보낸 1건뿐이다
+		assertThat(fileLinkMessages()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("상태 배치가 판매 종료(CLOSED)로 바꾼 대회는 대회명만 바꿔도 409이고 대회는 그대로다")
+	void rejectUpdateOfClosedRace() throws Exception {
+		RegisteredRace finished = registerOnSale(finishedRace().build());
+		productFacade.refreshSaleStatuses();
+		assertThat(findRace(finished.raceId()).getSaleStatus()).isEqualTo(RaceSaleStatus.CLOSED);
+
+		update(finished.raceId(), finishedRace()
+			.title("끝난 뒤 바꾼 이름")
+			.course(sameCourse(finished.courseId()))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("판매가 끝난 대회는 수정할 수 없습니다."));
+
+		Race race = findRace(finished.raceId());
+		assertThat(race.getSaleStatus()).isEqualTo(RaceSaleStatus.CLOSED);
+		assertThat(race.getTitle()).isEqualTo("2026 서울 하프 마라톤");
+	}
+
 	// ---------- 판매 시작 뒤 수정: 허용되는 변경 ----------
 
 	@Test
-	@DisplayName("판매 중에도 참가비를 45,000원에서 40,000원으로 내리고 개인 정원을 100에서 150으로 늘릴 수 있다")
-	void allowFavorableChangesAfterSaleStarted() throws Exception {
+	@DisplayName("판매 중에도 개인 정원을 100에서 150으로 늘릴 수 있다")
+	void allowQuotaIncreaseAfterSaleStarted() throws Exception {
 		RegisteredRace registered = registerOnSale(sameRace().build());
 
 		update(registered.raceId(), sameRace()
-			.course(sameCourse(registered.courseId()).price(40_000).quota(0, 150))
+			.course(sameCourse(registered.courseId()).quota(0, 150))
 			.build())
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.saleStatus").value("ON_SALE"));
 
-		RaceCourse course = findCourse(registered.courseId());
-		assertThat(course.getPrice()).isEqualTo(40_000);
-		assertThat(course.getIndividualQuota()).isEqualTo(150);
+		assertThat(findCourse(registered.courseId()).getIndividualQuota()).isEqualTo(150);
 	}
 
 	@Test
@@ -670,7 +789,7 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 	// ---------- 도우미 ----------
 
 	// 기본 요청과 같은 일정 (대회 15일 뒤, 개인 예매 한 시간 전 오픈, 접수 마감 10일 뒤, 환불 기준일 = 대회 날짜)
-	// 판매 시작 일시가 지났으므로 registerOnSale()로 판매 중 대회를 만든다
+	// 판매 시작일이 오늘이므로 registerOnSale()로 판매 중 대회를 만든다
 	private RaceBuilder sameRace() {
 		return race()
 			.raceDate(now.plusDays(15))
@@ -678,9 +797,18 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 			.applicationCloseAt(now.plusDays(10));
 	}
 
-	// 판매 시작 일시 전인 판매 예정 대회의 일정 (개인 예매만 하루 뒤 오픈, 나머지는 sameRace()와 같다)
+	// 판매 시작일 전인 판매 예정 대회의 일정 (개인 예매만 이틀 뒤 오픈, 나머지는 sameRace()와 같다)
+	// 판매 시작일은 오늘로부터 이틀 뒤부터 정할 수 있어 register()로 등록된다
 	private RaceBuilder scheduledRace() {
-		return sameRace().individualOpenAt(now.plusDays(1));
+		return sameRace().individualOpenAt(now.plusDays(2));
+	}
+
+	// 대회일이 이틀 지난 대회의 일정 (개인 예매 오픈 5일 전, 접수 마감 3일 전). registerOnSale()로 만들면 판매 중이다
+	private RaceBuilder finishedRace() {
+		return race()
+			.raceDate(now.minusDays(2))
+			.individualOpenAt(now.minusDays(5))
+			.applicationCloseAt(now.minusDays(3));
 	}
 
 	// 이미 끝난 크루 예매(3일 전 시작, 2일 전 마감)를 더한다. 개인 예매 오픈(한 시간 전)은 크루 마감 다음 날 06:00 이후다

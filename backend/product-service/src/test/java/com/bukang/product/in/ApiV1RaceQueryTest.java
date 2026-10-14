@@ -134,8 +134,9 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 
 		String body = bodyOf(result);
 		assertThat(dateTimeAt(body, "$.data.raceDate")).isEqualTo(now.plusDays(20));
-		// 크루 예매가 없으면 개인 예매 오픈이 판매 시작 일시다
-		assertThat(dateTimeAt(body, "$.data.saleOpenAt")).isEqualTo(now.minusHours(2));
+		// 크루 예매가 없으면 개인 예매 오픈 날짜가 판매 시작일이다
+		assertThat(LocalDate.parse(JsonPath.<String>read(body, "$.data.saleOpenDate")))
+			.isEqualTo(now.minusHours(2).toLocalDate());
 		assertThat(dateTimeAt(body, "$.data.individualOpenAt")).isEqualTo(now.minusHours(2));
 		assertThat(dateTimeAt(body, "$.data.applicationCloseAt")).isEqualTo(now.plusDays(18));
 	}
@@ -150,7 +151,7 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 			"이러너", SellerStatus.APPROVED, now, now));
 		RaceBuilder builder = race();
 		RegisteredRace registered = register(INDIVIDUAL_SELLER_MEMBER_ID,
-			builder.individualOpenAt(builder.now().plusDays(1)).build());
+			builder.individualOpenAt(builder.now().plusDays(2)).build());
 
 		getAs(RACES + registered.raceId(), null)
 			.andExpect(status().isOk())
@@ -184,11 +185,11 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("개인 예매가 내일 열리는 대회는 등록하자마자 판매 예정이고, 헤더 없음·등록한 판매자(9001)·다른 판매자(9002)·"
+	@DisplayName("개인 예매가 이틀 뒤 열리는 대회는 등록하자마자 판매 예정이고, 헤더 없음·등록한 판매자(9001)·다른 판매자(9002)·"
 		+ "판매자 아닌 회원(9999) 모두 200으로 본다")
 	void scheduledRaceVisibleToEveryone() throws Exception {
 		RaceBuilder builder = race();
-		RegisteredRace registered = register(builder.individualOpenAt(builder.now().plusDays(1)).build());
+		RegisteredRace registered = register(builder.individualOpenAt(builder.now().plusDays(2)).build());
 		String path = RACES + registered.raceId();
 
 		for (Integer memberId : new Integer[] {null, SELLER_MEMBER_ID, OTHER_SELLER_MEMBER_ID, NOT_SELLER_MEMBER_ID}) {
@@ -250,19 +251,19 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 		+ "다른 판매자(9002)의 대회는 빠진다")
 	void findMineInRecentOrder() throws Exception {
 		RaceBuilder firstBuilder = race().title("첫 번째 대회");
-		RegisteredRace first = register(firstBuilder.individualOpenAt(firstBuilder.now().plusDays(1)).build());
+		RegisteredRace first = register(firstBuilder.individualOpenAt(firstBuilder.now().plusDays(2)).build());
 		RegisteredRace second = registerOnSale(race().title("두 번째 대회").build());
 		RaceBuilder builder = race().title("세 번째 대회");
 		LocalDateTime now = builder.now();
 		RegisteredRace third = register(builder
 			.raceDate(now.plusDays(20))
-			.individualOpenAt(now.plusDays(1))
+			.individualOpenAt(now.plusDays(2))
 			.applicationCloseAt(now.plusDays(18))
 			.course(course().name("하프").type(CourseType.HALF).distanceKm("21.1").price(60_000).quota(0, 70))
 			.build());
 		RaceBuilder othersBuilder = race().title("다른 판매자 대회");
 		RegisteredRace others = register(OTHER_SELLER_MEMBER_ID,
-			othersBuilder.individualOpenAt(othersBuilder.now().plusDays(1)).build());
+			othersBuilder.individualOpenAt(othersBuilder.now().plusDays(2)).build());
 
 		ResultActions result = getAs(MINE, SELLER_MEMBER_ID)
 			.andExpect(status().isOk())
@@ -283,8 +284,9 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 
 		String body = bodyOf(result);
 		assertThat(dateTimeAt(body, "$.data[0].raceDate")).isEqualTo(now.plusDays(20));
-		// 크루 예매가 없으면 개인 예매 오픈이 판매 시작 일시다
-		assertThat(dateTimeAt(body, "$.data[0].saleOpenAt")).isEqualTo(now.plusDays(1));
+		// 크루 예매가 없으면 개인 예매 오픈 날짜가 판매 시작일이다
+		assertThat(LocalDate.parse(JsonPath.<String>read(body, "$.data[0].saleOpenDate")))
+			.isEqualTo(now.plusDays(2).toLocalDate());
 		assertThat(dateTimeAt(body, "$.data[0].applicationCloseAt")).isEqualTo(now.plusDays(18));
 
 		getAs(MINE, OTHER_SELLER_MEMBER_ID)
@@ -355,7 +357,7 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 		RaceBuilder builder = race().title("2026 춘천 가을 마라톤");
 		LocalDateTime now = builder.now();
 		LocalDateTime crewSaleStartAt = now.minusDays(3);
-		// 크루 마감 다음 날 06:00. 판매 시작 일시(크루 예매 시작)와 달라야 applicationOpenAt이 개인 예매 오픈인지 알 수 있다
+		// 크루 마감 다음 날 06:00. 크루 예매 시작과 달라야 applicationOpenAt이 개인 예매 오픈인지 알 수 있다
 		LocalDateTime individualOpenAt = now.minusDays(1).toLocalDate().atTime(6, 0);
 		LocalDate refundDeadline = now.plusDays(15).toLocalDate();
 		RaceSaveRequestDto request = builder
@@ -434,11 +436,11 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("판매 예정(개인 예매 내일 오픈) 대회의 종목 정보도 200이며 "
+	@DisplayName("판매 예정(개인 예매 이틀 뒤 오픈) 대회의 종목 정보도 200이며 "
 		+ "courseName은 '2026 서울 하프 마라톤 10K', 키트 없는 종목이라 kitPrice 0·티셔츠 사이즈 없음이다")
 	void findScheduledCourseInfo() throws Exception {
 		RaceBuilder builder = race();
-		LocalDateTime individualOpenAt = builder.now().plusDays(1);
+		LocalDateTime individualOpenAt = builder.now().plusDays(2);
 		RegisteredRace registered = register(builder.individualOpenAt(individualOpenAt).build());
 
 		ResultActions result = getAs(COURSES + registered.courseId(), null)

@@ -24,7 +24,7 @@ import com.bukang.product.out.RaceRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 승인된 판매자가 대회와 종목을 판매 예정(SCHEDULED)으로 등록한다. 판매 시작 일시가 이미 지난 대회는 등록하지 못한다.
+ * 승인된 판매자가 대회와 종목을 판매 예정(SCHEDULED)으로 등록한다. 판매 시작일은 오늘로부터 이틀 뒤부터 정할 수 있다.
  * 이미지 연결 메시지(이미지는 모두 종목, 즉 RaceCourse 대상)는 여기서 만들기만 하고,
  * ProductFacade가 커밋한 뒤 Kafka로 보낸다.
  */
