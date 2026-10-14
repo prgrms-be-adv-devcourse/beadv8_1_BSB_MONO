@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.cash.dto.CashPaymentDto;
 import com.bukang.cash.dto.WalletBalanceDto;
 
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,8 @@ public class CashFacade {
 	private final CashSupport cashSupport;
 	private final CashSyncMemberUseCase cashSyncMemberUseCase;
 	private final CashCreateWalletUseCase cashCreateWalletUseCase;
+	private final CashCompleteOrderPaymentUseCase cashCompleteOrderPaymentUseCase;
+	private final CashCancelOrderPaymentUseCase cashCancelOrderPaymentUseCase;
 
 	@Transactional
 	public CashMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate,
@@ -34,4 +37,13 @@ public class CashFacade {
 		return WalletBalanceDto.from(cashSupport.findWalletByHolderId(holderId));
 	}
 
+	@Transactional
+	public CashPaymentDto completeOrderPayment(int orderId, int customerId, int salePrice) {
+		return cashCompleteOrderPaymentUseCase.completeOrderPayment(orderId, customerId, salePrice);
+	}
+
+	@Transactional
+	public void cancelPayment(int orderId, int customerId) {
+		cashCancelOrderPaymentUseCase.cancelPayment(orderId, customerId);
+	}
 }
