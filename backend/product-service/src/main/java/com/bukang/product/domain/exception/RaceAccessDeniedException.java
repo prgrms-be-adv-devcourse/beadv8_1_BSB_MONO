@@ -5,7 +5,7 @@ import org.springframework.http.HttpStatus;
 import com.bukang.common.global.exception.BusinessException;
 
 /**
- * 다른 판매자가 등록한 대회를 수정하거나 판매를 시작하려 할 때
+ * 다른 판매자가 등록한 대회를 수정하거나 취소하려 할 때
  */
 public class RaceAccessDeniedException extends BusinessException {
 	public RaceAccessDeniedException() {

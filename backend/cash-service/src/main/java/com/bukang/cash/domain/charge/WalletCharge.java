@@ -28,7 +28,7 @@ public class WalletCharge extends BaseIdAndTime {
 	@ManyToOne(fetch = LAZY, optional = false)
 	private Wallet wallet;
 
-	private long amount;
+	private int amount;
 
 	@Column(nullable = false, length = 30)
 	private String pgProvider;
@@ -44,7 +44,7 @@ public class WalletCharge extends BaseIdAndTime {
 	private ChargeStatus status;
 	private LocalDateTime chargedAt;
 
-	public WalletCharge(Wallet wallet, long amount, String pgProvider, String idempotencyKey) {
+	public WalletCharge(Wallet wallet, int amount, String pgProvider, String idempotencyKey) {
 		this.wallet = wallet;
 		this.amount = amount;
 		this.pgProvider = pgProvider;

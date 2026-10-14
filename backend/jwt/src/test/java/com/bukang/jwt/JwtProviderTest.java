@@ -32,12 +32,60 @@ class JwtProviderTest {
 	@Test
 	@DisplayName("발급한 Refresh Token은 검증을 통과한다")
 	void issuedRefreshTokenPassesVerification() {
-		String token = provider.issueRefreshToken(42L);
+		String token = provider.issueRefreshToken(42L, "family-1", NOW.plus(Duration.ofDays(14)));
 
 		JwtClaims claims = provider.parse(token, TokenType.REFRESH);
 
 		assertThat(claims.memberId()).isEqualTo(42L);
+		assertThat(claims.type()).isEqualTo(TokenType.REFRESH);
 		assertThat(claims.expiresAt()).isEqualTo(NOW.plus(Duration.ofDays(14)));
+	}
+
+	@Test
+	@DisplayName("같은 회원에게 같은 순간 발급해도 jti가 달라 토큰이 서로 다르다")
+	void issuesDifferentJtiEvenAtSameInstant() {
+		String first = provider.issueAccessToken(42L);
+		String second = provider.issueAccessToken(42L);
+
+		assertThat(first).isNotEqualTo(second);
+		assertThat(provider.parse(first, TokenType.ACCESS).jti())
+			.isNotBlank()
+			.isNotEqualTo(provider.parse(second, TokenType.ACCESS).jti());
+	}
+
+	@Test
+	@DisplayName("Access Token에는 familyId가 없다")
+	void accessTokenHasNoFamilyId() {
+		JwtClaims claims = provider.parse(provider.issueAccessToken(42L), TokenType.ACCESS);
+
+		assertThat(claims.familyId()).isNull();
+	}
+
+	@Test
+	@DisplayName("회전용 Refresh Token은 넘긴 familyId와 만료 시각을 담고, 꺼낼 때 jti·familyId를 돌려준다")
+	void rotatingRefreshTokenCarriesFamilyIdAndGivenExpiry() {
+		Instant expiresAt = NOW.plus(Duration.ofDays(3));
+
+		String token = provider.issueRefreshToken(42L, "family-1", expiresAt);
+		JwtClaims claims = provider.parse(token, TokenType.REFRESH);
+
+		assertThat(claims.memberId()).isEqualTo(42L);
+		assertThat(claims.familyId()).isEqualTo("family-1");
+		assertThat(claims.jti()).isNotBlank();
+		assertThat(claims.expiresAt()).isEqualTo(expiresAt);
+	}
+
+	@Test
+	@DisplayName("회전용 Refresh Token은 familyId가 비었거나 만료 시각이 지금 이전이면 발급하지 않는다")
+	void rejectsRotatingRefreshTokenWithInvalidArguments() {
+		Instant later = NOW.plus(Duration.ofDays(1));
+
+		assertThatThrownBy(() -> provider.issueRefreshToken(42L, " ", later))
+			.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> provider.issueRefreshToken(42L, null, later))
+			.isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> provider.issueRefreshToken(42L, "family-1", NOW))
+			.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
@@ -75,7 +123,7 @@ class JwtProviderTest {
 	@Test
 	@DisplayName("Refresh Token을 Access Token으로 쓰면 거절한다")
 	void rejectsRefreshTokenUsedAsAccessToken() {
-		String refreshToken = provider.issueRefreshToken(42L);
+		String refreshToken = provider.issueRefreshToken(42L, "family-1", NOW.plus(Duration.ofDays(14)));
 
 		assertThatThrownBy(() -> provider.parse(refreshToken, TokenType.ACCESS))
 			.isInstanceOf(InvalidTokenException.class)

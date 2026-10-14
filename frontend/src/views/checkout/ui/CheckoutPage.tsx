@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { SAMPLE_PARTICIPANT, useBookingFlow } from '@/features/booking'
@@ -33,7 +33,7 @@ const RESULT: Record<
   {
     icon: IconName
     title: string
-    description: string
+    description: ReactNode
     action: string
     href: '/races' | '/checkout'
   }
@@ -41,21 +41,39 @@ const RESULT: Record<
   timeout: {
     icon: 'CircleAlert',
     title: '결제 시간이 지났어요',
-    description: '10분이 지나 잡아 둔 자리가 풀렸어요. 충전한 예치금은 그대로 남아 있어요.',
+    description: (
+      <>
+        10분이 지나 잡아 둔 자리가 풀렸어요.
+        <br />
+        충전한 예치금은 그대로 남아 있어요.
+      </>
+    ),
     action: '대회 다시 보기',
     href: '/races',
   },
   soldout: {
     icon: 'TriangleAlert',
     title: '남은 자리가 없어요',
-    description: '결제하는 동안 정원이 다 찼거나 접수가 끝났어요. 결제된 금액은 없어요.',
+    description: (
+      <>
+        결제하는 동안 정원이 다 찼거나 접수가 끝났어요.
+        <br />
+        결제된 금액은 없어요.
+      </>
+    ),
     action: '다른 대회 보기',
     href: '/races',
   },
   failed: {
     icon: 'CircleAlert',
     title: '결제하지 못했어요',
-    description: '잠시 뒤 다시 시도해 주세요. 결제 시간 안이면 잡아 둔 자리는 그대로예요.',
+    description: (
+      <>
+        잠시 뒤 다시 시도해 주세요.
+        <br />
+        결제 시간 안이면 잡아 둔 자리는 그대로예요.
+      </>
+    ),
     action: '다시 결제하기',
     href: '/checkout',
   },
@@ -67,7 +85,7 @@ const SAMPLE_DEPOSIT_BALANCE = 40_000
 // ?preview=offline 시안에서 보여 주는 남은 시간 (5분 10초)
 const OFFLINE_PREVIEW_SECONDS = 310
 
-const won = (amount: number) => `${formatNumber(amount)}원`
+const won = (amount: number) => `₩${formatNumber(amount)}`
 
 // 피그마 V2 · M07 결제 · 부족분 충전 (+ 연결 끊김, M07-1~3 결과)
 // 앞 단계에서 고른 종목과 참가자 정보는 예매 흐름 스토어에서 읽는다.
@@ -119,7 +137,6 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
 
   const race = (selection && getRaceDetail(selection.raceId)) ?? RACE_DETAIL
   const option = race.options.find((o) => o.id === selection?.optionId) ?? race.options[0]
-  const refundDeadline = race.schedule.find((row) => row.label === '전액 환불 기한')?.value
   const payment = splitPayment(option.price, SAMPLE_DEPOSIT_BALANCE)
 
   return (
@@ -162,8 +179,9 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
             <KeyValue label="충전 (최소 1만 원)" value={`+${won(payment.charge)}`} />
             <KeyValue label="결제 뒤 남는 예치금" value={won(payment.balanceAfter)} />
             <p className="text-caption text-text-tertiary">
-              1만 원보다 적게 모자라면 1만 원을 충전해요. 결제가 안 돼도 충전한 돈은 예치금으로
-              남아요.
+              1만 원보다 적게 모자라면 1만 원을 충전해요.
+              <br />
+              결제가 안 돼도 충전한 돈은 예치금으로 남아요.
             </p>
           </div>
 
@@ -176,9 +194,7 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2 rounded-[12px] px-4 pt-3 pb-4 inset-ring inset-ring-border-default">
-              <p className="text-body-s text-text-secondary">
-                환불 규정 · {refundDeadline}까지 전액 환불
-              </p>
+              <p className="text-body-s text-text-secondary">환불 규정</p>
               {race.refund.map((row) => (
                 <KeyValue key={row.label} label={row.label} value={row.value} />
               ))}
