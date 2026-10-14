@@ -1,0 +1,428 @@
+{
+  "responses": {
+    "search": {
+      "200": {
+        "wrapper": "RsDataRacePageDto",
+        "data": {
+          "$ref": "#/components/schemas/RacePageDto"
+        }
+      }
+    },
+    "suggest": {
+      "200": {
+        "wrapper": "RsDataRaceSuggestionDto",
+        "data": {
+          "$ref": "#/components/schemas/RaceSuggestionDto"
+        }
+      }
+    },
+    "findRace": {
+      "200": {
+        "wrapper": "RsDataRaceDetailDto",
+        "data": {
+          "$ref": "#/components/schemas/RaceDetailDto"
+        }
+      }
+    }
+  },
+  "schemas": {
+    "RacePageDto": {
+      "type": "object",
+      "properties": {
+        "races": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/RaceSummaryDto"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalElements": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "totalPages": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "RaceSummaryDto": {
+      "type": "object",
+      "properties": {
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "title": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "regionSido": {
+          "type": "string"
+        },
+        "regionSigungu": {
+          "type": "string"
+        },
+        "raceDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "saleStatus": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "SCHEDULED",
+            "ON_SALE",
+            "STOPPED",
+            "CLOSED",
+            "CANCELED"
+          ]
+        },
+        "saleOpenAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "applicationCloseAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "minPrice": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "courses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/RaceSummaryCourseDto"
+          }
+        }
+      }
+    },
+    "RaceSummaryCourseDto": {
+      "type": "object",
+      "properties": {
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "name": {
+          "type": "string"
+        },
+        "courseType": {
+          "type": "string",
+          "enum": [
+            "KM_5",
+            "KM_10",
+            "HALF",
+            "FULL",
+            "ULTRA"
+          ]
+        },
+        "distanceKm": {
+          "type": "number"
+        },
+        "price": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "OPEN",
+            "SOLD_OUT"
+          ]
+        },
+        "individualRemaining": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "RaceSuggestionDto": {
+      "type": "object",
+      "properties": {
+        "races": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/RaceTitleSuggestionDto"
+          }
+        },
+        "courses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/CourseLabelSuggestionDto"
+          }
+        }
+      }
+    },
+    "RaceTitleSuggestionDto": {
+      "type": "object",
+      "properties": {
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "title": {
+          "type": "string"
+        }
+      }
+    },
+    "CourseLabelSuggestionDto": {
+      "type": "object",
+      "properties": {
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "RaceDetailDto": {
+      "type": "object",
+      "properties": {
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "type": "string"
+        },
+        "regionSido": {
+          "type": "string"
+        },
+        "regionSigungu": {
+          "type": "string"
+        },
+        "raceDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "saleStatus": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "SCHEDULED",
+            "ON_SALE",
+            "STOPPED",
+            "CLOSED",
+            "CANCELED"
+          ]
+        },
+        "saleOpenAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "crewSaleStartAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "crewSaleEndAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "individualOpenAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "applicationCloseAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "refundDeadline": {
+          "type": "string",
+          "format": "date"
+        },
+        "refundPolicy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "crewMinCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "crewMaxCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "scheduleChangedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "seller": {
+          "$ref": "#/components/schemas/RaceSellerDto"
+        },
+        "courses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/RaceDetailCourseDto"
+          }
+        }
+      }
+    },
+    "RaceDetailCourseDto": {
+      "type": "object",
+      "properties": {
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "name": {
+          "type": "string"
+        },
+        "courseType": {
+          "type": "string",
+          "enum": [
+            "KM_5",
+            "KM_10",
+            "HALF",
+            "FULL",
+            "ULTRA"
+          ]
+        },
+        "surface": {
+          "type": "string",
+          "enum": [
+            "ROAD",
+            "TRAIL"
+          ]
+        },
+        "distanceKm": {
+          "type": "number"
+        },
+        "timeLimitMinutes": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "minAge": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "maxAge": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "price": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "kitIncluded": {
+          "type": "boolean"
+        },
+        "kitPrice": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "tshirtSizeOption": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "XS",
+              "S",
+              "M",
+              "L",
+              "XL",
+              "XXL",
+              "XXXL"
+            ]
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "OPEN",
+            "SOLD_OUT"
+          ]
+        },
+        "crewQuota": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "individualQuota": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "crewRemaining": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "individualRemaining": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "RaceSellerDto": {
+      "type": "object",
+      "properties": {
+        "sellerId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sellerType": {
+          "type": "string",
+          "enum": [
+            "BUSINESS",
+            "INDIVIDUAL"
+          ]
+        },
+        "businessName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "businessNumber": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "representativeName": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
