@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { type RaceDetail, type RaceOption } from '@/entities/race'
+import { RacePoster, type RaceDetail, type RaceOption } from '@/entities/race'
 import { cn, formatNumber, formatWon } from '@/shared/lib'
 import {
   Alert,
@@ -40,7 +40,7 @@ export type RaceDetailPageProps = {
 }
 
 // 피그마 V2 · M02 대회 상세 (+ M02-1 이미 신청함, 링크 복사 완료 토스트)
-// TODO(api): raceId로 대회를 불러온다. 지금은 시안 예시 값.
+// 대회는 상품 API, 종목 이미지는 파일 API에서 받는다(page.tsx). 이미지가 없으면 색 포스터를 그린다.
 export function RaceDetailPage({
   race,
   optionId: initialOptionId,
@@ -48,11 +48,14 @@ export function RaceDetailPage({
 }: RaceDetailPageProps) {
   const toast = useToast()
   const [optionId, setOptionId] = useState(
-    race.options.find((o) => o.id === initialOptionId)?.id ?? race.options[0].id,
+    race.options.find((o) => o.id === initialOptionId && !o.soldOut)?.id ??
+      race.options.find((o) => !o.soldOut)?.id ??
+      '',
   )
+  const posterLabel = race.options.map((o) => o.name).join(' · ')
   const [anchor, setAnchor] = useState<Anchor>('options')
   const [infoTab, setInfoTab] = useState<'detail' | 'faq'>('detail')
-  const minPrice = Math.min(...race.options.map((o) => o.price))
+  const minPrice = race.options.length > 0 ? Math.min(...race.options.map((o) => o.price)) : 0
 
   function copyLink() {
     void navigator.clipboard?.writeText(window.location.href)
@@ -78,27 +81,33 @@ export function RaceDetailPage({
       <main className="flex flex-1 flex-col gap-2 bg-bg-surface">
         <div className="bg-bg-surface">
           <div className="relative h-84 overflow-hidden">
-            <Image
-              src={race.images[0]}
-              alt=""
-              fill
-              priority
-              sizes="480px"
-              className="object-cover"
-            />
+            {race.images[0] ? (
+              <Image
+                src={race.images[0]}
+                alt=""
+                fill
+                priority
+                sizes="480px"
+                className="object-cover"
+              />
+            ) : (
+              <RacePoster seed={race.id} title="" label="" className="absolute inset-0" />
+            )}
             <div className="absolute inset-x-0 bottom-0 h-35 bg-linear-to-b from-[rgb(0_0_0/0)] to-[rgb(0_0_0/0.55)]" />
             <div className="absolute bottom-5.5 left-5.5 flex flex-col gap-1.5 text-text-on-hero">
               <p className="text-heading-m">{race.heroTitle}</p>
               <p className="text-label-m whitespace-pre opacity-85">{race.heroTags}</p>
             </div>
-            <span className="absolute right-4 bottom-4.5 rounded-full bg-[rgb(0_0_0/0.4)] px-3 py-1 text-label-s text-text-on-hero">
-              1 / {race.images.length}
-            </span>
+            {race.images.length > 0 && (
+              <span className="absolute right-4 bottom-4.5 rounded-full bg-[rgb(0_0_0/0.4)] px-3 py-1 text-label-s text-text-on-hero">
+                1 / {race.images.length}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 px-4 py-5">
             <div className="flex gap-1">
-              <Badge tone="brand">접수중</Badge>
+              <Badge tone={race.status.tone}>{race.status.label}</Badge>
             </div>
             <h2 className="text-heading-xl">{race.title}</h2>
             <p className="flex items-center gap-2 text-body-m text-text-secondary">
@@ -151,7 +160,9 @@ export function RaceDetailPage({
               <OptionCard
                 key={option.id}
                 option={option}
-                image={race.images[0]}
+                image={option.image ?? race.images[0]}
+                posterSeed={race.id}
+                posterLabel={posterLabel}
                 selected={option.id === optionId}
                 onSelect={() => setOptionId(option.id)}
               />
@@ -197,18 +208,25 @@ export function RaceDetailPage({
             />
             {infoTab === 'detail' ? (
               <>
-                <div className="relative h-112 overflow-hidden rounded-[12px]">
-                  <Image
-                    src={race.images[0]}
-                    alt="상세 정보 이미지"
-                    fill
-                    sizes="448px"
-                    className="object-cover"
-                  />
-                </div>
-                <p className="text-caption text-text-secondary">
-                  판매자가 올린 코스 · 타임테이블 · 기념품 사이즈표 이미지가 이어져요
-                </p>
+                {race.description && (
+                  <p className="text-body-m whitespace-pre-line">{race.description}</p>
+                )}
+                {race.images.map((src, i) => (
+                  <div key={src} className="relative h-112 overflow-hidden rounded-[12px]">
+                    <Image
+                      src={src}
+                      alt={`상세 정보 이미지 ${i + 1}`}
+                      fill
+                      sizes="448px"
+                      className="object-cover"
+                    />
+                  </div>
+                ))}
+                {!race.description && race.images.length === 0 && (
+                  <p className="py-6 text-center text-body-s text-text-tertiary">
+                    등록된 상세 정보가 없어요
+                  </p>
+                )}
               </>
             ) : (
               <FaqList items={race.faq} />
@@ -229,6 +247,10 @@ export function RaceDetailPage({
             <Button size="l" disabled>
               이미 신청했어요
             </Button>
+          ) : optionId === '' ? (
+            <Button size="l" disabled>
+              {race.options.length === 0 ? '신청할 수 있는 종목이 없어요' : '정원이 모두 찼어요'}
+            </Button>
           ) : (
             // TODO(auth): 로그인 전이면 로그인(M03)으로 보낸다
             <Link
@@ -247,11 +269,15 @@ export function RaceDetailPage({
 function OptionCard({
   option,
   image,
+  posterSeed,
+  posterLabel,
   selected,
   onSelect,
 }: {
   option: RaceOption
-  image: string
+  image?: string
+  posterSeed: string
+  posterLabel: string
   selected: boolean
   onSelect: () => void
 }) {
@@ -259,6 +285,7 @@ function OptionCard({
     <button
       type="button"
       aria-pressed={selected}
+      disabled={option.soldOut}
       onClick={onSelect}
       className={cn(
         'flex h-27 items-center gap-4 rounded-lg p-4 text-left',
@@ -268,15 +295,27 @@ function OptionCard({
         FOCUS_RING,
       )}
     >
-      <Image
-        src={image}
-        alt=""
-        width={72}
-        height={72}
-        className="size-18 rounded-md object-cover"
-      />
+      {image ? (
+        <Image
+          src={image}
+          alt=""
+          width={72}
+          height={72}
+          className="size-18 rounded-md object-cover"
+        />
+      ) : (
+        <RacePoster
+          seed={posterSeed}
+          title=""
+          label={posterLabel}
+          className="size-18 shrink-0 rounded-md"
+        />
+      )}
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="text-label-strong">{option.name}</span>
+        <span className="text-label-strong">
+          {option.name}
+          {option.soldOut && <span className="text-text-tertiary"> · 정원 마감</span>}
+        </span>
         <span className="text-caption text-text-secondary">{option.includes}</span>
       </span>
       <span className={cn('text-label-strong', selected ? 'text-text-brand' : 'text-text-primary')}>
