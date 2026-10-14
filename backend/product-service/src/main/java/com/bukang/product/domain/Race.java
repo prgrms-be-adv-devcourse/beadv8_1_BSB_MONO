@@ -129,6 +129,10 @@ public class Race extends BaseIdAndTime {
 		if (saleStatus == RaceSaleStatus.CANCELED) {
 			throw new RaceChangeNotAllowedException("취소된 대회는 수정할 수 없습니다.");
 		}
+		// 판매 종료는 대회일이 지나 완전히 끝난 대회라 어떤 칸도 바꾸지 못한다
+		if (isSaleEnded(now)) {
+			throw new RaceChangeNotAllowedException("판매가 끝난 대회는 수정할 수 없습니다.");
+		}
 		// 판매 시작 뒤에는 환불 기준일을 늦추는 변경만 된다 (구매자에게 유리한 변경만, ERD refund_deadline 주석)
 		if (saleStarted && request.getRefundDeadline().isBefore(refundDeadline)) {
 			throw new RaceChangeNotAllowedException("판매가 시작된 대회는 환불 기준일을 앞당길 수 없습니다.");
@@ -230,15 +234,20 @@ public class Race extends BaseIdAndTime {
 		return !now.isBefore(saleOpenAt);
 	}
 
-	// 판매 종료 전이면 어떤 상태든 취소할 수 있다 (10/13 결정). 대회일 다음 날 0시부터는 판매 종료로 본다
-	// (상태 배치가 판매 종료로 바꾸기 전이라도 같은 기준으로 막는다)
+	// 판매 종료 전이면 어떤 상태든 취소할 수 있다 (10/13 결정)
 	public void checkCancelable(LocalDateTime now) {
 		if (saleStatus == RaceSaleStatus.CANCELED) {
 			throw new RaceChangeNotAllowedException("이미 취소된 대회입니다.");
 		}
-		if (saleStatus == RaceSaleStatus.CLOSED || raceDate.isBefore(now.toLocalDate().atStartOfDay())) {
+		if (isSaleEnded(now)) {
 			throw new RaceChangeNotAllowedException("판매가 끝난 대회는 취소할 수 없습니다.");
 		}
+	}
+
+	// 대회일 다음 날 0시부터는 판매 종료로 본다
+	// (상태 배치가 판매 종료로 바꾸기 전이라도 같은 기준으로 막는다)
+	private boolean isSaleEnded(LocalDateTime now) {
+		return saleStatus == RaceSaleStatus.CLOSED || raceDate.isBefore(now.toLocalDate().atStartOfDay());
 	}
 
 	// 개인 예매로 자리를 확보할 수 있는지: 판매 예정·판매 중이고, 개인 예매 오픈부터 접수 마감 전까지
