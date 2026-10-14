@@ -72,6 +72,7 @@ Claude는 Linear 이슈를 만들거나 고칠 때, 이슈 작업을 시작할 �
 2. **브랜치**: `<type>/PRO-<번호>-<짧은-설명>`. type은 커밋과 같은 Conventional Commits 종류다. 예: `feat/PRO-12-crew-invite-accept`
    이슈에서 `Cmd+Shift+.`로 브랜치 이름을 복사할 수 있지만, 앞의 `<type>/`은 직접 붙인다.
 3. **PR**: 제목은 커밋 규칙을 따르고, 본문에 `Closes PRO-12`를 넣는다.
+   본문은 `.github/pull_request_template.md`의 6개 섹션(배경·의도·구현·중점 리뷰 사항·확인 방법·기타)을 채운다. CI `pr-body`가 섹션 제목이 다 있는지 검사한다.
 4. **끝**: PR이 머지되면 연결된 이슈가 Done으로 옮겨진다. PR이 없는 일(기획, 디자인)은 결과물 링크를 댓글로 남기고 직접 Done으로 바꾼다.
 
 ### PR 자동 연결 (`linear-sync` 워크플로)
