@@ -2,6 +2,9 @@ package com.bukang.order.out.seat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -12,6 +15,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,13 +23,19 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.kafka.KafkaException;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import com.bukang.common.global.json.JsonConverter;
+import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.ParticipationNotPayableException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
+
+import tools.jackson.databind.json.JsonMapper;
 
 class HttpSeatHoldAdapterTest {
 	private static final String BASE_URL = "http://product";
@@ -36,12 +46,15 @@ class HttpSeatHoldAdapterTest {
 
 	private MockRestServiceServer server;
 	private HttpSeatHoldAdapter adapter;
+	private KafkaTemplate<String, String> kafkaTemplate;
 
 	@BeforeEach
 	void setUp() {
 		RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
 		server = MockRestServiceServer.bindTo(builder).build();
-		adapter = new HttpSeatHoldAdapter(builder.build());
+		kafkaTemplate = mock();
+		JsonConverter jsonConverter = new JsonConverter(JsonMapper.builder().build());
+		adapter = new HttpSeatHoldAdapter(builder.build(), kafkaTemplate, jsonConverter);
 	}
 
 	@Test
@@ -136,6 +149,27 @@ class HttpSeatHoldAdapterTest {
 		assertThatThrownBy(() -> adapter.extend(1001))
 			.isInstanceOf(OrderNotExtendableException.class)
 			.hasMessage(HttpSeatHoldAdapter.NOT_EXTENDABLE_MESSAGE);
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("해제: 참가 신청 ID를 key로 product.hold.cancel에 {participationId}를 보내고, 보내지 못하면 503으로 알린다")
+	void release() {
+		given(kafkaTemplate.send(KafkaTopics.PRODUCT_HOLD_CANCEL, "1001", "{\"participationId\":1001}"))
+			.willReturn(CompletableFuture.completedFuture(null));
+
+		adapter.release(1001);
+
+		verify(kafkaTemplate).send(KafkaTopics.PRODUCT_HOLD_CANCEL, "1001", "{\"participationId\":1001}");
+
+		// 브로커에 연결하지 못하면 send()가 예외를 던지고, 브로커가 받지 못하면 future가 실패한다
+		// 둘 다 503으로 알려 만료를 롤백시키고 다음 실행에서 다시 보내게 한다
+		given(kafkaTemplate.send(KafkaTopics.PRODUCT_HOLD_CANCEL, "1002", "{\"participationId\":1002}"))
+			.willThrow(new KafkaException("broker unavailable"));
+		given(kafkaTemplate.send(KafkaTopics.PRODUCT_HOLD_CANCEL, "1003", "{\"participationId\":1003}"))
+			.willReturn(CompletableFuture.failedFuture(new KafkaException("send failed")));
+		assertThatThrownBy(() -> adapter.release(1002)).isInstanceOf(ExternalServiceUnavailableException.class);
+		assertThatThrownBy(() -> adapter.release(1003)).isInstanceOf(ExternalServiceUnavailableException.class);
 		server.verify();
 	}
 
