@@ -86,6 +86,7 @@ public class ProductKafkaConsumer {
 		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
 	)
 	public void handleHoldCancel(String payload) {
-		productFacade.cancelHold(jsonConverter.fromJson(payload, HoldCancelEvent.class));
+		HoldCancelEvent event = jsonConverter.fromJson(payload, HoldCancelEvent.class);
+		productFacade.cancelHold(event.participationId());
 	}
 }
