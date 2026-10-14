@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 회원·판매자 이벤트를 받아 복제본(ProductMember, ProductSeller)에 저장하고, 주문 서비스의 임시 확보 해제 요청을 처리한다
  * 메시지는 JSON 문자열로 받아 JsonConverter로 바꾼다.
- * 처리 중 예외가 나면 재시도 토픽으로 보내 간격을 늘려 가며 다시 시도하고, 그래도 실패하면 <토픽>.dlt로 보낸다.
+ * 처리 중 예외가 나면 재시도 토픽으로 보내 간격을 늘려 가며 다시 시도하고, 그래도 실패하면 <토픽>.product.dlt로 보낸다.
  * DLT 메시지는 ProductKafkaDltConsumer가 받는다.
  */
 @Component
@@ -34,9 +34,13 @@ public class ProductKafkaConsumer {
 	private static final String RETRY_ATTEMPTS = "3";
 	private static final long RETRY_DELAY_MILLIS = 1000L;
 	private static final double RETRY_MULTIPLIER = 2.0;
-	// 마지막까지 실패한 메시지를 보낼 토픽 접미사 (예: product.member.joined.dlt, 기본값은 -dlt)
+	// 재시도·DLT 토픽 접미사에 서비스 이름을 넣는다. 회원 토픽은 다른 서비스도 같이 받는 공용 토픽이라,
+	// 기본 접미사(-retry, -dlt)를 쓰면 같은 토픽을 @RetryableTopic으로 받는 서비스끼리 재시도·DLT 토픽이 겹쳐 서로의 실패 메시지를 받는다
+	// 재시도 토픽 이름은 접미사 뒤에 지연 시간이 붙는다 (예: queuing.member.joined.product.retry-1000)
+	private static final String RETRY_TOPIC_SUFFIX = ".product.retry";
+	// 마지막까지 실패한 메시지를 보낼 토픽 접미사 (예: queuing.member.joined.product.dlt)
 	// ProductKafkaDltConsumer가 DLT 토픽 이름을 만들 때 같은 값을 쓴다
-	static final String DLT_TOPIC_SUFFIX = ".dlt";
+	static final String DLT_TOPIC_SUFFIX = ".product.dlt";
 	// DLT는 ProductKafkaDltConsumer가 받으므로, @RetryableTopic이 기본으로 띄우는 DLT 리스너는 시작하지 않는다
 	// (켜 두면 같은 DLT 메시지를 두 곳에서 받는다)
 	private static final String AUTO_START_DEFAULT_DLT_HANDLER = "false";
@@ -44,7 +48,8 @@ public class ProductKafkaConsumer {
 	private final ProductFacade productFacade;
 	private final JsonConverter jsonConverter;
 
-	@KafkaListener(topics = KafkaTopics.PRODUCT_MEMBER_JOINED, groupId = GROUP_ID, concurrency = CONCURRENCY)
+	// 회원 서비스가 보내는 공용 토픽. 캐시 서비스도 groupId를 달리해 같은 메시지를 받는다
+	@KafkaListener(topics = KafkaTopics.MEMBER_MEMBER_JOINED, groupId = GROUP_ID, concurrency = CONCURRENCY)
 	@RetryableTopic(
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
@@ -52,6 +57,7 @@ public class ProductKafkaConsumer {
 		// (JsonConverter가 파싱 실패를 IllegalArgumentException으로 바꾼다)
 		exclude = IllegalArgumentException.class,
 		numPartitions = PARTITIONS,
+		retryTopicSuffix = RETRY_TOPIC_SUFFIX,
 		dltTopicSuffix = DLT_TOPIC_SUFFIX,
 		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
 	)
@@ -67,6 +73,7 @@ public class ProductKafkaConsumer {
 		// (JsonConverter가 파싱 실패를 IllegalArgumentException으로 바꾼다)
 		exclude = IllegalArgumentException.class,
 		numPartitions = PARTITIONS,
+		retryTopicSuffix = RETRY_TOPIC_SUFFIX,
 		dltTopicSuffix = DLT_TOPIC_SUFFIX,
 		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
 	)
@@ -82,6 +89,7 @@ public class ProductKafkaConsumer {
 		// 깨진 JSON은 다시 해도 실패하므로 재시도 없이 바로 DLT로 보낸다
 		exclude = IllegalArgumentException.class,
 		numPartitions = PARTITIONS,
+		retryTopicSuffix = RETRY_TOPIC_SUFFIX,
 		dltTopicSuffix = DLT_TOPIC_SUFFIX,
 		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
 	)
