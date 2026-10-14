@@ -126,7 +126,8 @@ export function toRaceDetail(
   )
   const status = raceBadge(race.saleStatus, courses, race.applicationCloseAt)
   const refundDeadline = race.refundDeadline ? `${formatRaceDate(race.refundDeadline)} 23:59` : '-'
-  const openAt = race.individualOpenAt ?? race.saleOpenAt
+  // 판매 시작일(saleOpenDate)은 판매자 화면용 날짜라, 접수 기간은 개인 예매 오픈 일시부터 보여 준다
+  const openAt = race.individualOpenAt
   const closeAt = race.applicationCloseAt
 
   const seller = race.seller
