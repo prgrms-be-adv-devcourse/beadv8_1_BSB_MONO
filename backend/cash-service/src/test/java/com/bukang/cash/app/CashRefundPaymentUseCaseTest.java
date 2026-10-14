@@ -27,6 +27,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.cash.config.CashWalletProperties;
+import com.bukang.cash.domain.exception.PaymentMemberMismatchException;
 import com.bukang.cash.domain.exception.PaymentNotRefundableException;
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.payment.Payment;
@@ -87,6 +88,28 @@ class CashRefundPaymentUseCaseTest {
 
 		assertBalance(CUSTOMER_ID, 10_000);
 		assertThat(countLedgersForOrder(orderId)).isZero();
+	}
+
+	@Test
+	@DisplayName("결제한 지갑과 다른 회원 ID로 환불을 요청하면 거절되고, 어느 지갑도 바뀌지 않는다")
+	void refundRejectsMemberMismatch() {
+		int orderId = 850;
+		int amount = 3_000;
+		int otherMemberId = 4;
+		createCustomerWallet(10_000);
+		createHoldingWallet();
+		createWallet(otherMemberId, "다른고객", 10_000);
+		cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+
+		assertThatThrownBy(() -> cashFacade.refund(orderId, otherMemberId))
+			.isInstanceOf(PaymentMemberMismatchException.class);
+
+		assertBalance(CUSTOMER_ID, 7_000);
+		assertBalance(cashWalletProperties.holdingMemberId(), 3_000);
+		assertBalance(otherMemberId, 10_000);
+		assertThat(paymentRepository.findByOrderId(orderId).orElseThrow().getStatus())
+			.as("결제 상태도 그대로 COMPLETED여야 한다")
+			.isEqualTo(PaymentStatus.COMPLETED);
 	}
 
 	@Test
