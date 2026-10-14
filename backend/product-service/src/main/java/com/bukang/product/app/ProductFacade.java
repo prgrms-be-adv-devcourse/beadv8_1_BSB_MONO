@@ -14,7 +14,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
-import com.bukang.common.shared.race.event.HoldCancelEvent;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.product.domain.HoldReleaseReason;
 import com.bukang.product.domain.ProductMember;
@@ -123,8 +122,8 @@ public class ProductFacade {
 
 	// 대기열 활성 시간이 끝나 주문 서비스가 보낸 해제 요청 (Kafka product.hold.cancel)
 	@Transactional
-	public boolean cancelHold(HoldCancelEvent event) {
-		return raceHoldUseCase.release(event.participationId(), HoldReleaseReason.EXPIRED, LocalDateTime.now());
+	public boolean cancelHold(int participationId) {
+		return raceHoldUseCase.release(participationId, HoldReleaseReason.EXPIRED, LocalDateTime.now());
 	}
 
 	public RacePageDto searchRaces(RaceSearchCondition condition, int page, int size) {
