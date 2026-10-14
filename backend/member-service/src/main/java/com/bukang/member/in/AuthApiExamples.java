@@ -23,12 +23,34 @@ final class AuthApiExamples {
 			"status": 200,
 			"message": "로그인 성공",
 			"data": {
-				"id": 1,
-				"createDate": "2026-10-05T21:25:35",
-				"modifyDate": "2026-10-05T21:25:35",
-				"nickname": "러너1",
-				"email": "runner1@crewrun.com"
+				"accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature",
+				"member": {
+					"id": 1,
+					"createDate": "2026-10-05T21:25:35",
+					"modifyDate": "2026-10-05T21:25:35",
+					"nickname": "러너1",
+					"email": "runner1@crewrun.com",
+					"phone": "010-1234-5678"
+				}
 			}
+		}
+		""";
+
+	static final String REISSUE_SUCCESS = """
+		{
+			"status": 200,
+			"message": "토큰 재발급 성공",
+			"data": {
+				"accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature"
+			}
+		}
+		""";
+
+	static final String LOGOUT_SUCCESS = """
+		{
+			"status": 200,
+			"message": "로그아웃 성공",
+			"data": null
 		}
 		""";
 
@@ -58,6 +80,18 @@ final class AuthApiExamples {
 
 	static final String LOGIN_FAILED = """
 		{ "status": 401, "message": "이메일 또는 비밀번호가 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String REISSUE_MISSING_TOKEN = """
+		{ "status": 401, "message": "Refresh Token이 없습니다. 다시 로그인해주세요.", "data": null }
+		""";
+
+	static final String REISSUE_EXPIRED_TOKEN = """
+		{ "status": 401, "message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.", "data": null }
+		""";
+
+	static final String REISSUE_INVALID_TOKEN = """
+		{ "status": 401, "message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.", "data": null }
 		""";
 
 	private AuthApiExamples() {

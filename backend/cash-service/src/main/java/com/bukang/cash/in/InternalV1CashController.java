@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import com.bukang.cash.app.CashFacade;
 import com.bukang.cash.dto.CashCancelPaymentRequestDto;
 import com.bukang.cash.dto.CashPaymentDto;
@@ -68,6 +67,7 @@ public class InternalV1CashController {
 		CashPaymentDto result = cashFacade.completeOrderPayment(orderId, request.getMemberId(), request.getAmount());
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, result.message(), result));
 	}
+
 
 	@PostMapping("/payments/{orderId}/cancel")
 	@Operation(summary = "결제 취소(환원)", description = "결제 완료된 주문이면 예치금을 돌려주고, 결제 전이면 뒤늦게 오는 결제를 "

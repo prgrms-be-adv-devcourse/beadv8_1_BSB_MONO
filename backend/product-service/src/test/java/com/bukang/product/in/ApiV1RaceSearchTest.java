@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,27 +65,23 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 	// ---------- 공개 조건, 한 줄 ----------
 
 	@Test
-	@DisplayName("검색어 없이 조회하면 판매 중 대회와 판매 예정(개인 예매 내일 오픈) 대회만 나오고, "
-		+ "작성 중 대회와 접수 마감이 하루 지난 판매 중 대회는 빠진다")
+	@DisplayName("검색어 없이 조회하면 판매 중 대회와 판매 예정(개인 예매 이틀 뒤 오픈) 대회가 나오고, "
+		+ "접수 마감이 하루 지난 판매 중 대회는 빠진다")
 	void listsOnlyPublicRaces() throws Exception {
 		LocalDateTime now = LocalDateTime.now().withNano(0);
 		RegisteredRace onSale = registerOnSale(race().title("판매 중 대회")
 			.applicationCloseAt(now.plusDays(5))
 			.build());
-		RegisteredRace scheduled = registerOnSale(race().title("판매 예정 대회")
-			.individualOpenAt(now.plusDays(1))
+		RegisteredRace scheduled = register(race().title("판매 예정 대회")
+			.individualOpenAt(now.plusDays(2))
 			.applicationCloseAt(now.plusDays(8))
-			.build());
-		RegisteredRace draft = register(race().title("작성 중 대회")
-			.applicationCloseAt(now.plusDays(3))
 			.build());
 		// 사흘 전에 개인 예매가 열려 판매 중이지만, 접수 마감이 하루 지났다
 		RegisteredRace closed = registerOnSale(race().title("접수 마감 대회")
 			.individualOpenAt(now.minusDays(3))
 			.applicationCloseAt(now.minusDays(1))
 			.build());
-		// 빠지는 두 대회도 검색 문서는 있다 (색인되지 않아서 빠진 것이 아님을 먼저 확인한다)
-		expectDocumentSaleStatus(draft, RaceSaleStatus.DRAFT);
+		// 빠지는 대회도 검색 문서는 있다 (색인되지 않아서 빠진 것이 아님을 먼저 확인한다)
 		expectDocumentSaleStatus(closed, RaceSaleStatus.ON_SALE);
 
 		expectRacesInOrder(search(), onSale, scheduled)
@@ -136,8 +133,13 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 		String body = bodyOf(result);
 		assertThat(dateTimeAt(body, "$.data.races[1].raceDate")).isEqualTo(now.plusDays(20));
 		assertThat(dateTimeAt(body, "$.data.races[1].applicationCloseAt")).isEqualTo(now.plusDays(18));
-		// 크루 예매가 없으면 개인 예매 오픈(기본 한 시간 전)이 판매 시작 일시다
-		assertThat(dateTimeAt(body, "$.data.races[1].saleOpenAt")).isEqualTo(now.minusHours(1));
+		// 크루 예매가 없으면 개인 예매 오픈(기본 한 시간 전) 날짜가 판매 시작일이다
+		// 구매자 화면용으로 크루 예매 기간(없으면 null)과 개인 예매 오픈 일시도 준다
+		assertThat(LocalDate.parse(JsonPath.<String>read(body, "$.data.races[1].saleOpenDate")))
+			.isEqualTo(now.minusHours(1).toLocalDate());
+		assertThat(dateTimeAt(body, "$.data.races[1].individualOpenAt")).isEqualTo(now.minusHours(1));
+		assertThat((Object)JsonPath.read(body, "$.data.races[1].crewSaleStartAt")).isNull();
+		assertThat((Object)JsonPath.read(body, "$.data.races[1].crewSaleEndAt")).isNull();
 
 		// 종목 3개가 모두 맞는 검색어도 대회는 한 줄이다
 		expectRacesInOrder(search("keyword", "춘천"), multi);
@@ -567,14 +569,13 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("연관검색어는 판매 중·판매 예정 대회에서만 찾고, 작성 중 대회와 접수 마감이 하루 지난 대회는 대회·종목 모두 빠진다")
+	@DisplayName("연관검색어는 판매 중·판매 예정 대회에서만 찾고, 접수 마감이 하루 지난 대회는 대회·종목 모두 빠진다")
 	void suggestsOnlyPublicRaces() throws Exception {
 		LocalDateTime now = LocalDateTime.now().withNano(0);
 		RegisteredRace onSale = registerOnSale(race().title("서울 가을 마라톤").build());
-		RegisteredRace scheduled = registerOnSale(race().title("서울 겨울 마라톤")
-			.individualOpenAt(now.plusDays(1))
+		RegisteredRace scheduled = register(race().title("서울 겨울 마라톤")
+			.individualOpenAt(now.plusDays(2))
 			.build());
-		register(race().title("서울 봄 마라톤").build());
 		registerOnSale(race().title("서울 여름 마라톤")
 			.individualOpenAt(now.minusDays(3))
 			.applicationCloseAt(now.minusDays(1))

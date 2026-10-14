@@ -1,11 +1,12 @@
 package com.bukang.order.out;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,13 +23,12 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 	@Query("select o from Order o where o.id = :id")
 	Optional<Order> findByIdForUpdate(@Param("id") int id);
 
-	// 결제 기한이 지난 결제 대기 주문을 만료(EXPIRED)로 끝낸다. 조건부 UPDATE라 여러 번 돌아도 결과가 같다 (PRO-42)
-	// 일괄 UPDATE는 JPA 감사(@LastModifiedDate)를 거치지 않으므로 수정 일시도 직접 넣는다
-	@Modifying(flushAutomatically = true, clearAutomatically = true)
+	// 결제 기한이 지난 결제 대기 주문 ID (만료 정리 대상, PRO-42). 잠그지 않고 읽으므로, 만료 정리가 주문마다 잠근 뒤 다시 확인한다
+	// 한 번에 읽을 건수는 pageable로 정한다. 예치금 서비스가 느릴 때 한 번의 정리가 끝없이 길어지지 않게 한다
 	@Query("""
-		update Order o
-		set o.status = com.bukang.order.domain.OrderStatus.EXPIRED, o.modifyDate = :now
+		select o.id from Order o
 		where o.status = com.bukang.order.domain.OrderStatus.CREATED and o.paymentDueAt <= :now
+		order by o.id
 		""")
-	int expireOverdue(@Param("now") LocalDateTime now);
+	List<Integer> findOverdueIds(@Param("now") LocalDateTime now, Pageable pageable);
 }

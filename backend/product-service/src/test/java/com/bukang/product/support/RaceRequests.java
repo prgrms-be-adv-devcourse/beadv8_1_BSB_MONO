@@ -16,7 +16,7 @@ import com.bukang.product.dto.RaceImageRequestDto;
 import com.bukang.product.dto.RaceSaveRequestDto;
 
 /**
- * 대회 등록·수정 요청을 만든다. 기본값은 "지금 개인 예매가 열려 있는 서울 대회, 10K 종목 1개(개인 정원 100, 대표 이미지 1장)"다.
+ * 대회 등록·수정 요청을 만든다. 기본값은 "한 시간 전에 개인 예매가 열린 서울 대회, 10K 종목 1개(개인 정원 100, 대표 이미지 1장)"다.
  * 테스트마다 바꿀 값만 고친다. 예: race().title("부산 바다 런").course(course().price(30000)).build()
  */
 public final class RaceRequests {
@@ -52,7 +52,9 @@ public final class RaceRequests {
 		private LocalDateTime raceDate = now.plusDays(15);
 		private LocalDateTime crewSaleStartAt;
 		private LocalDateTime crewSaleEndAt;
-		// 기본은 한 시간 전에 열려, 판매 시작을 누르면 바로 판매 중이 되고 자리도 확보할 수 있다
+		// 기본은 한 시간 전에 열려 자리를 확보할 수 있다. 판매 시작일은 오늘로부터 이틀 뒤부터만 등록할 수 있어
+		// registerOnSale()로 만들고, register()로 등록하려면 이틀 뒤 이후로 바꾼다
+		// (예: individualOpenAt(now().plusDays(2)) → 판매 예정)
 		private LocalDateTime individualOpenAt = now.minusHours(1);
 		private LocalDateTime applicationCloseAt = now.plusDays(10);
 		private LocalDate refundDeadline;

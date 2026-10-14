@@ -2,11 +2,14 @@ package com.bukang.payout.app;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutStatus;
+import com.bukang.payout.dto.PayoutPayResultDto;
 import com.bukang.payout.out.PayoutRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -21,8 +24,10 @@ public class PayoutPayUseCase {
 	private final PayoutRepository payoutRepository;
 
 	@Transactional
-	public void run(LocalDate today, LocalDateTime now) {
-		payoutRepository.findByStatusAndScheduledPayDateLessThanEqual(PayoutStatus.CALCULATED, today)
-			.forEach(payout -> payout.pay(now));
+	public PayoutPayResultDto run(LocalDate today, LocalDateTime now) {
+		List<Payout> payouts =
+			payoutRepository.findByStatusAndScheduledPayDateLessThanEqual(PayoutStatus.CALCULATED, today);
+		payouts.forEach(payout -> payout.pay(now));
+		return new PayoutPayResultDto(today, payouts.size());
 	}
 }

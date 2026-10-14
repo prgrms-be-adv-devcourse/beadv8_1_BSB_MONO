@@ -117,7 +117,7 @@ class ApiV1OrderCancelTest {
 			.andExpect(jsonPath("$.data.items[0].status").value("CANCELED"));
 
 		assertThat(seatHoldPort.restoredParticipations()).containsExactly(paid.participationId());
-		assertThat(walletPort.refundedOrderItems()).containsExactly(paid.orderItemId());
+		assertThat(walletPort.refundCalls()).containsExactly(new StubWalletPort.Call(paid.orderId(), MEMBER_ID));
 		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
 		Participation participation = participationRepository.findById(paid.participationId()).orElseThrow();
 		assertThat(participation.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
@@ -127,7 +127,7 @@ class ApiV1OrderCancelTest {
 
 		// 취소한 참가권은 정산용 판매 내역에서 빠지고, 같은 대회에 다시 신청할 수 있다
 		String raceDate = raceCoursePort.findCourse(COURSE_ID).orElseThrow().raceDate().toLocalDate().toString();
-		mockMvc.perform(get("/internal/v1/order/sold-entries").param("raceDate", raceDate))
+		mockMvc.perform(get("/internal/v1/order/sold-entries").param("from", raceDate).param("to", raceDate))
 			.andExpect(jsonPath("$.data.length()").value(0));
 		applyAndGetId(MEMBER_ID);
 	}
@@ -256,7 +256,7 @@ class ApiV1OrderCancelTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 취소한 상품입니다."));
 
-		assertThat(walletPort.refundedOrderItems()).hasSize(1);
+		assertThat(walletPort.refundCalls()).hasSize(1);
 		assertThat(seatHoldPort.restoredParticipations()).hasSize(1);
 	}
 
@@ -344,7 +344,7 @@ class ApiV1OrderCancelTest {
 	}
 
 	private void assertNothingCanceled(Paid paid) {
-		assertThat(walletPort.refundedOrderItems()).isEmpty();
+		assertThat(walletPort.refundCalls()).isEmpty();
 		assertThat(seatHoldPort.restoredParticipations()).isEmpty();
 		assertThat(orderRepository.findById(paid.orderId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(participationRepository.findById(paid.participationId()).orElseThrow().getStatus())

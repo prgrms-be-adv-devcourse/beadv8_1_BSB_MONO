@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import {
@@ -27,7 +27,7 @@ const RESULT: Record<
   {
     icon: IconName
     title: string
-    description: string
+    description: ReactNode
     action: string
     href: '/races' | '/checkout'
   }
@@ -35,21 +35,39 @@ const RESULT: Record<
   timeout: {
     icon: 'CircleAlert',
     title: '결제 시간이 지났어요',
-    description: '10분이 지나 잡아 둔 자리가 풀렸어요. 충전한 예치금은 그대로 남아 있어요.',
+    description: (
+      <>
+        10분이 지나 잡아 둔 자리가 풀렸어요.
+        <br />
+        충전한 예치금은 그대로 남아 있어요.
+      </>
+    ),
     action: '대회 다시 보기',
     href: '/races',
   },
   soldout: {
     icon: 'TriangleAlert',
     title: '남은 자리가 없어요',
-    description: '결제하는 동안 정원이 다 찼거나 접수가 끝났어요. 결제된 금액은 없어요.',
+    description: (
+      <>
+        결제하는 동안 정원이 다 찼거나 접수가 끝났어요.
+        <br />
+        결제된 금액은 없어요.
+      </>
+    ),
     action: '다른 대회 보기',
     href: '/races',
   },
   failed: {
     icon: 'CircleAlert',
     title: '결제하지 못했어요',
-    description: '잠시 뒤 다시 시도해 주세요. 결제 시간 안이면 잡아 둔 자리는 그대로예요.',
+    description: (
+      <>
+        잠시 뒤 다시 시도해 주세요.
+        <br />
+        결제 시간 안이면 잡아 둔 자리는 그대로예요.
+      </>
+    ),
     action: '다시 결제하기',
     href: '/checkout',
   },
@@ -118,16 +136,17 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
             <p className="text-body-s text-text-secondary">
               2026 용감한 쿠키RUN in 서울 · 10K · 김러너
             </p>
-            <p className="text-[32px] leading-11 font-bold tracking-[-0.015em]">45,000원</p>
+            <p className="text-[32px] leading-11 font-bold tracking-[-0.015em]">₩45,000</p>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-border-default pt-4">
-            <KeyValue label="예치금에서" value="40,000원" />
-            <KeyValue label="충전 (최소 1만 원)" value="+10,000원" />
-            <KeyValue label="결제 뒤 남는 예치금" value="5,000원" />
+            <KeyValue label="예치금에서" value="₩40,000" />
+            <KeyValue label="충전 (최소 1만 원)" value="+₩10,000" />
+            <KeyValue label="결제 뒤 남는 예치금" value="₩5,000" />
             <p className="text-caption text-text-tertiary">
-              1만 원보다 적게 모자라면 1만 원을 충전해요. 결제가 안 돼도 충전한 돈은 예치금으로
-              남아요.
+              1만 원보다 적게 모자라면 1만 원을 충전해요.
+              <br />
+              결제가 안 돼도 충전한 돈은 예치금으로 남아요.
             </p>
           </div>
 
@@ -140,9 +159,7 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2 rounded-[12px] px-4 pt-3 pb-4 inset-ring inset-ring-border-default">
-              <p className="text-body-s text-text-secondary">
-                환불 규정 · 10/31 (토) 23:59까지 전액 환불
-              </p>
+              <p className="text-body-s text-text-secondary">환불 규정</p>
               <KeyValue label="환불 기한 10/31 (토) 23:59까지" value="전액 환불" />
               <KeyValue label="환불 기한이 지난 뒤" value="개인 사정 환불 불가" />
               <KeyValue label="대회 취소 · 일정 변경" value="전액 환불" />
@@ -159,7 +176,7 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
         className="sticky bottom-0 z-10"
         primary={
           <Button size="l" disabled={!agreed} onClick={() => router.push('/checkout/complete')}>
-            {offline ? '다시 시도하기' : '10,000원 충전하고 결제'}
+            {offline ? '다시 시도하기' : '₩10,000 충전하고 결제'}
           </Button>
         }
       />

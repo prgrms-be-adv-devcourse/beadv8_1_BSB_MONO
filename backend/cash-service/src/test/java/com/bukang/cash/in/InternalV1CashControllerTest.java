@@ -126,6 +126,7 @@ class InternalV1CashControllerTest {
 			.andExpect(status().isBadRequest());
 	}
 
+
 	@Test
 	@DisplayName("결제 완료된 주문을 취소(주문 서비스 요청)하면 고객 잔액이 돌아오고 보관 잔액은 빠진다")
 	void cancelCompletedPayment() throws Exception {
@@ -213,6 +214,7 @@ class InternalV1CashControllerTest {
 			.content("{\"memberId\": %d, \"amount\": %d}".formatted(memberId, amount)));
 	}
 
+
 	private ResultActions cancelPayment(int orderId, int memberId) throws Exception {
 		return mockMvc.perform(post("/internal/v1/cash/payments/" + orderId + "/cancel")
 			.contentType(MediaType.APPLICATION_JSON)
@@ -225,9 +227,11 @@ class InternalV1CashControllerTest {
 			.content("{\"memberId\": %d}".formatted(memberId)));
 	}
 
+
 	private void assertBalance(int holderId, int expected) {
 		assertThat(walletRepository.findById(holderId).orElseThrow().getBalance()).isEqualTo(expected);
 	}
+
 
 	private long countLedgersForOrder(int orderId) {
 		return walletLedgerRepository.findAll().stream()

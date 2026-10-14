@@ -8,7 +8,6 @@ import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
 import com.bukang.product.domain.RaceCourse;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.exception.RaceCourseNotFoundException;
 import com.bukang.product.domain.exception.RaceNotFoundException;
 import com.bukang.product.domain.exception.SellerNotApprovedException;
@@ -31,7 +30,7 @@ public class RaceQueryUseCase {
 	private final RaceRepository raceRepository;
 	private final RaceCourseRepository raceCourseRepository;
 
-	// 작성 중·취소된 대회는 등록한 판매자만 볼 수 있다. 다른 사람에게는 없는 대회(404)로 보인다
+	// 취소된 대회는 등록한 판매자만 볼 수 있다. 다른 사람에게는 없는 대회(404)로 보인다
 	public RaceDetailDto findDetail(int raceId, Integer memberId) {
 		Race race = raceRepository.findById(raceId)
 			.filter(found -> found.isVisibleTo(memberId))
@@ -47,10 +46,9 @@ public class RaceQueryUseCase {
 			.toList();
 	}
 
-	// 주문 서비스 RaceCoursePort 계약: 없거나 공개되지 않은(작성 중) 종목이면 찾지 못한 것으로 본다
+	// 주문 서비스 RaceCoursePort 계약: 없는 종목이면 찾지 못한 것으로 본다
 	public RaceCourseInfoDto findCourseInfo(int raceCourseId) {
 		RaceCourse course = raceCourseRepository.findById(raceCourseId)
-			.filter(found -> found.getRace().getSaleStatus() != RaceSaleStatus.DRAFT)
 			.orElseThrow(RaceCourseNotFoundException::new);
 		return RaceCourseInfoDto.from(course);
 	}

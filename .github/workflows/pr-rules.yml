@@ -53,3 +53,18 @@ jobs:
           script: |
             const check = require('./.github/scripts/pr-rules.js')
             await check({ context, core })
+
+  # PR 본문에 템플릿(.github/pull_request_template.md)의 섹션이 모두 있는지 본다.
+  # 본문을 고치면(edited) 다시 검사한다. 필수 체크는 아니다.
+  pr-body:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const check = require('./.github/scripts/pr-body.js')
+            await check({ context, core })

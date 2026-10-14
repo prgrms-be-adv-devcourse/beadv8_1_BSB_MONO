@@ -60,14 +60,15 @@ public class Payment extends BaseIdAndTime {
 		this.status = PaymentStatus.FAILED;
 		this.failReason = failReason;
 	}
-
 	public void markCanceled() {
 		this.status = PaymentStatus.CANCELED;
 		this.failReason = null;
 	}
 
+
 	public void markRefunded() {
 		this.status = PaymentStatus.REFUNDED;
 		this.failReason = null;
 	}
+
 }
