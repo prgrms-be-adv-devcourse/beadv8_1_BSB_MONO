@@ -4,9 +4,10 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
-
+import com.bukang.cash.config.CashWalletProperties;
 import com.bukang.cash.app.CashSupport.LockedWallets;
 import com.bukang.cash.domain.exception.PaymentAlreadyFinalizedException;
+import com.bukang.cash.domain.exception.WalletNotFoundException;
 import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.payment.PaymentFailReason;
 import com.bukang.cash.domain.payment.PaymentStatus;
@@ -16,7 +17,6 @@ import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.dto.CashPaymentDto;
 import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
-
 import lombok.RequiredArgsConstructor;
 
 @Service

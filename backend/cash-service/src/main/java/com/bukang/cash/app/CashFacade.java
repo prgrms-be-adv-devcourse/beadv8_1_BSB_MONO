@@ -21,6 +21,7 @@ public class CashFacade {
 	private final CashCompleteOrderPaymentUseCase cashCompleteOrderPaymentUseCase;
 	private final CashCancelOrderPaymentUseCase cashCancelOrderPaymentUseCase;
 
+
 	@Transactional
 	public CashMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate,
 		String nickname) {
@@ -41,9 +42,9 @@ public class CashFacade {
 	public CashPaymentDto completeOrderPayment(int orderId, int customerId, int salePrice) {
 		return cashCompleteOrderPaymentUseCase.completeOrderPayment(orderId, customerId, salePrice);
 	}
-
 	@Transactional
 	public void cancelPayment(int orderId, int customerId) {
 		cashCancelOrderPaymentUseCase.cancelPayment(orderId, customerId);
 	}
+
 }

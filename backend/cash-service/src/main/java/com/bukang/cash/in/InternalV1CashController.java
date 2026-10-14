@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import com.bukang.cash.app.CashFacade;
 import com.bukang.cash.dto.CashCancelPaymentRequestDto;
 import com.bukang.cash.dto.CashPaymentDto;
@@ -27,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 public class InternalV1CashController {
 	private final CashFacade cashFacade;
 
+
 	@PostMapping("/payments/{orderId}")
 	public ResponseEntity<RsData<CashPaymentDto>> pay(
 		@PathVariable int orderId,
@@ -35,6 +35,7 @@ public class InternalV1CashController {
 		CashPaymentDto result = cashFacade.completeOrderPayment(orderId, request.getMemberId(), request.getAmount());
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, result.message(), result));
 	}
+
 
 	@PostMapping("/payments/{orderId}/cancel")
 	public ResponseEntity<RsData<Void>> cancelPayment(
