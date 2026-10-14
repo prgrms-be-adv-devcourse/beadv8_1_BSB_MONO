@@ -34,6 +34,8 @@ public class HttpWalletAdapter implements WalletPort {
 	static final String PAY_UNKNOWN_MESSAGE = "결제 결과를 확인하지 못했습니다. 잠시 뒤 다시 결제해주세요.";
 	static final String UNAVAILABLE_MESSAGE = "예치금 서비스에 연결하지 못했습니다. 잠시 뒤 다시 시도해주세요.";
 	static final String PAYMENT_FINALIZED_MESSAGE = "이미 취소·환불된 결제라 다시 결제할 수 없습니다.";
+	// 오류 본문을 로그에 남길 최대 길이. D의 dev 오류 응답은 스택 트레이스를 통째로 담아 한 줄이 수십 줄이 된다
+	static final int LOGGED_BODY_LIMIT = 300;
 
 	private static final ParameterizedTypeReference<RsData<PayBody>> PAY_TYPE = new ParameterizedTypeReference<>() {
 	};
@@ -110,8 +112,15 @@ public class HttpWalletAdapter implements WalletPort {
 	private ExternalServiceUnavailableException contractError(String action, int orderId,
 		HttpClientErrorException exception) {
 		log.error("예치금 서비스가 {} 요청을 거절했습니다. 계약(경로·요청)이나 지갑을 확인해야 합니다. status={}, orderId={}, body={}",
-			action, exception.getStatusCode(), orderId, exception.getResponseBodyAsString());
+			action, exception.getStatusCode(), orderId, abbreviate(exception.getResponseBodyAsString()));
 		return new ExternalServiceUnavailableException(UNAVAILABLE_MESSAGE);
+	}
+
+	static String abbreviate(String body) {
+		if (body == null || body.length() <= LOGGED_BODY_LIMIT) {
+			return body;
+		}
+		return body.substring(0, LOGGED_BODY_LIMIT) + "…(" + body.length() + "자)";
 	}
 
 	// D 오류 응답(RsData)의 message. 읽지 못하면 기본 문구를 쓴다
