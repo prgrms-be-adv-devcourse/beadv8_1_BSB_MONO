@@ -351,8 +351,8 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 	// ---------- 주문용 종목 정보 ----------
 
 	@Test
-	@DisplayName("판매 중 대회의 종목 정보는 주문 서비스 13필드와 추가 필드(판매 상태·남은 자리·키트·티셔츠 사이즈)를 주고, "
-		+ "applicationOpenAt은 개인 예매 오픈, courseName은 '2026 춘천 가을 마라톤 하프'다")
+	@DisplayName("판매 중 대회의 종목 정보는 주문 서비스 13필드와 추가 필드(대회명·종목명·판매 상태·남은 자리·키트·티셔츠 사이즈)를 "
+		+ "주고, applicationOpenAt은 개인 예매 오픈, courseName은 '2026 춘천 가을 마라톤 하프'다")
 	void findCourseInfo() throws Exception {
 		RaceBuilder builder = race().title("2026 춘천 가을 마라톤");
 		LocalDateTime now = builder.now();
@@ -388,6 +388,8 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 			.andExpect(jsonPath("$.data.refundDeadline").value(refundDeadline.toString()))
 			.andExpect(jsonPath("$.data.scheduleChangedAt", nullValue()))
 			// 아래는 주문 서비스 RaceCourseInfo에 없는 추가 필드
+			.andExpect(jsonPath("$.data.title").value("2026 춘천 가을 마라톤"))
+			.andExpect(jsonPath("$.data.course").value("하프"))
 			.andExpect(jsonPath("$.data.saleStatus").value("ON_SALE"))
 			.andExpect(jsonPath("$.data.courseStatus").value("OPEN"))
 			.andExpect(jsonPath("$.data.individualRemaining").value(89))
@@ -397,10 +399,10 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 
 		String body = bodyOf(result);
 		Map<String, Object> data = JsonPath.read(body, "$.data");
-		assertThat(data).containsOnlyKeys("raceCourseId", "raceId", "raceDate", "applicationOpenAt",
-			"applicationCloseAt", "minAge", "maxAge", "sellerId", "courseName", "price", "kitPrice", "refundDeadline",
-			"scheduleChangedAt", "saleStatus", "courseStatus", "individualRemaining", "crewRemaining", "kitIncluded",
-			"tshirtSizeOption");
+		assertThat(data).containsOnlyKeys("raceCourseId", "raceId", "title", "raceDate", "applicationOpenAt",
+			"applicationCloseAt", "minAge", "maxAge", "sellerId", "course", "courseName", "price", "kitPrice",
+			"refundDeadline", "scheduleChangedAt", "saleStatus", "courseStatus", "individualRemaining", "crewRemaining",
+			"kitIncluded", "tshirtSizeOption");
 		assertThat(dateTimeAt(body, "$.data.raceDate")).isEqualTo(now.plusDays(20));
 		assertThat(dateTimeAt(body, "$.data.applicationOpenAt"))
 			.isEqualTo(individualOpenAt)
