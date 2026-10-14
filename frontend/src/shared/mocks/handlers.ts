@@ -1,7 +1,11 @@
 import { http, HttpResponse, type RequestHandler } from 'msw'
 
 import { getBukangCashAPIMock } from '@/shared/api/generated/cash/cash.msw'
-import { getBukangFileAPIMock } from '@/shared/api/generated/file/file.msw'
+import {
+  getBukangFileAPIMock,
+  getFindByRefMockHandler,
+  getFindByRefResponseMock,
+} from '@/shared/api/generated/file/file.msw'
 import { getBukangMemberAPIMock } from '@/shared/api/generated/member/member.msw'
 import { getBukangOrderAPIMock } from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
@@ -12,6 +16,18 @@ function pathParamCount(handler: RequestHandler): number {
   const path = (handler.info as { path?: unknown }).path
   return typeof path === 'string' ? (path.match(/\/:/g) ?? []).length : 0
 }
+
+/**
+ * 명세 예시의 이미지 주소는 실제로 없는 S3 주소라(next/image 허용 호스트도 아니다) 목에서는 public/mock 이미지로 바꾼다.
+ * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ */
+const fileImageHandler = getFindByRefMockHandler(() => {
+  const example = getFindByRefResponseMock()
+  return {
+    ...example,
+    data: example.data?.map((file) => ({ ...file, url: '/mock/races/cookierun.png' })),
+  }
+})
 
 /** orval이 서비스별 명세(openapi/*.json)의 응답 예시로 만든 목 */
 const generatedHandlers = [
@@ -30,5 +46,6 @@ const generatedHandlers = [
 export const handlers = [
   // 목 파이프라인이 살아있는지 확인하는 용도
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
+  fileImageHandler,
   ...generatedHandlers,
 ]
