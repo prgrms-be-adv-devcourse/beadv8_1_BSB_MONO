@@ -1,6 +1,7 @@
 package com.bukang.cash.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.cash.config.CashWalletProperties;
+import com.bukang.cash.domain.exception.PaymentMemberMismatchException;
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.payment.PaymentStatus;
@@ -82,6 +84,28 @@ class CashCancelOrderPaymentUseCaseTest {
 		assertThat(paymentRepository.findByOrderId(orderId).orElseThrow().getStatus())
 			.as("REFUNDED는 그대로 유지돼야 한다(CANCELED로 덮어쓰면 안 됨)")
 			.isEqualTo(PaymentStatus.REFUNDED);
+	}
+
+	@Test
+	@DisplayName("결제한 지갑과 다른 회원 ID로 환원을 요청하면 거절되고, 어느 지갑도 바뀌지 않는다")
+	void cancelPaymentRejectsMemberMismatch() {
+		int orderId = 250;
+		int amount = 3_000;
+		int otherMemberId = 4;
+		createCustomerWallet(10_000);
+		createHoldingWallet();
+		createWallet(otherMemberId, "다른고객", 10_000);
+		cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+
+		assertThatThrownBy(() -> cashFacade.cancelPayment(orderId, otherMemberId))
+			.isInstanceOf(PaymentMemberMismatchException.class);
+
+		assertBalance(CUSTOMER_ID, 7_000);
+		assertBalance(cashWalletProperties.holdingMemberId(), 3_000);
+		assertBalance(otherMemberId, 10_000);
+		assertThat(paymentRepository.findByOrderId(orderId).orElseThrow().getStatus())
+			.as("결제 상태도 그대로 COMPLETED여야 한다")
+			.isEqualTo(PaymentStatus.COMPLETED);
 	}
 
 	@Test

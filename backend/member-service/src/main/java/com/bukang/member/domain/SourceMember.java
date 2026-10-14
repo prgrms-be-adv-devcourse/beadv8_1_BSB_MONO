@@ -50,7 +50,7 @@ public abstract class SourceMember extends BaseMember {
 	private LocalDateTime modifyDate;
 
 	// 개인정보 칸은 지금은 NOT NULL. 탈퇴(PRO-71)를 만들 때 NULL 허용 + status CHECK로 함께 바꾼다
-	@Column(nullable = false, unique = true) // 로그인 아이디
+	@Column(nullable = false) // 로그인 아이디. unique 제약은 Member의 uk_member_email
 	private String email;
 
 	@Column(name = "password_hash", nullable = false)
@@ -63,7 +63,8 @@ public abstract class SourceMember extends BaseMember {
 	@Column(nullable = false, length = 255)
 	private String phone;
 
-	@Column(name = "phone_hash", nullable = false, unique = true, length = 64) // 휴대폰 번호 조회, 중복 검사용 블라인드 인덱스
+	// 휴대폰 번호 조회, 중복 검사용 블라인드 인덱스. unique 제약은 Member의 uk_member_phone_hash
+	@Column(name = "phone_hash", nullable = false, length = 64)
 	private String phoneHash;
 
 	@Column(name = "birth_date", nullable = false) // 만 14세 미만 가입 불가 확인용 (정책 1장 1-4)

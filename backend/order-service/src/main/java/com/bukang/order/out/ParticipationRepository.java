@@ -22,7 +22,7 @@ public interface ParticipationRepository extends JpaRepository<Participation, In
 	Optional<Participation> findFirstByMemberIdAndParticipantShippingAddressAddressIsNotNullOrderByIdDesc(int memberId);
 
 	// [결제하기]가 같은 신청서로 동시에 들어오면 한 요청씩 처리해, 상품 서비스에 자리를 두 번 잡지 않게 한다
-	// 결제·연장·참가자 정보 수정도 이걸로 읽어, 서로 겹쳐도 한쪽이 바꾼 상태를 다른 쪽이 옛 값으로 덮지 않게 한다
+	// 결제·참가자 정보 수정도 이걸로 읽어, 서로 겹쳐도 한쪽이 바꾼 상태를 다른 쪽이 옛 값으로 덮지 않게 한다
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select p from Participation p where p.id = :id")
 	Optional<Participation> findByIdForUpdate(@Param("id") int id);

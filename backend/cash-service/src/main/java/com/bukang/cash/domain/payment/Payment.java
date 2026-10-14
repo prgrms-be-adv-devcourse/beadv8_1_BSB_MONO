@@ -65,4 +65,10 @@ public class Payment extends BaseIdAndTime {
 		this.failReason = null;
 	}
 
+
+	public void markRefunded() {
+		this.status = PaymentStatus.REFUNDED;
+		this.failReason = null;
+	}
+
 }
