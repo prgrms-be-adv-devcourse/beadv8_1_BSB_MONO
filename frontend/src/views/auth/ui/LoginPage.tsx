@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
-import { useLogin } from '@/features/auth'
+import { safeNextPath, useLogin } from '@/features/auth'
 import { ApiError } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import { Button, FOCUS_RING, Logo, TextField } from '@/shared/ui'
@@ -19,7 +19,8 @@ const LINK = cn('rounded-sm', FOCUS_RING)
 
 // 피그마 V2 · M03 로그인 (+ M03-E 로그인 실패)
 // failed는 시안 미리보기(?preview=error)용. 실패 문구를 띄운 채로 보여 준다.
-export function LoginPage({ failed = false }: { failed?: boolean }) {
+// next는 로그인 뒤 돌아갈 경로(?next=). 앱 내부 경로가 아니면 홈으로 간다.
+export function LoginPage({ failed = false, next }: { failed?: boolean; next?: string }) {
   const router = useRouter()
   const login = useLogin()
   const {
@@ -42,7 +43,7 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
           className="flex flex-col items-center px-6"
           noValidate
           onSubmit={handleSubmit((values) =>
-            login.mutate(values, { onSuccess: () => router.push('/') }),
+            login.mutate(values, { onSuccess: () => router.replace(safeNextPath(next)) }),
           )}
         >
           <Logo className="h-11 w-[150px]" />

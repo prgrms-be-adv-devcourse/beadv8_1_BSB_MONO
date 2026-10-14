@@ -74,7 +74,8 @@ describe('AuthSessionRestorer', () => {
     expect(replace).not.toHaveBeenCalled()
   })
 
-  it('로그인 중에 재발급이 실패하면 로그인 화면으로 보낸다', async () => {
+  it('로그인 중에 재발급이 실패하면 보던 화면 주소를 next로 넘겨 로그인 화면으로 보낸다', async () => {
+    window.history.replaceState(null, '', '/tickets?tab=done')
     server.use(
       http.post('*/api/v1/auth/reissue', () =>
         HttpResponse.json({ status: 401, message: '만료', data: null }, { status: 401 }),
@@ -92,6 +93,7 @@ describe('AuthSessionRestorer', () => {
     await customFetch('http://localhost/api/v1/order/orders').catch(() => undefined)
 
     expect(getAuthStatus()).toBe('anonymous')
-    expect(replace).toHaveBeenCalledWith('/login')
+    expect(replace).toHaveBeenCalledWith('/login?next=%2Ftickets%3Ftab%3Ddone')
+    window.history.replaceState(null, '', '/')
   })
 })

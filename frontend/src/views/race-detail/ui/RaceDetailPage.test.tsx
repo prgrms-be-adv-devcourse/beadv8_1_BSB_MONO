@@ -22,9 +22,14 @@ function renderPage() {
 }
 
 describe('RaceDetailPage 신청하기', () => {
-  it('로그인 전이면 로그인 화면으로 보낸다', () => {
+  it('로그인 전이면 로그인 화면으로 보내고, 로그인 뒤 갈 신청 화면 주소를 next로 넘긴다', () => {
     clearAccessToken()
-    expect(renderPage()).toHaveAttribute('href', '/login')
+    const href = renderPage().getAttribute('href') ?? ''
+    const url = new URL(href, 'http://localhost')
+    expect(url.pathname).toBe('/login')
+    expect(url.searchParams.get('next')).toMatch(
+      new RegExp(`^/races/${RACE_DETAIL.id}/apply\\?option=`),
+    )
   })
 
   it('로그인했으면 신청 화면으로 보낸다', () => {

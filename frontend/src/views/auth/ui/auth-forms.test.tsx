@@ -15,12 +15,16 @@ import { LoginPage } from './LoginPage'
 import { SignupAccountPage, SignupProfilePage } from './SignupPages'
 
 const push = vi.fn()
+const replace = vi.fn()
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push, back: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push, back: vi.fn(), replace }),
   usePathname: () => '/',
 }))
 
-beforeEach(() => push.mockClear())
+beforeEach(() => {
+  push.mockClear()
+  replace.mockClear()
+})
 
 // 약관 시트가 열려 있으면 시트가 포커스를 가져가 뒤쪽 입력칸 타이핑이 가끔 빠진다. 먼저 동의해 시트를 닫는다.
 async function agreeAllTerms(user: ReturnType<typeof userEvent.setup>) {
@@ -66,7 +70,7 @@ describe('LoginPage', () => {
     expect(button).toBeEnabled()
     await user.click(button)
 
-    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/'))
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
     expect(body).toEqual({ email: 'runner@crewrun.kr', password: 'password1' })
     expect(getAuthStatus()).toBe('authenticated')
   })
@@ -87,8 +91,34 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: '로그인' }))
 
     expect(await screen.findByText(AUTH_ERRORS.loginFailed)).toBeInTheDocument()
-    expect(push).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
     expect(getAuthStatus()).not.toBe('authenticated')
+  })
+
+  it('next가 있으면 로그인 뒤 그 경로로 간다', async () => {
+    server.use(
+      http.post('*/api/v1/auth/login', () => HttpResponse.json(memberMock.getLoginResponseMock())),
+    )
+    const user = userEvent.setup()
+    render(withQueryClient(<LoginPage next="/races/1/apply?option=2" />))
+
+    await fillLogin(user)
+    await user.click(screen.getByRole('button', { name: '로그인' }))
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/races/1/apply?option=2'))
+  })
+
+  it('next가 다른 사이트 주소면 로그인 뒤 홈으로 간다', async () => {
+    server.use(
+      http.post('*/api/v1/auth/login', () => HttpResponse.json(memberMock.getLoginResponseMock())),
+    )
+    const user = userEvent.setup()
+    render(withQueryClient(<LoginPage next="//evil.com" />))
+
+    await fillLogin(user)
+    await user.click(screen.getByRole('button', { name: '로그인' }))
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
   })
 
   it('시안 미리보기(failed)는 로그인 실패 문구를 보여 준다', () => {
