@@ -6,10 +6,18 @@ import {
   getFindByRefMockHandler,
   getFindByRefResponseMock,
 } from '@/shared/api/generated/file/file.msw'
-import { getBukangMemberAPIMock } from '@/shared/api/generated/member/member.msw'
+import {
+  getBukangMemberAPIMock,
+  getLoginMockHandler,
+  getLoginResponseMock,
+  getLogoutMockHandler,
+  getReissueResponseMock,
+} from '@/shared/api/generated/member/member.msw'
 import { getBukangOrderAPIMock } from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
 import { getBukangProductAPIMock } from '@/shared/api/generated/product/product.msw'
+
+import { isMockLoggedIn, setMockLoggedIn } from './mock-session'
 
 /** 경로 변수(:raceId) 수. 적은 것부터 둬야 /races/suggestions가 /races/:raceId에 먼저 걸리지 않는다. */
 function pathParamCount(handler: RequestHandler): number {
@@ -29,6 +37,36 @@ const fileImageHandler = getFindByRefMockHandler(() => {
   }
 })
 
+/**
+ * 로그인 상태를 진짜처럼 흉내 내는 인증 목. 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ * 로그인하면 "가짜 로그인됨" 표시를 켜고, 로그아웃하면 끈다. 재발급은 표시가 있을 때만 성공하고 없으면 401.
+ * 그래서 로그인하지 않고 새로고침하면 로그아웃 상태로 보인다.
+ */
+let reissueCount = 0
+const authHandlers = [
+  getLoginMockHandler(() => {
+    setMockLoggedIn(true)
+    return getLoginResponseMock()
+  }),
+  http.post('*/api/v1/auth/reissue', () => {
+    if (!isMockLoggedIn()) {
+      return HttpResponse.json(
+        { status: 401, message: 'Refresh Token이 없습니다. 다시 로그인해주세요.', data: null },
+        { status: 401 },
+      )
+    }
+    reissueCount += 1
+    const example = getReissueResponseMock()
+    return HttpResponse.json({
+      ...example,
+      data: { ...example.data, accessToken: `${example.data?.accessToken}.mock${reissueCount}` },
+    })
+  }),
+  getLogoutMockHandler(() => {
+    setMockLoggedIn(false)
+  }),
+]
+
 /** orval이 서비스별 명세(openapi/*.json)의 응답 예시로 만든 목 */
 const generatedHandlers = [
   ...getBukangMemberAPIMock(),
@@ -47,5 +85,6 @@ export const handlers = [
   // 목 파이프라인이 살아있는지 확인하는 용도
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
+  ...authHandlers,
   ...generatedHandlers,
 ]
