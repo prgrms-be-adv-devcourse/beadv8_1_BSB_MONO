@@ -6,6 +6,6 @@ import com.bukang.common.global.exception.BusinessException;
 
 public class DuplicateNicknameException extends BusinessException {
 	public DuplicateNicknameException(String message) {
-		super(HttpStatus.CONFLICT, message);
+		super(HttpStatus.CONFLICT, "MEMBER_DUPLICATE_NICKNAME", message);
 	}
 }

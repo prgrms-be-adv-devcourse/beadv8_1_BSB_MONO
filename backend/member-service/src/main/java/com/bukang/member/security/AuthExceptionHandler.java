@@ -19,6 +19,6 @@ public class AuthExceptionHandler {
 	public ResponseEntity<RsData<Void>> authenticationException(AuthenticationException exception) {
 		return ResponseEntity
 			.status(HttpStatus.UNAUTHORIZED)
-			.body(RsData.of(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다.", null));
+			.body(RsData.of(HttpStatus.UNAUTHORIZED, "MEMBER_LOGIN_FAILED", "이메일 또는 비밀번호가 올바르지 않습니다.", null));
 	}
 }
