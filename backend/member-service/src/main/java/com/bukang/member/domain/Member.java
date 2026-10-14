@@ -3,6 +3,7 @@ package com.bukang.member.domain;
 import java.time.LocalDate;
 import java.time.Period;
 
+import com.bukang.common.shared.member.event.MemberJoinedEvent;
 import com.bukang.member.dto.MemberDto;
 
 import jakarta.persistence.AttributeOverride;
@@ -47,6 +48,11 @@ public class Member extends SourceMember {
 	// 만 나이 기준. 생일 당일부터 한 살 더한다
 	public static boolean isJoinableAge(LocalDate birthDate, LocalDate today) {
 		return Period.between(birthDate, today).getYears() >= MIN_JOIN_AGE;
+	}
+
+	// 가입 이벤트를 발행한다. ID는 저장할 때(IDENTITY) 정해지므로 save() 뒤에 부른다
+	public void publishJoinedEvent() {
+		publishEvent(new MemberJoinedEvent(getId(), getCreateDate(), getModifyDate(), getNickname()));
 	}
 
 	// 한글 완성형(가~힣)은 화면에서 영문보다 두 배쯤 넓어 2칸, 그 밖의 글자는 1칸으로 센다 ("러너abc" = 7칸)

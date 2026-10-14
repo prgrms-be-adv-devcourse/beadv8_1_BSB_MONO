@@ -67,14 +67,17 @@ public class MemberJoinUseCase {
 			birthDate,
 			gender
 		);
+		Member savedMember;
 		try {
 			// 유니크 제약 위반을 여기서 잡으려고 바로 반영한다.
 			// save만 하면 Facade의 트랜잭션이 커밋될 때 에러가 나서 이 메서드에서 잡을 수 없다
-			return memberRepository.saveAndFlush(newMember);
+			savedMember = memberRepository.saveAndFlush(newMember);
 		} catch (DataIntegrityViolationException exception) {
 			// 같은 값으로 동시에 가입하면 둘 다 위의 중복 검사를 통과하고, 늦은 쪽이 DB 유니크 제약에 걸린다
 			throw toDuplicateException(exception);
 		}
+		savedMember.publishJoinedEvent();
+		return savedMember;
 	}
 
 	// 제약 이름으로 어느 칸이 겹쳤는지 구별한다. 회원 제약이 아니면 원래 예외를 그대로 던진다
