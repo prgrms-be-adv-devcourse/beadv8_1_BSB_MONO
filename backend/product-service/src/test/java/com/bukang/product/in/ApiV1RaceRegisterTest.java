@@ -520,6 +520,15 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("키트 금액 45,001원이 참가비 45,000원보다 크면 400이고, 참가비와 같으면 등록된다")
+	void rejectKitPriceOverPrice() throws Exception {
+		assertRejected(upcomingRace().course(course().price(45_000).kit(45_001)).build(),
+			"키트 금액은 참가비보다 클 수 없습니다. (종목: 10K)");
+
+		register(upcomingRace().course(course().price(45_000).kit(45_000)).build());
+	}
+
+	@Test
 	@DisplayName("크루 예매가 없는 대회의 종목에 크루 정원 10명을 넣으면 400")
 	void rejectCrewQuotaWithoutCrewSale() throws Exception {
 		assertRejected(upcomingRace().course(course().quota(10, 90)).build(),

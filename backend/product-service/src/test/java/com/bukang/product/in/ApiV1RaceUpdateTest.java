@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -43,8 +44,9 @@ import com.jayway.jsonpath.JsonPath;
 
 /**
  * 대회 수정(PUT /api/v1/product/races/{raceId})을 확인한다.
- * - 판매 시작 일시 전(판매 예정)에는 참가비·정원·참가 조건·환불 기준일을 자유롭게 바꿀 수 있다
- * - 판매가 시작된 뒤에는 참가비 인상, 정원 줄이기, 참가 조건·티셔츠 사이즈 변경, 환불 기준일 앞당기기, 종목 빼기가 409다
+ * - 판매 시작 일시 전(판매 예정)에는 참가비·키트 금액·정원·참가 조건·환불 기준일을 자유롭게 바꿀 수 있다
+ * - 판매가 시작된 뒤에는 참가비·키트 금액 변경, 정원 줄이기, 참가 조건·티셔츠 사이즈 변경, 환불 기준일 앞당기기,
+ *   종목 빼기가 409다
  * - 이미 지난 판매 일정을 바꾸거나 일정을 지난 시각으로 옮기면 409다 (판매 시작 일시 전에도)
  * - 판매가 시작된 뒤 대회 일시·장소를 바꾸면 일정·장소 변경 일시를 남긴다 (판매 전에는 남기지 않는다)
  * - 수정이 커밋되면 파일 연결 메시지를 보내고 검색 문서를 다시 만들며, 정원을 늘리면 정원 마감 종목이 접수 중으로 돌아온다
@@ -59,8 +61,8 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 	// ---------- 판매 시작 전 수정 ----------
 
 	@Test
-	@DisplayName("판매 예정(개인 예매 하루 뒤 오픈) 대회는 참가비 인상(45,000→60,000원), 정원 축소(100→50), "
-		+ "참가 조건·환불 기준일·개인 예매 오픈(하루 뒤→이틀 뒤)을 모두 바꿀 수 있다")
+	@DisplayName("판매 예정(개인 예매 하루 뒤 오픈) 대회는 참가비 인상(45,000→60,000원), 키트 금액(0→5,000원), "
+		+ "정원 축소(100→50), 참가 조건·환불 기준일·개인 예매 오픈(하루 뒤→이틀 뒤)을 모두 바꿀 수 있다")
 	void updateAnythingBeforeSaleOpen() throws Exception {
 		RegisteredRace registered = register(scheduledRace().build());
 
@@ -89,6 +91,7 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 
 		RaceCourse course = findCourse(registered.courseId());
 		assertThat(course.getPrice()).isEqualTo(60_000);
+		assertThat(course.getKitPrice()).isEqualTo(5_000);
 		assertThat(course.getIndividualQuota()).isEqualTo(50);
 		assertThat(course.getCourseType()).isEqualTo(CourseType.HALF);
 		assertThat(course.getSurface()).isEqualTo(CourseSurface.TRAIL);
@@ -143,19 +146,35 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 
 	// ---------- 판매 시작 뒤 수정: 막히는 변경 ----------
 
-	@Test
-	@DisplayName("판매 중 종목의 참가비를 45,000원에서 50,000원으로 올리면 409이고, 저장되지 않아 파일 연결 메시지도 없다")
-	void rejectPriceRaiseAfterSaleStarted() throws Exception {
+	@ParameterizedTest(name = "45,000원 → {0}원")
+	@ValueSource(ints = {50_000, 40_000})
+	@DisplayName("판매 중 종목의 참가비를 올리거나 내리면 409이고, 저장되지 않아 파일 연결 메시지도 없다")
+	void rejectPriceChangeAfterSaleStarted(int newPrice) throws Exception {
 		RegisteredRace registered = registerOnSale(sameRace().build());
 
-		update(registered.raceId(), sameRace().course(sameCourse(registered.courseId()).price(50_000)).build())
+		update(registered.raceId(), sameRace().course(sameCourse(registered.courseId()).price(newPrice)).build())
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.status").value(409))
-			.andExpect(jsonPath("$.message").value("판매가 시작된 종목은 참가비를 올릴 수 없습니다. (종목: 10K)"));
+			.andExpect(jsonPath("$.message").value("판매가 시작된 종목은 참가비를 바꿀 수 없습니다. (종목: 10K)"));
 
 		assertThat(findCourse(registered.courseId()).getPrice()).isEqualTo(45_000);
 		// 등록 때 보낸 1건뿐이다
 		assertThat(fileLinkMessages()).hasSize(1);
+	}
+
+	@ParameterizedTest(name = "5,000원 → {0}원")
+	@ValueSource(ints = {6_000, 0})
+	@DisplayName("판매 중 종목의 키트 금액을 올리거나 내리면 409이다")
+	void rejectKitPriceChangeAfterSaleStarted(int newKitPrice) throws Exception {
+		RegisteredRace registered = registerOnSale(sameRace().course(course().kit(5_000)).build());
+
+		update(registered.raceId(), sameRace()
+			.course(sameCourse(registered.courseId()).kit(newKitPrice))
+			.build())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("판매가 시작된 종목은 키트 금액을 바꿀 수 없습니다. (종목: 10K)"));
+
+		assertThat(findCourse(registered.courseId()).getKitPrice()).isEqualTo(5_000);
 	}
 
 	@Test
@@ -375,19 +394,17 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 	// ---------- 판매 시작 뒤 수정: 허용되는 변경 ----------
 
 	@Test
-	@DisplayName("판매 중에도 참가비를 45,000원에서 40,000원으로 내리고 개인 정원을 100에서 150으로 늘릴 수 있다")
-	void allowFavorableChangesAfterSaleStarted() throws Exception {
+	@DisplayName("판매 중에도 개인 정원을 100에서 150으로 늘릴 수 있다")
+	void allowQuotaIncreaseAfterSaleStarted() throws Exception {
 		RegisteredRace registered = registerOnSale(sameRace().build());
 
 		update(registered.raceId(), sameRace()
-			.course(sameCourse(registered.courseId()).price(40_000).quota(0, 150))
+			.course(sameCourse(registered.courseId()).quota(0, 150))
 			.build())
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.saleStatus").value("ON_SALE"));
 
-		RaceCourse course = findCourse(registered.courseId());
-		assertThat(course.getPrice()).isEqualTo(40_000);
-		assertThat(course.getIndividualQuota()).isEqualTo(150);
+		assertThat(findCourse(registered.courseId()).getIndividualQuota()).isEqualTo(150);
 	}
 
 	@Test
