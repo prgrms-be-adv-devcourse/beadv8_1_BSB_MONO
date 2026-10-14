@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.cash.app.CashFacade;
+import com.bukang.cash.dto.CashCancelPaymentRequestDto;
 import com.bukang.cash.dto.CashPaymentDto;
 import com.bukang.cash.dto.CashPaymentRequestDto;
 import com.bukang.common.global.rsdata.RsData;
@@ -26,12 +27,21 @@ import lombok.RequiredArgsConstructor;
 public class InternalV1CashController {
 	private final CashFacade cashFacade;
 
-	@PostMapping("/orders/{orderId}/payments")
+	@PostMapping("/payments/{orderId}")
 	public ResponseEntity<RsData<CashPaymentDto>> pay(
 		@PathVariable int orderId,
 		@Valid @RequestBody CashPaymentRequestDto request
 	) {
 		CashPaymentDto result = cashFacade.completeOrderPayment(orderId, request.getMemberId(), request.getAmount());
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, result.message(), result));
+	}
+
+	@PostMapping("/payments/{orderId}/cancel")
+	public ResponseEntity<RsData<Void>> cancelPayment(
+		@PathVariable int orderId,
+		@Valid @RequestBody CashCancelPaymentRequestDto request
+	) {
+		cashFacade.cancelPayment(orderId, request.getMemberId());
+		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "결제를 취소했습니다.", null));
 	}
 }
