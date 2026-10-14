@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { RaceTicketCard, type RaceDetail } from '@/entities/race'
+import { RaceTicketCard, type RaceDetail, type RaceOption } from '@/entities/race'
 import { cn, formatWon } from '@/shared/lib'
 import {
   BottomCta,
@@ -32,10 +32,10 @@ const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 
 // 피그마 V2 · M05 참가 신청 · 참가자 정보 (+ M05-1 장바구니 바꾸기 확인)
 // TODO(api): 회원 정보·지난 신청 값으로 채우고, 제출은 react-hook-form + zod로 묶는다.
-export function RaceApplyPage({ race, optionId }: { race: RaceDetail; optionId?: string }) {
+// 종목은 page.tsx에서 정원이 남은 종목 중에 골라 넘긴다.
+export function RaceApplyPage({ race, option }: { race: RaceDetail; option: RaceOption }) {
   const router = useRouter()
   const refundDeadline = race.schedule.find((row) => row.label === '전액 환불 기한')?.value
-  const option = race.options.find((o) => o.id === optionId) ?? race.options[0]
   // 필수 동의는 사용자가 직접 체크해야 버튼이 켜진다.
   const [agreed, setAgreed] = useState(false)
   const [replaceOpen, setReplaceOpen] = useState(false)
