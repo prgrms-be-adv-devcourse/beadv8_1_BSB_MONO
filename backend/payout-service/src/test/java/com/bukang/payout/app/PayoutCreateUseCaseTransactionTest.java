@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
+import com.bukang.payout.domain.PayoutItem;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutItemRepository;
 import com.bukang.payout.out.PayoutRepository;
@@ -65,7 +67,7 @@ class PayoutCreateUseCaseTransactionTest {
 	}
 
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
-		SoldEntryPort soldEntryPort = raceDate -> raceDate.equals(RACE_DATE) ? entries : List.of();
+		SoldEntryPort soldEntryPort = (from, to) -> entries;
 		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntryPort, sellerAccountPort,
 			RACE_NAMES);
 	}
@@ -74,9 +76,9 @@ class PayoutCreateUseCaseTransactionTest {
 	@DisplayName("한 묶음 저장이 DB에서 실패해도 같은 날 다른 묶음의 정산 내역은 저장된다")
 	void failedGroupDoesNotRollBackOthers() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, 50_000L),
-			new SoldEntry(300, 3, 30, 40_000L),
-			new SoldEntry(200, 2, 20, 30_000L)
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(300, 3, 30, RACE_DATE, 40_000L),
+			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
 		), sellerId -> true);
 
 		useCase.run(TARGET_DATE, NOW);
@@ -98,8 +100,8 @@ class PayoutCreateUseCaseTransactionTest {
 			return true;
 		};
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, 50_000L),
-			new SoldEntry(200, 2, 20, 30_000L)
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
 		), sellerAccountPort);
 
 		useCase.run(TARGET_DATE, NOW);
@@ -108,5 +110,37 @@ class PayoutCreateUseCaseTransactionTest {
 			.extracting(Payout::getSellerId)
 			.containsExactly(1);
 		assertThat(payoutHoldRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("어제 실패한 묶음은 오늘 실행이 되돌아보기로 다시 만들고, 정산 대상일과 정산 월은 원래 날짜로 남긴다")
+	void failedGroupIsCreatedOnNextRun() {
+		// 9/26에는 회원 서비스가 멈춰 판매자 2의 계좌 확인이 실패하고, 9/27에는 돌아온다
+		AtomicBoolean memberServiceDown = new AtomicBoolean(true);
+		SellerAccountPort sellerAccountPort = sellerId -> {
+			if (sellerId == 2 && memberServiceDown.get()) {
+				throw new IllegalStateException("회원 서비스 응답 없음");
+			}
+			return true;
+		};
+		PayoutCreateUseCase useCase = useCaseSelling(List.of(
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
+		), sellerAccountPort);
+
+		useCase.run(TARGET_DATE, NOW);
+		memberServiceDown.set(false);
+		useCase.run(TARGET_DATE.plusDays(1), NOW.plusDays(1));
+
+		List<Payout> payouts = payoutRepository.findAll();
+		assertThat(payouts)
+			.extracting(Payout::getSellerId)
+			.containsExactlyInAnyOrder(1, 2);
+		Payout retried = payouts.stream().filter(p -> p.getSellerId() == 2).findFirst().orElseThrow();
+		assertThat(retried.getPayoutMonth()).isEqualTo("2026-09");
+		assertThat(payoutItemRepository.findAll())
+			.filteredOn(item -> item.getOrderItemId() == 200)
+			.extracting(PayoutItem::getTargetDate)
+			.containsExactly(TARGET_DATE);
 	}
 }

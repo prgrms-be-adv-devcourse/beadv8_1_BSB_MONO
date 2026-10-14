@@ -11,7 +11,7 @@ import com.bukang.product.domain.RaceSaleStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-// 판매자 대회 관리의 대회 한 줄 (작성 중인 대회도 나온다)
+// 판매자 대회 관리의 대회 한 줄 (취소된 대회도 나온다)
 @AllArgsConstructor
 @Getter
 public class SellerRaceDto {

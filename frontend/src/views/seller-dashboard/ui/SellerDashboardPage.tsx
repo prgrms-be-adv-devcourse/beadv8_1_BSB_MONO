@@ -113,13 +113,7 @@ function DashboardBody() {
     <>
       <div className="flex gap-4">
         <StatTile label="다음 정산일" value="11/20" unit="(금)" />
-        <StatTile
-          tone="accent"
-          className="flex-2"
-          label="정산 예정액"
-          value="1,920,000"
-          unit="원"
-        />
+        <StatTile tone="accent" className="flex-2" label="정산 예정액" value="₩1,920,000" />
         <StatTile label="판매 중 대회" value="2" unit="개" />
         <StatTile label="처리할 일" value="5" unit="건" />
       </div>

@@ -64,27 +64,23 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 	// ---------- 공개 조건, 한 줄 ----------
 
 	@Test
-	@DisplayName("검색어 없이 조회하면 판매 중 대회와 판매 예정(개인 예매 내일 오픈) 대회만 나오고, "
-		+ "작성 중 대회와 접수 마감이 하루 지난 판매 중 대회는 빠진다")
+	@DisplayName("검색어 없이 조회하면 판매 중 대회와 판매 예정(개인 예매 내일 오픈) 대회가 나오고, "
+		+ "접수 마감이 하루 지난 판매 중 대회는 빠진다")
 	void listsOnlyPublicRaces() throws Exception {
 		LocalDateTime now = LocalDateTime.now().withNano(0);
 		RegisteredRace onSale = registerOnSale(race().title("판매 중 대회")
 			.applicationCloseAt(now.plusDays(5))
 			.build());
-		RegisteredRace scheduled = registerOnSale(race().title("판매 예정 대회")
+		RegisteredRace scheduled = register(race().title("판매 예정 대회")
 			.individualOpenAt(now.plusDays(1))
 			.applicationCloseAt(now.plusDays(8))
-			.build());
-		RegisteredRace draft = register(race().title("작성 중 대회")
-			.applicationCloseAt(now.plusDays(3))
 			.build());
 		// 사흘 전에 개인 예매가 열려 판매 중이지만, 접수 마감이 하루 지났다
 		RegisteredRace closed = registerOnSale(race().title("접수 마감 대회")
 			.individualOpenAt(now.minusDays(3))
 			.applicationCloseAt(now.minusDays(1))
 			.build());
-		// 빠지는 두 대회도 검색 문서는 있다 (색인되지 않아서 빠진 것이 아님을 먼저 확인한다)
-		expectDocumentSaleStatus(draft, RaceSaleStatus.DRAFT);
+		// 빠지는 대회도 검색 문서는 있다 (색인되지 않아서 빠진 것이 아님을 먼저 확인한다)
 		expectDocumentSaleStatus(closed, RaceSaleStatus.ON_SALE);
 
 		expectRacesInOrder(search(), onSale, scheduled)
@@ -567,14 +563,13 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("연관검색어는 판매 중·판매 예정 대회에서만 찾고, 작성 중 대회와 접수 마감이 하루 지난 대회는 대회·종목 모두 빠진다")
+	@DisplayName("연관검색어는 판매 중·판매 예정 대회에서만 찾고, 접수 마감이 하루 지난 대회는 대회·종목 모두 빠진다")
 	void suggestsOnlyPublicRaces() throws Exception {
 		LocalDateTime now = LocalDateTime.now().withNano(0);
 		RegisteredRace onSale = registerOnSale(race().title("서울 가을 마라톤").build());
-		RegisteredRace scheduled = registerOnSale(race().title("서울 겨울 마라톤")
+		RegisteredRace scheduled = register(race().title("서울 겨울 마라톤")
 			.individualOpenAt(now.plusDays(1))
 			.build());
-		register(race().title("서울 봄 마라톤").build());
 		registerOnSale(race().title("서울 여름 마라톤")
 			.individualOpenAt(now.minusDays(3))
 			.applicationCloseAt(now.minusDays(1))

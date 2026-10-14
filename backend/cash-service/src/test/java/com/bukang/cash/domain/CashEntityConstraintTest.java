@@ -61,12 +61,12 @@ class CashEntityConstraintTest {
 	}
 
 	@Test
-	@DisplayName("결제 멱등키가 같으면 두 번째 결제는 저장되지 않는다")
-	void duplicatePaymentIdempotencyKey() {
-		paymentRepository.saveAndFlush(new Payment(15, wallet, 5_000, "payment-key-1"));
+	@DisplayName("같은 주문 ID로 두 번째 결제는 저장되지 않는다")
+	void duplicateOrderIdPayment() {
+		paymentRepository.saveAndFlush(new Payment(15, wallet, 5_000));
 
 		assertThatThrownBy(() ->
-			paymentRepository.saveAndFlush(new Payment(15, wallet, 5_000, "payment-key-1"))
+			paymentRepository.saveAndFlush(new Payment(15, wallet, 5_000))
 		).isInstanceOf(DataIntegrityViolationException.class);
 	}
 

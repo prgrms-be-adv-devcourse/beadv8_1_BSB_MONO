@@ -17,15 +17,15 @@ import com.bukang.product.domain.RaceSaleStatus;
 
 import jakarta.persistence.LockModeType;
 
-// 잠그는 순서: 대회 행을 잡는 요청(판매 시작·수정·취소·자리 확보)은 모두 대회 행을 먼저, 종목 행을 나중에 잠근다
+// 잠그는 순서: 대회 행을 잡는 요청(수정·취소·자리 확보)은 모두 대회 행을 먼저, 종목 행을 나중에 잠근다
 // 순서가 엇갈리면 MySQL에서 두 트랜잭션이 서로 상대의 잠금을 기다리다 한쪽이 교착으로 롤백된다
 public interface RaceRepository extends JpaRepository<Race, Integer> {
 	// 판매자의 대회 (최근 등록 순)
 	List<Race> findAllBySellerOrderByIdDesc(ProductSeller seller);
 
-	// 대회 행을 잠그고 읽는다 (SELECT … FOR UPDATE). 판매 시작·수정·취소가 쓴다
+	// 대회 행을 잠그고 읽는다 (SELECT … FOR UPDATE). 수정·취소가 쓴다
 	// 같은 대회에서 겹치면 차례로 처리되어, 나중 요청이 최신 상태(예: 방금 취소됨)를 보고 막힌다
-	// 잠그지 않고 읽으면 옛 상태로 판단해, 취소된 대회를 판매 시작으로 덮어쓰거나 수정할 수 있다
+	// 잠그지 않고 읽으면 옛 상태로 판단해, 취소된 대회를 수정할 수 있다
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select r from Race r where r.id = :id")
 	Optional<Race> findByIdForUpdate(@Param("id") int id);

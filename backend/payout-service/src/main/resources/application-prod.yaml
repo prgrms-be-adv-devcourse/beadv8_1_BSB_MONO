@@ -25,3 +25,8 @@ logging:
   level:
     com:
       bukang: info
+
+# 정산이 부르는 다른 서비스 주소. compose.yml의 컨테이너 이름으로 찾는다 (/internal/** 은 게이트웨이를 거치지 않고 직접 부른다)
+payout:
+  services:
+    order: http://bukang-order-service:8084

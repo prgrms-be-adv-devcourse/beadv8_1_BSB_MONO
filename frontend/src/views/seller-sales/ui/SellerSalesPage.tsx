@@ -99,7 +99,7 @@ export function SellerSalesPage() {
 
       <Alert
         title="환불 기한(10/31 23:59)까지는 취소가 생길 수 있어요"
-        description="취소로 풀린 자리는 남은 자리로 자동으로 돌아가 다시 판매돼요. 환불 기한이 지나면 1차 정산 대상이 돼요."
+        description="취소로 풀린 자리는 남은 자리로 자동으로 돌아가 다시 판매돼요."
       />
 
       <ConsoleCard
