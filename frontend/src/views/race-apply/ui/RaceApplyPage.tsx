@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { SAMPLE_PARTICIPANT, useBookingFlow, type BookingParticipant } from '@/features/booking'
 import { RaceTicketCard, type RaceDetail, type RaceOption } from '@/entities/race'
 import { cn, formatWon } from '@/shared/lib'
 import {
@@ -36,9 +37,19 @@ const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 export function RaceApplyPage({ race, option }: { race: RaceDetail; option: RaceOption }) {
   const router = useRouter()
   const refundDeadline = race.schedule.find((row) => row.label === '전액 환불 기한')?.value
+  const savedParticipant = useBookingFlow((s) => s.participant)
+  const submitApplication = useBookingFlow((s) => s.submitApplication)
+  // 결제에서 돌아오면 앞서 입력한 값을 그대로 보여 준다.
+  const [participant, setParticipant] = useState<BookingParticipant>(
+    savedParticipant ?? SAMPLE_PARTICIPANT,
+  )
+  const edit = (patch: Partial<BookingParticipant>) => setParticipant((p) => ({ ...p, ...patch }))
   // 필수 동의는 사용자가 직접 체크해야 버튼이 켜진다.
   const [agreed, setAgreed] = useState(false)
   const [replaceOpen, setReplaceOpen] = useState(false)
+
+  // 다음 단계(장바구니 · 결제)로 넘어가기 전에 고른 종목과 입력값을 예매 흐름 스토어에 남긴다.
+  const submit = () => submitApplication({ raceId: race.id, optionId: option.id }, participant)
 
   return (
     <>
@@ -71,29 +82,44 @@ export function RaceApplyPage({ race, option }: { race: RaceDetail; option: Race
           }
         >
           <div className="flex flex-col gap-2">
-            <KeyValue label="이름" value="김러너" />
-            <KeyValue label="생년월일" value="1995.03.02" />
+            <KeyValue label="이름" value={participant.name} />
+            <KeyValue label="생년월일" value={participant.birth} />
           </div>
           <Divider />
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-2 text-label-m">성별</legend>
-            <RadioGroup defaultValue="male" className="flex-row gap-6">
+            <RadioGroup
+              value={participant.gender}
+              onValueChange={(gender) => edit({ gender: gender as BookingParticipant['gender'] })}
+              className="flex-row gap-6"
+            >
               <Radio value="male" label="남성" />
               <Radio value="female" label="여성" />
             </RadioGroup>
           </fieldset>
-          <Select label="기념 티셔츠 사이즈" items={SIZES} defaultValue="M (95)" />
-          <TextField label="비상 연락처 이름" defaultValue="김보호" />
+          <Select
+            label="기념 티셔츠 사이즈"
+            items={SIZES}
+            value={participant.shirtSize}
+            onValueChange={(shirtSize) => shirtSize !== null && edit({ shirtSize })}
+          />
+          <TextField
+            label="비상 연락처 이름"
+            value={participant.emergencyName}
+            onChange={(e) => edit({ emergencyName: e.target.value })}
+          />
           <TextField
             label="비상 연락처 전화번호"
             helper="연락받을 분께 미리 알려 주세요"
             inputMode="tel"
-            defaultValue="010-9876-5432"
+            value={participant.emergencyPhone}
+            onChange={(e) => edit({ emergencyPhone: e.target.value })}
           />
           <TextField
             label="키트 배송 주소"
             helper={`환불 기한(${refundDeadline})이 지난 뒤 이 주소로 키트를 보내요.`}
-            defaultValue="서울 성동구 왕십리로 00, 101동 1001호"
+            value={participant.address}
+            onChange={(e) => edit({ address: e.target.value })}
           />
         </Section>
 
@@ -131,13 +157,23 @@ export function RaceApplyPage({ race, option }: { race: RaceDetail; option: Race
             variant="secondary"
             size="l"
             disabled={!agreed}
-            onClick={() => setReplaceOpen(true)}
+            onClick={() => {
+              submit()
+              setReplaceOpen(true)
+            }}
           >
             장바구니 담기
           </Button>
         }
         primary={
-          <Button size="l" disabled={!agreed} onClick={() => router.push('/checkout')}>
+          <Button
+            size="l"
+            disabled={!agreed}
+            onClick={() => {
+              submit()
+              router.push('/checkout')
+            }}
+          >
             바로 결제
           </Button>
         }
