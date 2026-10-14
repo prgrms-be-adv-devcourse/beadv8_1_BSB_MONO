@@ -42,14 +42,14 @@ describe('결제 화면', () => {
 
     expect(screen.getByText('2026 용감한 쿠키RUN in 서울 · 5K · 이달림')).toBeInTheDocument()
     // 5K는 35,000원이라 예치금(시안 예시 40,000원)으로 다 내고 충전하지 않는다.
-    expect(screen.getByRole('button', { name: '35,000원 결제' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '₩35,000 결제' })).toBeInTheDocument()
   })
 
   it('스토어가 비어 있으면 시안 예시 값을 보여 준다', () => {
     renderCheckout()
 
     expect(screen.getByText('2026 용감한 쿠키RUN in 서울 · 10K · 김러너')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '10,000원 충전하고 결제' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '₩10,000 충전하고 결제' })).toBeInTheDocument()
   })
 
   it('들어오면 10분부터 1초씩 줄어든다', () => {

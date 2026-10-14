@@ -4,7 +4,7 @@ import { createStore } from 'zustand/vanilla'
 
 import { createStoreContext } from '@/shared/lib'
 
-/** 자리를 잡아 두는 시간 (정책 3장: 10분) */
+/** 자리를 잡아 두는 시간 (docs/erd/cash.md 결제 정책 4: 임시 확보부터 10분) */
 export const HOLD_SECONDS = 10 * 60
 
 /** 참가자 정보 단계(M05)에서 입력한 값 */
@@ -46,7 +46,8 @@ type BookingFlowState = {
   /** 참가자 정보 단계를 마치면 고른 종목과 입력값을 남긴다. 새 신청이라 잡아 둔 자리도 비운다. */
   submitApplication: (selection: BookingSelection, participant: BookingParticipant) => void
   /**
-   * 결제 단계에 들어갈 때 자리를 잡는다. 이미 잡아 둔 자리가 있으면 그대로 둔다.
+   * 결제 단계에 들어갈 때 자리를 잡는다. 아직 마감 전인 자리가 있으면 그대로 두고,
+   * 없거나 마감이 지났으면 새로 잡는다.
    * TODO(api): 주문 생성 응답의 마감 시각을 expiresAt으로 넘긴다.
    */
   startHold: (expiresAt?: number) => void
@@ -68,7 +69,9 @@ export const { Provider: BookingFlowProvider, useStore: useBookingFlow } = creat
       submitApplication: (selection, participant) =>
         set({ selection, participant, holdExpiresAt: null }),
       startHold: (expiresAt) => {
-        if (get().holdExpiresAt !== null) return
+        // StrictMode에서 두 번 불려도 처음 잡은 마감 시각을 지킨다
+        const current = get().holdExpiresAt
+        if (current !== null && current > Date.now()) return
         set({ holdExpiresAt: expiresAt ?? Date.now() + HOLD_SECONDS * 1000 })
       },
     })),

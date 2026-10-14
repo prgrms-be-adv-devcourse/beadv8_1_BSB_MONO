@@ -19,6 +19,14 @@ export function useHoldCountdown(expiresAt: number | null) {
     expiresAt === null ? HOLD_SECONDS : secondsUntil(expiresAt),
   )
 
+  // 마감 시각이 바뀌면 다음 1초를 기다리지 않고 이번 렌더에서 바로 맞춘다.
+  // 첫 렌더에는 바뀐 것이 없어 이 분기를 타지 않으므로, 첫 렌더 값은 그대로다.
+  const [prevExpiresAt, setPrevExpiresAt] = useState(expiresAt)
+  if (prevExpiresAt !== expiresAt) {
+    setPrevExpiresAt(expiresAt)
+    setRemaining(expiresAt === null ? HOLD_SECONDS : secondsUntil(expiresAt))
+  }
+
   useEffect(() => {
     if (expiresAt === null) return
     const id = setInterval(() => {
