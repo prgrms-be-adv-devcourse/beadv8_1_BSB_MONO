@@ -48,7 +48,9 @@ import lombok.NoArgsConstructor;
 		// 내 주문 목록 최신순 (PRO-43)
 		@Index(name = "idx_order_buyer", columnList = "buyer_id, id"),
 		// 결제 기한이 지난 결제 대기 주문 찾기 (만료 정리 배치, PRO-42)
-		@Index(name = "idx_order_due", columnList = "status, payment_due_at")
+		@Index(name = "idx_order_due", columnList = "status, payment_due_at"),
+		// 취소된 대회의 주문 찾기 (일괄 환불, PRO-135)
+		@Index(name = "idx_order_race", columnList = "race_id, id")
 	}
 )
 public class Order extends BaseIdAndTime {
@@ -183,6 +185,16 @@ public class Order extends BaseIdAndTime {
 		this.canceledAmount += item.getAmount();
 		boolean allCanceled = items.stream().allMatch(each -> each.getStatus() == OrderItemStatus.CANCELED);
 		this.status = allCanceled ? OrderStatus.CANCELED : OrderStatus.PARTIAL_CANCELED;
+	}
+
+	// 대회가 취소됐다. 결제한 주문 상품을 모두 취소하고 취소한 상품을 돌려준다 (키트 포함 전액, 정책 1차 5장 4번)
+	// 결제 전이거나 이미 취소한 상품은 그대로 둔다. 같은 취소가 다시 와도 빈 목록이라 환불이 한 번만 일어난다
+	public List<OrderItem> cancelPaidItems(LocalDateTime canceledAt) {
+		List<OrderItem> paidItems = items.stream()
+			.filter(item -> item.getStatus() == OrderItemStatus.PAID)
+			.toList();
+		paidItems.forEach(item -> cancelItem(item, canceledAt));
+		return paidItems;
 	}
 
 	// 개인 예매 주문은 참가 신청 1건짜리다 (결제 1건 = 참가 신청 1건)

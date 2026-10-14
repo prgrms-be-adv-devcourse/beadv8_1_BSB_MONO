@@ -34,6 +34,7 @@ public class StubWalletPort implements WalletPort {
 	private final List<Integer> refundedAmounts = new CopyOnWriteArrayList<>();
 	private boolean payTimesOut;
 	private boolean cancelFails;
+	private boolean refundFails;
 	private volatile CountDownLatch payEntered;
 	private volatile CountDownLatch payReleased;
 
@@ -90,6 +91,9 @@ public class StubWalletPort implements WalletPort {
 	@Override
 	public synchronized void refund(int orderId, int memberId) {
 		refundCalls.add(new Call(orderId, memberId));
+		if (refundFails) {
+			throw new ExternalServiceUnavailableException(TIMEOUT_MESSAGE);
+		}
 		Integer amount = paidOrders.remove(orderId);
 		if (amount != null) {
 			refundedAmounts.add(amount);
@@ -130,6 +134,11 @@ public class StubWalletPort implements WalletPort {
 	// 결제 취소가 실패하게 한다 (예치금 서비스 장애)
 	public synchronized void setCancelFails(boolean cancelFails) {
 		this.cancelFails = cancelFails;
+	}
+
+	// 환불이 실패하게 한다 (예치금 서비스 장애)
+	public synchronized void setRefundFails(boolean refundFails) {
+		this.refundFails = refundFails;
 	}
 
 	public List<Call> cancelCalls() {
@@ -176,6 +185,7 @@ public class StubWalletPort implements WalletPort {
 		refundedAmounts.clear();
 		payTimesOut = false;
 		cancelFails = false;
+		refundFails = false;
 		releasePay();
 		payEntered = null;
 		payReleased = null;
