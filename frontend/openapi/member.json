@@ -8,11 +8,11 @@
   "tags": [
     {
       "name": "Auth",
-      "description": "회원가입, 로그인 API"
+      "description": "회원가입, 로그인, 토큰 재발급, 로그아웃 API"
     },
     {
       "name": "Member",
-      "description": "회원 정보 API"
+      "description": "내 정보 조회 API"
     }
   ],
   "paths": {
@@ -126,7 +126,7 @@
           "Auth"
         ],
         "summary": "로그인",
-        "description": "이메일과 비밀번호로 로그인하고 세션에 인증 정보를 저장한다.",
+        "description": "이메일과 비밀번호로 로그인하고 Access Token은 응답 본문으로, Refresh Token은 httpOnly 쿠키로 내려준다. Refresh Token은 Redis에도 저장한다.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -141,17 +141,30 @@
         "responses": {
           "200": {
             "description": "로그인 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=...; Path=/api/v1/auth; Max-Age=1209600; Secure; HttpOnly; SameSite=Lax",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "example": {
                   "status": 200,
                   "message": "로그인 성공",
                   "data": {
-                    "id": 1,
-                    "createDate": "2026-10-05T21:25:35",
-                    "modifyDate": "2026-10-05T21:25:35",
-                    "nickname": "러너1",
-                    "email": "runner1@crewrun.com"
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature",
+                    "member": {
+                      "id": 1,
+                      "createDate": "2026-10-05T21:25:35",
+                      "modifyDate": "2026-10-05T21:25:35",
+                      "nickname": "러너1",
+                      "email": "runner1@crewrun.com",
+                      "phone": "010-1234-5678"
+                    }
                   }
                 }
               }
@@ -195,6 +208,206 @@
                 "example": {
                   "status": 401,
                   "message": "이메일 또는 비밀번호가 올바르지 않습니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/reissue": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "토큰 재발급",
+        "description": "쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). 이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).",
+        "operationId": "reissue",
+        "parameters": [
+          {
+            "name": "refreshToken",
+            "in": "cookie",
+            "description": "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "재발급 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=...; Path=/api/v1/auth; Max-Age=1209600; Secure; HttpOnly; SameSite=Lax (Max-Age는 토큰 만료까지 남은 초. 로그인 30일 상한에 가까우면 14일보다 짧다)",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "토큰 재발급 성공",
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Refresh Token 쿠키 없음, 만료 또는 유효하지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "쿠키 없음": {
+                    "description": "쿠키 없음",
+                    "value": {
+                      "status": 401,
+                      "message": "Refresh Token이 없습니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  },
+                  "만료": {
+                    "description": "만료",
+                    "value": {
+                      "status": 401,
+                      "message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  },
+                  "유효하지 않음": {
+                    "description": "유효하지 않음",
+                    "value": {
+                      "status": 401,
+                      "message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "로그아웃",
+        "description": "Redis의 Refresh Token을 지우고 Refresh Token 쿠키를 만료시킨다. 쿠키가 없거나 이미 무효한 토큰이어도 성공으로 응답한다.",
+        "operationId": "logout",
+        "parameters": [
+          {
+            "name": "refreshToken",
+            "in": "cookie",
+            "description": "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "로그아웃 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=; Path=/api/v1/auth; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "로그아웃 성공",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/member/members/me": {
+      "get": {
+        "tags": [
+          "Member"
+        ],
+        "summary": "내 정보 조회",
+        "description": "게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.",
+        "operationId": "findMe",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "내 정보를 조회했습니다.",
+                  "data": {
+                    "id": 1,
+                    "createDate": "2026-10-05T21:25:35",
+                    "modifyDate": "2026-10-05T21:25:35",
+                    "nickname": "러너1",
+                    "email": "runner1@crewrun.com",
+                    "phone": "010-1234-5678"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 회원입니다.",
                   "data": null
                 }
               }

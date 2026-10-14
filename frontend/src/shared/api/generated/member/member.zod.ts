@@ -38,7 +38,7 @@ export const JoinResponse = zod.void()
 
 
 /**
- * 이메일과 비밀번호로 로그인하고 세션에 인증 정보를 저장한다.
+ * 이메일과 비밀번호로 로그인하고 Access Token은 응답 본문으로, Refresh Token은 httpOnly 쿠키로 내려준다. Refresh Token은 Redis에도 저장한다.
  * @summary 로그인
  */
 
@@ -50,4 +50,56 @@ export const LoginBody = zod.object({
   "password": zod.string().min(1).describe('비밀번호')
 }).describe('로그인 요청')
 
-export const LoginResponse = zod.unknown()
+export const LoginResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "accessToken": zod.string().optional().describe('Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다'),
+  "member": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "nickname": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional()
+}).optional().describe('로그인한 회원')
+}).optional().describe('로그인 응답')
+})
+
+
+/**
+ * 쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). 이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).
+ * @summary 토큰 재발급
+ */
+export const ReissueResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "accessToken": zod.string().optional().describe('새 Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다')
+}).optional().describe('토큰 재발급 응답')
+})
+
+
+/**
+ * Redis의 Refresh Token을 지우고 Refresh Token 쿠키를 만료시킨다. 쿠키가 없거나 이미 무효한 토큰이어도 성공으로 응답한다.
+ * @summary 로그아웃
+ */
+export const LogoutResponse = zod.unknown()
+
+
+/**
+ * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
+ * @summary 내 정보 조회
+ */
+export const FindMeResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "nickname": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional()
+}).optional()
+})

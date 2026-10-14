@@ -80,3 +80,48 @@ export interface RsData {
   data?: unknown;
 }
 
+export interface MemberDto {
+  id?: number;
+  createDate?: string;
+  modifyDate?: string;
+  nickname?: string;
+  email?: string;
+  phone?: string;
+}
+
+/**
+ * 로그인 응답
+ */
+export interface MemberLoginResponseDto {
+  /** Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다 */
+  accessToken?: string;
+  /** 로그인한 회원 */
+  member?: MemberDto;
+}
+
+/**
+ * 토큰 재발급 응답
+ */
+export interface TokenReissueResponseDto {
+  /** 새 Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다 */
+  accessToken?: string;
+}
+
+export interface RsDataMemberLoginResponseDto {
+  status?: number;
+  message?: string;
+  data?: MemberLoginResponseDto;
+}
+
+export interface RsDataTokenReissueResponseDto {
+  status?: number;
+  message?: string;
+  data?: TokenReissueResponseDto;
+}
+
+export interface RsDataMemberDto {
+  status?: number;
+  message?: string;
+  data?: MemberDto;
+}
+

@@ -6,19 +6,31 @@
  * OpenAPI spec version: v1
  */
 import {
-  useMutation
+  useMutation,
+  useQuery
 } from '@tanstack/react-query';
 import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
   MutationFunction,
   QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
   UseMutationOptions,
-  UseMutationResult
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
   MemberJoinRequestDto,
   MemberLoginRequestDto,
-  RsData
+  RsData,
+  RsDataMemberDto,
+  RsDataMemberLoginResponseDto,
+  RsDataTokenReissueResponseDto
 } from './member.schemas';
 
 import { customFetch } from '../../fetcher';
@@ -27,6 +39,21 @@ import { customFetch } from '../../fetcher';
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === 'queryKey') continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
 
 export const getJoinUrl = () => {
 
@@ -126,10 +153,10 @@ export const getLoginUrl = () => {
 }
 
 /**
- * 이메일과 비밀번호로 로그인하고 세션에 인증 정보를 저장한다.
+ * 이메일과 비밀번호로 로그인하고 Access Token은 응답 본문으로, Refresh Token은 httpOnly 쿠키로 내려준다. Refresh Token은 Redis에도 저장한다.
  * @summary 로그인
  */
-export const login = async (memberLoginRequestDto: MemberLoginRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const login = async (memberLoginRequestDto: MemberLoginRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataMemberLoginResponseDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -145,7 +172,7 @@ export const login = async (memberLoginRequestDto: MemberLoginRequestDto, option
     }
     return headers;
   };
-return customFetch<unknown>(getLoginUrl(),
+return customFetch<RsDataMemberLoginResponseDto>(getLoginUrl(),
   {
     ...options,
     method: 'POST',
@@ -205,4 +232,256 @@ export const useLogin = <TError = RsData,
       > => {
       return useMutation(getLoginMutationOptions(options), queryClient);
     }
+
+export const getReissueUrl = () => {
+
+
+
+
+  return `/api/v1/auth/reissue`
+}
+
+/**
+ * 쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). 이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).
+ * @summary 토큰 재발급
+ */
+export const reissue = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataTokenReissueResponseDto> => {
+
+  return customFetch<RsDataTokenReissueResponseDto>(getReissueUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReissueMutationKey = () => ['reissue'] as const;
+
+export const getReissueMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reissue>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reissue>>, TError,void, TContext> => {
+
+const mutationKey = getReissueMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reissue>>, void> = () => {
+
+
+          return  reissue(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReissueMutationResult = NonNullable<Awaited<ReturnType<typeof reissue>>>
+
+    export type ReissueMutationError = RsData
+
+
+    /**
+ * @summary 토큰 재발급
+ */
+export const useReissue = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reissue>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reissue>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getReissueMutationOptions(options), queryClient);
+    }
+
+export const getLogoutUrl = () => {
+
+
+
+
+  return `/api/v1/auth/logout`
+}
+
+/**
+ * Redis의 Refresh Token을 지우고 Refresh Token 쿠키를 만료시킨다. 쿠키가 없거나 이미 무효한 토큰이어도 성공으로 응답한다.
+ * @summary 로그아웃
+ */
+export const logout = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getLogoutUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getLogoutMutationKey = () => ['logout'] as const;
+
+export const getLogoutMutationOptions = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,void, TContext> => {
+
+const mutationKey = getLogoutMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof logout>>, void> = () => {
+
+
+          return  logout(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LogoutMutationResult = NonNullable<Awaited<ReturnType<typeof logout>>>
+
+    export type LogoutMutationError = unknown
+
+
+    /**
+ * @summary 로그아웃
+ */
+export const useLogout = <TError = unknown,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof logout>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getLogoutMutationOptions(options), queryClient);
+    }
+
+export const getFindMeUrl = () => {
+
+
+
+
+  return `/api/v1/member/members/me`
+}
+
+/**
+ * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
+ * @summary 내 정보 조회
+ */
+export const findMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataMemberDto> => {
+
+  return customFetch<RsDataMemberDto>(getFindMeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindMeQueryKey = () => {
+    return [
+    `/api/v1/member/members/me`
+    ] as const;
+    }
+
+
+export const getFindMeQueryOptions = <TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findMe>>> = ({ signal }) => findMe({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type FindMeQueryResult = NonNullable<Awaited<ReturnType<typeof findMe>>>
+export type FindMeQueryError = RsData
+
+
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findMe>>,
+          TError,
+          Awaited<ReturnType<typeof findMe>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findMe>>,
+          TError,
+          Awaited<ReturnType<typeof findMe>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 내 정보 조회
+ */
+
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getFindMeQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
