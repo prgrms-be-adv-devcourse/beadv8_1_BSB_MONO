@@ -22,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.cash.config.CashWalletProperties;
 import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.payment.PaymentStatus;
 import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.LedgerType;
 import com.bukang.cash.domain.wallet.Wallet;
@@ -119,20 +120,76 @@ class InternalV1CashControllerTest {
 	@Test
 	@DisplayName("회원 ID나 금액이 없으면 400이다")
 	void invalidRequest() throws Exception {
-		mockMvc.perform(post("/internal/v1/cash/orders/" + ORDER_ID + "/payments")
+		mockMvc.perform(post("/internal/v1/cash/payments/" + ORDER_ID)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{}"))
 			.andExpect(status().isBadRequest());
 	}
 
+
+	@Test
+	@DisplayName("결제 완료된 주문을 취소(주문 서비스 요청)하면 고객 잔액이 돌아오고 보관 잔액은 빠진다")
+	void cancelCompletedPayment() throws Exception {
+		pay(ORDER_ID, CUSTOMER_ID, 3_000).andExpect(status().isOk());
+
+		cancelPayment(ORDER_ID, CUSTOMER_ID).andExpect(status().isOk());
+
+		assertBalance(CUSTOMER_ID, 10_000);
+		assertBalance(cashWalletProperties.holdingMemberId(), 0);
+		assertThat(countLedgersForOrder(ORDER_ID)).as("결제 2줄 + 취소 반대 2줄").isEqualTo(4);
+		assertThat(paymentRepository.findByOrderId(ORDER_ID).orElseThrow().getStatus())
+			.isEqualTo(PaymentStatus.CANCELED);
+	}
+
+	@Test
+	@DisplayName("같은 주문을 두 번 취소해도 잔액은 한 번만 바뀐다")
+	void cancelPaymentIsIdempotent() throws Exception {
+		pay(ORDER_ID, CUSTOMER_ID, 3_000).andExpect(status().isOk());
+
+		cancelPayment(ORDER_ID, CUSTOMER_ID).andExpect(status().isOk());
+		cancelPayment(ORDER_ID, CUSTOMER_ID).andExpect(status().isOk());
+
+		assertBalance(CUSTOMER_ID, 10_000);
+	}
+
+	@Test
+	@DisplayName("결제 전 주문을 취소로 선점하면, 뒤늦게 온 결제 요청은 거절된다")
+	void cancelBeforePaymentRejectsLatePay() throws Exception {
+		// 첫 번째 pay 요청이 네트워크 지연 등으로 늦게 도착하는 사이, 주문 서비스가 먼저 이 주문을 포기하고
+		// cancelPayment를 보낼 수 있다. 이때 cash에는 아직 이 주문의 결제 기록이 없다.
+		// 여기서 아무것도 안 하고 끝내면, 뒤늦게 도착한 pay가 정상 결제로 처리돼 버려
+		// 이미 포기된 주문인데 고객 돈만 빠지는 상태가 된다.
+		// 그래서 결제 기록이 없어도 CANCELED로 미리 선점해 두고, 나중에 온 pay를 거절한다.
+		cancelPayment(ORDER_ID, CUSTOMER_ID).andExpect(status().isOk());
+
+		pay(ORDER_ID, CUSTOMER_ID, 3_000)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("이미 취소·환불된 결제입니다."));
+
+		assertBalance(CUSTOMER_ID, 10_000);
+	}
+
 	private ResultActions pay(int orderId, int memberId, int amount) throws Exception {
-		return mockMvc.perform(post("/internal/v1/cash/orders/" + orderId + "/payments")
+		return mockMvc.perform(post("/internal/v1/cash/payments/" + orderId)
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"memberId\": %d, \"amount\": %d}".formatted(memberId, amount)));
 	}
 
+
+	private ResultActions cancelPayment(int orderId, int memberId) throws Exception {
+		return mockMvc.perform(post("/internal/v1/cash/payments/" + orderId + "/cancel")
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("{\"memberId\": %d}".formatted(memberId)));
+	}
 	private void assertBalance(int holderId, int expected) {
 		assertThat(walletRepository.findById(holderId).orElseThrow().getBalance()).isEqualTo(expected);
+	}
+
+
+	private long countLedgersForOrder(int orderId) {
+		return walletLedgerRepository.findAll().stream()
+			.filter(ledger -> ledger.getRefTypeCode() == LedgerRefType.Order && ledger.getRefId() == orderId)
+			.count();
 	}
 
 	private Wallet createWallet(int memberId, String nickname) {

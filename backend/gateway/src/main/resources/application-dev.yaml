@@ -1,0 +1,17 @@
+# 서비스를 bootRun/IDE로 호스트에서 실행할 때의 주소
+gateway:
+  services:
+    member: http://localhost:8080
+    cash: http://localhost:8081
+    payout: http://localhost:8082
+    file: http://localhost:8083
+    order: http://localhost:8084
+    product: http://localhost:8085
+
+# Access Token 검사용 서명 키. member-service가 발급할 때 쓰는 키와 같아야 한다
+jwt:
+  secret: jwt-dev-secret-key-1423-1126-7541-3217
+
+logging:
+  level:
+    com.bukang: debug

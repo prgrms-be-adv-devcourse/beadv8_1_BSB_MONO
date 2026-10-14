@@ -3,9 +3,12 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { useStore as useZustandStore, type StoreApi } from 'zustand'
 
+// 초기값 타입에 undefined가 들어 있으면(기본값이 있는 인자) Provider에서 생략할 수 있다.
 type ProviderProps<I> = [I] extends [void]
   ? { children: ReactNode }
-  : { children: ReactNode; initialState: I }
+  : undefined extends I
+    ? { children: ReactNode; initialState?: I }
+    : { children: ReactNode; initialState: I }
 
 /**
  * 요청(렌더 트리)마다 새 스토어를 만드는 Zustand 패턴.

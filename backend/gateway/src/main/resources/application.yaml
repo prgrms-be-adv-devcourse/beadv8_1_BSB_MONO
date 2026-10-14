@@ -1,0 +1,73 @@
+server:
+  # 서비스 포트(8080~8085)와 겹치지 않게 둔다. Nginx는 /api를 이 포트로 넘긴다
+  port: 8000
+
+spring:
+  application:
+    name: gateway
+
+  profiles:
+    active: dev
+
+  output:
+    ansi:
+      enabled: always
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # 주소 앞부분을 자르지 않는다(StripPrefix 없음). 서비스 주소와 쿠키 경로가 게이트웨이 주소와 그대로 맞아야 한다
+          # /internal/**는 규칙을 만들지 않는다. 맞는 규칙이 없으면 게이트웨이가 404로 응답한다
+          # 서비스 주소(gateway.services.*)는 프로파일별 yaml에 있다 (dev: localhost, prod: 컨테이너 이름)
+          # 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿는다. 클라이언트가 보낸 값을 지우고 토큰 속 회원 ID로 다시 넣는 일은
+          # JwtAuthenticationFilter가 한다 (default-filters로 지우면 필터가 넣은 값까지 지워질 수 있어 한곳에서 처리)
+          default-filters:
+            # 브라우저에 "이 사이트는 1년 동안 HTTPS로만 접속"하라고 알린다 (HSTS). HTTPS 응답에서만 효력이 있고 HTTP(로컬)에서는 무시된다
+            # 화면과 API가 Nginx 뒤 같은 주소라 화면에도 적용된다. 도메인 구성이 정해지지 않아 includeSubDomains는 넣지 않는다
+            - AddResponseHeader=Strict-Transport-Security, max-age=31536000
+          routes:
+            - id: member-service
+              uri: ${gateway.services.member}
+              predicates:
+                - Path=/api/v1/member/**,/api/v1/auth/**
+            - id: cash-service
+              uri: ${gateway.services.cash}
+              predicates:
+                - Path=/api/v1/cash/**
+            - id: payout-service
+              uri: ${gateway.services.payout}
+              predicates:
+                - Path=/api/v1/payout/**
+            - id: file-service
+              uri: ${gateway.services.file}
+              predicates:
+                - Path=/api/v1/file/**
+            - id: order-service
+              uri: ${gateway.services.order}
+              predicates:
+                - Path=/api/v1/order/**
+            - id: product-service
+              uri: ${gateway.services.product}
+              predicates:
+                - Path=/api/v1/product/**
+
+gateway:
+  auth:
+    # 토큰 없이 통과하는 주소 (JwtAuthenticationFilter). 여기 없는 주소는 토큰이 없으면 게이트웨이가 401로 막는다
+    # 로그인 전에 쓰는 API를 서비스에 추가하면 여기에도 추가한다. 빠뜨리면 그 API가 401로 막힌다(열리지는 않는다)
+    # pattern: "/a/b"는 정확히 같은 주소만, "/a/**"는 그 아래 전부. methods: 비우면 모든 메서드
+    # 공개 주소라도 유효한 토큰이 있으면 회원 ID를 넘긴다 (예: 대회 상세의 "이미 신청함" 표시)
+    public-paths:
+      # 재발급·로그아웃은 Refresh Token 쿠키로 본인을 확인하므로 Access Token이 만료돼도 부를 수 있어야 한다
+      - pattern: /api/v1/auth/join
+      - pattern: /api/v1/auth/login
+      - pattern: /api/v1/auth/reissue
+      - pattern: /api/v1/auth/logout
+      # 로그인 없이 대회 목록·상세를 볼 수 있게 한다. 등록·수정(POST 등)은 토큰이 필요하다
+      - pattern: /api/v1/product/**
+        methods: [ GET ]
+      # 대회 사진 등 대상에 연결된 파일은 누구나 본다. 연결 전 파일을 올린 회원만 보게 막는 일은 file-service가 한다
+      # (/** 는 그 아래가 없는 /api/v1/file/files 목록 조회도 포함한다)
+      - pattern: /api/v1/file/files/**
+        methods: [ GET ]

@@ -46,7 +46,7 @@ class InternalV1OrderControllerTest {
 	// 11/15 대회 종목과 11/16 대회 종목
 	private static final int COURSE_1115 = 10;
 	private static final int COURSE_1116 = 11;
-	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE + StubRaceCoursePort.KIT_PRICE;
+	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -88,7 +88,7 @@ class InternalV1OrderControllerTest {
 	}
 
 	@Test
-	@DisplayName("11/15 대회 참가권 3장 중 1장을 취소하면 raceDate=2026-11-15 조회에 2장만 정산 필드로 나온다")
+	@DisplayName("11/15 대회 참가권 3장 중 1장을 취소하면 11/15 ~ 11/15 조회에 2장만 정산 필드로 나온다")
 	void soldEntriesExcludeCanceled() throws Exception {
 		int first = paidOrderItem(1, COURSE_1115);
 		int canceled = paidOrderItem(2, COURSE_1115);
@@ -96,13 +96,14 @@ class InternalV1OrderControllerTest {
 		// 취소 API는 다음 작업이라, 주문 상품을 직접 취소 상태로 만든다
 		markCanceled(canceled);
 
-		findSoldEntries("2026-11-15")
+		findSoldEntries("2026-11-15", "2026-11-15")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("판매 내역을 조회했습니다."))
 			.andExpect(jsonPath("$.data.length()").value(2))
 			.andExpect(jsonPath("$.data[0].orderItemId").value(first))
 			.andExpect(jsonPath("$.data[0].sellerId").value(StubRaceCoursePort.SELLER_ID))
 			.andExpect(jsonPath("$.data[0].raceId").value(100))
+			.andExpect(jsonPath("$.data[0].raceDate").value("2026-11-15"))
 			.andExpect(jsonPath("$.data[0].price").value(TICKET_PRICE))
 			.andExpect(jsonPath("$.data[1].orderItemId").value(third));
 	}
@@ -117,37 +118,62 @@ class InternalV1OrderControllerTest {
 		createdOrder(4, COURSE_1115);
 		paidOrderItem(1, COURSE_1116);
 
-		findSoldEntries("2026-11-15")
+		findSoldEntries("2026-11-15", "2026-11-15")
 			.andExpect(jsonPath("$.data.length()").value(1))
 			.andExpect(jsonPath("$.data[0].orderItemId").value(paid));
 		// 11/16 23:59 대회는 그날에 들어간다
-		findSoldEntries("2026-11-16")
+		findSoldEntries("2026-11-16", "2026-11-16")
 			.andExpect(jsonPath("$.data.length()").value(1));
-		findSoldEntries("2026-11-17")
+		findSoldEntries("2026-11-17", "2026-11-17")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.length()").value(0));
 	}
 
 	@Test
-	@DisplayName("대회 날짜가 없거나 형식이 틀리면 400이다")
-	void invalidRaceDate() throws Exception {
-		mockMvc.perform(get(URL))
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 값(raceDate)이 없습니다."));
-		findSoldEntries("2026/11/15")
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
+	@DisplayName("기간으로 물으면 양 끝 날짜의 대회를 모두 포함해 주문 상품 ID 순으로 돌려주고, 참가권마다 대회일을 준다")
+	void soldEntriesInPeriod() throws Exception {
+		int on1115 = paidOrderItem(1, COURSE_1115);
+		int on1116 = paidOrderItem(2, COURSE_1116);
+
+		findSoldEntries("2026-11-15", "2026-11-16")
+			.andExpect(jsonPath("$.data.length()").value(2))
+			.andExpect(jsonPath("$.data[0].orderItemId").value(on1115))
+			.andExpect(jsonPath("$.data[0].raceDate").value("2026-11-15"))
+			.andExpect(jsonPath("$.data[1].orderItemId").value(on1116))
+			.andExpect(jsonPath("$.data[1].raceDate").value("2026-11-16"));
+		findSoldEntries("2026-11-09", "2026-11-15")
+			.andExpect(jsonPath("$.data.length()").value(1));
 	}
 
-	private ResultActions findSoldEntries(String raceDate) throws Exception {
-		return mockMvc.perform(get(URL).param("raceDate", raceDate));
+	@Test
+	@DisplayName("기간이 없거나 형식이 틀리거나, 시작일이 종료일보다 늦거나, 31일을 넘으면 400이다")
+	void invalidPeriod() throws Exception {
+		mockMvc.perform(get(URL).param("to", "2026-11-15"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("필수 요청 값(from)이 없습니다."));
+		findSoldEntries("2026/11/15", "2026-11-15")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
+		findSoldEntries("2026-11-16", "2026-11-15")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("조회 시작일이 종료일보다 늦습니다."));
+		// 10/16 ~ 11/15는 31일, 10/15 ~ 11/15는 32일
+		findSoldEntries("2026-10-16", "2026-11-15")
+			.andExpect(status().isOk());
+		findSoldEntries("2026-10-15", "2026-11-15")
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("판매 내역은 한 번에 31일까지 조회할 수 있습니다."));
+	}
+
+	private ResultActions findSoldEntries(String from, String to) throws Exception {
+		return mockMvc.perform(get(URL).param("from", from).param("to", to));
 	}
 
 	private static RaceCourseInfo courseOn(int raceCourseId, int raceId, LocalDateTime raceDate) {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, raceDate, now.minusDays(1), now.plusDays(30), 14, null,
 			StubRaceCoursePort.SELLER_ID, "테스트 대회 종목 " + raceCourseId, StubRaceCoursePort.PRICE,
-			StubRaceCoursePort.KIT_PRICE, raceDate.toLocalDate().minusDays(10));
+			true, raceDate.toLocalDate().minusDays(10), null);
 	}
 
 	private void markCanceled(int orderItemId) {
@@ -179,7 +205,9 @@ class InternalV1OrderControllerTest {
 				{ "raceCourseId": %d, "thirdPartyConsent": true,
 					"participant": { "name": "김러너", "birth": "1994-06-25", "gender": "MALE",
 						"phone": "010-1234-5678", "emergencyContactName": "김가족",
-						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L" } }
+						"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
+							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
 				""".formatted(raceCourseId))));
 		return read(mockMvc.perform(post("/api/v1/order/orders")
 			.header("X-Member-Id", memberId)

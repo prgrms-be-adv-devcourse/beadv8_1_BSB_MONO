@@ -17,7 +17,11 @@ public final class KafkaTopics {
 	public static final String PRODUCT_MEMBER_JOINED = "product.member.joined";
 	public static final String PRODUCT_SELLER_CHANGED = "product.seller.changed";
 	// 대회·종목을 저장한 뒤 이미지 연결을 요청한다 (product → file)
-	public static final String RACE_FILE_LINK_REQUESTED = "race.file.link.requested";
+	public static final String RACE_FILE_LINK_REQUESTED = "race.filelink.requested";
+	// 대기열 활성 시간이 끝나 임시 확보한 자리를 해제한다 (order → product)
+	public static final String PRODUCT_HOLD_CANCEL = "product.hold.cancel";
+	// 판매자가 대회를 취소했다. 주문 서비스가 참가권을 일괄 환불한다 (product → order)
+	public static final String ORDER_RACE_CANCEL = "order.race.cancel";
 
 	private KafkaTopics() {
 	}

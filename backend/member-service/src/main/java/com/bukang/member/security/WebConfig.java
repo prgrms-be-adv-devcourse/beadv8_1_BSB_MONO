@@ -22,7 +22,8 @@ public class WebConfig {
 	// ─────────────────────────────────────────────────────────────────────
 	// [목표] JWT + Redis 기반 Stateless 인증 (의존성: jjwt, data-redis / 설정: jwt.secret)
 	// - AccessToken: Authorization: Bearer {token} 헤더
-	// - RefreshToken: httpOnly 쿠키 (refreshToken, deviceId)
+	// - RefreshToken: httpOnly 쿠키 (refreshToken). Redis에는 회원당 하나만 두어, 다른 기기에서 로그인하면 이전 기기의 토큰은 덮어쓴다
+	//   (기기별 보관(deviceId)은 세미 이후에 검토)
 	// - 세션/CSRF 완전 비활성화
 	// [현재] JWT 필터 구현 전까지는 세션(HttpSessionSecurityContextRepository)으로 로그인 상태를 유지한다
 	// ─────────────────────────────────────────────────────────────────────

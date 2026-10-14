@@ -1,5 +1,6 @@
 package com.bukang.product.app;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,7 +24,7 @@ import com.bukang.product.out.RaceRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 승인된 판매자가 대회와 종목을 작성 중(DRAFT)으로 등록한다.
+ * 승인된 판매자가 대회와 종목을 판매 예정(SCHEDULED)으로 등록한다. 판매 시작 일시가 이미 지난 대회는 등록하지 못한다.
  * 이미지 연결 메시지(이미지는 모두 종목, 즉 RaceCourse 대상)는 여기서 만들기만 하고,
  * ProductFacade가 커밋한 뒤 Kafka로 보낸다.
  */
@@ -34,13 +35,13 @@ public class RaceRegisterUseCase {
 	private final RaceRepository raceRepository;
 	private final RaceRequestValidator raceRequestValidator;
 
-	public RaceSaveResult register(int memberId, RaceSaveRequestDto request) {
+	public RaceSaveResult register(int memberId, RaceSaveRequestDto request, LocalDateTime now) {
 		// 회원당 승인된 판매자는 1명이라고 가정한다 (ProductSellerRepository)
 		ProductSeller seller = productSellerRepository.findByMemberIdAndStatus(memberId, SellerStatus.APPROVED)
 			.orElseThrow(SellerNotApprovedException::new);
 		raceRequestValidator.validate(request);
 
-		Race race = new Race(seller, request);
+		Race race = new Race(seller, request, now);
 		// 종목마다 요청의 종목 이미지를 함께 기억해 두었다가, 저장해 ID가 생긴 뒤 연결 대상을 만든다
 		Map<RaceCourse, List<RaceImageRequestDto>> imagesByCourse = new LinkedHashMap<>();
 		for (RaceCourseSaveRequestDto courseRequest : request.getCourses()) {

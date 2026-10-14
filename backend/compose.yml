@@ -1,9 +1,90 @@
+# 앱이 요청을 받을 준비가 됐는지 확인하는 공통 설정. 포트가 열리면(Tomcat·Netty 시작 완료) healthy로 본다
+# JRE 이미지에 curl이 없을 수 있어 bash의 /dev/tcp로 포트 연결만 확인한다. test는 서비스마다 포트를 바꿔 쓴다
+x-app-healthcheck: &app-healthcheck
+  interval: 10s
+  timeout: 3s
+  retries: 12
+  start_period: 30s
+
 services:
 
   # Spring 앱 (운영 프로파일로 실행, backend/Dockerfile에 MODULE 인자를 넘겨 서비스별로 빌드)
   # profiles 지정으로 기본 `docker compose up`에서는 제외된다
   # (bootRun 시 Spring Boot가 compose를 띄울 때 앱 컨테이너가 포트를 선점하지 않도록)
   # 실행: docker compose --profile app up -d --build
+  # 요청 흐름: 브라우저 → nginx(80) → /api는 gateway(8000) → 각 서비스 / 나머지는 web(Next.js, 3000)
+  # 서비스 6개(member~product)는 호스트에 포트를 열지 않는다. 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿으므로,
+  # 게이트웨이를 건너뛰고 서비스 포트로 직접 오면 헤더를 위조할 수 있기 때문이다. 컨테이너끼리는 이름(bukang-order-service:8084)으로 통한다
+  # 서비스를 직접 부르며 확인하려면 컨테이너 대신 bootRun(dev 프로파일)으로 띄운다
+
+  # 입구: 80 포트 하나만 열고 /api는 gateway, 나머지는 web으로 넘긴다 (설정: docker/nginx/default.conf)
+  nginx:
+    image: nginx:1.28-alpine
+    container_name: bukang-nginx
+    profiles: [ app ]
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    # Nginx는 시작할 때 upstream 이름(bukang-gateway, bukang-web)을 찾으므로 두 컨테이너가 먼저 떠 있어야 한다
+    depends_on:
+      gateway:
+        condition: service_healthy
+      web:
+        condition: service_started
+
+  # 프론트엔드(Next.js). 화면 요청은 nginx가 넘겨 주고, 서버 컴포넌트는 BACKEND_URL(게이트웨이)로 API를 직접 부른다
+  web:
+    build:
+      context: ../frontend
+      args:
+        API_MOCKING: "off"
+    image: bukang-web:latest
+    container_name: bukang-web
+    profiles: [ app ]
+    environment:
+      BACKEND_URL: http://bukang-gateway:8000
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+  # API 게이트웨이: Nginx가 /api를 이 컨테이너(8000)로 넘기고, 게이트웨이가 경로를 보고 각 서비스로 보낸다
+  # 서비스 주소는 gateway의 application-prod.yaml에 컨테이너 이름으로 들어 있다
+  gateway:
+    build:
+      context: .
+      args:
+        MODULE: gateway
+    image: bukang-gateway:latest
+    container_name: bukang-gateway
+    profiles: [ app ]
+    ports:
+      - "8000:8000"
+    # 토큰 검사에 member-service와 같은 JWT_SECRET을 쓴다 (.env.example 참고)
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8000" ]
+    # 서비스가 준비되기 전에 들어온 요청은 연결 실패로 응답하므로, 서비스가 healthy가 된 뒤에 시작한다
+    # (condition 없이 이름만 쓰면 "컨테이너가 켜졌다"까지만 기다리고 앱 준비는 기다리지 않는다)
+    depends_on:
+      member-service:
+        condition: service_healthy
+      cash-service:
+        condition: service_healthy
+      payout-service:
+        condition: service_healthy
+      file-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+
   member-service:
     build:
       context: .
@@ -12,14 +93,15 @@ services:
     image: bukang-member-service:latest
     container_name: bukang-member-service
     profiles: [ app ]
-    ports:
-      - "8080:8080"
     # 접속 정보와 비밀값(JWT_SECRET, CRYPTO_* 등)은 모두 .env에서 읽는다 (.env.example 참고)
     env_file:
       - path: .env
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8080" ]
     # 인프라가 모두 healthy 상태가 된 뒤에 시작
     depends_on:
       bukang-db:
@@ -39,13 +121,14 @@ services:
     image: bukang-cash-service:latest
     container_name: bukang-cash-service
     profiles: [ app ]
-    ports:
-      - "8081:8081"
     env_file:
       - path: .env
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8081" ]
     depends_on:
       bukang-db:
         condition: service_healthy
@@ -60,13 +143,14 @@ services:
     image: bukang-payout-service:latest
     container_name: bukang-payout-service
     profiles: [ app ]
-    ports:
-      - "8082:8082"
     env_file:
       - path: .env
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8082" ]
     depends_on:
       bukang-db:
         condition: service_healthy
@@ -79,8 +163,6 @@ services:
     image: bukang-file-service:latest
     container_name: bukang-file-service
     profiles: [ app ]
-    ports:
-      - "8083:8083"
     env_file:
       - path: .env
         required: false
@@ -95,6 +177,9 @@ services:
       S3_PATH_STYLE: ${S3_PATH_STYLE:-true}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY-s3mock}
       S3_SECRET_KEY: ${S3_SECRET_KEY-s3mock}
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8083" ]
     depends_on:
       bukang-db:
         condition: service_healthy
@@ -111,13 +196,14 @@ services:
     image: bukang-order-service:latest
     container_name: bukang-order-service
     profiles: [ app ]
-    ports:
-      - "8084:8084"
     env_file:
       - path: .env
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8084" ]
     depends_on:
       bukang-db:
         condition: service_healthy
@@ -132,13 +218,14 @@ services:
     image: bukang-product-service:latest
     container_name: bukang-product-service
     profiles: [ app ]
-    ports:
-      - "8085:8085"
     env_file:
       - path: .env
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8085" ]
     depends_on:
       bukang-db:
         condition: service_healthy

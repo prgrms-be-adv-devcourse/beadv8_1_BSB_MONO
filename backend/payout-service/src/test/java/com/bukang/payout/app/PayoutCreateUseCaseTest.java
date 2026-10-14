@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,9 +22,10 @@ import com.bukang.payout.domain.PayoutItem;
 import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
-import com.bukang.payout.out.PayoutSourcePort;
+import com.bukang.payout.out.RacePort;
 import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
+import com.bukang.payout.out.SoldEntryPort;
 
 @DataJpaTest
 @ActiveProfiles("test")
@@ -32,15 +34,24 @@ class PayoutCreateUseCaseTest {
 	private static final LocalDate TARGET_DATE = LocalDate.of(2026, 9, 26);
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 26, 3, 0);
 
+	// 상품 서비스에 대회 10, 20만 있다
+	private static final RacePort RACE_NAMES = raceId -> switch (raceId) {
+		case 10 -> Optional.of("2026 한강 나이트런");
+		case 20 -> Optional.of("2026 가을 하프마라톤");
+		default -> Optional.empty();
+	};
+
 	@Autowired
 	private PayoutRepository payoutRepository;
 
 	@Autowired
 	private PayoutHoldRepository payoutHoldRepository;
 
-	// 정산 대상일의 대회일(9/25)로 물어볼 때만 판매된 참가권을 돌려주는 가짜 포트
-	private PayoutSourcePort sourceReturning(List<SoldEntry> entries) {
-		return raceDate -> raceDate.equals(RACE_DATE) ? entries : List.of();
+	// 주문 서비스처럼, 물어본 기간(양 끝 포함)에 열린 대회의 참가권만 돌려주는 가짜 포트
+	private SoldEntryPort soldEntriesReturning(List<SoldEntry> entries) {
+		return (from, to) -> entries.stream()
+			.filter(entry -> !entry.raceDate().isBefore(from) && !entry.raceDate().isAfter(to))
+			.toList();
 	}
 
 	// 모든 판매자가 정산 계좌를 등록했다
@@ -49,8 +60,26 @@ class PayoutCreateUseCaseTest {
 	}
 
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
-		return new PayoutCreateUseCase(payoutRepository, payoutHoldRepository, sourceReturning(entries),
-			sellerAccountPort, new BusinessDayCalendar());
+		// 테스트 전체가 트랜잭션 하나라 묶음별 트랜잭션은 보이지 않는다 (묶음별 트랜잭션은 PayoutCreateUseCaseTransactionTest)
+		PayoutGroupCreator payoutGroupCreator =
+			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar());
+		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntriesReturning(entries),
+			sellerAccountPort, RACE_NAMES);
+	}
+
+	@Test
+	@DisplayName("정산 내역을 만들 때 상품 서비스에서 받은 대회 이름을 저장하고, 대회를 못 찾아도 정산은 만든다")
+	void savesRaceName() {
+		PayoutCreateUseCase useCase = useCaseSelling(List.of(
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(300, 3, 30, RACE_DATE, 40_000L)
+		));
+
+		useCase.run(TARGET_DATE, NOW);
+
+		assertThat(payoutOf(1).getRaceName()).isEqualTo("2026 한강 나이트런");
+		assertThat(payoutOf(3).getRaceName()).isEqualTo("알 수 없는 대회 (ID 30)");
+		assertThat(payoutOf(3).getStatus()).isEqualTo(PayoutStatus.CALCULATED);
 	}
 
 	private Payout payoutOf(int sellerId) {
@@ -64,9 +93,9 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("정산 대상일에 판매자 × 대회별로 정산 내역을 만들고, 참가권마다 정산 항목을 만든다")
 	void createsPayoutPerSellerAndRace() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, 50_000L),
-			new SoldEntry(101, 1, 10, 50_000L),
-			new SoldEntry(200, 2, 20, 30_000L)
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(101, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
 		));
 
 		useCase.run(TARGET_DATE, NOW);
@@ -92,7 +121,7 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("정산 ID는 'ST-만든 날-16진수 4자리' 형식이다")
 	void assignsPayoutCode() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, 50_000L)
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L)
 		));
 
 		useCase.run(TARGET_DATE, NOW);
@@ -105,7 +134,7 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("같은 날 배치를 두 번 돌려도 정산 내역이 중복으로 만들어지지 않는다")
 	void runTwiceDoesNotDuplicate() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, 50_000L)
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L)
 		));
 
 		useCase.run(TARGET_DATE, NOW);
@@ -119,8 +148,8 @@ class PayoutCreateUseCaseTest {
 	void holdsPayoutOfSellerWithoutAccount() {
 		// 판매자 2만 계좌가 없다
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, 50_000L),
-			new SoldEntry(200, 2, 20, 30_000L)
+			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
 		), sellerId -> sellerId != 2);
 
 		useCase.run(TARGET_DATE, NOW);
@@ -138,5 +167,78 @@ class PayoutCreateUseCaseTest {
 		assertThat(hold.getHeldBy()).isEqualTo(PayoutHold.SYSTEM_MEMBER_ID);
 		assertThat(hold.getHeldAt()).isEqualTo(NOW);
 		assertThat(hold.getHoldCode()).matches("HD-20260926-[0-9A-F]{4}");
+	}
+
+	@Test
+	@DisplayName("9/29 실행을 놓쳐도 9/30 실행에서 9/28 대회의 정산 내역을 만들고, 정산 대상일은 9/29로 남긴다")
+	void catchesUpMissedDay() {
+		LocalDate raceDate = LocalDate.of(2026, 9, 28);
+		PayoutCreateUseCase useCase = useCaseSelling(List.of(
+			new SoldEntry(100, 1, 10, raceDate, 50_000L)
+		));
+
+		// 9/29 03:00 실행은 서버가 없어 돌지 않았다
+		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
+
+		Payout payout = payoutOf(1);
+		assertThat(payout.getPayoutMonth()).isEqualTo("2026-09");
+		assertThat(payout.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+		assertThat(payout.getItems())
+			.extracting(PayoutItem::getTargetDate)
+			.containsOnly(LocalDate.of(2026, 9, 29));
+	}
+
+	@Test
+	@DisplayName("월 경계: 9/29 대회는 9/30 · 10/1 실행이 모두 봐도 9월 정산 내역 하나만 만든다 (정산 월은 실행일이 아니라 대회일로 정한다)")
+	void monthBoundaryDoesNotDuplicate() {
+		PayoutCreateUseCase useCase = useCaseSelling(List.of(
+			new SoldEntry(100, 1, 10, LocalDate.of(2026, 9, 29), 50_000L),
+			new SoldEntry(200, 2, 20, LocalDate.of(2026, 9, 30), 30_000L)
+		));
+
+		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
+		useCase.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
+
+		assertThat(payoutRepository.findAll()).hasSize(2);
+		// 대회 9/29 → 정산 대상일 9/30 → 10/20 지급
+		assertThat(payoutOf(1).getPayoutMonth()).isEqualTo("2026-09");
+		assertThat(payoutOf(1).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+		// 대회 9/30 → 정산 대상일 10/1 → 11/20 지급 (payout.md 2-4 월말 경계)
+		assertThat(payoutOf(2).getPayoutMonth()).isEqualTo("2026-10");
+		assertThat(payoutOf(2).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 11, 20));
+	}
+
+	@Test
+	@DisplayName("되돌아보기는 어제부터 7일치 대회다. 그보다 오래된 대회와 오늘 열린 대회는 만들지 않는다")
+	void looksBackSevenDays() {
+		PayoutCreateUseCase useCase = useCaseSelling(List.of(
+			new SoldEntry(100, 1, 10, LocalDate.of(2026, 9, 22), 50_000L),
+			new SoldEntry(200, 2, 20, LocalDate.of(2026, 9, 23), 30_000L),
+			new SoldEntry(300, 3, 30, LocalDate.of(2026, 9, 29), 40_000L),
+			new SoldEntry(400, 4, 40, LocalDate.of(2026, 9, 30), 20_000L)
+		));
+
+		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
+
+		// 9/30 실행은 9/23 ~ 9/29 대회를 본다
+		assertThat(payoutRepository.findAll())
+			.extracting(Payout::getSellerId)
+			.containsExactlyInAnyOrder(2, 3);
+	}
+
+	@Test
+	@DisplayName("한 대회의 참가권 대회일이 서로 다르면 어느 날로 정산할지 고르지 않고 그 묶음을 만들지 않는다")
+	void skipsGroupWithMixedRaceDates() {
+		PayoutCreateUseCase useCase = useCaseSelling(List.of(
+			new SoldEntry(100, 1, 10, LocalDate.of(2026, 9, 27), 50_000L),
+			new SoldEntry(101, 1, 10, LocalDate.of(2026, 9, 28), 50_000L),
+			new SoldEntry(200, 2, 20, LocalDate.of(2026, 9, 28), 30_000L)
+		));
+
+		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
+
+		assertThat(payoutRepository.findAll())
+			.extracting(Payout::getSellerId)
+			.containsExactly(2);
 	}
 }

@@ -6,5 +6,5 @@ public enum PaymentStatus {
 	FAILED,
 	TIMED_OUT,
 	REFUNDED,
-	CANCELED
+	CANCELED // 시스템 환원(고객 취소 아님)
 }

@@ -1,0 +1,13 @@
+# compose.yml의 앱 컨테이너끼리는 컨테이너 이름으로 접속한다
+gateway:
+  services:
+    member: http://bukang-member-service:8080
+    cash: http://bukang-cash-service:8081
+    payout: http://bukang-payout-service:8082
+    file: http://bukang-file-service:8083
+    order: http://bukang-order-service:8084
+    product: http://bukang-product-service:8085
+
+# Access Token 검사용 서명 키. member-service와 같은 .env의 JWT_SECRET을 쓴다
+jwt:
+  secret: ${JWT_SECRET}

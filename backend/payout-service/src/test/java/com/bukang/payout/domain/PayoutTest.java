@@ -16,11 +16,11 @@ class PayoutTest {
 	private static final BusinessDayCalendar CALENDAR = new BusinessDayCalendar();
 
 	private Payout newPayout() {
-		return new Payout(1, 10, YearMonth.of(2026, 9), LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
+		return new Payout(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
 	}
 
 	private Payout newPayout(YearMonth payoutMonth) {
-		return new Payout(1, 10, payoutMonth, payoutMonth.atEndOfMonth().atTime(3, 0), CALENDAR);
+		return new Payout(1, 10, "테스트 대회", payoutMonth, payoutMonth.atEndOfMonth().atTime(3, 0), CALENDAR);
 	}
 
 	@Test

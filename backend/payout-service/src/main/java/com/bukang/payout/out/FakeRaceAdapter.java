@@ -1,0 +1,28 @@
+package com.bukang.payout.out;
+
+import java.util.Optional;
+
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * 임시 어댑터: 상품 서비스(B)가 아직 없어, 어떤 대회 ID든 "대회 {ID}"라는 이름을 돌려준다
+ * 상품 서비스와 연결할 때(HTTP 호출) 이 클래스를 진짜 어댑터로 바꾼다 (주문 서비스의 FakeRaceCourseAdapter와 같은 방식)
+ */
+@Slf4j
+@Component
+public class FakeRaceAdapter implements RacePort {
+	// 호출마다 경고를 남기면 로그가 묻히므로, 앱을 켤 때 한 번만 알린다
+	public FakeRaceAdapter() {
+		log.warn("상품 서비스 연결 전이라 대회 이름은 가짜 응답(FakeRaceAdapter)을 씁니다.");
+	}
+
+	@Override
+	public Optional<String> findRaceName(int raceId) {
+		if (raceId <= 0) {
+			return Optional.empty();
+		}
+		return Optional.of("대회 %d".formatted(raceId));
+	}
+}
