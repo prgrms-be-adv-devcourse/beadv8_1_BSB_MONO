@@ -53,6 +53,7 @@ public class Payment extends BaseIdAndTime {
 	public void markCompleted(LocalDateTime completedAt) {
 		this.status = PaymentStatus.COMPLETED;
 		this.completedAt = completedAt;
+		this.failReason = null;
 	}
 
 	public void markFailed(PaymentFailReason failReason) {
