@@ -54,19 +54,22 @@ import com.jayway.jsonpath.JsonPath;
 
 /**
  * 대회 등록 API(POST /api/v1/product/races)를 확인한다.
- * 성공하면 대회·종목을 판매 예정(SCHEDULED)으로 저장하고, 판매 시작 일시를 크루 예매 시작·개인 예매 오픈 중 이른 시각으로 채운다.
- * 판매 시작 일시가 이미 지났으면 등록할 수 없다.
+ * 성공하면 대회·종목을 판매 예정(SCHEDULED)으로 저장하고, 판매 시작일을 크루 예매 시작·개인 예매 오픈 중 이른 날짜로 채운다.
+ * 판매 시작일은 오늘로부터 이틀 뒤부터 정할 수 있다 (등록한 뒤 하루 이상 판매 예정으로 둔다).
  * 커밋한 뒤에는 종목마다 검색 문서를 만들고 race.filelink.requested로 종목별 이미지 연결을 요청한다.
  * 실패 쪽은 인증(401·403), 요청 DTO의 검증 애노테이션, RaceRequestValidator의 규칙(값끼리 맞추는 검사), 요청 본문 형식 오류를
  * 하나씩 보고, 거절된 요청은 대회·종목을 저장하지 않고 파일 연결 메시지도 보내지 않는지 함께 확인한다.
  */
 class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	private static final String RACES_PATH = "/api/v1/product/races";
-	// 응답 메시지에 보여 주는 일시 형식 (ApiV1RaceController와 같다)
-	private static final DateTimeFormatter MESSAGE_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-	private static final String REGISTER_MESSAGE = "대회를 등록했습니다. %s에 판매가 자동으로 시작됩니다.";
-	private static final String SALE_OPEN_PASSED_MESSAGE =
-		"판매 시작 일시가 이미 지났습니다. 크루 예매 시작·개인 예매 오픈 일시를 지금보다 늦게 작성해주세요.";
+	// 응답 메시지에 보여 주는 날짜·일시 형식 (ApiV1RaceController, Race와 같다)
+	private static final DateTimeFormatter MESSAGE_DATE = DateTimeFormatter.ofPattern("M월 d일");
+	private static final DateTimeFormatter MESSAGE_DATE_TIME = DateTimeFormatter.ofPattern("M월 d일 HH:mm");
+	// 판매 시작일, 예매가 열리는 일시 순서
+	private static final String REGISTER_MESSAGE = "대회를 등록했습니다. %s 0시부터 판매 중으로 표시되고, %s에 열립니다.";
+	// 오늘로부터 이틀 뒤 날짜
+	private static final String SALE_OPEN_TOO_SOON_MESSAGE =
+		"판매 시작일은 오늘로부터 이틀 뒤(%s)부터 정할 수 있습니다. 크루 예매 시작·개인 예매 오픈 일시를 확인해주세요.";
 	// 판매자 신청이 승인 대기인 회원 (테스트 안에서 직접 넣는다)
 	private static final int PENDING_SELLER_MEMBER_ID = 9003;
 	private static final int PENDING_SELLER_ID = 7003;
@@ -74,15 +77,18 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	// ---------- 등록 성공 ----------
 
 	@Test
-	@DisplayName("크루 예매 없이 1시간 뒤에 열리는 개인 예매로 등록하면 201이고, 판매 예정이며 판매 시작 일시는 개인 예매 오픈 일시다")
+	@DisplayName("크루 예매 없이 이틀 뒤에 열리는 개인 예매로 등록하면 201이고, 판매 예정이며 판매 시작일은 개인 예매 오픈 날짜다. "
+		+ "메시지로 판매 중 표시일과 개인 예매 오픈 일시를 알린다")
 	void registerWithoutCrewSale() throws Exception {
 		RaceSaveRequestDto request = upcomingRace().build();
+		LocalDateTime individualOpenAt = request.getIndividualOpenAt();
 
 		MvcResult result = postJson(RACES_PATH, SELLER_MEMBER_ID, request)
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value(201))
-			.andExpect(jsonPath("$.message")
-				.value(REGISTER_MESSAGE.formatted(request.getIndividualOpenAt().format(MESSAGE_DATE_TIME))))
+			// 예: "대회를 등록했습니다. 10월 16일 0시부터 판매 중으로 표시되고, 개인 예매는 10월 16일 14:30에 열립니다."
+			.andExpect(jsonPath("$.message").value(REGISTER_MESSAGE.formatted(
+				individualOpenAt.format(MESSAGE_DATE), "개인 예매는 " + individualOpenAt.format(MESSAGE_DATE_TIME))))
 			.andExpect(jsonPath("$.data.raceId").isNumber())
 			.andExpect(jsonPath("$.data.saleStatus").value("SCHEDULED"))
 			.andExpect(jsonPath("$.data.courseIds.length()").value(1))
@@ -91,19 +97,20 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 		String body = result.getResponse().getContentAsString();
 		int raceId = JsonPath.read(body, "$.data.raceId");
 		int courseId = JsonPath.read(body, "$.data.courseIds[0]");
-		String saleOpenAt = JsonPath.read(body, "$.data.saleOpenAt");
-		assertThat(LocalDateTime.parse(saleOpenAt)).isEqualTo(request.getIndividualOpenAt());
+		String saleOpenDate = JsonPath.read(body, "$.data.saleOpenDate");
+		assertThat(LocalDate.parse(saleOpenDate)).isEqualTo(individualOpenAt.toLocalDate());
 		assertThat(result.getResponse().getHeader("Location")).isEqualTo(RACES_PATH + "/" + raceId);
 		assertThat(raceRepository.findById(raceId)).isPresent();
 		assertThat(raceCourseRepository.findById(courseId)).isPresent();
 	}
 
 	@Test
-	@DisplayName("크루 예매가 내일 시작하고 개인 예매가 크루 마감 다음 날 10:00에 열리면, 판매 시작 일시는 더 이른 크루 예매 시작 일시다")
+	@DisplayName("크루 예매가 이틀 뒤 시작하고 개인 예매가 크루 마감 다음 날 10:00에 열리면, 판매 시작일은 더 이른 크루 예매 시작 날짜이고 "
+		+ "메시지로 크루 예매와 개인 예매가 열리는 일시를 함께 알린다")
 	void registerWithCrewSale() throws Exception {
 		RaceBuilder builder = upcomingRace();
-		LocalDateTime crewSaleStartAt = builder.now().plusDays(1);
-		LocalDateTime crewSaleEndAt = builder.now().plusDays(2);
+		LocalDateTime crewSaleStartAt = builder.now().plusDays(2);
+		LocalDateTime crewSaleEndAt = builder.now().plusDays(3);
 		LocalDateTime individualOpenAt = crewSaleEndAt.toLocalDate().plusDays(1).atTime(10, 0);
 		RaceSaveRequestDto request = builder.crewSale(crewSaleStartAt, crewSaleEndAt)
 			.individualOpenAt(individualOpenAt)
@@ -113,19 +120,20 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 
 		MvcResult result = postJson(RACES_PATH, SELLER_MEMBER_ID, request)
 			.andExpect(status().isCreated())
-			.andExpect(jsonPath("$.message")
-				.value(REGISTER_MESSAGE.formatted(crewSaleStartAt.format(MESSAGE_DATE_TIME))))
+			.andExpect(jsonPath("$.message").value(REGISTER_MESSAGE.formatted(crewSaleStartAt.format(MESSAGE_DATE),
+				"크루 예매는 %s, 개인 예매는 %s".formatted(crewSaleStartAt.format(MESSAGE_DATE_TIME),
+					individualOpenAt.format(MESSAGE_DATE_TIME)))))
 			.andExpect(jsonPath("$.data.saleStatus").value("SCHEDULED"))
 			.andReturn();
 
 		String body = result.getResponse().getContentAsString();
-		String saleOpenAt = JsonPath.read(body, "$.data.saleOpenAt");
-		assertThat(LocalDateTime.parse(saleOpenAt)).isEqualTo(crewSaleStartAt);
+		String saleOpenDate = JsonPath.read(body, "$.data.saleOpenDate");
+		assertThat(LocalDate.parse(saleOpenDate)).isEqualTo(crewSaleStartAt.toLocalDate());
 
 		int raceId = JsonPath.read(body, "$.data.raceId");
 		int courseId = JsonPath.read(body, "$.data.courseIds[0]");
 		Race savedRace = raceRepository.findById(raceId).orElseThrow();
-		assertThat(savedRace.getSaleOpenAt()).isEqualTo(crewSaleStartAt);
+		assertThat(savedRace.getSaleOpenDate()).isEqualTo(crewSaleStartAt.toLocalDate());
 		assertThat(savedRace.getCrewSaleStartAt()).isEqualTo(crewSaleStartAt);
 		assertThat(savedRace.getCrewSaleEndAt()).isEqualTo(crewSaleEndAt);
 		assertThat(savedRace.getIndividualOpenAt()).isEqualTo(individualOpenAt);
@@ -170,7 +178,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 			assertThat(savedRace.getCrewSaleEndAt()).isNull();
 			assertThat(savedRace.getIndividualOpenAt()).isEqualTo(request.getIndividualOpenAt());
 			assertThat(savedRace.getApplicationCloseAt()).isEqualTo(applicationCloseAt);
-			assertThat(savedRace.getSaleOpenAt()).isEqualTo(request.getIndividualOpenAt());
+			assertThat(savedRace.getSaleOpenDate()).isEqualTo(request.getIndividualOpenAt().toLocalDate());
 			assertThat(savedRace.getRefundDeadline()).isEqualTo(refundDeadline);
 			assertThat(savedRace.getRefundPolicy()).isEqualTo(request.getRefundPolicy());
 			assertThat(savedRace.getCrewMinCount()).isEqualTo(5);
@@ -276,7 +284,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 		assertThat(tenK.getSurface()).isEqualTo(CourseSurface.ROAD);
 		assertThat(tenK.getRaceDate()).isEqualTo(request.getRaceDate());
 		assertThat(tenK.getApplicationCloseAt()).isEqualTo(request.getApplicationCloseAt());
-		assertThat(tenK.getSaleOpenAt()).isEqualTo(request.getIndividualOpenAt());
+		assertThat(tenK.getSaleOpenDate()).isEqualTo(request.getIndividualOpenAt().toLocalDate());
 		// 문서의 날짜는 밀리초까지만 저장되므로 대회 등록 일시와 1초 안으로 맞는지 본다
 		assertThat(tenK.getRaceCreatedAt()).isCloseTo(raceCreatedAt, within(1, ChronoUnit.SECONDS));
 		assertThat(tenK.getPrice()).isEqualTo(45_000);
@@ -447,9 +455,9 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	@DisplayName("개인 예매 오픈이 크루 예매 마감일 다음 날 05:59면 400이고, 06:00 정각이면 등록된다")
 	void rejectIndividualOpenBeforeCrewNextDay() throws Exception {
 		RaceBuilder builder = upcomingRace();
-		LocalDateTime crewSaleEndAt = builder.now().plusDays(2);
+		LocalDateTime crewSaleEndAt = builder.now().plusDays(3);
 		LocalDateTime earliestOpenAt = crewSaleEndAt.toLocalDate().plusDays(1).atTime(6, 0);
-		builder.crewSale(builder.now().plusDays(1), crewSaleEndAt);
+		builder.crewSale(builder.now().plusDays(2), crewSaleEndAt);
 
 		assertRejected(builder.individualOpenAt(earliestOpenAt.minusMinutes(1)).build(),
 			"개인 예매 오픈 일시는 크루 예매 마감일 다음 날 06:00 이후여야 합니다.");
@@ -458,30 +466,44 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("접수 마감 일시가 개인 예매 오픈 일시(1시간 뒤)와 같은 시각이면 400")
+	@DisplayName("접수 마감 일시가 개인 예매 오픈 일시(이틀 뒤)와 같은 시각이면 400")
 	void rejectApplicationCloseNotAfterIndividualOpen() throws Exception {
 		RaceBuilder builder = upcomingRace();
 
-		assertRejected(builder.applicationCloseAt(builder.now().plusHours(1)).build(),
+		assertRejected(builder.applicationCloseAt(builder.now().plusDays(2)).build(),
 			"접수 마감 일시는 개인 예매 오픈 일시보다 늦어야 합니다.");
 	}
 
 	@Test
-	@DisplayName("크루 예매 없이 개인 예매 오픈이 1분 전이면 판매 시작 일시가 지나 400이고 아무것도 저장하지 않는다")
-	void rejectPassedIndividualOpen() throws Exception {
+	@DisplayName("크루 예매 없이 개인 예매 오픈이 내일 23:59면 판매 시작일이 이틀 뒤보다 빨라 400이고, 이틀 뒤 00:00이면 등록된다")
+	void rejectSaleOpenBeforeTwoDays() throws Exception {
 		RaceBuilder builder = race();
+		LocalDate twoDaysLater = builder.now().toLocalDate().plusDays(2);
 
-		assertRejected(builder.individualOpenAt(builder.now().minusMinutes(1)).build(), SALE_OPEN_PASSED_MESSAGE);
+		assertRejected(builder.individualOpenAt(twoDaysLater.atStartOfDay().minusMinutes(1)).build(),
+			SALE_OPEN_TOO_SOON_MESSAGE.formatted(twoDaysLater.format(MESSAGE_DATE)));
+
+		register(builder.individualOpenAt(twoDaysLater.atStartOfDay()).build());
 	}
 
 	@Test
-	@DisplayName("개인 예매 오픈(사흘 뒤)은 남았어도 더 이른 크루 예매 시작이 1시간 전이면 판매 시작 일시가 지나 400")
-	void rejectPassedCrewSaleStart() throws Exception {
+	@DisplayName("크루 예매 없이 개인 예매 오픈이 1분 전이면 판매 시작일이 지나 400이고 아무것도 저장하지 않는다")
+	void rejectPassedIndividualOpen() throws Exception {
 		RaceBuilder builder = race();
 
-		assertRejected(builder.crewSale(builder.now().minusHours(1), builder.now().plusDays(1))
-			.individualOpenAt(builder.now().plusDays(3))
-			.build(), SALE_OPEN_PASSED_MESSAGE);
+		assertRejected(builder.individualOpenAt(builder.now().minusMinutes(1)).build(),
+			SALE_OPEN_TOO_SOON_MESSAGE.formatted(builder.now().toLocalDate().plusDays(2).format(MESSAGE_DATE)));
+	}
+
+	@Test
+	@DisplayName("개인 예매 오픈(사흘 뒤)은 이틀 뒤 이후여도 더 이른 크루 예매 시작이 내일이면 판매 시작일이 이틀 뒤보다 빨라 400")
+	void rejectCrewSaleStartBeforeTwoDays() throws Exception {
+		RaceBuilder builder = race();
+		LocalDate today = builder.now().toLocalDate();
+
+		assertRejected(builder.crewSale(today.plusDays(1).atTime(10, 0), today.plusDays(1).atTime(20, 0))
+			.individualOpenAt(today.plusDays(3).atTime(10, 0))
+			.build(), SALE_OPEN_TOO_SOON_MESSAGE.formatted(today.plusDays(2).format(MESSAGE_DATE)));
 	}
 
 	@Test
@@ -620,10 +642,10 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 
 	// ---------- 도우미 ----------
 
-	// 판매 시작 일시가 아직 오지 않은 대회 (개인 예매 1시간 뒤 오픈). 지난 판매 시작 일시로는 등록할 수 없다
+	// 등록할 수 있는 대회 (개인 예매 이틀 뒤 오픈). 판매 시작일은 오늘로부터 이틀 뒤부터 정할 수 있다
 	private static RaceBuilder upcomingRace() {
 		RaceBuilder builder = race();
-		return builder.individualOpenAt(builder.now().plusHours(1));
+		return builder.individualOpenAt(builder.now().plusDays(2));
 	}
 
 	// 하프 종목 (트레일 21.1km, 제한 180분, 참가비 60,000원, 키트 5,000원·티셔츠 M, 20~60세, 개인 정원 300)

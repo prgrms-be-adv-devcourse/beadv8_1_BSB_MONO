@@ -1,5 +1,6 @@
 package com.bukang.product.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -21,8 +22,14 @@ public class RaceSummaryDto {
 	private final String regionSido;
 	private final String regionSigungu;
 	private final LocalDateTime raceDate;
+	// 판매 상태와 판매 시작일은 판매자 화면용이다
+	// 구매자 화면은 상태 대신 크루 예매 기간·개인 예매 오픈·접수 마감 일시로 "오픈 예정·예매 중·마감"을 보여 준다
 	private final RaceSaleStatus saleStatus;
-	private final LocalDateTime saleOpenAt;
+	private final LocalDate saleOpenDate;
+	// 크루 예매 기간 (크루 예매가 없으면 둘 다 null)
+	private final LocalDateTime crewSaleStartAt;
+	private final LocalDateTime crewSaleEndAt;
+	private final LocalDateTime individualOpenAt;
 	private final LocalDateTime applicationCloseAt;
 	// 조건에 맞은 종목 중 가장 싼 참가비 ("₩45,000부터"). 조건이 없으면 대회에서 가장 싼 종목의 참가비
 	//   "하프"만 골랐으면 5K가 더 싸도 하프 종목의 참가비
@@ -35,7 +42,8 @@ public class RaceSummaryDto {
 			.map(RaceSummaryCourseDto::from)
 			.toList();
 		return new RaceSummaryDto(race.getId(), race.getTitle(), race.getLocation(), race.getRegionSido(),
-			race.getRegionSigungu(), race.getRaceDate(), race.getSaleStatus(), race.getSaleOpenAt(),
+			race.getRegionSigungu(), race.getRaceDate(), race.getSaleStatus(), race.getSaleOpenDate(),
+			race.getCrewSaleStartAt(), race.getCrewSaleEndAt(), race.getIndividualOpenAt(),
 			race.getApplicationCloseAt(), minPrice, courses);
 	}
 }

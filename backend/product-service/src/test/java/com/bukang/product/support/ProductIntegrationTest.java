@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -152,7 +153,7 @@ public abstract class ProductIntegrationTest {
 
 	// ---------- 대회 등록 ----------
 
-	// 판매 시작 일시가 지금보다 뒤인 대회를 등록한다 (판매 예정)
+	// 판매 시작일이 오늘로부터 이틀 뒤 이후인 대회를 등록한다 (판매 예정)
 	protected RegisteredRace register(RaceSaveRequestDto request) throws Exception {
 		return register(SELLER_MEMBER_ID, request);
 	}
@@ -167,34 +168,36 @@ public abstract class ProductIntegrationTest {
 		return new RegisteredRace(raceId, courseIds);
 	}
 
-	// 판매 시작 일시가 지난 대회를 판매 중으로 만든다 (기본 요청이면 개인 예매가 한 시간 전에 열린 대회)
-	// 판매 시작 일시가 지난 대회는 등록할 수 없으므로(400), 일정을 모두 같은 날수만큼 미래로 옮겨 API로 등록한 뒤
+	// 판매 시작일이 오늘이거나 지난 대회를 판매 중으로 만든다 (기본 요청이면 개인 예매가 한 시간 전에 열린 대회)
+	// 판매 시작일은 오늘로부터 이틀 뒤부터만 등록할 수 있으므로(400), 일정을 모두 같은 날수만큼 미래로 옮겨 API로 등록한 뒤
 	// DB의 일정을 요청 값으로 되돌리고, 상태 배치처럼 판매 중으로 바꿔 검색 문서를 다시 색인한다
+	// 판매 시작일이 내일이면 같은 방법으로 등록하고 판매 예정으로 둔다
 	// 대회일이 지났어도 판매 종료로는 바꾸지 않는다 (상태 배치가 아직 돌지 않은 대회)
-	// 판매 시작 일시가 아직 오지 않은 요청이면 그대로 등록해 판매 예정이 된다
+	// 판매 시작일이 이틀 뒤 이후인 요청이면 그대로 등록해 판매 예정이 된다
 	protected RegisteredRace registerOnSale(RaceSaveRequestDto request) throws Exception {
-		LocalDateTime now = LocalDateTime.now();
-		LocalDateTime saleOpenAt = saleOpenAt(request);
-		if (saleOpenAt.isAfter(now)) {
+		LocalDate today = LocalDate.now();
+		LocalDate saleOpenDate = saleOpenDate(request);
+		if (!saleOpenDate.isBefore(today.plusDays(2))) {
 			return register(request);
 		}
 		// 날짜 단위로 옮겨야 '크루 마감 다음 날 06:00 이후', '환불 기준일 ≤ 대회 날짜' 같은 검사 결과가 그대로다
-		long days = ChronoUnit.DAYS.between(saleOpenAt.toLocalDate(), now.toLocalDate()) + 1;
+		long days = ChronoUnit.DAYS.between(saleOpenDate, today) + 2;
+		RaceSaleStatus saleStatus = saleOpenDate.isAfter(today) ? RaceSaleStatus.SCHEDULED : RaceSaleStatus.ON_SALE;
 		RegisteredRace race = register(shiftSchedule(request, days));
 		transactionTemplate.executeWithoutResult(status -> entityManager.createQuery("""
-				update Race r set r.raceDate = :raceDate, r.saleOpenAt = :saleOpenAt,
+				update Race r set r.raceDate = :raceDate, r.saleOpenDate = :saleOpenDate,
 					r.crewSaleStartAt = :crewSaleStartAt, r.crewSaleEndAt = :crewSaleEndAt,
 					r.individualOpenAt = :individualOpenAt, r.applicationCloseAt = :applicationCloseAt,
 					r.refundDeadline = :refundDeadline, r.saleStatus = :saleStatus
 				where r.id = :id""")
 			.setParameter("raceDate", request.getRaceDate())
-			.setParameter("saleOpenAt", saleOpenAt)
+			.setParameter("saleOpenDate", saleOpenDate)
 			.setParameter("crewSaleStartAt", request.getCrewSaleStartAt())
 			.setParameter("crewSaleEndAt", request.getCrewSaleEndAt())
 			.setParameter("individualOpenAt", request.getIndividualOpenAt())
 			.setParameter("applicationCloseAt", request.getApplicationCloseAt())
 			.setParameter("refundDeadline", request.getRefundDeadline())
-			.setParameter("saleStatus", RaceSaleStatus.ON_SALE)
+			.setParameter("saleStatus", saleStatus)
 			.setParameter("id", race.raceId())
 			.executeUpdate());
 		List<RaceCourseDocument> documents = transactionTemplate.execute(status ->
@@ -205,14 +208,14 @@ public abstract class ProductIntegrationTest {
 		return race;
 	}
 
-	// 판매 시작 일시: 크루 예매 시작·개인 예매 오픈 중 이른 시각 (Race와 같은 계산)
-	private static LocalDateTime saleOpenAt(RaceSaveRequestDto request) {
+	// 판매 시작일: 크루 예매 시작·개인 예매 오픈 중 이른 날짜 (Race와 같은 계산)
+	private static LocalDate saleOpenDate(RaceSaveRequestDto request) {
 		LocalDateTime crewSaleStartAt = request.getCrewSaleStartAt();
 		LocalDateTime individualOpenAt = request.getIndividualOpenAt();
 		if (crewSaleStartAt != null && crewSaleStartAt.isBefore(individualOpenAt)) {
-			return crewSaleStartAt;
+			return crewSaleStartAt.toLocalDate();
 		}
-		return individualOpenAt;
+		return individualOpenAt.toLocalDate();
 	}
 
 	// 대회 일정(대회 일시, 크루 예매, 개인 예매 오픈, 접수 마감, 환불 기준일)을 모두 days일 뒤로 옮긴 요청

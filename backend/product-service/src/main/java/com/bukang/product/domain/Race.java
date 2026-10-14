@@ -8,6 +8,7 @@ import static lombok.AccessLevel.PROTECTED;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -47,6 +48,11 @@ import lombok.NoArgsConstructor;
 @AttributeOverride(name = "createDate", column = @Column(name = "created_at", nullable = false, updatable = false))
 @AttributeOverride(name = "modifyDate", column = @Column(name = "updated_at", nullable = false))
 public class Race extends BaseIdAndTime {
+	// 판매 시작일은 오늘로부터 이 날수 뒤부터 정할 수 있다 (등록한 뒤 하루 이상 판매 예정으로 둔다)
+	private static final int SALE_OPEN_MIN_DAYS = 2;
+	// 응답 메시지에 보여 주는 날짜 형식 (예: 10월 16일)
+	private static final DateTimeFormatter MESSAGE_DATE = DateTimeFormatter.ofPattern("M월 d일");
+
 	@ManyToOne(fetch = LAZY, optional = false)
 	@JoinColumn(name = "seller_id", nullable = false)
 	private ProductSeller seller;
@@ -70,9 +76,11 @@ public class Race extends BaseIdAndTime {
 	@Column(nullable = false)
 	private LocalDateTime raceDate;
 
-	// 판매 시작 일시. 판매자가 입력하지 않고 크루 예매 시작·개인 예매 오픈 중 이른 시각으로 채운다
+	// 판매 시작일. 판매자가 입력하지 않고 크루 예매 시작·개인 예매 오픈 중 이른 날짜로 채운다
+	// 이날 0시에 상태 배치(RaceSaleStatusScheduler)가 판매 중으로 바꾸고, 판매 시작 뒤 수정 규칙도 이날부터 걸린다
+	// 구매자가 실제로 예매할 수 있는 시각은 크루 예매 시작·개인 예매 오픈 일시다
 	@Column(nullable = false)
-	private LocalDateTime saleOpenAt;
+	private LocalDate saleOpenDate;
 
 	// 크루 예매 기간. 시작 일시가 null이면 크루 모집 없이 개인 예매만 한다
 	private LocalDateTime crewSaleStartAt;
@@ -117,11 +125,8 @@ public class Race extends BaseIdAndTime {
 	public Race(ProductSeller seller, RaceSaveRequestDto request, LocalDateTime now) {
 		this.seller = seller;
 		apply(request);
-		// 등록하면 판매 예정이고, 판매 시작 일시가 지나면 상태 배치(RaceSaleStatusScheduler)가 판매 중으로 바꾼다
-		// 판매 예정에서 시작하므로 판매 시작 일시가 이미 지난 대회는 등록하지 못한다
-		if (!saleOpenAt.isAfter(now)) {
-			throw new InvalidRaceException("판매 시작 일시가 이미 지났습니다. 크루 예매 시작·개인 예매 오픈 일시를 지금보다 늦게 작성해주세요.");
-		}
+		// 등록하면 판매 예정이고, 판매 시작일 0시에 상태 배치(RaceSaleStatusScheduler)가 판매 중으로 바꾼다
+		checkSaleOpenDate(saleOpenDate, now);
 		this.saleStatus = RaceSaleStatus.SCHEDULED;
 	}
 
@@ -133,13 +138,17 @@ public class Race extends BaseIdAndTime {
 		if (isSaleEnded(now)) {
 			throw new RaceChangeNotAllowedException("판매가 끝난 대회는 수정할 수 없습니다.");
 		}
+		// 판매 시작 뒤에는 판매 시작일을 정하는 일정을 바꾸지 못한다
+		// 상태 배치는 판매 중을 판매 예정으로 되돌리지 않으므로, 판매 중인데 판매 시작일이 미래인 대회가 생기지 않게 한다
+		if (saleStarted) {
+			checkSaleOpenScheduleUnchanged(request);
+		}
 		// 판매 시작 뒤에는 환불 기준일을 늦추는 변경만 된다 (구매자에게 유리한 변경만, ERD refund_deadline 주석)
 		if (saleStarted && request.getRefundDeadline().isBefore(refundDeadline)) {
 			throw new RaceChangeNotAllowedException("판매가 시작된 대회는 환불 기준일을 앞당길 수 없습니다.");
 		}
 		// 판매 일정은 마음대로 바꾸지 못한다 (대기열, 크루 마감 다음 날 06:00 배치, 확보 기한이 이 일정을 따른다)
-		// 판매 시작 일시 전에는 일정이 모두 아직 오지 않았으므로, 지난 시각으로 옮기는 것만 막힌다 (등록 때와 같은 기준)
-		// 판매 시작 일시는 크루 예매 시작·개인 예매 오픈으로 계산하므로, 이 검사로 판매 시작 일시도 지난 뒤에는 바뀌지 않는다
+		// 판매 시작일 전에는 일정이 모두 아직 오지 않았으므로, 지난 시각으로 옮기는 것만 막힌다
 		checkScheduleChange("크루 예매 시작", crewSaleStartAt, request.getCrewSaleStartAt(), now);
 		checkScheduleChange("크루 예매 마감", crewSaleEndAt, request.getCrewSaleEndAt(), now);
 		checkScheduleChange("개인 예매 오픈", individualOpenAt, request.getIndividualOpenAt(), now);
@@ -152,7 +161,32 @@ public class Race extends BaseIdAndTime {
 		if (saleStarted && (!request.getRaceDate().equals(raceDate) || isPlaceChanged(request))) {
 			this.scheduleChangedAt = now;
 		}
+		// 판매 시작 전 수정으로 판매 시작일이 바뀌면 등록과 같은 기준으로 본다
+		LocalDate requestedSaleOpenDate = saleOpenDateOf(request.getCrewSaleStartAt(), request.getIndividualOpenAt());
+		if (!requestedSaleOpenDate.equals(saleOpenDate)) {
+			checkSaleOpenDate(requestedSaleOpenDate, now);
+		}
 		apply(request);
+	}
+
+	// 판매 예정으로 하루 이상 두도록, 판매 시작일은 오늘로부터 이틀 뒤부터 정할 수 있다
+	//   예: 10/14 등록 → 판매 시작일(크루 예매 시작·개인 예매 오픈 중 이른 날짜)이 10/16 이후
+	private static void checkSaleOpenDate(LocalDate openDate, LocalDateTime now) {
+		LocalDate earliest = now.toLocalDate().plusDays(SALE_OPEN_MIN_DAYS);
+		if (openDate.isBefore(earliest)) {
+			throw new InvalidRaceException(("판매 시작일은 오늘로부터 이틀 뒤(%s)부터 정할 수 있습니다. "
+				+ "크루 예매 시작·개인 예매 오픈 일시를 확인해주세요.").formatted(earliest.format(MESSAGE_DATE)));
+		}
+	}
+
+	// 판매 시작일을 정하는 일정: 크루 예매가 있으면 크루 예매 시작(개인 예매 오픈보다 늘 이르다), 없으면 개인 예매 오픈
+	private void checkSaleOpenScheduleUnchanged(RaceSaveRequestDto request) {
+		if (crewSaleStartAt != null && !crewSaleStartAt.equals(request.getCrewSaleStartAt())) {
+			throw new RaceChangeNotAllowedException("판매가 시작된 대회는 크루 예매 시작 일시를 바꿀 수 없습니다.");
+		}
+		if (crewSaleStartAt == null && !individualOpenAt.equals(request.getIndividualOpenAt())) {
+			throw new RaceChangeNotAllowedException("판매가 시작된 대회는 개인 예매 오픈 일시를 바꿀 수 없습니다.");
+		}
 	}
 
 	// 장소는 화면에 보이는 주소와 검색 필터(시·도, 시·군·구) 중 하나라도 바뀌면 바뀐 것으로 본다
@@ -193,15 +227,15 @@ public class Race extends BaseIdAndTime {
 		this.refundPolicy = request.getRefundPolicy();
 		this.crewMinCount = request.getCrewMinCount();
 		this.crewMaxCount = request.getCrewMaxCount();
-		this.saleOpenAt = earliestOpenAt(request.getCrewSaleStartAt(), request.getIndividualOpenAt());
+		this.saleOpenDate = saleOpenDateOf(request.getCrewSaleStartAt(), request.getIndividualOpenAt());
 	}
 
-	// 크루 예매가 없으면(시작 일시 null) 개인 예매 오픈이 판매 시작이다
-	private static LocalDateTime earliestOpenAt(LocalDateTime crewSaleStartAt, LocalDateTime individualOpenAt) {
+	// 크루 예매 시작·개인 예매 오픈 중 이른 날짜. 크루 예매가 없으면(시작 일시 null) 개인 예매 오픈 날짜다
+	private static LocalDate saleOpenDateOf(LocalDateTime crewSaleStartAt, LocalDateTime individualOpenAt) {
 		if (crewSaleStartAt != null && crewSaleStartAt.isBefore(individualOpenAt)) {
-			return crewSaleStartAt;
+			return crewSaleStartAt.toLocalDate();
 		}
-		return individualOpenAt;
+		return individualOpenAt.toLocalDate();
 	}
 
 	public void addRaceCourse(RaceCourse raceCourse) {
@@ -229,9 +263,10 @@ public class Race extends BaseIdAndTime {
 		return saleStatus != RaceSaleStatus.CANCELED || (memberId != null && seller.getMember().getId() == memberId);
 	}
 
-	// 판매 시작 일시가 지났으면 구매자가 있을 수 있는 대회다
+	// 판매 시작일 0시가 지났으면 판매가 시작된 대회다 (상태 배치가 판매 중으로 바꾸는 기준과 같다)
+	// 판매 시작 뒤 수정 규칙(참가비·정원·참가 조건 고정 등)이 이때부터 걸린다
 	public boolean isSaleStarted(LocalDateTime now) {
-		return !now.isBefore(saleOpenAt);
+		return !now.toLocalDate().isBefore(saleOpenDate);
 	}
 
 	// 판매 종료 전이면 어떤 상태든 취소할 수 있다 (10/13 결정)
@@ -251,7 +286,8 @@ public class Race extends BaseIdAndTime {
 	}
 
 	// 개인 예매로 자리를 확보할 수 있는지: 판매 예정·판매 중이고, 개인 예매 오픈부터 접수 마감 전까지
-	// 판매 예정도 넣는 이유: 판매 시작 일시가 지나도 상태 배치가 판매 중으로 바꾸기까지 최대 5분 걸린다
+	// 판매 예정도 넣는 이유: 판매 시작일 0시가 지나도 상태 배치가 판매 중으로 바꾸기까지 최대 5분 걸린다
+	// (개인 예매가 판매 시작일 0시에 열리는 대회)
 	public boolean isAcceptingIndividual(LocalDateTime now) {
 		return (saleStatus == RaceSaleStatus.SCHEDULED || saleStatus == RaceSaleStatus.ON_SALE)
 			&& !now.isBefore(individualOpenAt) && now.isBefore(applicationCloseAt);
