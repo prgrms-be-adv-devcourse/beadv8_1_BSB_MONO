@@ -132,7 +132,10 @@ backend/
 - 도메인 예외는 `common`의 `global/exception/BusinessException`을 상속하고 생성자에서 `HttpStatus`를 정합니다.
   `GlobalExceptionHandler`가 한 번에 처리하므로 도메인을 추가해도 핸들러는 고치지 않습니다.
   Spring Security 예외는 `member-service`의 `AuthExceptionHandler`가 처리합니다.
-- API 응답은 성공·실패 모두 `RsData {status, message, data}` 형식입니다.
+- API 응답은 성공·실패 모두 `RsData {status, code, message, data}` 형식입니다.
+  `code`는 오류 응답에 붙는 오류 코드입니다 (예: `MEMBER_DUPLICATE_EMAIL`, 입력값 오류는 `INVALID_REQUEST`, 예상 못 한 오류는 500 `INTERNAL_ERROR`).
+  코드가 없으면 JSON에서 `code` 칸이 빠집니다.
+  도메인 예외에 코드를 붙이려면 `BusinessException(status, code, message)` 생성자를 쓰고, 코드 이름은 `도메인_상황` 대문자 스네이크로 짓습니다.
 - 엔티티 테이블 이름은 `<도메인>_<엔티티>` 형식입니다 (예: `MEMBER_MEMBER`, `CASH_MEMBER`). 지금은 모든 서비스가 같은 DB(`bukang-db`)를 쓰고 접두사로 구분합니다.
 
 ## 의존성 구성 (`member-service/build.gradle.kts`)

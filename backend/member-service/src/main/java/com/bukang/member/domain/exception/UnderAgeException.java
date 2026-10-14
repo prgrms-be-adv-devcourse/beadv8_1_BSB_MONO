@@ -6,6 +6,6 @@ import com.bukang.common.global.exception.BusinessException;
 
 public class UnderAgeException extends BusinessException {
 	public UnderAgeException(String message) {
-		super(HttpStatus.BAD_REQUEST, message);
+		super(HttpStatus.BAD_REQUEST, "MEMBER_UNDER_AGE", message);
 	}
 }
