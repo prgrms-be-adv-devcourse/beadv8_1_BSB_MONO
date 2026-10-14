@@ -145,6 +145,20 @@ public class Order extends BaseIdAndTime {
 		return status == OrderStatus.PAID;
 	}
 
+	// 결제 기한이 지난 결제 대기 주문인지 (만료 정리 대상, OrderExpiryUseCase). 기한 시각부터 지난 것으로 본다
+	public boolean isOverdue(LocalDateTime now) {
+		return status == OrderStatus.CREATED && !now.isBefore(paymentDueAt);
+	}
+
+	// 결제하지 않고 기한이 지났다. 예치금 결제 취소를 부른 뒤에 바꾼다 (OrderExpiryUseCase)
+	public void expire(LocalDateTime now) {
+		if (!isOverdue(now)) {
+			throw new IllegalStateException(
+				"결제 기한이 지난 결제 대기 주문만 만료할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+		this.status = OrderStatus.EXPIRED;
+	}
+
 	// 예치금 차감과 자리 판매가 끝났다. 주문과 주문 상품을 함께 결제 완료로 바꾼다
 	public void markPaid(LocalDateTime paidAt) {
 		if (status != OrderStatus.CREATED) {

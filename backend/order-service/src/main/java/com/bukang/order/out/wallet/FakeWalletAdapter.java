@@ -23,12 +23,12 @@ public class FakeWalletAdapter implements WalletPort {
 	}
 
 	@Override
-	public void cancelPayment(int orderId) {
-		log.debug("가짜 예치금 환원 orderId={}", orderId);
+	public void cancelPayment(int orderId, int memberId) {
+		log.debug("가짜 예치금 결제 취소 orderId={}, memberId={}", orderId, memberId);
 	}
 
 	@Override
-	public void refund(int orderId, int orderItemId, int amount) {
-		log.debug("가짜 예치금 환불 orderId={}, orderItemId={}, amount={}", orderId, orderItemId, amount);
+	public void refund(int orderId, int memberId) {
+		log.debug("가짜 예치금 환불 orderId={}, memberId={}", orderId, memberId);
 	}
 }
