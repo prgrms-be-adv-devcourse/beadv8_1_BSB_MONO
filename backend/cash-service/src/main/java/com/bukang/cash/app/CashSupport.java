@@ -39,4 +39,25 @@ public class CashSupport {
 	public Optional<Payment> findByOrderId(int orderId) {
 		return paymentRepository.findByOrderId(orderId);
 	}
+
+	// 고객 지갑·보관 지갑을 ID가 작은 쪽부터 비관적 락으로 잠근다 (교착 상태 방지, PRO-78)
+	// 지갑 ID가 회원 ID와 항상 같을 때만 올바르다. 지갑 ID가 자동 증가(BaseIdAndTime)라면
+	// 다른 회원의 지갑을 잠글 수 있으므로, 회원 ID로 잠그는 findByMemberIdForUpdate를 써야 한다.
+	public LockedWallets lockCustomerAndHoldingWallets(int customerId) {
+		int holdingMemberId = cashWalletProperties.holdingMemberId();
+		int firstId = Math.min(customerId, holdingMemberId);
+		int secondId = Math.max(customerId, holdingMemberId);
+
+		Wallet first = walletRepository.findByIdForUpdate(firstId)
+			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
+		Wallet second = walletRepository.findByIdForUpdate(secondId)
+			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
+
+		Wallet customerWallet = customerId == firstId ? first : second;
+		Wallet holdingWallet = holdingMemberId == firstId ? first : second;
+		return new LockedWallets(customerWallet, holdingWallet);
+	}
+
+	public record LockedWallets(Wallet customerWallet, Wallet holdingWallet) {
+	}
 }
