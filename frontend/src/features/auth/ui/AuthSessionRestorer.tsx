@@ -1,0 +1,35 @@
+'use client'
+
+import { useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+
+import { getAuthStatus, memberApi, onSessionExpired, restoreSession } from '@/shared/api'
+
+/**
+ * 앱 전체에 한 번 둔다 (화면에는 아무것도 그리지 않는다).
+ * - 새로고침하면 메모리의 Access Token이 사라지므로 재발급으로 되살리고, 성공하면 내 정보를 불러 둔다.
+ * - 쓰는 중에 재발급이 실패해 로그인이 끊기면 로그인 화면으로 보낸다.
+ */
+export function AuthSessionRestorer() {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+
+  useEffect(() => {
+    void restoreSession().then(() => {
+      if (getAuthStatus() === 'authenticated') {
+        void queryClient.prefetchQuery(memberApi.getFindMeQueryOptions())
+      }
+    })
+  }, [queryClient])
+
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        router.replace('/login')
+      }),
+    [router],
+  )
+
+  return null
+}
