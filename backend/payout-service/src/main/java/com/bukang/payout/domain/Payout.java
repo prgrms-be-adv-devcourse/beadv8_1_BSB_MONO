@@ -159,6 +159,8 @@ public class Payout extends BaseIdAndTime {
 	}
 
 	// 지급보류 풀기: 정산 예정으로 돌리고 지급 예정일을 해제일 뒤 돌아오는 지급일로 다시 정한다 (payout.md 2-6)
+	// 단, 원래 지급 예정일보다 앞당기지 않는다 (PRO-128). 보류를 걸 때는 지급 예정일을 바꾸지 않으므로
+	// 지금 값이 원래 지급 예정일(또는 이전 해제로 이미 늦춰진 날)이다
 	// 지급 배치는 상태와 지급 예정일만 보므로, 보류 기록을 보지 않아도 다음 지급일에 지급된다
 	public void release(PayoutHold hold, int releasedBy, LocalDateTime releasedAt, BusinessDayCalendar calendar) {
 		// ==로 비교하지 않는다. LAZY로 읽은 hold.getPayout()은 Hibernate 프록시라 같은 행이어도 this와 다른 객체다
@@ -168,7 +170,10 @@ public class Payout extends BaseIdAndTime {
 		}
 		hold.markReleased(releasedBy, releasedAt);
 		this.status = PayoutStatus.CALCULATED;
-		this.scheduledPayDate = nextPayDateAfter(releasedAt.toLocalDate(), calendar);
+		LocalDate payDateAfterRelease = nextPayDateAfter(releasedAt.toLocalDate(), calendar);
+		if (payDateAfterRelease.isAfter(scheduledPayDate)) {
+			this.scheduledPayDate = payDateAfterRelease;
+		}
 	}
 
 	// date "뒤"의 지급일: 이번 달 지급일이 date보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일
