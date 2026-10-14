@@ -1,10 +1,14 @@
 package com.bukang.cash.app;
 
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 
 import com.bukang.cash.config.CashWalletProperties;
 import com.bukang.cash.domain.exception.WalletNotFoundException;
+import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.WalletRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -13,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class CashSupport {
 	private final WalletRepository walletRepository;
+	private final PaymentRepository paymentRepository;
 	private final CashWalletProperties cashWalletProperties;
 
 	// 지갑 ID = 회원 ID. 지갑은 가입 이벤트로 만들어지므로, 없으면 조회 시점에 만들지 않고 404로 알린다
@@ -28,5 +33,10 @@ public class CashSupport {
 
 	public Wallet findSystemWallet() {
 		return findWalletByHolderId(cashWalletProperties.systemMemberId());
+	}
+
+	//주문 존재 확인
+	public Optional<Payment> findByOrderId(int orderId) {
+		return paymentRepository.findByOrderId(orderId);
 	}
 }
