@@ -147,6 +147,20 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
+	@DisplayName("판매자가 대회를 취소했으면 환불 기한이 지났어도 결제한 참가권을 취소하면 전액 환불된다")
+	void cancelCanceledRaceAfterRefundDeadline() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		raceCoursePort.put(StubRaceCoursePort.canceled(
+			StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, LocalDate.now().minusDays(10))));
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.canceledAmount").value(TICKET_PRICE));
+
+		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
+	}
+
+	@Test
 	@DisplayName("환불 기한이 지났어도 대회 일정이 바뀐 날(알린 날)부터 7일째 날까지는 취소하면 전액 환불된다")
 	void cancelWithinScheduleChangeRefund() throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);

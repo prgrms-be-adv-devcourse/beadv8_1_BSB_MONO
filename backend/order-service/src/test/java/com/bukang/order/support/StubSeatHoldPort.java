@@ -14,7 +14,7 @@ import com.bukang.order.out.seat.SeatHoldResult;
 import com.bukang.order.out.seat.SeatSellResult;
 
 /**
- * 테스트용 자리 확보. 종목별 남은 자리를 정할 수 있고(정하지 않으면 무제한), 결제 기한은 지금부터 10분이다
+ * 테스트용 자리 확보. 종목별 남은 자리를 정할 수 있고(정하지 않으면 무제한), 결제 기한은 주문이 보낸 값(지금부터 10분)이다
  * 연장은 자리마다 한 번, 2분이다. 확보하지 않은 자리를 늘리려 하면 기한이 지난 것으로 본다
  */
 public class StubSeatHoldPort implements SeatHoldPort {
@@ -32,7 +32,7 @@ public class StubSeatHoldPort implements SeatHoldPort {
 	private final Set<Integer> failingCourses = ConcurrentHashMap.newKeySet();
 
 	@Override
-	public SeatHoldResult hold(int raceCourseId, int participationId, int memberId) {
+	public SeatHoldResult hold(int raceCourseId, int participationId, LocalDateTime requestedExpiresAt) {
 		holdCalls.incrementAndGet();
 		if (failingCourses.contains(raceCourseId)) {
 			throw new IllegalStateException("상품 서비스 응답 없음 (테스트)");
@@ -48,9 +48,8 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		if (!held[0]) {
 			return SeatHoldResult.soldOut();
 		}
-		LocalDateTime due = LocalDateTime.now().plusMinutes(PAYMENT_MINUTES);
-		expiresAt.put(participationId, due);
-		return SeatHoldResult.held(due);
+		expiresAt.put(participationId, requestedExpiresAt);
+		return SeatHoldResult.held(requestedExpiresAt);
 	}
 
 	@Override

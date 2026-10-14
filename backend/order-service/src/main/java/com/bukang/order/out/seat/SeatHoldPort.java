@@ -1,13 +1,18 @@
 package com.bukang.order.out.seat;
 
+import java.time.LocalDateTime;
+
 /**
  * 상품 서비스(B)에 참가권 자리 1석을 확보한다. 자리 행(RACE_SEAT)과 정원은 B 소유다 (ERD 추천안 v4, 팀 결정 #10)
- * 결제 기한(개인 10분)은 B가 정해 돌려준다. 결제와 만료 판정의 원본도 B의 expires_at이다
+ * 결제 기한(개인 10분)은 주문이 정해 보내고 B가 그 시각까지 자리를 잡는다. 결제와 만료 판정의 원본은 B에 저장된 expires_at이다
  */
 public interface SeatHoldPort {
-	SeatHoldResult hold(int raceCourseId, int participationId, int memberId);
+	// 결제 기한(expiresAt)은 주문이 정해 보낸다 (10/14 김호빈님과 정함, 대기열이 생기면 활성 시간이 끝나는 시각)
+	// 멱등: 같은 참가 신청 ID로 다시 부르면 새 자리를 잡지 않고 처음 결과(처음 기한)를 돌려준다
+	SeatHoldResult hold(int raceCourseId, int participationId, LocalDateTime expiresAt);
 
 	// PG 충전창에 들어가면 결제 기한을 2분 늘린다. 자리마다 한 번만 된다 (정책 4장 결제)
+	// B에 연장 API가 없어(10/14 연장 없음으로 정함) 실제 어댑터는 늘릴 수 없다고 응답한다. 연장 기능 삭제는 따로 한다
 	SeatExtendResult extend(int participationId);
 
 	// 결제 뒤 자리를 판매 완료로 바꾼다. 기한이 지났으면 B가 거절한다 (결제·만료 판정 원본은 B의 expires_at)
