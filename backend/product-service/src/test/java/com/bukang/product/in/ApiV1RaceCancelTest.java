@@ -147,10 +147,10 @@ class ApiV1RaceCancelTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("개인 예매 오픈이 하루 뒤라 판매 예정인 대회도 취소되고 order.race.cancel 메시지를 보낸다")
+	@DisplayName("개인 예매 오픈이 이틀 뒤라 판매 예정인 대회도 취소되고 order.race.cancel 메시지를 보낸다")
 	void cancelScheduledRace() throws Exception {
 		RegisteredRace scheduled = register(race()
-			.individualOpenAt(LocalDateTime.now().withNano(0).plusDays(1))
+			.individualOpenAt(LocalDateTime.now().withNano(0).plusDays(2))
 			.build());
 		assertThat(findRace(scheduled.raceId()).getSaleStatus()).isEqualTo(RaceSaleStatus.SCHEDULED);
 

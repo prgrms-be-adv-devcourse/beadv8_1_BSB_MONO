@@ -52,9 +52,9 @@ public final class RaceRequests {
 		private LocalDateTime raceDate = now.plusDays(15);
 		private LocalDateTime crewSaleStartAt;
 		private LocalDateTime crewSaleEndAt;
-		// 기본은 한 시간 전에 열려 자리를 확보할 수 있다. 지난 판매 시작 일시로는 등록할 수 없어
-		// registerOnSale()로 만들고, register()로 등록하려면 미래 일시로 바꾼다
-		// (예: individualOpenAt(now().plusDays(1)) → 판매 예정)
+		// 기본은 한 시간 전에 열려 자리를 확보할 수 있다. 판매 시작일은 오늘로부터 이틀 뒤부터만 등록할 수 있어
+		// registerOnSale()로 만들고, register()로 등록하려면 이틀 뒤 이후로 바꾼다
+		// (예: individualOpenAt(now().plusDays(2)) → 판매 예정)
 		private LocalDateTime individualOpenAt = now.minusHours(1);
 		private LocalDateTime applicationCloseAt = now.plusDays(10);
 		private LocalDate refundDeadline;

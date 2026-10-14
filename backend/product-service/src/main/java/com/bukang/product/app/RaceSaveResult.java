@@ -27,7 +27,7 @@ public record RaceSaveResult(
 		RaceSaveDto dto = new RaceSaveDto(
 			race.getId(),
 			race.getSaleStatus(),
-			race.getSaleOpenAt(),
+			race.getSaleOpenDate(),
 			courses.stream().map(RaceCourse::getId).toList()
 		);
 		return new RaceSaveResult(
