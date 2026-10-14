@@ -35,7 +35,8 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
 - [결정됨] 대기열 진입 단위는 **대회 ID 하나 + 종목 ID 하나**다.
   - 대회(1) : 종목(N) 관계는 최종에서 대회를 기준으로 종목 옵션을 골라 대기열에 들어가도록 확장하려고 둔 것이다.
   - 세미에서 실제로 구현하는 관계는 대회(1) : 종목(1)이다. 최종에서 확장해도 대회 ID 하나에 종목 ID 하나로 대기열에 들어간다.
-- [결정됨] 대기열에 들어올 수 있는 판매 상태는 **`ON_SALE`**이다. `SCHEDULED`는 판매 예정이라 들어올 수 없다.
+- [결정됨] 대기열에 들어올 수 있는 때는 판매 상태가 **`ON_SALE`**이고 **`individualOpenAt ≤ now < applicationCloseAt`**일 때다. `SCHEDULED`는 판매 예정이라 들어올 수 없다.
+  - `ON_SALE`은 판매자에게만 보이는 상태다. 구매자에게 예매하기 버튼이 보이는 것은 `individualOpenAt` 시각부터다(`RaceSaleStatus.java:9`).
 - [결정됨] 접수 일정은 **Kafka 복제**로 받는다. 대기열은 대회 · 종목 **복제 테이블**을 둔다.
   - 이유: 트래픽이 몰리는 대기열에서는 Cache-Aside(상품 내부 API + 캐시, 참고 `D:\Study\redis\redisinspring`)보다 복제한 대회 · 종목을 쓰는 쪽이 튼튼하고 유리하다.
   - 상품이 바뀌면 바뀐 정보가 대기열 복제 테이블에 **멱등하게** 반영되어야 한다.
@@ -61,21 +62,24 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
 - 왜: 3단계 등록 API가 "지금 이 대회 · 종목에 줄을 세울 수 있는가"를 판정해야 한다.
 - [결정됨] 대회와 종목을 함께 복제한다(대회 · 종목 복제 테이블, `QUEUE_` 접두사).
 - [결정됨] 상품이 바뀌면 바뀐 정보를 복제 테이블에 멱등하게 반영한다. 같은 메시지가 두 번 와도 결과가 같다.
-- [결정됨] 들어올 수 있는 판매 상태는 `ON_SALE`이다.
-  - [미정] 시각 조건(`individualOpenAt ≤ now < applicationCloseAt`)도 함께 볼지.
-    `ON_SALE`은 판매 시작일(크루 예매 시작과 개인 예매 오픈 중 이른 날짜) 0시에 바뀐다. 그래서 개인 예매 오픈 시각 전에도 `ON_SALE`일 수 있다.
-    또 `CLOSED`는 대회일 다음 날 0시에 바뀌어, 접수 마감 뒤에도 그때까지 `ON_SALE`로 남는다(`Race.java:233-239`, `RaceSaleStatus.java:8`). 상품의 자리 확보 판정은 시각을 함께 본다(`Race.java:288-294`).
-  - 복제본이 `ON_SALE`을 알려면 **상태 배치가 바꾼 상태도 메시지로 보내야** 한다. 상태는 등록 때 `SCHEDULED`이고, 5분마다 도는 상태 배치가 `ON_SALE`로 바꾼다(`RaceSaleStatusScheduler`, `ProductFacade.java:149-161`). 이때 메시지를 보내지 않으면 복제본은 `SCHEDULED`에 머물러 대기열이 열리지 않는다.
+- [결정됨] 들어올 수 있는 때: 판매 상태 `ON_SALE` + 시각 조건 `individualOpenAt ≤ now < applicationCloseAt`.
+  - 시각 조건도 보는 이유: `ON_SALE`은 판매 시작일(크루 예매 시작과 개인 예매 오픈 중 이른 날짜) 0시에 바뀌어 개인 예매 오픈 시각 전에도 `ON_SALE`일 수 있다. 또 `CLOSED`는 대회일 다음 날 0시에 바뀌어, 접수 마감 뒤에도 그때까지 `ON_SALE`로 남는다(`Race.java:233-239`, `RaceSaleStatus.java:8`).
+- [결정됨] 상품의 상태 배치가 판매 상태를 바꾸면, 상품이 Kafka 생산자로서 대기열에 동기화 메시지를 보낸다.
+  - 상태는 등록 때 `SCHEDULED`이고, 5분마다 도는 상태 배치가 `ON_SALE`로 바꾼다(`RaceSaleStatusScheduler`, `ProductFacade.java:149-161`). 이 메시지가 없으면 복제본은 `SCHEDULED`에 머물러 대기열이 열리지 않는다.
+  - 알려진 한계: 개인 예매 오픈이 판매 시작일 0시 정각이면, 상태 배치(5분 주기)가 `ON_SALE`로 바꾸고 메시지가 올 때까지 최대 5분쯤 줄을 설 수 없다. 상품은 같은 이유로 자리 확보 판정에 `SCHEDULED`도 넣었다(`Race.java:289`).
 - 상품 쪽 (사용자 담당): 커밋 뒤 메시지를 보낸다. 지금 상품은 일정 메시지를 보내지 않는다(등록 · 수정은 `race.filelink.requested`, 취소는 `order.race.cancel`만).
 - 대기열 쪽: [결정됨] `in/QueueKafkaConsumer`가 `@KafkaListener`로 받아 복제 테이블에 저장한다.
 - [제안] 세부 (B1~B8)
   - B1 메시지: 대회 하나에 메시지 하나(key = `raceId`), 대회와 종목을 함께 담은 스냅샷. 담는 값은 `raceId`, 종목 목록(`raceCourseId` 등), `individualOpenAt`, `applicationCloseAt`, `saleStatus`, 순서 판단 값(B5)이다.
-  - B2 보내는 시점: 등록 · 수정 · 취소 커밋 뒤와, 상태 배치가 판매 상태를 바꾼 뒤(`ON_SALE`/`CLOSED`). 발행은 `ProductFacade.publish()`(`ProductFacade.java:186`)를 쓴다. 매진(`SOLD_OUT`)은 보내지 않는다. 결제 대기가 풀리면 `OPEN`으로 돌아오는 일시적인 값이다.
+  - B2 보내는 시점: 등록 · 수정 · 취소 커밋 뒤. 상태 배치가 판매 상태를 바꾼 뒤(`ON_SALE`/`CLOSED`)에도 보낸다([결정됨]). 발행은 `ProductFacade.publish()`(`ProductFacade.java:186`)를 쓴다. 매진(`SOLD_OUT`)은 보내지 않는다. 결제 대기가 풀리면 `OPEN`으로 돌아오는 일시적인 값이다.
   - B3 토픽: `queuing.race.changed` (상수는 common `KafkaTopics`, 이벤트 클래스는 common `shared/race/event/`). 취소는 스냅샷의 `saleStatus = CANCELED`로 받으므로 `order.race.cancel`은 구독하지 않는다.
   - B5 순서 판단 값(늦게 온 옛 메시지 건너뛰기, 회원 동기화 방식 `ProductSyncMemberUseCase.java:21-25`). [미정] 무엇으로 할지:
     - `race.updated_at`: 대회 칸이 바뀐 수정과 취소 · 상태 배치에서는 갱신된다(`RaceRepository.java:61,71,78`). 하지만 종목만 바꾼 수정에서는 바뀌지 않는다. 종목은 자기 `race_course.updated_at`만 바뀐다(`RaceCourse.java:43`, `RaceUpdateUseCase.java:56-85`).
     - 발행 시각: 메시지를 만들 때의 시각
     - 상품 수정 때 `race.updated_at`도 항상 갱신하도록 상품을 고친다
+    - 종목 `updated_at`을 기준으로 둔다(사용자 안, 10/14). 종목 `updated_at`만으로는 대회 칸 변경(일정 · 취소 · 상태 배치)을 가릴 수 없다. 이때는 `race.updated_at`만 바뀌기 때문이다.
+    - [제안] 행마다 자기 `updated_at`으로 비교한다(사용자 안을 넓힌 것): 대회 칸은 `race.updated_at`, 종목 칸은 종목마다 `race_course.updated_at`. 그러면 대회만 바뀐 수정과 종목만 바뀐 수정을 모두 가린다.
+      - 남는 경우는 종목 삭제다. 삭제하면 대회 · 남은 종목의 `updated_at`이 바뀌지 않는다. 다만 종목은 판매 시작일 전에만 뺄 수 있다(`RaceCourse.java:187-191`, `Race.java:268-270`). 그때는 아직 `SCHEDULED`라 대기열이 열리지 않았고, 판매 시작일 0시 상태 배치 메시지(`race.updated_at` 갱신)가 종목 목록을 바로잡는다.
     - 참고: key가 `raceId`라 같은 대회 메시지는 한 파티션 안에서 순서가 지켜진다. 순서가 뒤집히는 것은 실패한 메시지가 재시도 토픽을 거칠 때다.
   - B6 재시도 · DLT: `QueueKafkaConsumer`도 `@RetryableTopic` 3번(1초 → 2초), `IllegalArgumentException`은 바로 DLT로 둔다. DLT는 로그만 남기는 전용 컨슈머(이름 예: `QueueKafkaDltConsumer`)가 받는다. 설정은 상품 컨슈머를 참고한다(`ProductKafkaConsumer.java:34-37,54-64`, `ProductKafkaDltConsumer.java:28-47`).
   - B7 대기열 전에 등록된 대회: 세미는 더미 대회를 새로 등록해 채운다. "전체 다시 보내기"는 필요하면 최종에서 만든다.
@@ -100,7 +104,7 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
 - [미정] 경로 · 키 이름(위 사용자 후보 기준)
 - [미정] active인 회원이 다시 등록할 때 응답: 지금 상태를 그대로 돌려주기 / 거부
 - [미정] Redis 장애 때: 막기(fail-closed, 예매 중단) / 통과(fail-open, 주문 · 상품에 트래픽이 몰림)
-- 확인: Testcontainers Redis로 등록 · 다른 기기 재등록(순번 유지) · active 회원 재등록 · `ON_SALE`이 아닌 대회 등록
+- 확인: Testcontainers Redis로 등록 · 다른 기기 재등록(순번 유지) · active 회원 재등록 · `ON_SALE`이 아닌 대회 등록 · 개인 예매 오픈 전과 접수 마감 뒤 등록
 
 ### 4. 순번 조회 API (브라우저 폴링)
 
@@ -120,7 +124,8 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
 - [결정됨] `@EnableScheduling`을 넣고, 스케줄러는 `@Profile("!test")`로 테스트에서 끈다(order · product 관례).
 - [결정됨] 승격 규칙: 주기마다 정해진 인원(동시 active 상한 없음, 결정 사항 참고). 동시에 active인 회원 수는 저절로 "주기마다 올리는 인원 × (600초 ÷ 주기)"를 넘지 않는다(예: 3초마다 10명이면 최대 2,000명).
 - [미정] 주기와 한 번에 올릴 인원
-- [제안] 방식: `@Scheduled` + UseCase(order · product 관례). Spring Batch를 쓴다고 더 효율적이지 않다(10/14 사용자 질문에 대한 Claude 판단).
+- [결정됨] 한 대기열 키(대회 · 종목)에서 오류가 나도 다른 대회 대기열의 승격에는 영향이 없어야 한다. 대기열 키마다 오류를 따로 처리한다.
+- [결정됨] 방식: `@Scheduled` + UseCase(order · product 관례). Spring Batch를 쓴다고 더 효율적이지 않다(10/14 Claude 판단, 사용자 동의).
   - 승격은 몇 초마다 Redis 명령 몇 개(Lua)를 실행하는 일이다. Batch의 장점(대량 데이터 청크 처리, 실패 지점부터 재시작, 실행 기록)을 쓸 곳이 없다.
   - 실패해도 다음 주기가 곧 재시도이므로 재시작 기능이 필요 없다.
   - Batch는 Job을 실행할 때마다 실행 기록을 남긴다. JDBC 저장소(file-service 방식)면 3초 주기에 하루 약 28,800번 `BATCH_` 테이블에 행이 쌓인다. 기록을 남기지 않는 `ResourcelessJobRepository`(spring-batch-core 6)도 있지만, 그래도 얻는 것이 없다.
@@ -201,3 +206,12 @@ shrimp 작업 설명과 이 문서가 다르면 **이 문서가 우선**입니�
   - `updated_at`: 종목만 바꾼 수정은 `race_course.updated_at`만 바뀌고 `race.updated_at`은 그대로다(B5에 반영).
   - Spring Batch: 승격에는 더 효율적이지 않다(5단계 [제안]에 이유).
   - `ON_SALE`을 기준으로 하면 상태 배치가 바꾼 상태도 메시지로 보내야 한다(B2에 반영).
+
+### 2026-10-14 ROADMAP 검토 2차
+
+- 사용자 결정
+  - Spring Batch 대신 `@Scheduled` + UseCase (Batch는 승격에 이득이 없다)
+  - 한 대기열 키에서 오류가 나도 다른 대회 대기열 승격에는 영향이 없어야 한다. 앞서 "다음 종목을 계속 처리"라고 적은 것은 같은 대회의 다음 종목으로 읽힐 수 있는 표현이었다.
+  - 상품 상태 배치가 판매 상태를 바꾸면 상품이 Kafka로 대기열에 동기화 메시지를 보낸다.
+  - 진입 조건은 `ON_SALE` + `individualOpenAt ≤ now < applicationCloseAt`. `ON_SALE`은 판매자에게만 보이는 상태이고, 구매자 예매하기 버튼은 `individualOpenAt`부터 보인다.
+- 사용자 질문: "종목의 `updated_at`을 기준으로 두면?" → 종목 `updated_at`만으로는 대회 칸 변경을 못 가린다. 행마다 자기 `updated_at`으로 비교하는 안을 [제안]으로 B5에 적었다.
