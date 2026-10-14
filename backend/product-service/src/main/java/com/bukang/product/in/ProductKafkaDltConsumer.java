@@ -18,7 +18,9 @@ public class ProductKafkaDltConsumer {
 	private static final String GROUP_ID = "product-dlt";
 	private static final String MEMBER_JOINED_DLT = KafkaTopics.MEMBER_MEMBER_JOINED
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
-	private static final String SELLER_CHANGED_DLT = KafkaTopics.PRODUCT_SELLER_CHANGED
+	private static final String MEMBER_MODIFIED_DLT = KafkaTopics.MEMBER_MODIFIED
+		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
+	private static final String SELLER_CHANGED_DLT = KafkaTopics.SELLER_CHANGED
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
 	private static final String HOLD_CANCEL_DLT = KafkaTopics.PRODUCT_HOLD_CANCEL
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
@@ -26,6 +28,11 @@ public class ProductKafkaDltConsumer {
 	@KafkaListener(topics = MEMBER_JOINED_DLT, groupId = GROUP_ID)
 	public void handleMemberJoinedDlt(String payload) {
 		log.error("처리하지 못한 회원가입 메시지: {}", payload);
+	}
+
+	@KafkaListener(topics = MEMBER_MODIFIED_DLT, groupId = GROUP_ID)
+	public void handleMemberModifiedDlt(String payload) {
+		log.error("처리하지 못한 회원 변경 메시지: {}", payload);
 	}
 
 	@KafkaListener(topics = SELLER_CHANGED_DLT, groupId = GROUP_ID)

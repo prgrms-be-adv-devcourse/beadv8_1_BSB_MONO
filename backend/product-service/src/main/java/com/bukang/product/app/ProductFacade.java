@@ -13,7 +13,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
-import com.bukang.common.shared.member.event.MemberJoinedEvent;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.product.domain.HoldReleaseReason;
 import com.bukang.product.domain.ProductMember;
@@ -55,8 +54,8 @@ public class ProductFacade {
 	private final JsonConverter jsonConverter;
 
 	@Transactional
-	public ProductMember syncMember(MemberJoinedEvent event) {
-		return productSyncMemberUseCase.syncMember(event);
+	public ProductMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate, String nickname) {
+		return productSyncMemberUseCase.syncMember(id, createDate, modifyDate, nickname);
 	}
 
 	@Transactional

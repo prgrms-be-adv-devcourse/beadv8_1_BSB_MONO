@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
+import com.bukang.common.shared.member.event.MemberModifiedEvent;
 import com.bukang.common.shared.race.event.HoldCancelEvent;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.product.app.ProductFacade;
@@ -62,10 +63,28 @@ public class ProductKafkaConsumer {
 		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
 	)
 	public void handleMemberJoined(String payload) {
-		productFacade.syncMember(jsonConverter.fromJson(payload, MemberJoinedEvent.class));
+		MemberJoinedEvent event = jsonConverter.fromJson(payload, MemberJoinedEvent.class);
+		productFacade.syncMember(event.id(), event.createDate(), event.modifyDate(), event.nickname());
 	}
 
-	@KafkaListener(topics = KafkaTopics.PRODUCT_SELLER_CHANGED, groupId = GROUP_ID, concurrency = CONCURRENCY)
+	// 회원 서비스가 보내는 공용 토픽. 가입과 같은 방식으로 회원 복제본에 덮어쓴다
+	@KafkaListener(topics = KafkaTopics.MEMBER_MODIFIED, groupId = GROUP_ID, concurrency = CONCURRENCY)
+	@RetryableTopic(
+		attempts = RETRY_ATTEMPTS,
+		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),
+		// 깨진 JSON은 다시 해도 실패하므로 재시도 없이 바로 DLT로 보낸다
+		exclude = IllegalArgumentException.class,
+		numPartitions = PARTITIONS,
+		retryTopicSuffix = RETRY_TOPIC_SUFFIX,
+		dltTopicSuffix = DLT_TOPIC_SUFFIX,
+		autoStartDltHandler = AUTO_START_DEFAULT_DLT_HANDLER
+	)
+	public void handleMemberModified(String payload) {
+		MemberModifiedEvent event = jsonConverter.fromJson(payload, MemberModifiedEvent.class);
+		productFacade.syncMember(event.id(), event.createDate(), event.modifyDate(), event.nickname());
+	}
+
+	@KafkaListener(topics = KafkaTopics.SELLER_CHANGED, groupId = GROUP_ID, concurrency = CONCURRENCY)
 	@RetryableTopic(
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),

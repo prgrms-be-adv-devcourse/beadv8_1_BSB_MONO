@@ -10,7 +10,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.bukang.common.shared.member.event.MemberJoinedEvent;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
@@ -22,11 +21,12 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 개발용 기본 회원·판매자 복제본
- * 상품 서비스는 회원·판매자를 Kafka 메시지(queuing.member.joined, product.seller.changed)로 받아 복제본에 저장한다.
+ * 상품 서비스는 회원·판매자를 Kafka 메시지(queuing.member.joined, queuing.seller.changed)로 받아 복제본에 저장한다.
  * dev DB를 비우면 복제본도 비어 대회를 등록할 수 없으므로(403), 메시지를 받은 것처럼 같은 저장 경로
  * (ProductFacade.syncMember·syncSeller)로 넣는다.
  * 회원 ID는 member-service MemberDataInit의 가입 순서(system 1, holding 2, 관리자 3, 사용자1~3 4~6, 판매자1 7)를 따른다.
- * member-service가 같은 회원의 메시지를 보내도 같은 ID로 덮어쓰므로 결과가 같다.
+ * member-service가 같은 회원의 메시지를 보내도 같은 ID로 덮어쓰므로 결과가 같다
+ * (수정 시각이 여기서 넣은 값보다 이르면 건너뛰지만 닉네임이 같다).
  * dev 프로파일에서만 실행한다 (prod, test에서는 만들지 않음)
  */
 @Profile("dev")
@@ -81,7 +81,7 @@ public class ProductDataInit {
 		}
 
 		LocalDateTime now = LocalDateTime.now();
-		productFacade.syncMember(new MemberJoinedEvent(id, now, now, nickname));
+		productFacade.syncMember(id, now, now, nickname);
 		log.info("기본 회원 복제본 생성: id={}, nickname={}", id, nickname);
 	}
 
