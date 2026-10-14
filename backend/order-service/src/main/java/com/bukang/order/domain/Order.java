@@ -12,6 +12,7 @@ import java.util.List;
 import org.hibernate.annotations.BatchSize;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.event.OrderRaceCanceledEvent;
 import com.bukang.order.domain.exception.OrderItemNotFoundException;
 import com.bukang.order.domain.exception.OrderNotExtendableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
@@ -189,11 +190,16 @@ public class Order extends BaseIdAndTime {
 
 	// 대회가 취소됐다. 결제한 주문 상품을 모두 취소하고 취소한 상품을 돌려준다 (키트 포함 전액, 정책 1차 5장 4번)
 	// 결제 전이거나 이미 취소한 상품은 그대로 둔다. 같은 취소가 다시 와도 빈 목록이라 환불이 한 번만 일어난다
+	// 취소한 상품이 있으면 구매자에게 알리도록 이벤트를 발행한다 (환불까지 커밋된 뒤에 알린다)
 	public List<OrderItem> cancelPaidItems(LocalDateTime canceledAt) {
 		List<OrderItem> paidItems = items.stream()
 			.filter(item -> item.getStatus() == OrderItemStatus.PAID)
 			.toList();
 		paidItems.forEach(item -> cancelItem(item, canceledAt));
+		if (!paidItems.isEmpty()) {
+			int refundedAmount = paidItems.stream().mapToInt(OrderItem::getAmount).sum();
+			publishEvent(new OrderRaceCanceledEvent(getId(), buyerId, raceId, refundedAmount));
+		}
 		return paidItems;
 	}
 

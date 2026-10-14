@@ -1,6 +1,10 @@
 package com.bukang.order.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.LocalDateTime;
@@ -21,6 +25,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -28,6 +33,8 @@ import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItemStatus;
 import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.domain.event.OrderRaceCanceledEvent;
+import com.bukang.order.in.RaceCanceledNotificationListener;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.support.StubRaceCoursePort;
@@ -86,6 +93,9 @@ class RaceCancelRefundTest {
 	@Autowired
 	private TransactionTemplate transactionTemplate;
 
+	@MockitoSpyBean
+	private RaceCanceledNotificationListener notificationListener;
+
 	@BeforeEach
 	void setUp() {
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null));
@@ -124,6 +134,12 @@ class RaceCancelRefundTest {
 		assertThat(statusOf(otherRace)).isEqualTo(OrderStatus.PAID);
 		// 자리는 되돌리지 않는다 (취소된 대회는 다시 팔지 않는다)
 		assertThat(seatHoldPort.restoredParticipations()).isEmpty();
+		// 환불한 구매자에게만 알린다
+		verify(notificationListener)
+			.notifyBuyer(new OrderRaceCanceledEvent(first, 1, RACE_ID, StubRaceCoursePort.PRICE));
+		verify(notificationListener)
+			.notifyBuyer(new OrderRaceCanceledEvent(second, 2, RACE_ID, StubRaceCoursePort.PRICE));
+		verify(notificationListener, times(2)).notifyBuyer(any());
 	}
 
 	@Test
@@ -149,6 +165,8 @@ class RaceCancelRefundTest {
 		assertThat(failed).isEqualTo(new RaceCancelRefundUseCase.RefundResult(0, 1));
 		assertThat(statusOf(first)).isEqualTo(OrderStatus.PAID);
 		assertThat(participationStatusOf(first)).isEqualTo(ParticipationStatus.CONFIRMED);
+		// 환불이 롤백된 주문은 알리지 않는다
+		verify(notificationListener, never()).notifyBuyer(any());
 
 		walletPort.setRefundFails(false);
 		int second = paidOrder(2, COURSE_ID);
