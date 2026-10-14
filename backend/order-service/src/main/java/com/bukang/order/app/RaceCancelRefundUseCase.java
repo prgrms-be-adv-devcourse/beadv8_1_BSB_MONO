@@ -31,6 +31,9 @@ import lombok.extern.slf4j.Slf4j;
 public class RaceCancelRefundUseCase {
 	// 한 번에 읽을 주문 ID 수. 대회 하나의 주문이 많아도 ID 목록을 한꺼번에 메모리에 올리지 않는다
 	static final int BATCH_SIZE = 100;
+	// 이만큼 연달아 환불에 실패하면 예치금 서비스 장애로 보고 멈춘다. 남은 주문은 재시도 토픽이 간격을 두고 다시 처리한다
+	// (장애 중에 주문마다 시간 초과 2초를 기다리면 Kafka가 소비자를 내보내 같은 메시지를 바로 다시 처리한다)
+	static final int MAX_CONSECUTIVE_FAILURES = 5;
 
 	private final OrderRepository orderRepository;
 	private final ParticipationRepository participationRepository;
@@ -40,6 +43,7 @@ public class RaceCancelRefundUseCase {
 	/**
 	 * @param refundedOrders 이번에 취소·환불한 주문 수
 	 * @param failedOrders   환불(D 장애 등)에 실패해 결제 완료로 남긴 주문 수. 같은 대회 취소를 다시 처리하면 이어서 환불한다
+	 *                       연달아 실패해 중간에 멈추면 1 이상이다 (보지 못한 주문은 세지 않는다)
 	 */
 	public record RefundResult(int refundedOrders, int failedOrders) {
 	}
@@ -52,9 +56,11 @@ public class RaceCancelRefundUseCase {
 	public RefundResult refundAll(int raceId, LocalDateTime now) {
 		int refunded = 0;
 		int failed = 0;
+		int consecutiveFailures = 0;
 		int afterId = 0;
 		List<Integer> orderIds;
-		while (!(orderIds = orderRepository.findRefundCandidateIds(raceId, afterId,
+		while (consecutiveFailures < MAX_CONSECUTIVE_FAILURES
+			&& !(orderIds = orderRepository.findRefundCandidateIds(raceId, afterId,
 			PageRequest.of(0, BATCH_SIZE))).isEmpty()) {
 			for (int orderId : orderIds) {
 				afterId = orderId;
@@ -62,10 +68,16 @@ public class RaceCancelRefundUseCase {
 					if (Boolean.TRUE.equals(transactionTemplate.execute(status -> refundLocked(orderId, now)))) {
 						refunded++;
 					}
+					consecutiveFailures = 0;
 				} catch (RuntimeException exception) {
 					failed++;
+					consecutiveFailures++;
 					log.warn("취소된 대회의 주문을 환불하지 못했습니다. raceId={}, orderId={}, cause={}",
 						raceId, orderId, exception.toString());
+					if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+						log.warn("환불이 {}건 연달아 실패해 멈추고 나중에 다시 처리합니다. raceId={}", consecutiveFailures, raceId);
+						break;
+					}
 				}
 			}
 		}

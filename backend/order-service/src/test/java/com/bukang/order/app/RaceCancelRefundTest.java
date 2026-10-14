@@ -179,6 +179,22 @@ class RaceCancelRefundTest {
 	}
 
 	@Test
+	@DisplayName("환불이 연달아 실패하면(예치금 서비스 장애) 남은 주문을 부르지 않고 멈춰, 재시도에 맡긴다")
+	void stopsAfterConsecutiveFailures() throws Exception {
+		int count = RaceCancelRefundUseCase.MAX_CONSECUTIVE_FAILURES + 2;
+		for (int memberId = 1; memberId <= count; memberId++) {
+			paidOrder(memberId, COURSE_ID);
+		}
+		walletPort.setRefundFails(true);
+
+		RaceCancelRefundUseCase.RefundResult result = raceCancelRefundUseCase.refundAll(RACE_ID, LocalDateTime.now());
+
+		assertThat(result).isEqualTo(
+			new RaceCancelRefundUseCase.RefundResult(0, RaceCancelRefundUseCase.MAX_CONSECUTIVE_FAILURES));
+		assertThat(walletPort.refundCalls()).hasSize(RaceCancelRefundUseCase.MAX_CONSECUTIVE_FAILURES);
+	}
+
+	@Test
 	@DisplayName("주문이 많아도 끝까지 읽어 모두 환불한다 (한 번에 읽는 수보다 많을 때)")
 	void refundsBeyondOneBatch() throws Exception {
 		int count = RaceCancelRefundUseCase.BATCH_SIZE + 1;
