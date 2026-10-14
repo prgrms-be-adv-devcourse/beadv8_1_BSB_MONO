@@ -115,6 +115,17 @@ class ApiV1AuthLoginTest {
 	}
 
 	@Test
+	@DisplayName("로그인해도 세션을 만들지 않는다 (로그인 상태는 토큰으로만 유지)")
+	void loginCreatesNoSession() throws Exception {
+		MvcResult result = login(EMAIL, PASSWORD)
+			.andExpect(status().isOk())
+			.andReturn();
+
+		assertThat(result.getRequest().getSession(false)).isNull();
+		assertThat(result.getResponse().getCookie("JSESSIONID")).isNull();
+	}
+
+	@Test
 	@DisplayName("Redis에 저장하지 못해도 로그인은 성공하고 토큰을 받는다")
 	void loginSucceedsWhenRedisIsDown() throws Exception {
 		willThrow(new RedisConnectionFailureException("Redis 연결 실패"))
