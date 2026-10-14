@@ -9,28 +9,23 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
-import com.bukang.order.out.seat.SeatExtendResult;
 import com.bukang.order.out.seat.SeatHoldPort;
 import com.bukang.order.out.seat.SeatHoldResult;
 import com.bukang.order.out.seat.SeatSellResult;
 
 /**
  * 테스트용 자리 확보. 종목별 남은 자리를 정할 수 있고(정하지 않으면 무제한), 결제 기한은 주문이 보낸 값(지금부터 10분)이다
- * 연장은 자리마다 한 번, 2분이다. 확보하지 않은 자리를 늘리려 하면 기한이 지난 것으로 본다
  */
 public class StubSeatHoldPort implements SeatHoldPort {
 	public static final long PAYMENT_MINUTES = 10;
-	public static final long EXTEND_MINUTES = 2;
 
 	private final Map<Integer, Integer> remainingSeats = new ConcurrentHashMap<>();
 	private final AtomicInteger holdCalls = new AtomicInteger();
-	private final AtomicInteger extendCalls = new AtomicInteger();
 	private final List<Integer> restoredParticipations = new CopyOnWriteArrayList<>();
 	private final List<Integer> releasedParticipations = new CopyOnWriteArrayList<>();
 	private volatile boolean restoreFails;
 	private volatile boolean releaseFails;
 	private final Map<Integer, LocalDateTime> expiresAt = new ConcurrentHashMap<>();
-	private final Map<Integer, Boolean> extended = new ConcurrentHashMap<>();
 	private final Set<Integer> sold = ConcurrentHashMap.newKeySet();
 	// 자리 확보 때 예상하지 못한 오류(타임아웃 등)를 낼 종목
 	private final Set<Integer> failingCourses = ConcurrentHashMap.newKeySet();
@@ -54,21 +49,6 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		}
 		expiresAt.put(participationId, requestedExpiresAt);
 		return SeatHoldResult.held(requestedExpiresAt);
-	}
-
-	@Override
-	public SeatExtendResult extend(int participationId) {
-		extendCalls.incrementAndGet();
-		LocalDateTime due = expiresAt.get(participationId);
-		if (due == null) {
-			return SeatExtendResult.expired();
-		}
-		if (extended.putIfAbsent(participationId, true) != null) {
-			return SeatExtendResult.alreadyExtended();
-		}
-		LocalDateTime newDue = due.plusMinutes(EXTEND_MINUTES);
-		expiresAt.put(participationId, newDue);
-		return SeatExtendResult.extended(newDue);
 	}
 
 	@Override
@@ -133,10 +113,6 @@ public class StubSeatHoldPort implements SeatHoldPort {
 		return sold.contains(participationId);
 	}
 
-	public int extendCalls() {
-		return extendCalls.get();
-	}
-
 	public void failHold(int raceCourseId) {
 		failingCourses.add(raceCourseId);
 	}
@@ -152,13 +128,11 @@ public class StubSeatHoldPort implements SeatHoldPort {
 	public void clear() {
 		remainingSeats.clear();
 		holdCalls.set(0);
-		extendCalls.set(0);
 		restoredParticipations.clear();
 		releasedParticipations.clear();
 		restoreFails = false;
 		releaseFails = false;
 		expiresAt.clear();
-		extended.clear();
 		sold.clear();
 		failingCourses.clear();
 	}

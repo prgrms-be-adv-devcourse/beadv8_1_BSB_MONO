@@ -11,10 +11,6 @@ public interface SeatHoldPort {
 	// 멱등: 같은 참가 신청 ID로 다시 부르면 새 자리를 잡지 않고 처음 결과(처음 기한)를 돌려준다
 	SeatHoldResult hold(int raceCourseId, int participationId, LocalDateTime expiresAt);
 
-	// PG 충전창에 들어가면 결제 기한을 2분 늘린다. 자리마다 한 번만 된다 (정책 4장 결제)
-	// B에 연장 API가 없어(10/14 연장 없음으로 정함) 실제 어댑터는 늘릴 수 없다고 응답한다. 연장 기능 삭제는 따로 한다
-	SeatExtendResult extend(int participationId);
-
 	// 결제 뒤 자리를 판매 완료로 바꾼다. 기한이 지났으면 B가 거절한다 (결제·만료 판정 원본은 B의 expires_at)
 	// 멱등: 이미 판매한 자리면 기한과 상관없이 SOLD다. 판매 뒤 주문 저장이 롤백되어 같은 주문으로 다시 결제할 때,
 	// 기한이 지났다고 EXPIRED를 받으면 예치금은 돌려주는데 자리는 팔린 채로 남는다

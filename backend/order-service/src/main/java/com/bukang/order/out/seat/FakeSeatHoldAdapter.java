@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 가짜 어댑터: 상품 서비스를 띄우지 않고 개발할 때, 종목마다 정원 100석을 메모리에 두고 주문이 보낸 기한까지 자리를 내준다
- * 확보한 자리의 기한을 기억해 2분 연장(한 번)과 기한 안 판매, 판매하지 않은 자리 해제까지 흉내 낸다. 판매 복구는 하지 않는다
+ * 확보한 자리의 기한을 기억해 기한 안 판매, 판매하지 않은 자리 해제까지 흉내 낸다. 판매 복구는 하지 않는다
  * 앱을 다시 켜면 처음으로 돌아간다. order.clients.product.mode=fake(기본값)일 때만 쓰고, http면 HttpSeatHoldAdapter가 부른다
  */
 @Slf4j
@@ -20,7 +20,6 @@ import lombok.extern.slf4j.Slf4j;
 @ConditionalOnProperty(prefix = "order.clients.product", name = "mode", havingValue = "fake", matchIfMissing = true)
 public class FakeSeatHoldAdapter implements SeatHoldPort {
 	private static final int SEATS_PER_COURSE = 100;
-	private static final long EXTEND_MINUTES = 2;
 
 	private final Map<Integer, Integer> remainingSeats = new ConcurrentHashMap<>();
 	private final Map<Integer, Hold> holds = new ConcurrentHashMap<>();
@@ -47,26 +46,8 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 		if (!held[0]) {
 			return SeatHoldResult.soldOut();
 		}
-		holds.put(participationId, new Hold(raceCourseId, expiresAt, false));
+		holds.put(participationId, new Hold(raceCourseId, expiresAt));
 		return SeatHoldResult.held(expiresAt);
-	}
-
-	@Override
-	public SeatExtendResult extend(int participationId) {
-		SeatExtendResult[] result = {SeatExtendResult.expired()};
-		holds.computeIfPresent(participationId, (id, hold) -> {
-			if (hold.extended()) {
-				result[0] = SeatExtendResult.alreadyExtended();
-				return hold;
-			}
-			if (!LocalDateTime.now().isBefore(hold.expiresAt())) {
-				return hold;
-			}
-			Hold extended = new Hold(hold.raceCourseId(), hold.expiresAt().plusMinutes(EXTEND_MINUTES), true);
-			result[0] = SeatExtendResult.extended(extended.expiresAt());
-			return extended;
-		});
-		return result[0];
 	}
 
 	@Override
@@ -100,6 +81,6 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 		log.debug("가짜 자리 해제 participationId={}", participationId);
 	}
 
-	private record Hold(int raceCourseId, LocalDateTime expiresAt, boolean extended) {
+	private record Hold(int raceCourseId, LocalDateTime expiresAt) {
 	}
 }

@@ -77,7 +77,7 @@ public class ParticipationApplyUseCase {
 		Optional<Integer> orderId = orderItemRepository.findOrderIdByParticipationId(participationId);
 		Optional<Order> order = orderId.flatMap(orderRepository::findByIdForUpdate);
 		// 잠가서 읽는다. 엔티티는 저장할 때 모든 컬럼을 다시 쓰므로, 잠그지 않으면 결제·취소가 바꾼 상태를
-		// 옛 값으로 덮을 수 있다. 결제·연장·취소도 참가 신청을 잠그고 바꾼다
+		// 옛 값으로 덮을 수 있다. 결제·취소도 참가 신청을 잠그고 바꾼다
 		Participation participation = participationRepository.findByIdForUpdate(participationId)
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
 		checkOwner(participation, memberId);
