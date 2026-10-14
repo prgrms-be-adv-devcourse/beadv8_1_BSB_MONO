@@ -108,7 +108,7 @@ class ProductKafkaConsumerTest extends ProductIntegrationTest {
 		assertThat(productMemberRepository.existsById(NEW_MEMBER_ID)).isFalse();
 	}
 
-	// ---------- 판매자 (product.seller.changed) ----------
+	// ---------- 판매자 (queuing.seller.changed) ----------
 
 	@Test
 	@DisplayName("회원 8001 복제본이 있으면 판매자 8101 승인 메시지를 원본 값 그대로 저장하고 회원 8001의 승인된 판매자로 찾힌다")

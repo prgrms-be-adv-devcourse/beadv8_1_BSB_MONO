@@ -65,7 +65,7 @@ public class ProductKafkaConsumer {
 		productFacade.syncMember(jsonConverter.fromJson(payload, MemberJoinedEvent.class));
 	}
 
-	@KafkaListener(topics = KafkaTopics.PRODUCT_SELLER_CHANGED, groupId = GROUP_ID, concurrency = CONCURRENCY)
+	@KafkaListener(topics = KafkaTopics.SELLER_CHANGED, groupId = GROUP_ID, concurrency = CONCURRENCY)
 	@RetryableTopic(
 		attempts = RETRY_ATTEMPTS,
 		backOff = @BackOff(delay = RETRY_DELAY_MILLIS, multiplier = RETRY_MULTIPLIER),

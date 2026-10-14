@@ -18,7 +18,7 @@ public class ProductKafkaDltConsumer {
 	private static final String GROUP_ID = "product-dlt";
 	private static final String MEMBER_JOINED_DLT = KafkaTopics.MEMBER_MEMBER_JOINED
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
-	private static final String SELLER_CHANGED_DLT = KafkaTopics.PRODUCT_SELLER_CHANGED
+	private static final String SELLER_CHANGED_DLT = KafkaTopics.SELLER_CHANGED
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
 	private static final String HOLD_CANCEL_DLT = KafkaTopics.PRODUCT_HOLD_CANCEL
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;

@@ -22,8 +22,8 @@ public class KafkaTopicConfig {
 
 	// 복제 수는 정하지 않아 브로커 기본값을 따른다 (로컬 Redpanda는 1)
 	@Bean
-	public NewTopic productSellerChangedTopic() {
-		return TopicBuilder.name(KafkaTopics.PRODUCT_SELLER_CHANGED)
+	public NewTopic sellerChangedTopic() {
+		return TopicBuilder.name(KafkaTopics.SELLER_CHANGED)
 			.partitions(PARTITIONS)
 			.build();
 	}
