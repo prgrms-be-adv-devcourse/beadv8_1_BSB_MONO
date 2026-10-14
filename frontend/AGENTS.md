@@ -25,7 +25,8 @@ pnpm typecheck      # next typegen + tsc
 pnpm test           # Vitest
 pnpm storybook      # 시안 컴포넌트 확인 (localhost:6006). 스토리는 컴포넌트 옆 *.stories.tsx
 pnpm build
-pnpm api:generate   # orval. OPENAPI_URL=<springdoc 주소> 필요
+pnpm api:generate   # orval. openapi/<서비스>.json → src/shared/api/generated/<서비스>/
+pnpm api:pull       # 로컬에서 띄운 서비스(8080~8085)의 /v3/api-docs를 openapi/에 받기
 ```
 
 작업을 끝냈다고 말하기 전에 `pnpm lint && pnpm typecheck && pnpm test`를 돌린다.
@@ -55,8 +56,15 @@ src/
 - 코드에서는 항상 상대 경로 `/api/...`로 부른다. 모든 호출은 `shared/api`의 `customFetch`를 지난다.
   - 브라우저: 로컬·Vercel은 next.config rewrites → `BACKEND_URL`(게이트웨이, 로컬 8000), AWS는 Nginx → 게이트웨이
   - 서버 컴포넌트: `BACKEND_URL`을 붙여 직접 호출. `API_MOCKING=on`이면 MSW 핸들러에서 바로 응답
-- API 타입·훅은 orval로 생성해 `shared/api/generated/`에 둔다. 생성 파일은 직접 고치지 않는다.
-- 생성된 MSW 목은 `shared/mocks/handlers.ts`에 등록한다. 테스트도 같은 핸들러를 쓴다.
+- API 타입·훅은 orval로 생성해 `shared/api/generated/<서비스>/`에 둔다. 생성 파일은 직접 고치지 않는다.
+  - 명세는 서비스별로 `openapi/<서비스>.json`에 커밋해 둔다 (member, cash, payout, file, order, product).
+  - 성공 응답 스키마가 명세에 없는 API는 `openapi/supplements/<서비스>.json`으로 보충한다. 백엔드가 스키마를 내면 지운다.
+  - 게이트웨이가 넣는 `X-Member-Id` 헤더는 요청 함수 인자에서 뺀다 (`orval.config.ts`).
+- 가져올 때는 `@/shared/api`의 서비스별 묶음을 쓴다: `productApi`(요청 함수·훅), `productModel`(타입), `productZod`.
+- 응답은 `RsData{status, message, data, code?}`로 감싸여 온다. `customFetch`는 본문을 그대로 돌려주고, data는 `unwrapData`로 꺼낸다(`select: unwrapData`).
+  2xx가 아니면 `ApiError`(`serverMessage`, `code`)를 던진다.
+- 주문 생성·장바구니 결제는 `{ idempotencyKey: createIdempotencyKey() }`를 요청 옵션으로 넘겨 `Idempotency-Key` 헤더를 붙인다.
+- 생성된 MSW 목(명세의 응답 예시)은 `shared/mocks/handlers.ts`에 등록한다. 테스트도 같은 핸들러를 쓴다.
 - 서버 데이터는 TanStack Query(초기 데이터는 RSC). Zustand에 서버 데이터를 넣지 않는다.
 
 ## 상태·폼
