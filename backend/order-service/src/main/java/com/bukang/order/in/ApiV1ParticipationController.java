@@ -50,13 +50,17 @@ public class ApiV1ParticipationController {
 		@ApiResponse(responseCode = "201", description = "저장 성공",
 			content = @Content(examples = @ExampleObject(value = ParticipationApiExamples.APPLY_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 제3자 제공 미동의, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음 또는 회원 ID 오류",
+			description = "입력값 검증 실패, 제3자 제공 미동의, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음, "
+				+ "티셔츠 사이즈 없음·고를 수 없는 사이즈 또는 회원 ID 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = ParticipationApiExamples.INVALID_INPUT),
 				@ExampleObject(name = "제3자 제공 미동의", value = ParticipationApiExamples.CONSENT_REQUIRED),
 				@ExampleObject(name = "요청 본문 형식 오류", value = ParticipationApiExamples.INVALID_BODY),
 				@ExampleObject(name = "나이 제한 밖", value = ParticipationApiExamples.AGE_RESTRICTED),
 				@ExampleObject(name = "배송 주소 없음", value = ParticipationApiExamples.SHIPPING_ADDRESS_REQUIRED),
+				@ExampleObject(name = "티셔츠 사이즈 없음", value = ParticipationApiExamples.TSHIRT_SIZE_REQUIRED),
+				@ExampleObject(name = "고를 수 없는 티셔츠 사이즈",
+					value = ParticipationApiExamples.TSHIRT_SIZE_NOT_AVAILABLE),
 				@ExampleObject(name = "회원 ID 형식 오류", value = ParticipationApiExamples.INVALID_VALUE_TYPE),
 				@ExampleObject(name = "회원 ID가 0 이하", value = ParticipationApiExamples.INVALID_MEMBER_ID)
 			})),
@@ -192,12 +196,16 @@ public class ApiV1ParticipationController {
 		@ApiResponse(responseCode = "200", description = "수정 성공",
 			content = @Content(examples = @ExampleObject(value = ParticipationApiExamples.CHANGE_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음 또는 참가 신청 ID·회원 ID 오류",
+			description = "입력값 검증 실패, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음, "
+				+ "티셔츠 사이즈 없음·고를 수 없는 사이즈 또는 참가 신청 ID·회원 ID 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = ParticipationApiExamples.INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = ParticipationApiExamples.INVALID_BODY),
 				@ExampleObject(name = "나이 제한 밖", value = ParticipationApiExamples.AGE_RESTRICTED),
 				@ExampleObject(name = "배송 주소 없음", value = ParticipationApiExamples.SHIPPING_ADDRESS_REQUIRED),
+				@ExampleObject(name = "티셔츠 사이즈 없음", value = ParticipationApiExamples.TSHIRT_SIZE_REQUIRED),
+				@ExampleObject(name = "고를 수 없는 티셔츠 사이즈",
+					value = ParticipationApiExamples.TSHIRT_SIZE_NOT_AVAILABLE),
 				@ExampleObject(name = "참가 신청 ID·회원 ID 형식 오류", value = ParticipationApiExamples.INVALID_VALUE_TYPE),
 				@ExampleObject(name = "회원 ID가 0 이하", value = ParticipationApiExamples.INVALID_MEMBER_ID)
 			})),

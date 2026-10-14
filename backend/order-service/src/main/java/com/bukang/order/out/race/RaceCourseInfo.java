@@ -3,6 +3,7 @@ package com.bukang.order.out.race;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
+import java.util.List;
 
 /**
  * 참가 신청에 필요한 종목(참가권) 정보. B(상품)의 race · race_course에서 필요한 값만 옮긴 것이다
@@ -26,6 +27,8 @@ import java.time.Period;
  * @param canceled           판매자가 취소한 대회인지 (B race.sale_status = CANCELED). 신청·담기·[결제하기]는 막고,
  *                           결제한 참가권은 환불 기한과 상관없이 전액 환불한다 (정책 5장 1-2 "대회 취소·일정 변경일 때만 환불")
  *                           (ERD v4 race.schedule_changed_at)
+ * @param tshirtSizeOption   이 종목이 주는 기념 티셔츠 사이즈 (B race_course.tshirt_size_option, XS~XXXL 중 판매자가 고름).
+ *                           비어 있으면 티셔츠가 없다. 판매 시작 뒤에는 B가 바꾸지 못하게 막는다
  */
 public record RaceCourseInfo(
 	int raceCourseId,
@@ -41,14 +44,32 @@ public record RaceCourseInfo(
 	boolean kitIncluded,
 	LocalDate refundDeadline,
 	LocalDateTime scheduleChangedAt,
-	boolean canceled
+	boolean canceled,
+	List<String> tshirtSizeOption
 ) {
+	public RaceCourseInfo {
+		tshirtSizeOption = tshirtSizeOption == null ? List.of() : List.copyOf(tshirtSizeOption);
+	}
+
+	// 티셔츠 사이즈를 따로 정하지 않을 때 (티셔츠 없음)
+	public RaceCourseInfo(int raceCourseId, int raceId, LocalDateTime raceDate, LocalDateTime applicationOpenAt,
+		LocalDateTime applicationCloseAt, int minAge, Integer maxAge, int sellerId, String courseName, int price,
+		boolean kitIncluded, LocalDate refundDeadline, LocalDateTime scheduleChangedAt, boolean canceled) {
+		this(raceCourseId, raceId, raceDate, applicationOpenAt, applicationCloseAt, minAge, maxAge, sellerId,
+			courseName, price, kitIncluded, refundDeadline, scheduleChangedAt, canceled, List.of());
+	}
+
 	// 취소되지 않은 대회 (가짜 어댑터·테스트처럼 취소 여부를 따로 정하지 않을 때)
 	public RaceCourseInfo(int raceCourseId, int raceId, LocalDateTime raceDate, LocalDateTime applicationOpenAt,
 		LocalDateTime applicationCloseAt, int minAge, Integer maxAge, int sellerId, String courseName, int price,
 		boolean kitIncluded, LocalDate refundDeadline, LocalDateTime scheduleChangedAt) {
 		this(raceCourseId, raceId, raceDate, applicationOpenAt, applicationCloseAt, minAge, maxAge, sellerId,
 			courseName, price, kitIncluded, refundDeadline, scheduleChangedAt, false);
+	}
+
+	// 티셔츠를 주는 종목인지. 주면 참가 신청 때 사이즈를 이 목록에서 골라야 한다
+	public boolean offersTshirt() {
+		return !tshirtSizeOption.isEmpty();
 	}
 
 	// 일정이 바뀐 뒤 전액 환불해 주는 날 수 (정책 5장 4-4 "알린 날부터 7일 동안", ERD v4 race.schedule_changed_at)
