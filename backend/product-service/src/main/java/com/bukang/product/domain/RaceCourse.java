@@ -71,11 +71,12 @@ public class RaceCourse extends BaseIdAndTime {
 
 	private Integer maxAge;
 
-	// 참가비 (판매 시작 뒤에는 구매자에게 유리한 변경만)
+	// 참가비 (판매 시작 뒤에는 바꾸지 못한다)
 	@Column(nullable = false)
 	private int price;
 
 	// 참가권에 포함된 키트 금액 (참가권과 함께 판매·취소하고 배송으로만 받는다)
+	// 참가비보다 클 수 없고, 판매 시작 뒤에는 바꾸지 못한다
 	@ColumnDefault("0")
 	@Column(nullable = false)
 	private int kitPrice;
@@ -143,9 +144,12 @@ public class RaceCourse extends BaseIdAndTime {
 	}
 
 	public void update(RaceCourseSaveRequestDto request, boolean saleStarted) {
-		// 판매 시작 뒤에는 구매자에게 유리한 변경만 된다 (ERD price 주석). 키트 금액은 참가비에 포함된 금액이다
-		if (saleStarted && request.getPrice() > price) {
-			throw new RaceChangeNotAllowedException(withName("판매가 시작된 종목은 참가비를 올릴 수 없습니다."));
+		// 판매 시작 뒤에는 이미 산 사람이 낸 금액과 그 내역이 바뀌지 않게 참가비·키트 금액을 바꾸지 못한다
+		if (saleStarted && request.getPrice() != price) {
+			throw new RaceChangeNotAllowedException(withName("판매가 시작된 종목은 참가비를 바꿀 수 없습니다."));
+		}
+		if (saleStarted && request.getKitPrice() != kitPrice) {
+			throw new RaceChangeNotAllowedException(withName("판매가 시작된 종목은 키트 금액을 바꿀 수 없습니다."));
 		}
 		// 판매 시작 뒤에는 정원을 몫별로 늘리기만 한다
 		// 줄이는 수정은 같은 순간 들어온 자리 확보와 겹치면, 확인한 뒤 저장하는 사이에 확보된 자리 때문에

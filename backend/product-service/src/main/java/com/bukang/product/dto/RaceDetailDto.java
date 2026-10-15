@@ -24,8 +24,9 @@ public class RaceDetailDto {
 	private final String regionSido;
 	private final String regionSigungu;
 	private final LocalDateTime raceDate;
+	// 판매 상태와 판매 시작일은 판매자 화면용이다. 구매자 화면은 크루 예매 기간·개인 예매 오픈·접수 마감 일시를 쓴다
 	private final RaceSaleStatus saleStatus;
-	private final LocalDateTime saleOpenAt;
+	private final LocalDate saleOpenDate;
 	private final LocalDateTime crewSaleStartAt;
 	private final LocalDateTime crewSaleEndAt;
 	private final LocalDateTime individualOpenAt;
@@ -48,7 +49,7 @@ public class RaceDetailDto {
 			.toList();
 		return new RaceDetailDto(race.getId(), race.getTitle(), race.getDescription(), race.getLocation(),
 			race.getRegionSido(), race.getRegionSigungu(), race.getRaceDate(), race.getSaleStatus(),
-			race.getSaleOpenAt(), race.getCrewSaleStartAt(), race.getCrewSaleEndAt(), race.getIndividualOpenAt(),
+			race.getSaleOpenDate(), race.getCrewSaleStartAt(), race.getCrewSaleEndAt(), race.getIndividualOpenAt(),
 			race.getApplicationCloseAt(), race.getRefundDeadline(), race.getRefundPolicy(), race.getCrewMinCount(),
 			race.getCrewMaxCount(), race.getScheduleChangedAt(), RaceSellerDto.from(race.getSeller()), courses);
 	}

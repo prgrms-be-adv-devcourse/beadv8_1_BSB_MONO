@@ -101,11 +101,11 @@ backend/
 │   │                          OrderExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
 │   ├── app/                   ParticipationFacade·ParticipationApplyUseCase, CartFacade·CartUseCase·CartCheckoutUseCase(장바구니 결제),
 │   │                          OrderFacade·OrderCreateUseCase·OrderPayUseCase·OrderCancelUseCase·OrderExpiryUseCase·
-│   │                          OrderDeadlineExtendUseCase·OrderQueryUseCase, SoldEntryQueryUseCase
+│   │                          OrderQueryUseCase, SoldEntryQueryUseCase
 │   ├── domain/                Participation(BOOKING_PARTICIPATION), Cart·CartItem(ORDER_CART·_ITEM),
 │   │                          Order·OrderItem(ORDER_ORDER·_ITEM), 상태 enum, exception/
 │   └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
-│                              race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보·연장·판매),
+│                              race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보·판매·복구·해제),
 │                              wallet/(WalletPort 예치금 결제·환원·환불), payout/(RefundEligibilityPort 환불 가능 여부)
 │                              상품(B)·예치금(D)은 연결 전이라 Fake*Adapter가 가짜 응답을 준다. 정산(E)은 order.clients.payout.mode가
 │                              http면 HttpRefundEligibilityAdapter(RestClient, 2초 제한, 실패 시 503)로 부른다 (prod=http, 그 밖=fake)
@@ -132,7 +132,10 @@ backend/
 - 도메인 예외는 `common`의 `global/exception/BusinessException`을 상속하고 생성자에서 `HttpStatus`를 정합니다.
   `GlobalExceptionHandler`가 한 번에 처리하므로 도메인을 추가해도 핸들러는 고치지 않습니다.
   Spring Security 예외는 `member-service`의 `AuthExceptionHandler`가 처리합니다.
-- API 응답은 성공·실패 모두 `RsData {status, message, data}` 형식입니다.
+- API 응답은 성공·실패 모두 `RsData {status, code, message, data}` 형식입니다.
+  `code`는 오류 응답에 붙는 오류 코드입니다 (예: `MEMBER_DUPLICATE_EMAIL`, 입력값 오류는 `INVALID_REQUEST`, 예상 못 한 오류는 500 `INTERNAL_ERROR`).
+  코드가 없으면 JSON에서 `code` 칸이 빠집니다.
+  도메인 예외에 코드를 붙이려면 `BusinessException(status, code, message)` 생성자를 쓰고, 코드 이름은 `도메인_상황` 대문자 스네이크로 짓습니다.
 - 엔티티 테이블 이름은 `<도메인>_<엔티티>` 형식입니다 (예: `MEMBER_MEMBER`, `CASH_MEMBER`). 지금은 모든 서비스가 같은 DB(`bukang-db`)를 쓰고 접두사로 구분합니다.
 
 ## 의존성 구성 (`member-service/build.gradle.kts`)
@@ -154,7 +157,7 @@ Spring Boot 4의 모듈화된 스타터를 사용합니다. 테스트 지원도 
 - `backend/.env`와 `backend/compose.yml`은 `common`의 `global/config/LocalDevEnvironmentPostProcessor`가 실행 위치(working directory)와 상관없이 찾아 적용합니다.
 - 프로파일: `dev`(기본, 로컬 MySQL 등 compose 인프라), `test`(H2, Kafka 리스너 꺼짐), `prod`(값은 `.env` 환경변수).
 - dev/test의 암호화 키와 JWT 키는 개발용으로 yaml에 들어 있습니다. prod 키는 `.env`에만 두고 dev와 다른 값을 씁니다.
-- 인증은 JWT + Redis(Stateless)가 목표지만, JWT 필터를 구현하기 전까지는 세션으로 로그인 상태를 유지합니다 (`member-service`의 `security/WebConfig`).
+- 인증은 JWT + Redis(Stateless)입니다. Access Token은 게이트웨이가 검사하고, 서비스는 게이트웨이가 넣어 준 `X-Member-Id` 헤더로 회원을 알아봅니다. 서비스는 세션을 만들지 않습니다 (`member-service`의 `security/WebConfig`).
 - 개인정보(휴대폰 번호)는 AES로 암호화해 저장하고 해시 컬럼으로 조회합니다. 암호화한 필드로 직접 조회하지 않습니다 (README 참고).
 
 ## 코드 컨벤션

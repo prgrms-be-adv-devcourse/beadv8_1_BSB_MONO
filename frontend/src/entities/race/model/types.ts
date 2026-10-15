@@ -2,6 +2,9 @@
 
 export type RaceBadge = { label: string; tone: 'brand' | 'warning' | 'neutral' }
 
+/** 지금 신청할 수 있는지 (개인 예매 오픈 전 · 접수 중 · 마감 뒤) */
+export type ApplicationPhase = 'upcoming' | 'open' | 'closed'
+
 /** 홈 카드 (곧 마감 · 지금 접수 중) */
 export type RaceSummary = {
   id: string
@@ -49,6 +52,8 @@ export type RaceDetail = {
   heroTitle: string
   heroTags: string
   status: RaceBadge
+  /** 신청하기 버튼은 'open'일 때만 켠다 */
+  phase: ApplicationPhase
   startsAt: string
   place: string
   /** 판매자가 쓴 대회 소개 */

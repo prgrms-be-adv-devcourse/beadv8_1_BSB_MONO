@@ -25,6 +25,9 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        # 브로커가 없을 때 send()가 기다리는 시간 (기본 60초). 만료 처리 한 건이 오래 붙잡히지 않게 줄인다 (PRO-166)
+        max.block.ms: 3000
 
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -56,6 +59,12 @@ order:
   clients:
     # 연결·응답 시간 제한. 넘으면 503으로 다시 시도하게 한다
     timeout: 2s
+    product:
+      mode: fake
+      base-url: http://localhost:8085
     payout:
       mode: fake
       base-url: http://localhost:8082
+    cash:
+      mode: fake
+      base-url: http://localhost:8081

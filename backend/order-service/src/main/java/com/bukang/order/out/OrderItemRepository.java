@@ -17,7 +17,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 	 * 정산 배치가 정산 대상일에 부르므로, 그 전에 취소된 참가권은 돌려주지 않는다 (정산 전 취소)
 	 */
 	@Query("""
-		select new com.bukang.order.dto.SoldEntryDto(i.id, i.sellerId, i.raceId, i.amount)
+		select new com.bukang.order.dto.SoldEntryDto(i.id, i.sellerId, i.raceId, i.raceDate, i.amount)
 		from OrderItem i
 		where i.raceDate >= :from and i.raceDate < :to
 			and i.status = com.bukang.order.domain.OrderItemStatus.PAID

@@ -38,7 +38,7 @@ import lombok.RequiredArgsConstructor;
 @Repository
 @RequiredArgsConstructor
 public class RaceSearchRepository {
-	// 공개 목록에 나오는 판매 상태 (작성 중·판매 종료는 뺀다)
+	// 공개 목록에 나오는 판매 상태 (판매 중지·판매 종료·대회 취소는 뺀다)
 	private static final List<FieldValue> PUBLIC_STATUSES = List.of(
 		FieldValue.of(RaceSaleStatus.SCHEDULED.name()), FieldValue.of(RaceSaleStatus.ON_SALE.name()));
 	// 검색어로 찾는 칸과 가중치(^). 정확도순 점수는 가장 잘 맞은 칸 하나의 점수에 가중치를 곱한 값이다 (best_fields)
@@ -159,7 +159,7 @@ public class RaceSearchRepository {
 		return bool.build()._toQuery();
 	}
 
-	// 판매를 시작했고(판매 예정·판매 중) 아직 접수 마감 전인 대회만 보여 준다
+	// 판매 예정·판매 중이고 아직 접수 마감 전인 대회만 보여 준다
 	private BoolQuery.Builder publicFilter(BoolQuery.Builder bool, LocalDateTime now) {
 		String nowText = now.format(DATE_TIME);
 		return bool

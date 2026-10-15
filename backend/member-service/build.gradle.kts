@@ -44,7 +44,7 @@ dependencies {
 	// 필요해질 때 추가 (테스트 시 임시 컨테이너 생성)
 	// testImplementation("org.testcontainers:testcontainers-kafka")
 	// testImplementation("org.testcontainers:testcontainers-mysql")
-	// testImplementation("com.redis:testcontainers-redis")  // Boot BOM 관리 (2.2.4)
+	testImplementation("com.redis:testcontainers-redis")  // Boot BOM 관리. Refresh Token Lua 스크립트를 진짜 Redis로 검증
 
 	// QueryDSL (Jakarta 버전, 버전은 Spring Boot BOM의 querydsl.version 사용)
 	val querydslVersion = dependencyManagement.importedProperties["querydsl.version"]
