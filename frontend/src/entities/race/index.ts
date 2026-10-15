@@ -9,6 +9,7 @@ export {
   raceSuggestionsQueryOptions,
   type RaceSearchFilters,
 } from './api/race-api'
+export { parseKstDateTime } from './lib/race-date'
 export { RACE_BANNERS, RACE_DETAIL, type RaceBanner } from './model/fixtures'
 export {
   applicationPhase,

@@ -47,50 +47,34 @@ export const SAMPLE_PARTICIPANT: BookingParticipant = {
 
 // 예매 흐름(종목 선택 → 참가자 정보 → 장바구니 · 결제) 단계 사이에 넘기는 값.
 // 단계를 오가도 값이 남도록 (shop) 레이아웃에서 Provider를 둔다.
-// UI 상태만 둔다. 주문 생성과 응답(자리 잡기 마감 시각 등)은 TanStack Query로 다룬다.
+// UI 상태만 둔다. 주문과 결제 기한(paymentDueAt)은 주문 API에서 TanStack Query로 받는다.
 type BookingFlowState = {
   selection: BookingSelection | null
   participant: BookingParticipant | null
   /** 종목 ID → 저장한 참가 신청 */
   applications: Record<string, BookingApplication>
-  /** 자리 잡기가 끝나는 시각 (epoch ms). 결제 단계에 들어가기 전에는 null */
-  holdExpiresAt: number | null
-  /** 참가 신청을 저장하면 고른 종목과 입력값, 참가 신청 ID를 남긴다. 새 신청이라 잡아 둔 자리도 비운다. */
+  /** 참가 신청을 저장하면 고른 종목과 입력값, 참가 신청 ID를 남긴다. */
   submitApplication: (application: BookingApplication, participant: BookingParticipant) => void
-  /**
-   * 결제 단계에 들어갈 때 자리를 잡는다. 아직 마감 전인 자리가 있으면 그대로 두고,
-   * 없거나 마감이 지났으면 새로 잡는다.
-   * TODO(api): 주문 생성 응답의 마감 시각을 expiresAt으로 넘긴다.
-   */
-  startHold: (expiresAt?: number) => void
 }
 
 /** 테스트·시안 미리보기에서 단계 중간부터 시작할 때 넘기는 값 */
 export type BookingFlowInitial = Partial<
-  Pick<BookingFlowState, 'selection' | 'participant' | 'applications' | 'holdExpiresAt'>
+  Pick<BookingFlowState, 'selection' | 'participant' | 'applications'>
 >
 
 export const { Provider: BookingFlowProvider, useStore: useBookingFlow } = createStoreContext(
   'BookingFlow',
   (initial: BookingFlowInitial = {}) =>
-    createStore<BookingFlowState>()((set, get) => ({
+    createStore<BookingFlowState>()((set) => ({
       selection: null,
       participant: null,
       applications: {},
-      holdExpiresAt: null,
       ...initial,
       submitApplication: (application, participant) =>
         set((s) => ({
           selection: { raceId: application.raceId, optionId: application.optionId },
           participant,
           applications: { ...s.applications, [application.optionId]: application },
-          holdExpiresAt: null,
         })),
-      startHold: (expiresAt) => {
-        // StrictMode에서 두 번 불려도 처음 잡은 마감 시각을 지킨다
-        const current = get().holdExpiresAt
-        if (current !== null && current > Date.now()) return
-        set({ holdExpiresAt: expiresAt ?? Date.now() + HOLD_SECONDS * 1000 })
-      },
     })),
 )
