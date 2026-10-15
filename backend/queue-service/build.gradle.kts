@@ -27,6 +27,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 	// 진짜 Redis를 Docker로 띄워 ZSet·Lua를 확인한다 (Lua는 가짜 Redis로 검증할 수 없다)
+	testImplementation("org.springframework.boot:spring-boot-testcontainers") // @ServiceConnection
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter") // @Testcontainers, @Container
 	testImplementation("com.redis:testcontainers-redis") // RedisContainer (Boot BOM 관리 버전)
 
