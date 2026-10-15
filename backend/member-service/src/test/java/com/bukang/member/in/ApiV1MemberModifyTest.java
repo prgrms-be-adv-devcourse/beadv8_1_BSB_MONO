@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,18 +27,25 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.bukang.common.global.config.GlobalConfig;
+import com.bukang.common.global.eventpublisher.EventPublisher;
+import com.bukang.common.shared.member.event.MemberModifiedEvent;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.domain.Member;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.out.MemberRepository;
 
 // 게이트웨이가 토큰을 검사하고 넣어 주는 X-Member-Id 헤더를 테스트에서는 직접 넣는다
+// 수정 이벤트는 스프링 이벤트로 발행됐는지만 본다. Kafka로 나가는 건 MemberKafkaPublisherTest가 확인한다
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@RecordApplicationEvents
 class ApiV1MemberModifyTest {
 	private static final String ME = "/api/v1/member/members/me";
 	private static final String NAME = "김러너";
@@ -57,10 +65,24 @@ class ApiV1MemberModifyTest {
 	@MockitoSpyBean
 	private MemberRepository memberRepository;
 
+	// 테스트 메서드마다 새로 기록한다. setUp의 가입 이벤트도 담기므로 수정 이벤트만 골라 센다
+	@Autowired
+	private ApplicationEvents applicationEvents;
+
+	// 엔티티는 GlobalConfig의 정적 EventPublisher로 발행하는데, 정적 필드는 마지막에 만들어진 컨텍스트를 가리킨다.
+	// 같은 설정의 ApiV1AuthJoinTest가 먼저 만든 컨텍스트를 캐시에서 다시 쓰면, 그사이 다른 테스트가 만든 컨텍스트로
+	// 이벤트가 가 위의 기록에 잡히지 않는다. 그래서 테스트마다 이 컨텍스트의 EventPublisher로 다시 맞춘다
+	@Autowired
+	private GlobalConfig globalConfig;
+
+	@Autowired
+	private EventPublisher eventPublisher;
+
 	private int memberId;
 
 	@BeforeEach
 	void setUp() {
+		globalConfig.setEventPublisher(eventPublisher);
 		memberId = joinDirectly("runner1@crewrun.com", NICKNAME, PHONE);
 		// 가입할 때 부른 중복 검사·저장은 세지 않도록 지운다
 		clearInvocations(memberRepository);
@@ -92,6 +114,24 @@ class ApiV1MemberModifyTest {
 	}
 
 	@Test
+	@DisplayName("정보를 바꾸면 저장된 수정 시각과 새 닉네임을 담은 수정 이벤트를 한 번 발행한다")
+	void modifyPublishesModifiedEvent() throws Exception {
+		modify(memberId, NAME, "새닉네임", PHONE, BIRTH_DATE)
+			.andExpect(status().isOk());
+
+		Member saved = memberRepository.findById(memberId).orElseThrow();
+		assertThat(modifiedEvents())
+			.singleElement()
+			.satisfies(event -> {
+				assertThat(event.id()).isEqualTo(memberId);
+				assertThat(event.nickname()).isEqualTo("새닉네임");
+				assertThat(event.createDate()).isEqualTo(saved.getCreateDate());
+				// flush 뒤에 발행해야 옛 수정 시각이 아니라 DB에 저장된 수정 시각이 담긴다
+				assertThat(event.modifyDate()).isEqualTo(saved.getModifyDate());
+			});
+	}
+
+	@Test
 	@DisplayName("내 값을 그대로 보내면 내 행에 걸리지 않아 200이고 저장하지 않는다")
 	void modifyWithSameValuesDoesNotSave() throws Exception {
 		modify(memberId, NAME, NICKNAME, PHONE, BIRTH_DATE)
@@ -100,6 +140,7 @@ class ApiV1MemberModifyTest {
 			.andExpect(jsonPath("$.data.phone").value(PHONE));
 
 		verify(memberRepository, never()).saveAndFlush(any(Member.class));
+		assertThat(modifiedEvents()).isEmpty();
 	}
 
 	@Test
@@ -120,6 +161,8 @@ class ApiV1MemberModifyTest {
 		modify(memberId, NAME, OTHER_NICKNAME, PHONE, BIRTH_DATE)
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 사용 중인 닉네임입니다."));
+
+		assertThat(modifiedEvents()).isEmpty();
 	}
 
 	@Test
@@ -130,6 +173,8 @@ class ApiV1MemberModifyTest {
 		modify(memberId, NAME, NICKNAME, "01099998888", BIRTH_DATE)
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 사용 중인 전화번호입니다."));
+
+		assertThat(modifiedEvents()).isEmpty();
 	}
 
 	@Test
@@ -141,6 +186,8 @@ class ApiV1MemberModifyTest {
 		modify(memberId, NAME, OTHER_NICKNAME, PHONE, BIRTH_DATE)
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 사용 중인 닉네임입니다."));
+
+		assertThat(modifiedEvents()).isEmpty();
 	}
 
 	@Test
@@ -152,6 +199,8 @@ class ApiV1MemberModifyTest {
 		modify(memberId, NAME, NICKNAME, OTHER_PHONE, BIRTH_DATE)
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 사용 중인 전화번호입니다."));
+
+		assertThat(modifiedEvents()).isEmpty();
 	}
 
 	@Test
@@ -233,6 +282,10 @@ class ApiV1MemberModifyTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.nickname").value("runner1"));
 		}
+	}
+
+	private List<MemberModifiedEvent> modifiedEvents() {
+		return applicationEvents.stream(MemberModifiedEvent.class).toList();
 	}
 
 	// 다른 회원이 아직 없다고 답하게 해, 두 요청이 동시에 중복 검사를 통과한 상황을 만든다
