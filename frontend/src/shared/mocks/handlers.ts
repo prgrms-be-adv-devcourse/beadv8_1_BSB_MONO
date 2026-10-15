@@ -11,7 +11,11 @@ import {
   getLoginResponseMock,
   getReissueResponseMock,
 } from '@/shared/api/generated/member/member.msw'
-import { getBukangOrderAPIMock } from '@/shared/api/generated/order/order.msw'
+import {
+  getBukangOrderAPIMock,
+  getFindMineMockHandler,
+  getFindMineResponseMock,
+} from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
 import { getBukangProductAPIMock } from '@/shared/api/generated/product/product.msw'
 
@@ -76,6 +80,25 @@ const authHandlers = [
   ),
 ]
 
+/**
+ * 내 참가권 목. 생성된 주문 목록 예시는 결제 대기 · 기한 만료 주문뿐이라 참가권이 하나도 안 보인다.
+ * 결제한 주문(주문 상세 예시와 같은 1번)을 맨 앞에 더한다. 생성된 핸들러보다 앞에 둔다.
+ */
+const myOrdersHandler = getFindMineMockHandler(() => {
+  const example = getFindMineResponseMock()
+  const paid = {
+    id: 1,
+    createDate: '2026-10-12T10:00:00',
+    orderNo: 'OD-20261012-0001',
+    status: 'PAID' as const,
+    totalAmount: 50000,
+    paymentDueAt: '2026-10-12T10:10:00',
+    itemName: '2026 서울 하프 마라톤 10K',
+    itemCount: 1,
+  }
+  return { ...example, data: { ...example.data, orders: [paid, ...(example.data?.orders ?? [])] } }
+})
+
 /** orval이 서비스별 명세(openapi/*.json)의 응답 예시로 만든 목 */
 const generatedHandlers = [
   ...getBukangMemberAPIMock(),
@@ -95,5 +118,6 @@ export const handlers = [
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
   ...authHandlers,
+  myOrdersHandler,
   ...generatedHandlers,
 ]

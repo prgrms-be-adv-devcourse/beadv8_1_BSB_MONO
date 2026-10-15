@@ -2,7 +2,7 @@ import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
 
 import { ApiError, fileApi, productApi, productModel, unwrapData } from '@/shared/api'
 
-import { toRaceDetail } from '../model/mappers'
+import { courseImage, toRaceDetail } from '../model/mappers'
 import type { RaceDetail } from '../model/types'
 
 // 대회 조회 API는 로그인 없이 부르는 공개 API다 (토큰을 붙이지 않는다).
@@ -89,4 +89,26 @@ export async function fetchRaceDetail(raceId: string): Promise<RaceDetail | null
   )
   const files = await Promise.all(courseIds.map(fetchCourseFiles))
   return toRaceDetail(race, Object.fromEntries(courseIds.map((id, i) => [id, files[i]])))
+}
+
+/**
+ * 대회 상세 원본(상품 API 응답 그대로). 내 참가권처럼 날짜·종목 원본 값을 화면에서 직접 계산할 때 쓴다.
+ * 로그인한 화면(클라이언트)에서 부른다. 없는 대회면 ApiError(404)를 던진다.
+ */
+export function raceQueryOptions(raceId: number) {
+  return queryOptions({
+    queryKey: productApi.getFindRaceQueryKey(raceId),
+    queryFn: async ({ signal }) => unwrapData(await productApi.findRace(raceId, { signal })),
+    staleTime: 60 * 1000,
+  })
+}
+
+/** 종목 대표 이미지 한 장 (file 서비스). 없거나 못 받으면 null → 이미지 없이 그린다. URL이 30분 뒤 만료된다. */
+export function courseImageQueryOptions(raceCourseId: number) {
+  const params = { refType: 'RaceCourse', refId: raceCourseId } as const
+  return queryOptions({
+    queryKey: [...fileApi.getFindByRefQueryKey(params), 'image'],
+    queryFn: async () => courseImage(await fetchCourseFiles(raceCourseId)) ?? null,
+    staleTime: 10 * 60 * 1000,
+  })
 }
