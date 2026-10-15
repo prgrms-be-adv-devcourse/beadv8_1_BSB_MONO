@@ -15,7 +15,6 @@ import {
   getBukangOrderAPIMock,
   getCreateMockHandler,
   getCreateResponseMock,
-  getExtendDeadlineResponseMock,
   getFindById1MockHandler,
 } from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
@@ -99,7 +98,7 @@ const orderHandlers = [
     return { ...example, data: { ...example.data, paymentDueAt: kstMinutesFromNow(10) } }
   }),
   getFindById1MockHandler(() => {
-    const example = getExtendDeadlineResponseMock()
+    const example = getCreateResponseMock()
     return { ...example, data: { ...example.data, paymentDueAt: kstMinutesFromNow(10) } }
   }),
 ]
