@@ -17,6 +17,32 @@ final class QueueApiExamples {
 		}
 		""";
 
+	static final String STATUS_WAITING = """
+		{
+			"status": 200,
+			"message": "대기열 상태를 조회했습니다.",
+			"data": {
+				"myRank": 3,
+				"ahead": 2,
+				"total": 10,
+				"canEnter": false
+			}
+		}
+		""";
+
+	static final String STATUS_CAN_ENTER = """
+		{
+			"status": 200,
+			"message": "대기열 상태를 조회했습니다.",
+			"data": {
+				"myRank": 0,
+				"ahead": 0,
+				"total": 0,
+				"canEnter": true
+			}
+		}
+		""";
+
 	static final String INVALID_INPUT = """
 		{ "status": 400, "message": "대회 ID를 작성해주세요.", "data": null }
 		""";
@@ -31,6 +57,10 @@ final class QueueApiExamples {
 
 	static final String INVALID_MEMBER_ID = """
 		{ "status": 400, "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String INVALID_RACE_ID = """
+		{ "status": 400, "message": "대회 ID는 0보다 커야 합니다.", "data": null }
 		""";
 
 	static final String LOGIN_REQUIRED = """
@@ -51,6 +81,10 @@ final class QueueApiExamples {
 
 	static final String COURSE_NOT_FOUND = """
 		{ "status": 404, "message": "존재하지 않는 종목입니다.", "data": null }
+		""";
+
+	static final String MEMBER_NOT_IN_QUEUE = """
+		{ "status": 404, "message": "대기열에 없는 회원입니다.", "data": null }
 		""";
 
 	static final String ALREADY_ACTIVE = """

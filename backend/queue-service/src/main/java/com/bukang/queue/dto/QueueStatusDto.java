@@ -20,4 +20,9 @@ public class QueueStatusDto {
 	public static QueueStatusDto waiting(long rank, long total) {
 		return new QueueStatusDto(rank + 1, rank, total, false);
 	}
+
+	// 입장할 수 있음 (active). 순번 칸은 쓰지 않아 모두 0이다
+	public static QueueStatusDto active() {
+		return new QueueStatusDto(0, 0, 0, true);
+	}
 }

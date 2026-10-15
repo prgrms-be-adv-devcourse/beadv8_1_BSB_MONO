@@ -2,6 +2,8 @@ package com.bukang.queue.in;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -25,7 +27,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Queue", description = "대기열 등록 API")
+@Tag(name = "Queue", description = "대기열 등록, 순번 조회 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/queue")
@@ -79,5 +81,47 @@ public class ApiV1QueueController {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "대기열에 등록했습니다.",
 				queueFacade.register(memberId, request.getRaceId(), request.getRaceCourseId())));
+	}
+
+	@GetMapping("/races/{raceId}/racecourses/{raceCourseId}")
+	@Operation(summary = "대기열 순번 조회",
+		description = "대기 화면이 몇 초마다 불러 내 순번과 입장 여부를 확인한다. "
+			+ "줄에서 기다리는 중이면 순번·앞 인원·전체 인원을, 입장(active)했으면 canEnter=true를 돌려준다. "
+			+ "대기열(Redis)만 읽고 대회·종목이 있는지는 확인하지 않는다. "
+			+ "대기열(Redis)에 연결하지 못하면 막는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공 (기다리는 중 또는 입장 가능)",
+			content = @Content(examples = {
+				@ExampleObject(name = "기다리는 중", value = QueueApiExamples.STATUS_WAITING),
+				@ExampleObject(name = "입장 가능", value = QueueApiExamples.STATUS_CAN_ENTER)
+			})),
+		@ApiResponse(responseCode = "400", description = "대회·종목 ID 또는 회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "ID 형식 오류", value = QueueApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "대회·종목 ID가 0 이하", value = QueueApiExamples.INVALID_RACE_ID),
+				@ExampleObject(name = "회원 ID가 0 이하", value = QueueApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = QueueApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "404",
+			description = "줄에도 없고 입장한 상태도 아닌 회원 (등록하지 않음, 입장 시간이 끝남, 없는 대회·종목)",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = QueueApiExamples.MEMBER_NOT_IN_QUEUE))),
+		@ApiResponse(responseCode = "503", description = "대기열(Redis) 연결 실패",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = QueueApiExamples.QUEUE_UNAVAILABLE)))
+	})
+	public ResponseEntity<RsData<QueueStatusDto>> getStatus(
+		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "대회 ID", example = "1")
+		@PathVariable @Positive(message = "대회 ID는 0보다 커야 합니다.") int raceId,
+		@Parameter(description = "종목 ID", example = "1")
+		@PathVariable @Positive(message = "종목 ID는 0보다 커야 합니다.") int raceCourseId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "대기열 상태를 조회했습니다.",
+				queueFacade.getStatus(memberId, raceId, raceCourseId)));
 	}
 }
