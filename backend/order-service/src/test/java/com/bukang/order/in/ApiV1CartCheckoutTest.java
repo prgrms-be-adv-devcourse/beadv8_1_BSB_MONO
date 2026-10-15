@@ -18,7 +18,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,7 +56,6 @@ class ApiV1CartCheckoutTest {
 	private static final int OTHER_MEMBER_ID = 2;
 	private static final int COURSE_ID = 10;
 	private static final int OTHER_COURSE_ID = 11;
-	private static final int THIRD_COURSE_ID = 12;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -88,7 +86,6 @@ class ApiV1CartCheckoutTest {
 	void setUp() {
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, 100, 14, null));
 		raceCoursePort.put(StubRaceCoursePort.openCourse(OTHER_COURSE_ID, 101, 14, null));
-		raceCoursePort.put(StubRaceCoursePort.openCourse(THIRD_COURSE_ID, 102, 14, null));
 	}
 
 	@AfterEach
@@ -102,118 +99,97 @@ class ApiV1CartCheckoutTest {
 	}
 
 	@Test
-	@DisplayName("장바구니의 참가권 두 장을 한 번에 결제하면 참가권마다 주문이 1건씩 생기고, 주문한 항목은 장바구니에서 빠진다")
+	@DisplayName("장바구니의 참가권을 결제하면 주문이 생기고, 주문한 종목은 장바구니에서 빠진다")
 	void checkout() throws Exception {
 		addToCart(MEMBER_ID, COURSE_ID);
-		addToCart(MEMBER_ID, OTHER_COURSE_ID);
-		int first = apply(MEMBER_ID, COURSE_ID);
-		int second = apply(MEMBER_ID, OTHER_COURSE_ID);
+		int participationId = apply(MEMBER_ID, COURSE_ID);
 
-		checkout(MEMBER_ID, newKey(), first, second)
+		checkout(MEMBER_ID, newKey(), participationId)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.message").value("참가권 2건 중 2건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요."))
-			.andExpect(jsonPath("$.data.orderedCount").value(2))
-			.andExpect(jsonPath("$.data.results[0].participationId").value(first))
+			.andExpect(jsonPath("$.message").value("참가권 1건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요."))
+			.andExpect(jsonPath("$.data.orderedCount").value(1))
+			.andExpect(jsonPath("$.data.results[0].participationId").value(participationId))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"))
 			.andExpect(jsonPath("$.data.results[0].order.status").value("CREATED"))
-			.andExpect(jsonPath("$.data.results[0].order.items[0].participationId").value(first))
-			.andExpect(jsonPath("$.data.results[1].participationId").value(second))
-			.andExpect(jsonPath("$.data.results[1].outcome").value("CREATED"))
-			.andExpect(jsonPath("$.data.results[1].order.items[0].participationId").value(second));
+			.andExpect(jsonPath("$.data.results[0].order.items[0].participationId").value(participationId));
 
-		assertThat(orderRepository.count()).isEqualTo(2);
-		assertThat(statusOf(first)).isEqualTo(ParticipationStatus.APPLIED);
-		assertThat(statusOf(second)).isEqualTo(ParticipationStatus.APPLIED);
+		assertThat(orderRepository.count()).isEqualTo(1);
+		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.APPLIED);
 		assertThat(cartCourseIds(MEMBER_ID)).isEmpty();
 	}
 
 	@Test
-	@DisplayName("일부만 매진이면 나머지는 주문하고, 매진된 참가 신청은 FAILED가 되며 그 항목은 장바구니에 남는다")
+	@DisplayName("매진이면 SOLD_OUT으로 알려 주고, 참가 신청은 FAILED가 되며 그 종목은 장바구니에 남는다")
 	void checkoutPartlySoldOut() throws Exception {
-		addToCart(MEMBER_ID, COURSE_ID);
 		addToCart(MEMBER_ID, OTHER_COURSE_ID);
-		int available = apply(MEMBER_ID, COURSE_ID);
 		int soldOut = apply(MEMBER_ID, OTHER_COURSE_ID);
 		seatHoldPort.setRemainingSeats(OTHER_COURSE_ID, 0);
 
-		checkout(MEMBER_ID, newKey(), available, soldOut)
+		checkout(MEMBER_ID, newKey(), soldOut)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.message").value("참가권 2건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요."))
-			.andExpect(jsonPath("$.data.orderedCount").value(1))
-			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"))
-			.andExpect(jsonPath("$.data.results[1].outcome").value("SOLD_OUT"))
-			.andExpect(jsonPath("$.data.results[1].code").value("ORDER_SOLD_OUT"))
-			.andExpect(jsonPath("$.data.results[1].message").value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."))
-			.andExpect(jsonPath("$.data.results[1].order").doesNotExist());
+			.andExpect(jsonPath("$.message").value("주문한 참가권이 없습니다. 항목별 결과를 확인해주세요."))
+			.andExpect(jsonPath("$.data.orderedCount").value(0))
+			.andExpect(jsonPath("$.data.results[0].outcome").value("SOLD_OUT"))
+			.andExpect(jsonPath("$.data.results[0].message").value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."))
+			.andExpect(jsonPath("$.data.results[0].order").doesNotExist());
 
-		assertThat(orderRepository.count()).isEqualTo(1);
-		assertThat(statusOf(available)).isEqualTo(ParticipationStatus.APPLIED);
+		assertThat(orderRepository.count()).isZero();
 		assertThat(statusOf(soldOut)).isEqualTo(ParticipationStatus.FAILED);
 		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(OTHER_COURSE_ID);
 	}
 
 	@Test
-	@DisplayName("결제할 수 없는 항목(접수 마감)은 FAILED로 알려 주고 장바구니에 남기며, 나머지는 그대로 주문한다")
+	@DisplayName("결제할 수 없으면(접수 마감) FAILED로 알려 주고 그 종목은 장바구니에 남긴다")
 	void checkoutWithFailedItem() throws Exception {
 		addToCart(MEMBER_ID, COURSE_ID);
-		addToCart(MEMBER_ID, OTHER_COURSE_ID);
 		int closed = apply(MEMBER_ID, COURSE_ID);
-		int open = apply(MEMBER_ID, OTHER_COURSE_ID);
 		// 신청서를 쓴 뒤 접수가 마감됐다
 		raceCoursePort.put(StubRaceCoursePort.closedCourse(COURSE_ID, 100));
 
-		checkout(MEMBER_ID, newKey(), closed, open)
+		checkout(MEMBER_ID, newKey(), closed)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.orderedCount").value(1))
+			.andExpect(jsonPath("$.data.orderedCount").value(0))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("FAILED"))
-			.andExpect(jsonPath("$.data.results[0].message").value("접수 기간이 아닙니다."))
-			.andExpect(jsonPath("$.data.results[0].code").value("ORDER_APPLICATION_CLOSED"))
-			.andExpect(jsonPath("$.data.results[1].code").doesNotExist())
-			.andExpect(jsonPath("$.data.results[1].outcome").value("CREATED"));
+			.andExpect(jsonPath("$.data.results[0].message").value("접수 기간이 아닙니다."));
 
-		assertThat(orderRepository.count()).isEqualTo(1);
+		assertThat(orderRepository.count()).isZero();
 		assertThat(statusOf(closed)).isEqualTo(ParticipationStatus.PENDING);
 		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(COURSE_ID);
 	}
 
 	@Test
-	@DisplayName("장바구니 결제도 종목마다 대기열 입장을 확인해, 입장 중이 아닌 종목만 FAILED로 남기고 나머지는 주문한다")
+	@DisplayName("장바구니 결제도 대기열 입장을 확인해, 입장 중이 아니면 FAILED로 알려 주고 자리를 잡지 않는다")
 	void checkoutChecksQueuePerCourse() throws Exception {
 		addToCart(MEMBER_ID, COURSE_ID);
-		addToCart(MEMBER_ID, OTHER_COURSE_ID);
 		int notAdmitted = apply(MEMBER_ID, COURSE_ID);
-		int admitted = apply(MEMBER_ID, OTHER_COURSE_ID);
 		queueAdmissionPort.notAdmitted(COURSE_ID);
 
-		checkout(MEMBER_ID, newKey(), notAdmitted, admitted)
+		checkout(MEMBER_ID, newKey(), notAdmitted)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.orderedCount").value(1))
+			.andExpect(jsonPath("$.data.orderedCount").value(0))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("FAILED"))
-			.andExpect(jsonPath("$.data.results[0].message").value("대기열에서 입장한 뒤 결제할 수 있습니다."))
-			.andExpect(jsonPath("$.data.results[1].outcome").value("CREATED"));
+			.andExpect(jsonPath("$.data.results[0].code").value("ORDER_QUEUE_NOT_ADMITTED"))
+			.andExpect(jsonPath("$.data.results[0].message").value("대기열에서 입장한 뒤 결제할 수 있습니다."));
 
+		assertThat(seatHoldPort.holdCalls()).isZero();
 		assertThat(statusOf(notAdmitted)).isEqualTo(ParticipationStatus.PENDING);
 		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(COURSE_ID);
 	}
 
 	@Test
-	@DisplayName("한 항목에서 예상하지 못한 오류가 나도 500이 아니라 그 항목만 FAILED이고, 앞에서 만든 주문은 남는다")
+	@DisplayName("예상하지 못한 오류가 나도 500이 아니라 FAILED로 알려 주고 그 종목은 장바구니에 남긴다")
 	void checkoutWithUnexpectedError() throws Exception {
-		addToCart(MEMBER_ID, COURSE_ID);
 		addToCart(MEMBER_ID, OTHER_COURSE_ID);
-		int first = apply(MEMBER_ID, COURSE_ID);
 		int broken = apply(MEMBER_ID, OTHER_COURSE_ID);
 		seatHoldPort.failHold(OTHER_COURSE_ID);
 
-		checkout(MEMBER_ID, newKey(), first, broken)
+		checkout(MEMBER_ID, newKey(), broken)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.orderedCount").value(1))
-			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"))
-			.andExpect(jsonPath("$.data.results[1].outcome").value("FAILED"))
-			.andExpect(jsonPath("$.data.results[1].message").value("처리하지 못했습니다. 같은 Idempotency-Key로 다시 시도해주세요."))
-			.andExpect(jsonPath("$.data.results[1].code").value("INTERNAL_ERROR"));
+			.andExpect(jsonPath("$.data.orderedCount").value(0))
+			.andExpect(jsonPath("$.data.results[0].outcome").value("FAILED"))
+			.andExpect(jsonPath("$.data.results[0].message").value("처리하지 못했습니다. 같은 Idempotency-Key로 다시 시도해주세요."));
 
-		assertThat(orderRepository.count()).isEqualTo(1);
+		assertThat(orderRepository.count()).isZero();
 		assertThat(statusOf(broken)).isEqualTo(ParticipationStatus.PENDING);
 		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(OTHER_COURSE_ID);
 	}
@@ -237,18 +213,16 @@ class ApiV1CartCheckoutTest {
 	}
 
 	@Test
-	@DisplayName("같은 Idempotency-Key로 동시에 두 번 보내도 참가권마다 주문은 1건이고 자리도 한 번만 잡는다")
+	@DisplayName("같은 Idempotency-Key로 동시에 두 번 보내도 주문은 1건이고 자리도 한 번만 잡는다")
 	void checkoutTwiceTogether() throws Exception {
 		addToCart(MEMBER_ID, COURSE_ID);
-		addToCart(MEMBER_ID, OTHER_COURSE_ID);
-		int first = apply(MEMBER_ID, COURSE_ID);
-		int second = apply(MEMBER_ID, OTHER_COURSE_ID);
+		int participationId = apply(MEMBER_ID, COURSE_ID);
 		String key = newKey();
 
 		CountDownLatch start = new CountDownLatch(1);
 		Callable<String> request = () -> {
 			start.await();
-			return checkout(MEMBER_ID, key, first, second).andReturn().getResponse().getContentAsString();
+			return checkout(MEMBER_ID, key, participationId).andReturn().getResponse().getContentAsString();
 		};
 		List<String> bodies = new ArrayList<>();
 		try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
@@ -261,10 +235,10 @@ class ApiV1CartCheckoutTest {
 
 		for (String body : bodies) {
 			assertThat((Integer)JsonPath.read(body, "$.status")).isEqualTo(200);
-			assertThat((Integer)JsonPath.read(body, "$.data.orderedCount")).isEqualTo(2);
+			assertThat((Integer)JsonPath.read(body, "$.data.orderedCount")).isEqualTo(1);
 		}
-		assertThat(orderRepository.count()).isEqualTo(2);
-		assertThat(seatHoldPort.holdCalls()).isEqualTo(2);
+		assertThat(orderRepository.count()).isEqualTo(1);
+		assertThat(seatHoldPort.holdCalls()).isEqualTo(1);
 		assertThat(cartCourseIds(MEMBER_ID)).isEmpty();
 	}
 
@@ -272,23 +246,20 @@ class ApiV1CartCheckoutTest {
 	@DisplayName("같은 Idempotency-Key로 다시 보내면 새 주문·자리 확보 없이 처음 주문을 EXISTING으로 돌려준다")
 	void checkoutRetryWithSameKey() throws Exception {
 		addToCart(MEMBER_ID, COURSE_ID);
-		addToCart(MEMBER_ID, OTHER_COURSE_ID);
-		int first = apply(MEMBER_ID, COURSE_ID);
-		int second = apply(MEMBER_ID, OTHER_COURSE_ID);
+		int participationId = apply(MEMBER_ID, COURSE_ID);
 		String key = newKey();
-		int firstOrderId = JsonPath.read(checkout(MEMBER_ID, key, first, second)
+		int firstOrderId = JsonPath.read(checkout(MEMBER_ID, key, participationId)
 			.andReturn().getResponse().getContentAsString(), "$.data.results[0].order.id");
 
-		checkout(MEMBER_ID, key, first, second)
+		checkout(MEMBER_ID, key, participationId)
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.orderedCount").value(2))
+			.andExpect(jsonPath("$.data.orderedCount").value(1))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("EXISTING"))
 			.andExpect(jsonPath("$.data.results[0].message").value("이미 처리한 주문 요청입니다."))
-			.andExpect(jsonPath("$.data.results[0].order.id").value(firstOrderId))
-			.andExpect(jsonPath("$.data.results[1].outcome").value("EXISTING"));
+			.andExpect(jsonPath("$.data.results[0].order.id").value(firstOrderId));
 
-		assertThat(orderRepository.count()).isEqualTo(2);
-		assertThat(seatHoldPort.holdCalls()).isEqualTo(2);
+		assertThat(orderRepository.count()).isEqualTo(1);
+		assertThat(seatHoldPort.holdCalls()).isEqualTo(1);
 	}
 
 	@Test
@@ -322,17 +293,16 @@ class ApiV1CartCheckoutTest {
 	}
 
 	@Test
-	@DisplayName("다른 회원의 참가 신청이 섞여 있으면 403, 없는 참가 신청이 섞여 있으면 404이고 자리를 하나도 잡지 않는다")
+	@DisplayName("다른 회원의 참가 신청이면 403, 없는 참가 신청이면 404이고 자리를 잡지 않는다")
 	void checkoutNotOwnerOrMissing() throws Exception {
 		addToCart(MEMBER_ID, COURSE_ID);
-		int mine = apply(MEMBER_ID, COURSE_ID);
 		int others = apply(OTHER_MEMBER_ID, OTHER_COURSE_ID);
 
-		checkout(MEMBER_ID, newKey(), mine, others)
+		checkout(MEMBER_ID, newKey(), others)
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."))
 			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_FORBIDDEN"));
-		checkout(MEMBER_ID, newKey(), mine, 999999)
+		checkout(MEMBER_ID, newKey(), 999999)
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."))
 			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_FOUND"));
@@ -343,23 +313,19 @@ class ApiV1CartCheckoutTest {
 	}
 
 	@Test
-	@DisplayName("참가 신청이 없거나, 10건을 넘거나, 같은 신청서가 두 번이거나, ID가 0 이하면 400이고 자리를 잡지 않는다")
+	@DisplayName("참가 신청이 없거나, 2건 이상이거나, ID가 0 이하면 400이고 자리를 잡지 않는다 (장바구니는 한 종목)")
 	void checkoutInvalidRequest() throws Exception {
 		int participationId = apply(MEMBER_ID, COURSE_ID);
-		Integer[] eleven = IntStream.rangeClosed(1, 11).boxed().toArray(Integer[]::new);
+		int other = apply(MEMBER_ID, OTHER_COURSE_ID);
 
 		checkout(MEMBER_ID, newKey())
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."))
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-		checkout(MEMBER_ID, newKey(), eleven)
+		checkout(MEMBER_ID, newKey(), participationId, other)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("한 번에 10건까지 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.message").value("장바구니에는 한 종목만 담을 수 있어 참가 신청 1건만 결제할 수 있습니다."))
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-		checkout(MEMBER_ID, newKey(), participationId, participationId)
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("같은 참가 신청을 두 번 보낼 수 없습니다."))
-			.andExpect(jsonPath("$.code").value("ORDER_CART_CHECKOUT_INVALID"));
 		checkout(MEMBER_ID, newKey(), 0)
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("참가 신청 ID가 올바르지 않습니다."))

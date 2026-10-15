@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.exception.CartCourseLimitException;
 import com.bukang.order.dto.CartDto;
 
 import jakarta.persistence.Column;
@@ -60,8 +61,12 @@ public class Cart extends BaseIdAndTime {
 	}
 
 	// 참가권은 수량 1로 고정이라, 이미 담긴 종목이면 새 항목을 만들지 않고 그 항목을 돌려준다 (정책 4장 1-1)
+	// 장바구니에는 한 종목만 담는다. 개인 예매는 모두 대기열을 거치는데, 여러 종목이면 여러 대기열에 동시에 입장해야 한다 (PRO-192)
 	public CartItem addItem(int raceCourseId) {
 		return findItem(raceCourseId).orElseGet(() -> {
+			if (!items.isEmpty()) {
+				throw new CartCourseLimitException("장바구니에는 한 종목만 담을 수 있습니다. 담긴 종목을 뺀 뒤 담아주세요.");
+			}
 			CartItem item = new CartItem(this, raceCourseId);
 			items.add(item);
 			return item;

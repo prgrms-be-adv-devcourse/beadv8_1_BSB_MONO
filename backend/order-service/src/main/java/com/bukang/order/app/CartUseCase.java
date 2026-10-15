@@ -42,7 +42,7 @@ public class CartUseCase {
 			throw new ApplicationPeriodException("접수가 마감된 종목은 담을 수 없습니다.");
 		}
 		try {
-			Cart cart = cartRepository.findByMemberId(memberId)
+			Cart cart = cartRepository.findByMemberIdForUpdate(memberId)
 				.orElseGet(() -> cartRepository.save(Cart.of(memberId)));
 			boolean added = cart.findItem(raceCourseId).isEmpty();
 			CartItem item = cart.addItem(raceCourseId);
