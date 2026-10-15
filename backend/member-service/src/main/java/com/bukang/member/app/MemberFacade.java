@@ -12,6 +12,7 @@ import com.bukang.member.dto.MemberDto;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.dto.MemberLoginRequestDto;
 import com.bukang.member.dto.MemberLoginResult;
+import com.bukang.member.dto.MemberModifyRequestDto;
 import com.bukang.member.out.MemberRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class MemberFacade {
 	private final MemberJoinUseCase memberJoinUseCase;
+	private final MemberModifyUseCase memberModifyUseCase;
 	private final MemberRepository memberRepository;
 	private final AuthenticationManager authenticationManager;
 	private final TokenIssueUseCase tokenIssueUseCase;
@@ -44,6 +46,17 @@ public class MemberFacade {
 		return memberRepository.findById(memberId)
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."))
 			.toDto();
+	}
+
+	@Transactional
+	public MemberDto modifyMe(int memberId, MemberModifyRequestDto memberModifyRequestDto) {
+		return memberModifyUseCase.modify(
+			memberId,
+			memberModifyRequestDto.getName(),
+			memberModifyRequestDto.getNickname(),
+			memberModifyRequestDto.getPhone(),
+			memberModifyRequestDto.getBirthDate()
+		).toDto();
 	}
 
 	public boolean existsByEmail(String email) {

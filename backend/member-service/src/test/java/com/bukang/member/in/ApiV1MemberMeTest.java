@@ -51,7 +51,7 @@ class ApiV1MemberMeTest {
 	}
 
 	@Test
-	@DisplayName("회원 ID 헤더의 회원 정보를 돌려준다")
+	@DisplayName("회원 ID 헤더의 회원 정보를 수정 화면에 채울 이름·생년월일까지 돌려준다")
 	void findMe() throws Exception {
 		mockMvc.perform(get(ME).header(MemberIdHeader.NAME, memberId))
 			.andExpect(status().isOk())
@@ -59,7 +59,9 @@ class ApiV1MemberMeTest {
 			.andExpect(jsonPath("$.data.id").value(memberId))
 			.andExpect(jsonPath("$.data.nickname").value("러너1"))
 			.andExpect(jsonPath("$.data.email").value("runner1@crewrun.com"))
-			.andExpect(jsonPath("$.data.phone").value("010-1234-5678"));
+			.andExpect(jsonPath("$.data.phone").value("010-1234-5678"))
+			.andExpect(jsonPath("$.data.name").value("김러너"))
+			.andExpect(jsonPath("$.data.birthDate").value("1995-04-12"));
 	}
 
 	@Test

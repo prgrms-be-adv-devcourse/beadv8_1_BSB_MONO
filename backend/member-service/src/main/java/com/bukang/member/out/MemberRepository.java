@@ -14,4 +14,9 @@ public interface MemberRepository extends JpaRepository<Member, Integer> {
 	boolean existsByNickname(String nickname);
 
 	boolean existsByPhoneHash(String phoneHash);
+
+	// 정보 수정 때 내 행을 빼고 중복을 찾는다
+	boolean existsByNicknameAndIdNot(String nickname, int id);
+
+	boolean existsByPhoneHashAndIdNot(String phoneHash, int id);
 }

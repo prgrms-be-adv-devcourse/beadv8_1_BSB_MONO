@@ -3,6 +3,8 @@ package com.bukang.member.in;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.dto.MemberDto;
+import com.bukang.member.dto.MemberModifyRequestDto;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,9 +22,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Member", description = "내 정보 조회 API")
+@Tag(name = "Member", description = "내 정보 조회, 내 정보 수정 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/member/members")
@@ -48,5 +52,42 @@ public class ApiV1MemberController {
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "내 정보를 조회했습니다.", memberFacade.findMe(memberId)));
+	}
+
+	// 수정 화면은 저장할 때 항상 4칸을 다 보내므로 PUT으로 통째로 바꾼다. 대상은 X-Member-Id로만 정한다 (BE-012)
+	@PutMapping("/me")
+	@Operation(summary = "내 정보 수정",
+		description = "X-Member-Id 헤더의 회원의 이름, 생년월일, 휴대폰 번호, 닉네임을 바꾼다. "
+			+ "다른 회원이 쓰는 닉네임·휴대폰 번호인지 검사하고(내 행은 제외, 휴대폰은 하이픈 유무 무관), "
+			+ "4칸이 모두 그대로면 저장하지 않는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "수정 성공 (바뀐 게 없어도 200)",
+			content = @Content(examples = @ExampleObject(value = MemberApiExamples.MODIFY_ME_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "입력값 검증 실패, 요청 본문 형식 오류 또는 만 14세 미만",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "입력값 검증 실패", value = MemberApiExamples.MODIFY_ME_INVALID_INPUT),
+				@ExampleObject(name = "요청 본문 형식 오류", value = MemberApiExamples.INVALID_BODY),
+				@ExampleObject(name = "만 14세 미만", value = MemberApiExamples.MODIFY_ME_UNDER_AGE)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = MemberApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "404", description = "헤더의 회원이 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = MemberApiExamples.MEMBER_NOT_FOUND))),
+		@ApiResponse(responseCode = "409", description = "다른 회원이 쓰는 닉네임 또는 휴대폰 번호",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "닉네임 중복", value = MemberApiExamples.DUPLICATE_NICKNAME),
+				@ExampleObject(name = "휴대폰 번호 중복", value = MemberApiExamples.DUPLICATE_PHONE)
+			}))
+	})
+	public ResponseEntity<RsData<MemberDto>> modifyMe(
+		@Parameter(description = "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) int memberId,
+		@Valid @RequestBody MemberModifyRequestDto memberModifyRequestDto
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "내 정보를 수정했습니다.",
+				memberFacade.modifyMe(memberId, memberModifyRequestDto)));
 	}
 }
