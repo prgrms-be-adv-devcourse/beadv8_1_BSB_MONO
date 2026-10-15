@@ -19,10 +19,14 @@ import {
   getCreateResponseMock,
   getFindById1MockHandler,
   getFindById1ResponseMock,
+  getFindCartMockHandler,
+  getFindCartResponseMock,
   getFindMineMockHandler,
   getFindMineResponseMock,
   getPayMockHandler,
   getPayResponseMock,
+  getRemoveItemMockHandler,
+  getRemoveItemResponseMock,
 } from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
 import { getBukangProductAPIMock } from '@/shared/api/generated/product/product.msw'
@@ -138,6 +142,16 @@ const orderHandlers = [
   getCheckoutMockHandler(() => {
     mockOrderAwaitingPayment = true
     return getCheckoutResponseMock()
+  }),
+  // 장바구니에는 한 종목만 담긴다. 명세 예시는 두 항목이라, 대회 1의 10K(종목 1) 하나만 남겨 돌려준다.
+  getFindCartMockHandler(() => {
+    const example = getFindCartResponseMock()
+    const items = (example.data?.items ?? []).filter((item) => item.raceCourseId === 1)
+    return { ...example, data: { ...example.data, items } }
+  }),
+  getRemoveItemMockHandler(() => {
+    const example = getRemoveItemResponseMock()
+    return { ...example, data: { ...example.data, items: [] } }
   }),
   getPayMockHandler(() => {
     mockOrderAwaitingPayment = false
