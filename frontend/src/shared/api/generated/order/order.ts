@@ -31,7 +31,10 @@ import type {
   OrderCreateRequestDto,
   ParticipantInfoRequestDto,
   ParticipationApplyRequestDto,
-  RsData
+  RsData,
+  RsDataOrderDto,
+  RsDataOrderPageDto,
+  RsDataParticipationDto
 } from './order.schemas';
 
 import { customFetch } from '../../fetcher';
@@ -69,7 +72,7 @@ export const getChangeParticipantUrl = (participationId: number,) => {
  * @summary 참가자 정보 수정
  */
 export const changeParticipant = async (participationId: number,
-    participantInfoRequestDto: ParticipantInfoRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+    participantInfoRequestDto: ParticipantInfoRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataParticipationDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -85,7 +88,7 @@ export const changeParticipant = async (participationId: number,
     }
     return headers;
   };
-return customFetch<unknown>(getChangeParticipantUrl(participationId),
+return customFetch<RsDataParticipationDto>(getChangeParticipantUrl(participationId),
   {
     ...options,
     method: 'PUT',
@@ -247,9 +250,9 @@ export const getCancelBeforePaymentUrl = (participationId: number,) => {
  * [결제하기] 전(PENDING)인 본인 참가 신청서를 취소한다. 취소하면 같은 대회의 다른 종목으로 다시 신청할 수 있다. 결제 대기 중인 신청은 결제 기한이 지나면 자동으로 풀리고, 결제한 참가권은 주문 상품 취소로 취소한다.
  * @summary 참가 신청서 취소
  */
-export const cancelBeforePayment = async (participationId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const cancelBeforePayment = async (participationId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataParticipationDto> => {
 
-  return customFetch<unknown>(getCancelBeforePaymentUrl(participationId),
+  return customFetch<RsDataParticipationDto>(getCancelBeforePaymentUrl(participationId),
   {
     ...options,
     method: 'POST'
@@ -329,9 +332,9 @@ export const getFindMineUrl = (params?: FindMineParams,) => {
  * 내 주문을 최신순으로 돌려준다. 조회 기간(from·to, 주문 일자 기준)은 각각 생략할 수 있고, to 날짜의 주문까지 포함한다. 상품은 대표 상품명과 개수만 담는다.
  * @summary 내 주문 목록
  */
-export const findMine = async (params?: FindMineParams, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const findMine = async (params?: FindMineParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderPageDto> => {
 
-  return customFetch<unknown>(getFindMineUrl(params),
+  return customFetch<RsDataOrderPageDto>(getFindMineUrl(params),
   {
     ...options,
     method: 'GET'
@@ -597,9 +600,9 @@ export const getCancelItemUrl = (orderId: number,
  * @summary 참가권 취소·환불
  */
 export const cancelItem = async (orderId: number,
-    orderItemId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+    orderItemId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderDto> => {
 
-  return customFetch<unknown>(getCancelItemUrl(orderId,orderItemId),
+  return customFetch<RsDataOrderDto>(getCancelItemUrl(orderId,orderItemId),
   {
     ...options,
     method: 'POST'
@@ -925,9 +928,9 @@ export const getFindByIdUrl = (participationId: number,) => {
  * 본인의 참가 신청과 참가자 정보, 상태를 돌려준다.
  * @summary 참가 신청 조회
  */
-export const findById = async (participationId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const findById = async (participationId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataParticipationDto> => {
 
-  return customFetch<unknown>(getFindByIdUrl(participationId),
+  return customFetch<RsDataParticipationDto>(getFindByIdUrl(participationId),
   {
     ...options,
     method: 'GET'
@@ -1129,9 +1132,9 @@ export const getFindById1Url = (orderId: number,) => {
  * 본인 주문의 상품·상태·금액·결제 기한을 돌려준다. 상품명·단가는 주문 당시 값이다.
  * @summary 주문 상세
  */
-export const findById1 = async (orderId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const findById1 = async (orderId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderDto> => {
 
-  return customFetch<unknown>(getFindById1Url(orderId),
+  return customFetch<RsDataOrderDto>(getFindById1Url(orderId),
   {
     ...options,
     method: 'GET'
