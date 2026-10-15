@@ -88,13 +88,13 @@ describe('회원가입 단계', () => {
     expect(screen.getByRole('button', { name: '다음', hidden: true })).toBeDisabled()
   })
 
-  it('비밀번호 규칙에 안 맞으면 오류가 뜨고 다음 버튼이 꺼진다', async () => {
+  it('비밀번호가 9자면(백엔드 10자 이상) 오류가 뜨고 다음 버튼이 꺼진다', async () => {
     const user = userEvent.setup()
     renderSignup()
     await agreeRequiredTerms(user)
 
     await user.type(screen.getByLabelText('이메일'), 'runner@crewrun.kr')
-    await user.type(screen.getByLabelText('비밀번호'), 'short')
+    await user.type(screen.getByLabelText('비밀번호'), 'password1')
     await user.tab()
 
     expect(await screen.findByText(AUTH_ERRORS.passwordRule)).toBeInTheDocument()
@@ -107,8 +107,8 @@ describe('회원가입 단계', () => {
     await agreeRequiredTerms(user)
 
     await user.type(screen.getByLabelText('이메일'), 'runner@crewrun.kr')
-    await user.type(screen.getByLabelText('비밀번호'), 'password1')
-    await user.type(screen.getByLabelText('비밀번호 확인'), 'password1')
+    await user.type(screen.getByLabelText('비밀번호'), 'password123')
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'password123')
     await user.click(screen.getByRole('button', { name: '다음' }))
     expect(push).toHaveBeenCalledWith('/signup/profile')
 
@@ -119,7 +119,7 @@ describe('회원가입 단계', () => {
     // 약관에 이미 동의했으므로 바텀시트 없이 계정 단계가 보인다.
     expect(screen.queryByRole('button', { name: '동의하고 계속하기' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('이메일')).toHaveValue('runner@crewrun.kr')
-    expect(screen.getByLabelText('비밀번호 확인')).toHaveValue('password1')
+    expect(screen.getByLabelText('비밀번호 확인')).toHaveValue('password123')
     expect(await screen.findByRole('button', { name: '다음' })).toBeEnabled()
 
     show('profile')
@@ -134,8 +134,8 @@ describe('회원가입 단계', () => {
     expect(screen.queryByRole('button', { name: '동의하고 계속하기' })).not.toBeInTheDocument()
 
     await user.type(screen.getByLabelText('이메일'), 'runner@crewrun.kr')
-    await user.type(screen.getByLabelText('비밀번호'), 'password1')
-    await user.type(screen.getByLabelText('비밀번호 확인'), 'password1')
+    await user.type(screen.getByLabelText('비밀번호'), 'password123')
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'password123')
     await user.click(screen.getByRole('button', { name: '다음' }))
 
     expect(await screen.findByRole('button', { name: '동의하고 계속하기' })).toBeInTheDocument()

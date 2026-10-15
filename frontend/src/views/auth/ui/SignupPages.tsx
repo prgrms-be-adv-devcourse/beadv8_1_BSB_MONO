@@ -64,7 +64,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
     resolver: zodResolver(signupAccountSchema),
     mode: 'onTouched',
     defaultValues: invalid
-      ? { email: 'runner@crewrun.kr', password: 'password1', passwordConfirm: 'password2' }
+      ? { email: 'runner@crewrun.kr', password: 'password12', passwordConfirm: 'password13' }
       : account,
   })
   // 입력할 때마다 스토어에 옮겨 둔다. 뒤로 왔다가 다시 와도 값이 남는다.
@@ -111,7 +111,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           type="password"
           autoComplete="new-password"
           placeholder="비밀번호를 입력해 주세요"
-          helper="영문 · 숫자 포함 8자 이상"
+          helper="10자 이상"
           error={errors.password?.message}
           {...register('password', { onChange: revalidateConfirm })}
         />
@@ -292,7 +292,7 @@ function SignupProfileForm() {
         />
         <TextField
           label="닉네임"
-          helper="다른 사람에게는 실명 대신 닉네임이 보여요. 2~10자"
+          helper="다른 사람에게는 실명 대신 닉네임이 보여요. 한글 2~8자, 영문 4~16자"
           error={errors.nickname?.message}
           {...register('nickname')}
         />

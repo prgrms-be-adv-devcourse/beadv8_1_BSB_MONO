@@ -158,8 +158,8 @@ describe('SignupProfilePage', () => {
             termsAgreed: true,
             account: {
               email: 'runner@crewrun.kr',
-              password: 'password1',
-              passwordConfirm: 'password1',
+              password: 'password123',
+              passwordConfirm: 'password123',
             },
           }}
         >
@@ -198,8 +198,8 @@ describe('비밀번호 확인 칸', () => {
     const user = userEvent.setup()
     render(<PasswordNewPage />)
 
-    await user.type(screen.getByLabelText('새 비밀번호'), 'password1')
-    await user.type(screen.getByLabelText('새 비밀번호 확인'), 'password1')
+    await user.type(screen.getByLabelText('새 비밀번호'), 'password123')
+    await user.type(screen.getByLabelText('새 비밀번호 확인'), 'password123')
     await user.tab()
     expect(screen.queryByText(AUTH_ERRORS.passwordMismatch)).not.toBeInTheDocument()
 
@@ -208,7 +208,7 @@ describe('비밀번호 확인 칸', () => {
 
     await user.type(screen.getByLabelText('새 비밀번호 확인'), '2')
     await user.clear(screen.getByLabelText('새 비밀번호'))
-    await user.type(screen.getByLabelText('새 비밀번호'), 'password12')
+    await user.type(screen.getByLabelText('새 비밀번호'), 'password1232')
     expect(screen.queryByText(AUTH_ERRORS.passwordMismatch)).not.toBeInTheDocument()
   })
 
@@ -221,7 +221,7 @@ describe('비밀번호 확인 칸', () => {
     )
     await agreeAllTerms(user)
 
-    await user.type(screen.getByLabelText('비밀번호'), 'password1')
+    await user.type(screen.getByLabelText('비밀번호'), 'password123')
     expect(screen.queryByText(AUTH_ERRORS.passwordMismatch)).not.toBeInTheDocument()
   })
 
@@ -234,8 +234,8 @@ describe('비밀번호 확인 칸', () => {
     )
     await agreeAllTerms(user)
 
-    await user.type(screen.getByLabelText('비밀번호'), 'password1')
-    await user.type(screen.getByLabelText('비밀번호 확인'), 'password1')
+    await user.type(screen.getByLabelText('비밀번호'), 'password123')
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'password123')
     await user.tab()
     await user.type(screen.getByLabelText('비밀번호'), '2')
     expect(await screen.findByText(AUTH_ERRORS.passwordMismatch)).toBeInTheDocument()

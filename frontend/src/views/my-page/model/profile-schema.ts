@@ -1,11 +1,12 @@
 import { z } from 'zod'
 
+import { isNicknameWidthValid } from '@/entities/member'
 import { ApiError, memberZod } from '@/shared/api'
 
 import { toIsoDate } from './member-format'
 
 // 내 정보 수정 입력 검사. 규칙은 orval이 만든 memberZod.ModifyMeBody(백엔드 MemberModifyRequestDto)를 따르고,
-// 문구만 화면 말투로 바꾼다. 닉네임 칸 수는 백엔드 커스텀 검증(@NicknameWidth)이라 명세에 없어 여기서 같게 센다.
+// 문구만 화면 말투로 바꾼다. 닉네임 칸 수는 명세에 없는 백엔드 커스텀 검증(@NicknameWidth)이라 entities/member 규칙을 쓴다.
 
 export const PROFILE_ERRORS = {
   name: '이름을 입력해 주세요.',
@@ -25,13 +26,6 @@ const follow = (schema: z.ZodType, message: string) =>
     .trim()
     .refine((value) => schema.safeParse(value).success, message)
 
-// 백엔드 Member.nicknameWidth와 같다: 한글 완성형(가~힣)은 2칸, 그 밖의 글자는 1칸. 4~16칸
-const NICKNAME_MIN_WIDTH = 4
-const NICKNAME_MAX_WIDTH = 16
-export function nicknameWidth(nickname: string): number {
-  return [...nickname].reduce((width, char) => width + (char >= '가' && char <= '힣' ? 2 : 1), 0)
-}
-
 export const profileSchema = z.object({
   name: follow(body.name, PROFILE_ERRORS.name),
   birth: z
@@ -43,10 +37,10 @@ export const profileSchema = z.object({
       PROFILE_ERRORS.birth,
     ),
   phone: follow(body.phone, PROFILE_ERRORS.phone),
-  nickname: follow(body.nickname, PROFILE_ERRORS.nicknameChars).refine((value) => {
-    const width = nicknameWidth(value)
-    return width >= NICKNAME_MIN_WIDTH && width <= NICKNAME_MAX_WIDTH
-  }, PROFILE_ERRORS.nicknameWidth),
+  nickname: follow(body.nickname, PROFILE_ERRORS.nicknameChars).refine(
+    isNicknameWidthValid,
+    PROFILE_ERRORS.nicknameWidth,
+  ),
 })
 export type ProfileValues = z.infer<typeof profileSchema>
 
