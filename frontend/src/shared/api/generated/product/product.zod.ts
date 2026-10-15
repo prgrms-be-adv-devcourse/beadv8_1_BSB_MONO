@@ -324,17 +324,6 @@ export const RegisterResponse = zod.object({
 
 
 /**
- * 본인이 등록한 작성 중 대회의 판매를 시작한다. 판매 예정이 되어 판매 시작 일시부터 판매되고, 판매 시작 일시가 이미 지났으면 바로 판매 중이 된다. 대회 검수는 없다.
- * @summary 대회 판매 시작
- */
-export const StartSaleParams = zod.object({
-  "raceId": zod.int().describe('대회 ID')
-})
-
-export const StartSaleResponse = zod.unknown()
-
-
-/**
  * 본인이 등록한 대회를 취소한다. 판매가 끝나기 전(대회일 다음 날 0시 전)이면 작성 중·판매 예정·판매 중·판매 중지 어느 상태든 취소할 수 있고, 되돌릴 수 없다. 결제 대기 자리는 모두 해제되고 공개 목록에서 빠진다. 판매를 시작했던 대회면 주문 서비스에 취소 메시지(Kafka order.race.cancel)를 보내 참가권을 일괄 환불하게 한다. 취소된 대회는 수정·판매 시작·자리 확보를 할 수 없고, 상세는 등록한 판매자만 볼 수 있다.
  * @summary 대회 취소
  */

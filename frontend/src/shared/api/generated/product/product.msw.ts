@@ -85,16 +85,6 @@ export const getRegisterMockHandler = (overrideResponse?: RsDataRaceSaveDto | ((
   }, options)
 }
 
-export const getStartSaleMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
-  return http.post('*/api/v1/product/races/:raceId/sale', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
-
-    return new HttpResponse(null,
-      { status: 200
-      })
-  }, options)
-}
-
 export const getCancelMockHandler = (overrideResponse?: RsDataRaceSaveDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataRaceSaveDto> | RsDataRaceSaveDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/product/races/:raceId/cancel', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
 
@@ -135,7 +125,6 @@ export const getBukangProductAPIMock = () => [
   getUpdateMockHandler(),
   getSearchMockHandler(),
   getRegisterMockHandler(),
-  getStartSaleMockHandler(),
   getCancelMockHandler(),
   getSuggestMockHandler(),
   getFindMineMockHandler()
