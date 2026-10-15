@@ -218,7 +218,7 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 
 	// 원하는 배치 시각으로 판매 상태를 바꾼다. ProductFacade처럼 트랜잭션 안에서 부르고 커밋한다 (검색 색인은 하지 않는다)
 	private List<RaceCourseDocument> refresh(LocalDateTime now) {
-		return transactionTemplate.execute(tx -> raceSaleStatusUseCase.refresh(now));
+		return transactionTemplate.execute(tx -> raceSaleStatusUseCase.refresh(now)).documents();
 	}
 
 	// 기본 종목(10K) 옆에 붙이는 두 번째 종목

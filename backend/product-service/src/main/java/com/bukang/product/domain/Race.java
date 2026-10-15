@@ -19,6 +19,7 @@ import org.hibernate.annotations.DynamicUpdate;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 import com.bukang.common.shared.race.domain.RaceSaleStatus;
+import com.bukang.common.shared.race.event.RaceChangedEvent;
 import com.bukang.product.domain.exception.InvalidRaceException;
 import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
 import com.bukang.product.dto.RaceSaveRequestDto;
@@ -292,5 +293,10 @@ public class Race extends BaseIdAndTime {
 	public boolean isAcceptingIndividual(LocalDateTime now) {
 		return (saleStatus == RaceSaleStatus.SCHEDULED || saleStatus == RaceSaleStatus.ON_SALE)
 			&& !now.isBefore(individualOpenAt) && now.isBefore(applicationCloseAt);
+	}
+
+	// 대기열에 보낼 대회 변경 메시지 (진입 판정에 쓰는 칸과 수정 일시)
+	public RaceChangedEvent toChangedEvent() {
+		return new RaceChangedEvent(getId(), saleStatus, individualOpenAt, applicationCloseAt, getModifyDate());
 	}
 }

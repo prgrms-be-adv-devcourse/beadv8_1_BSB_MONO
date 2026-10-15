@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.bukang.common.shared.file.domain.FileRef;
 import com.bukang.common.shared.file.event.FileLinkRequestedEvent;
+import com.bukang.common.shared.race.event.RaceChangedEvent;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
@@ -49,6 +50,8 @@ public class RaceUpdateUseCase {
 			throw new RaceAccessDeniedException();
 		}
 		raceRequestValidator.validate(request);
+		// 대회 칸이 바뀌었는지는 수정 전후의 수정 일시로 본다 (바뀐 칸이 있을 때만 updated_at이 바뀐다)
+		LocalDateTime modifyDateBefore = race.getModifyDate();
 
 		// 판매 시작 일시가 요청 값으로 바뀌기 전에, 지금 판매가 시작됐는지 먼저 판단한다
 		LocalDateTime now = LocalDateTime.now();
@@ -97,10 +100,13 @@ public class RaceUpdateUseCase {
 		// 엔티티의 카운터는 이 트랜잭션이 처음 읽은 값이라 그 사이 확보된 자리가 빠져 있을 수 있어 쓰지 않는다
 		saved.dto().getCourseIds().forEach(raceCourseRepository::refreshStatus);
 		// 위 UPDATE가 영속성 컨텍스트를 비웠으므로, 바뀐 종목 상태로 검색 문서를 다시 만든다
-		List<RaceCourseDocument> documents = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new)
-			.getCourses().stream()
+		Race updated = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new);
+		List<RaceCourseDocument> documents = updated.getCourses().stream()
 			.map(RaceCourseDocument::from)
 			.toList();
-		return new RaceSaveResult(saved.dto(), documents, saved.deletedDocumentIds(), saved.fileLink());
+		// 종목만 바뀐 수정은 대회 수정 일시가 그대로라 대회 메시지를 보내지 않는다
+		RaceChangedEvent raceChanged = updated.getModifyDate().equals(modifyDateBefore)
+			? null : updated.toChangedEvent();
+		return new RaceSaveResult(saved.dto(), documents, saved.deletedDocumentIds(), saved.fileLink(), raceChanged);
 	}
 }

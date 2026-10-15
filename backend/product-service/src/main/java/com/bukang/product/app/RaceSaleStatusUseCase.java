@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.bukang.common.shared.race.domain.RaceSaleStatus;
+import com.bukang.product.domain.Race;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.out.RaceRepository;
 
@@ -29,8 +30,8 @@ public class RaceSaleStatusUseCase {
 
 	private final RaceRepository raceRepository;
 
-	// 상태가 바뀐 대회의 검색 문서를 돌려준다 (커밋한 뒤 ProductFacade가 다시 색인한다)
-	public List<RaceCourseDocument> refresh(LocalDateTime now) {
+	// 상태가 바뀐 대회의 검색 문서와 대회 변경 메시지를 돌려준다 (커밋한 뒤 ProductFacade가 다시 색인하고 메시지를 보낸다)
+	public RaceSaleStatusResult refresh(LocalDateTime now) {
 		List<Integer> changedIds = new ArrayList<>();
 
 		LocalDateTime today = now.toLocalDate().atStartOfDay();
@@ -48,9 +49,10 @@ public class RaceSaleStatusUseCase {
 		// 바꾼 상태를 DB에서 다시 읽어 검색 문서를 만든다 (조건부 UPDATE에서 건너뛴 대회는 지금 상태 그대로 색인된다)
 		// 잠그고 읽어야 최신 상태를 본다. 그냥 읽으면 처음 대상 ID를 읽을 때의 스냅숏이라,
 		// 그 사이 취소된 대회를 옛 상태(판매 예정)로 다시 색인해 공개 목록에 남긴다
-		return raceRepository.findAllByIdForShare(changedIds).stream()
-			.flatMap(race -> race.getCourses().stream())
-			.map(RaceCourseDocument::from)
-			.toList();
+		// 대회 변경 메시지도 다시 읽은 대회로 만든다 (건너뛴 대회는 지금 상태를 한 번 더 보낼 뿐이다)
+		List<Race> races = raceRepository.findAllByIdForShare(changedIds);
+		return new RaceSaleStatusResult(
+			races.stream().flatMap(race -> race.getCourses().stream()).map(RaceCourseDocument::from).toList(),
+			races.stream().map(Race::toChangedEvent).toList());
 	}
 }
