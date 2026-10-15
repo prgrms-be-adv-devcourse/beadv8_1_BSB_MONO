@@ -19,6 +19,40 @@ final class CashApiExamples {
 		{ "status": 404, "message": "존재하지 않는 지갑입니다.", "data": null }
 		""";
 
+	static final String CHARGE_CONFIRM_SUCCESS = """
+		{
+			"status": 200,
+			"message": "충전했습니다.",
+			"data": {
+				"outcome": "COMPLETED",
+				"balance": 60000
+			}
+		}
+		""";
+
+	static final String CHARGE_CONFIRM_FAILED = """
+		{
+			"status": 200,
+			"message": "충전에 실패했습니다.",
+			"data": {
+				"outcome": "FAILED",
+				"balance": 50000
+			}
+		}
+		""";
+
+	static final String CHARGE_AMOUNT_TOO_SMALL = """
+		{ "status": 400, "message": "최소 충전 금액은 10,000원입니다.", "data": null }
+		""";
+
+	static final String CHARGE_CONFIRM_INVALID_INPUT = """
+		{ "status": 400, "message": "paymentKey를 작성해주세요.", "data": null }
+		""";
+
+	static final String INVALID_BODY = """
+		{ "status": 400, "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		""";
+
 	private CashApiExamples() {
 	}
 }
