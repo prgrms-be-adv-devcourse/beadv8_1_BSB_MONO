@@ -1,46 +1,162 @@
 'use client'
 
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useQuery } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { useForm, useWatch } from 'react-hook-form'
 
-import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
-import { cn } from '@/shared/lib'
-import { Button, Dialog, FOCUS_RING, KeyValue, StatTile, Textarea, TextField } from '@/shared/ui'
+import { ConsoleCard, ConsoleLoading, ConsolePage } from '@/widgets/console-page'
+import { useCancelRace, useUpdateRace } from '@/features/seller-race'
+import {
+  formatRaceDate,
+  formatRaceDateTime,
+  isRaceEditable,
+  myRacesQueryOptions,
+  parseRaceDateTimeInput,
+  raceForEditQueryOptions,
+  toRaceDateTimeInput,
+  type RaceForEdit,
+} from '@/entities/race'
+import { ApiError } from '@/shared/api'
+import { cn, formatNumber } from '@/shared/lib'
+import {
+  Alert,
+  Button,
+  Dialog,
+  FOCUS_RING,
+  KeyValue,
+  StatTile,
+  Textarea,
+  TextField,
+  useToast,
+} from '@/shared/ui'
+
+import {
+  refundUntil,
+  rescheduleNotice,
+  rescheduleSchema,
+  type RescheduleValues,
+} from '../model/reschedule-form'
 
 type Mode = 'reschedule' | 'cancel'
 
-const NOTICE =
-  '[2026 춘천 나이트런] 대회일이 12월 6일에서 12월 13일(일)로 바뀌었어요.\n오늘부터 7일 동안(10/12까지)은 전액 환불받을 수 있어요.'
-
-const CANCEL_SUMMARY = [
-  {
-    label: '참가권 (키트 포함)',
-    title: '1,500건 전액 자동 환불',
-    body: '₩82,500,000 · 1차 정산 전이라 바로 예치금으로 돌려줘요. 이미 받은 키트는 돌려받지 않아요.',
-  },
-  {
-    label: '1차 정산 뒤 취소라면',
-    title: '1차 정산금 회수 뒤 환불',
-    body: '회수가 끝나야 구매자에게 환불돼요. 그동안 기다린다는 걸 구매자에게 알려요.',
-  },
-  {
-    label: '정산',
-    title: '지급보류 · 대회 취소 처리',
-    body: '환불이 끝나면 관리자가 보류를 풀어요.',
-  },
-]
+const FORM_ID = 'seller-race-reschedule'
+const n = formatNumber
 
 // 피그마 V2 · S09 대회 취소 · 일정 변경 (+ S09-1 대회 취소 확인)
-// TODO(api): 대회 정보를 불러오고 일정 변경 알림 · 대회 취소를 보낸다. 지금은 시안 예시 값.
-export function SellerRaceChangePage({ confirmOpen = false }: { confirmOpen?: boolean }) {
+export function SellerRaceChangePage({
+  raceId,
+  confirmOpen = false,
+}: {
+  raceId: number
+  confirmOpen?: boolean
+}) {
+  const edit = useQuery(raceForEditQueryOptions(raceId))
+  // 판매 수는 내 대회 목록에만 있다
+  const sold = useQuery({
+    ...myRacesQueryOptions(),
+    select: (list) =>
+      (list.find((r) => r.raceId === raceId)?.courses ?? []).reduce(
+        (sum, c) => sum + (c.sold ?? 0),
+        0,
+      ),
+  })
+
+  if (edit.isPending) {
+    return (
+      <ConsolePage title="대회 취소 · 일정 변경">
+        <ConsoleLoading />
+      </ConsolePage>
+    )
+  }
+  if (edit.isError) {
+    return (
+      <ConsolePage title="대회 취소 · 일정 변경">
+        <Alert
+          tone="danger"
+          title="대회 정보를 불러오지 못했어요"
+          description={errorMessage(edit.error)}
+        />
+      </ConsolePage>
+    )
+  }
+  return (
+    <ChangeContent
+      key={edit.dataUpdatedAt}
+      raceId={raceId}
+      edit={edit.data}
+      sold={sold.data ?? 0}
+      confirmOpen={confirmOpen}
+    />
+  )
+}
+
+function ChangeContent({
+  raceId,
+  edit,
+  sold,
+  confirmOpen,
+}: {
+  raceId: number
+  edit: RaceForEdit
+  sold: number
+  confirmOpen: boolean
+}) {
+  const router = useRouter()
+  const toast = useToast()
+  const update = useUpdateRace(raceId)
+  const cancel = useCancelRace(raceId)
   const [mode, setMode] = useState<Mode>('reschedule')
   const [cancelOpen, setCancelOpen] = useState(confirmOpen)
+  const { race, request } = edit
+  const editable = isRaceEditable(race.saleStatus)
+  const title = race.title ?? ''
+  const currentRaceDate = request.raceDate
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RescheduleValues>({
+    resolver: zodResolver(rescheduleSchema(currentRaceDate)),
+    mode: 'onTouched',
+    defaultValues: { raceDate: toRaceDateTimeInput(currentRaceDate) },
+  })
+  const nextRaceDate = parseRaceDateTimeInput(useWatch({ control, name: 'raceDate' }) ?? '')
+  const error = update.error ?? cancel.error
 
   return (
     <ConsolePage
       title="대회 취소 · 일정 변경"
-      description="2026 춘천 나이트런 · 대회 12/6(일) · 참가자 1,500명"
-      actions={<Button disabled={mode !== 'reschedule'}>일정 변경 알리기</Button>}
+      description={`${title} · 대회 ${formatRaceDate(currentRaceDate)} · 참가자 ${n(sold)}명`}
+      actions={
+        <Button
+          type="submit"
+          form={FORM_ID}
+          disabled={mode !== 'reschedule' || !editable}
+          loading={update.isPending}
+        >
+          일정 변경 알리기
+        </Button>
+      }
     >
+      {!editable && (
+        <Alert
+          tone="warning"
+          title="판매가 끝났거나 취소된 대회예요"
+          description="일정을 바꾸거나 취소할 수 없어요."
+        />
+      )}
+      {error && (
+        <Alert
+          tone="danger"
+          title={update.isError ? '일정을 바꾸지 못했어요' : '대회를 취소하지 못했어요'}
+          description={errorMessage(error)}
+        />
+      )}
+
       <div role="radiogroup" aria-label="할 일" className="flex flex-wrap gap-4">
         <ModeCard
           selected={mode === 'reschedule'}
@@ -58,21 +174,45 @@ export function SellerRaceChangePage({ confirmOpen = false }: { confirmOpen?: bo
 
       <div className="flex flex-wrap items-start gap-6">
         <ConsoleCard title="일정 변경" className="min-w-130 flex-1">
-          <KeyValue label="지금 대회일" value="2026. 12. 6 (일)" />
-          <TextField label="새 대회일" defaultValue="2026. 12. 13 (일)" />
-          <Textarea
-            label="알림 문구 미리보기"
-            helper="참가자 전원에게 앱 알림과 문자로 보내요"
-            showCounter
-            maxLength={200}
-            defaultValue={NOTICE}
-          />
+          <form
+            id={FORM_ID}
+            noValidate
+            className="flex flex-col gap-4"
+            onSubmit={handleSubmit((values) => {
+              cancel.reset()
+              update.mutate(
+                {
+                  ...request,
+                  raceDate: parseRaceDateTimeInput(values.raceDate) ?? currentRaceDate,
+                },
+                { onSuccess: () => toast({ message: '대회 일정을 바꿨어요', tone: 'success' }) },
+              )
+            })}
+          >
+            <KeyValue label="지금 대회일" value={formatRaceDateTime(currentRaceDate)} />
+            <TextField
+              label="새 대회일"
+              placeholder="2026-12-13 08:00"
+              disabled={!editable}
+              error={errors.raceDate?.message}
+              {...register('raceDate')}
+            />
+            {/* TODO(api): 알림 발송 API가 생기면 이 문구를 보낸다. 지금은 미리보기만 */}
+            <Textarea
+              label="알림 문구 미리보기"
+              helper="참가자 전원에게 앱 알림과 문자로 보내요"
+              showCounter
+              maxLength={200}
+              readOnly
+              value={rescheduleNotice(title, currentRaceDate, nextRaceDate)}
+            />
+          </form>
         </ConsoleCard>
 
         <ConsoleCard title="영향 요약" className="w-100 shrink-0">
-          <StatTile label="알림 받을 참가자" value="1,500" unit="명" className="flex-none" />
+          <StatTile label="알림 받을 참가자" value={n(sold)} unit="명" className="flex-none" />
           <div className="flex flex-col gap-3 rounded-md bg-bg-subtle p-4">
-            <KeyValue label="전액 환불 허용" value="알린 날부터 7일 (~10/12)" />
+            <KeyValue label="전액 환불 허용" value={`알린 날부터 7일 (~${refundUntil()})`} />
             <KeyValue label="최종 정산 대상일" value="바뀐 대회일로 다시 잡혀요" />
           </div>
           <p className="text-body-s text-text-tertiary">
@@ -84,7 +224,7 @@ export function SellerRaceChangePage({ confirmOpen = false }: { confirmOpen?: bo
 
       <ConsoleCard title="대회 취소하면">
         <div className="flex gap-4">
-          {CANCEL_SUMMARY.map((item) => (
+          {cancelSummary(sold).map((item) => (
             <div
               key={item.label}
               className="flex flex-1 flex-col gap-1 rounded-md bg-bg-subtle p-4"
@@ -99,7 +239,7 @@ export function SellerRaceChangePage({ confirmOpen = false }: { confirmOpen?: bo
           <p className="text-body-s text-text-danger">
             취소하면 되돌릴 수 없어요. 참가자에게 바로 알림이 가요.
           </p>
-          <Button variant="danger" onClick={() => setCancelOpen(true)}>
+          <Button variant="danger" disabled={!editable} onClick={() => setCancelOpen(true)}>
             대회 취소하기
           </Button>
         </div>
@@ -110,13 +250,48 @@ export function SellerRaceChangePage({ confirmOpen = false }: { confirmOpen?: bo
         onOpenChange={setCancelOpen}
         type="danger"
         title="대회를 취소할까요?"
-        body="참가자 1,500명에게 ₩82,500,000을 자동 환불하고 바로 알림을 보내요. 되돌릴 수 없어요."
+        body={`참가자 ${n(sold)}명에게 참가비를 전액 자동 환불하고 바로 알림을 보내요. 되돌릴 수 없어요.`}
         confirmLabel="대회 취소하기"
         cancelLabel="그대로 두기"
-        onConfirm={() => setCancelOpen(false)}
+        confirming={cancel.isPending}
+        onConfirm={() => {
+          update.reset()
+          cancel.mutate(undefined, {
+            onSuccess: () => {
+              toast({ message: '대회를 취소했어요', tone: 'success' })
+              router.push('/seller/races')
+            },
+            onSettled: () => setCancelOpen(false),
+          })
+        }}
       />
     </ConsolePage>
   )
+}
+
+function cancelSummary(sold: number) {
+  return [
+    {
+      label: '참가권 (키트 포함)',
+      title: `${n(sold)}건 전액 자동 환불`,
+      body: '1차 정산 전이라 바로 예치금으로 돌려줘요. 이미 받은 키트는 돌려받지 않아요.',
+    },
+    {
+      label: '1차 정산 뒤 취소라면',
+      title: '1차 정산금 회수 뒤 환불',
+      body: '회수가 끝나야 구매자에게 환불돼요. 그동안 기다린다는 걸 구매자에게 알려요.',
+    },
+    {
+      label: '정산',
+      title: '지급보류 · 대회 취소 처리',
+      body: '환불이 끝나면 관리자가 보류를 풀어요.',
+    },
+  ]
+}
+
+function errorMessage(error: Error | null): string {
+  if (error instanceof ApiError && error.serverMessage) return error.serverMessage
+  return '잠시 후 다시 시도해 주세요.'
 }
 
 function ModeCard({
