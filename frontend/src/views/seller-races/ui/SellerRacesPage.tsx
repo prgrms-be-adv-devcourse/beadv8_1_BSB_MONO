@@ -81,13 +81,13 @@ const RACES: Race[] = [
 const n = (value: number) => value.toLocaleString('ko-KR')
 
 // 피그마 V2 · S06 대회 관리 (+ S02-4 등록 완료 토스트)
-export function SellerRacesPage({ registered = false }: { registered?: boolean }) {
+export function SellerRacesPage({ registeredRaceId }: { registeredRaceId?: string }) {
   const [selectedId, setSelectedId] = useState(RACES[0].id)
   const toast = useToast()
   const shown = useRef(false)
 
   useEffect(() => {
-    if (!registered || shown.current) {
+    if (!registeredRaceId || shown.current) {
       return
     }
     shown.current = true
@@ -97,10 +97,12 @@ export function SellerRacesPage({ registered = false }: { registered?: boolean }
       action: {
         label: '링크 복사',
         onClick: () =>
-          void navigator.clipboard?.writeText(`${window.location.origin}/races/cookierun`),
+          void navigator.clipboard?.writeText(
+            `${window.location.origin}/races/${registeredRaceId}`,
+          ),
       },
     })
-  }, [registered, toast])
+  }, [registeredRaceId, toast])
 
   const race = RACES.find((r) => r.id === selectedId) ?? RACES[0]
 

@@ -14,3 +14,10 @@ export type { RaceBadge, RaceDetail, RaceListItem, RaceOption, RaceSummary } fro
 export { RaceCard, type RaceCardProps } from './ui/RaceCard'
 export { RacePoster, type RacePosterProps } from './ui/RacePoster'
 export { RaceTicketCard, type RaceTicketCardProps } from './ui/RaceTicketCard'
+export {
+  formatRaceDate,
+  formatRaceDateTime,
+  parseRaceDateInput,
+  parseRaceDateTimeInput,
+  toRaceDateTimeInput,
+} from './lib/race-date'
