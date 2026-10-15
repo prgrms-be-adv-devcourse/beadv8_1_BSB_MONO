@@ -1,6 +1,7 @@
 package com.bukang.member.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -126,12 +127,10 @@ class ApiV1MemberModifyTest {
 			.satisfies(event -> {
 				assertThat(event.id()).isEqualTo(memberId);
 				assertThat(event.nickname()).isEqualTo("새닉네임");
-				// DB는 시각을 마이크로초까지만 저장하고, 리눅스(CI)의 now()는 나노초까지 만들므로 마이크로초로 맞춰 비교한다
-				assertThat(event.createDate().truncatedTo(ChronoUnit.MICROS))
-					.isEqualTo(saved.getCreateDate().truncatedTo(ChronoUnit.MICROS));
+				// 리눅스(CI)의 now()는 나노초까지 만들고 DB(H2)는 마이크로초로 반올림해 저장하므로 1마이크로초 차이까지 같게 본다
+				assertThat(event.createDate()).isCloseTo(saved.getCreateDate(), within(1, ChronoUnit.MICROS));
 				// flush 뒤에 발행해야 옛 수정 시각이 아니라 DB에 저장된 수정 시각이 담긴다
-				assertThat(event.modifyDate().truncatedTo(ChronoUnit.MICROS))
-					.isEqualTo(saved.getModifyDate().truncatedTo(ChronoUnit.MICROS));
+				assertThat(event.modifyDate()).isCloseTo(saved.getModifyDate(), within(1, ChronoUnit.MICROS));
 			});
 	}
 
