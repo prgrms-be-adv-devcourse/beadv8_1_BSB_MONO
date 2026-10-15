@@ -90,10 +90,13 @@ src/
 - 최종: AWS. `Dockerfile`(standalone)로 이미지를 만들고 런타임에 `BACKEND_URL`을 백엔드 내부 주소로 준다.
 - 이미지: 기본은 Next 최적화 + `IMAGE_REMOTE_HOSTS`(S3). `NEXT_PUBLIC_IMAGE_CDN_URL`을 주면 `shared/lib/image/cdn-loader.ts`로 바뀐다.
 
+## 인증
+
+- `src/proxy.ts`는 로그인 여부를 검사하지 않는다. Refresh Token 쿠키가 `Path=/api/v1/auth`라 `/seller`·`/admin` 요청에 실리지 않기 때문이다. 로그인 전 진입은 `AuthSessionRestorer`가 재발급 실패 시 `/login`으로 보낸다.
+
 ## 미정 사항
 
 - 소셜 로그인은 아직 없다.
-- `src/proxy.ts`의 `TODO(auth)`: Refresh Token 쿠키는 `Path=/api/v1/auth`라 `/seller`·`/admin` 요청에 실리지 않아 쿠키 유무로 막을 수 없다.
 
 ## 커밋
 
