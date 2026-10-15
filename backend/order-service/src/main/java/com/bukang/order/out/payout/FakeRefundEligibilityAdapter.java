@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 가짜 어댑터: 정산 서비스를 띄우지 않고 개발할 때, 정산 서비스와 같은 규칙(오늘이 대회 다음 날 전이면 환불 가능)으로 직접 답한다
+ * 가짜 어댑터: 정산 서비스를 띄우지 않고 개발할 때, 정산 서비스가 환불 마감일을 모를 때와 같은 규칙
+ * (오늘이 대회 다음 날 전이면 환불 가능)으로 직접 답한다
  * order.clients.payout.mode=fake(기본값)일 때만 쓴다. 실제 정산 서비스는 http로 바꾸면 HttpRefundEligibilityAdapter가 부른다
  */
 @Slf4j
@@ -25,7 +26,7 @@ public class FakeRefundEligibilityAdapter implements RefundEligibilityPort {
 	}
 
 	@Override
-	public boolean isRefundable(LocalDate raceDate) {
+	public boolean isRefundable(int raceId, LocalDate raceDate) {
 		return LocalDate.now(ZONE).isBefore(raceDate.plusDays(1));
 	}
 }

@@ -23,7 +23,7 @@ public class StubRefundEligibilityPort implements RefundEligibilityPort {
 	private final List<Boolean> askedInTransaction = new CopyOnWriteArrayList<>();
 
 	@Override
-	public boolean isRefundable(LocalDate raceDate) {
+	public boolean isRefundable(int raceId, LocalDate raceDate) {
 		askedRaceDates.add(raceDate);
 		askedInTransaction.add(TransactionSynchronizationManager.isActualTransactionActive());
 		return refundable && !settledRaceDates.contains(raceDate);
