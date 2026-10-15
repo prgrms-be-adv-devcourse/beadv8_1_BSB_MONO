@@ -6,6 +6,55 @@
  * OpenAPI spec version: v1
  */
 /**
+ * 내 정보 수정 요청
+ */
+export interface MemberModifyRequestDto {
+  /**
+     * 실명
+     * @minLength 0
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * 닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)
+     * @minLength 1
+     * @pattern ^[가-힣A-Za-z0-9]+$
+     */
+  nickname: string;
+  /**
+     * 휴대폰 번호 (하이픈 생략 가능)
+     * @minLength 1
+     * @pattern ^01[016789]-?\d{3,4}-?\d{4}$
+     */
+  phone: string;
+  /** 생년월일 */
+  birthDate: string;
+}
+
+export interface RsData {
+  status?: number;
+  code?: string;
+  message?: string;
+  data?: unknown;
+}
+
+/**
+ * 로그인 요청
+ */
+export interface MemberLoginRequestDto {
+  /**
+     * 이메일
+     * @minLength 1
+     */
+  email: string;
+  /**
+     * 비밀번호
+     * @minLength 1
+     */
+  password: string;
+}
+
+/**
  * 성별 (선택)
  * @nullable
  */
@@ -38,9 +87,9 @@ export interface MemberJoinRequestDto {
      */
   name: string;
   /**
-     * 닉네임 (30자 이하)
-     * @minLength 0
-     * @maxLength 30
+     * 닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)
+     * @minLength 1
+     * @pattern ^[가-힣A-Za-z0-9]+$
      */
   nickname: string;
   /**
@@ -56,54 +105,6 @@ export interface MemberJoinRequestDto {
      * @nullable
      */
   gender?: MemberJoinRequestDtoGender;
-}
-
-/**
- * 로그인 요청
- */
-export interface MemberLoginRequestDto {
-  /**
-     * 이메일
-     * @minLength 1
-     */
-  email: string;
-  /**
-     * 비밀번호
-     * @minLength 1
-     */
-  password: string;
-}
-
-export interface RsData {
-  status?: number;
-  message?: string;
-  data?: unknown;
-}
-
-/**
- * 내 정보 수정 요청
- */
-export interface MemberModifyRequestDto {
-  /**
-     * 실명
-     * @minLength 1
-     * @maxLength 255
-     */
-  name: string;
-  /**
-     * 닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)
-     * @minLength 1
-     * @pattern ^[가-힣A-Za-z0-9]+$
-     */
-  nickname: string;
-  /**
-     * 휴대폰 번호 (하이픈 생략 가능)
-     * @minLength 1
-     * @pattern ^01[016789]-?\d{3,4}-?\d{4}$
-     */
-  phone: string;
-  /** 생년월일 */
-  birthDate: string;
 }
 
 export interface MemberDto {
@@ -135,10 +136,10 @@ export interface TokenReissueResponseDto {
   accessToken?: string;
 }
 
-export interface RsDataMemberLoginResponseDto {
+export interface RsDataMemberDto {
   status?: number;
   message?: string;
-  data?: MemberLoginResponseDto;
+  data?: MemberDto;
 }
 
 export interface RsDataTokenReissueResponseDto {
@@ -147,9 +148,9 @@ export interface RsDataTokenReissueResponseDto {
   data?: TokenReissueResponseDto;
 }
 
-export interface RsDataMemberDto {
+export interface RsDataMemberLoginResponseDto {
   status?: number;
   message?: string;
-  data?: MemberDto;
+  data?: MemberLoginResponseDto;
 }
 

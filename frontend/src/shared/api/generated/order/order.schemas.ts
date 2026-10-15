@@ -85,7 +85,7 @@ export interface ParticipantInfoRequestDto {
      */
   emergencyContactPhone: string;
   /**
-     * 기념 티셔츠(키트) 사이즈 (키트가 없는 종목이면 비워 둔다, 10자 이하)
+     * 기념 티셔츠(키트) 사이즈. 종목이 주는 사이즈(XS~XXXL 중 종목 정보의 tshirtSizeOption) 중 하나이고, 티셔츠가 없는 종목이면 비워 둔다 (소문자도 받는다, 10자 이하)
      * @minLength 0
      * @maxLength 10
      */
@@ -96,6 +96,7 @@ export interface ParticipantInfoRequestDto {
 
 export interface RsData {
   status?: number;
+  code?: string;
   message?: string;
   data?: unknown;
 }
@@ -316,6 +317,11 @@ export interface CartCheckoutItemDto {
   participationId?: number;
   /** CREATED·EXISTING이면 order가 있다 */
   outcome?: CartCheckoutItemDtoOutcome;
+  /**
+     * SOLD_OUT·FAILED일 때 오류 코드 (예: ORDER_SOLD_OUT)
+     * @nullable
+     */
+  code?: string | null;
   message?: string;
   order?: OrderDto | null;
 }
@@ -384,5 +390,18 @@ page?: number;
  * @maximum 100
  */
 size?: number;
+};
+
+export type FindAdmissionParams = {
+/**
+ * 대회 ID
+ * @exclusiveMinimum 0
+ */
+raceId: number;
+/**
+ * 종목 ID
+ * @exclusiveMinimum 0
+ */
+raceCourseId: number;
 };
 

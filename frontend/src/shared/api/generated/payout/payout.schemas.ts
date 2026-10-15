@@ -32,6 +32,7 @@ export interface PayoutHoldRequestDto {
 
 export interface RsData {
   status?: number;
+  code?: string;
   message?: string;
   data?: unknown;
 }

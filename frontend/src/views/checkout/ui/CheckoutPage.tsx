@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
@@ -90,7 +90,7 @@ const RESULT: Record<
 const OFFLINE_PREVIEW_BALANCE = 40_000
 const OFFLINE_PREVIEW_SECONDS = 310
 
-/** 충전창(예치금 충전 화면). 충전하러 갈 때 결제 기한을 2분 늘린다. */
+/** 충전창(예치금 충전 화면). 결제 기한은 늘리지 않는다(PRO-168) — 충전하고 남은 시간 안에 돌아와 결제한다. */
 const CHARGE_HREF = '/me/deposit/charge'
 
 const won = (amount: number) => `₩${formatNumber(amount)}`
@@ -171,7 +171,6 @@ function OfflinePreview() {
 
 function OrderCheckout({ orderId }: { orderId: number }) {
   const router = useRouter()
-  const queryClient = useQueryClient()
   const completeHref = `/checkout/complete?orderId=${orderId}` as const
   const order = orderApi.useFindById1(orderId, { query: { select: unwrapData } })
   const raceId = order.data?.raceId
@@ -196,18 +195,6 @@ function OrderCheckout({ orderId }: { orderId: number }) {
       setFailure(next)
       if (next.kind === 'insufficient') void deposit.refetch()
     },
-  })
-
-  // 충전하러 가기 전에 결제 기한을 2분 늘린다. 이미 늘렸거나 실패해도 충전창으로는 간다.
-  const extend = useMutation({
-    mutationFn: async () => unwrapData(await orderApi.extendDeadline(orderId)),
-    onSuccess: (extended) =>
-      queryClient.setQueryData(orderApi.getFindById1QueryKey(orderId), {
-        status: 200,
-        message: '',
-        data: extended,
-      }),
-    onSettled: () => router.push(CHARGE_HREF),
   })
 
   const status = order.data?.status
@@ -237,7 +224,7 @@ function OrderCheckout({ orderId }: { orderId: number }) {
   const amount = order.data.totalAmount ?? 0
   const balance = deposit.balance
   const payment = balance === undefined ? undefined : splitPayment(amount, balance)
-  const busy = pay.isPending || extend.isPending
+  const busy = pay.isPending
 
   return (
     <CheckoutForm
@@ -255,7 +242,7 @@ function OrderCheckout({ orderId }: { orderId: number }) {
       }
       action={
         payment && payment.charge > 0 ? (
-          <Button size="l" disabled={!agreed || busy} onClick={() => extend.mutate()}>
+          <Button size="l" disabled={!agreed || busy} onClick={() => router.push(CHARGE_HREF)}>
             {`${won(payment.charge)} 충전하고 결제`}
           </Button>
         ) : (
