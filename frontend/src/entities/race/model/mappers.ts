@@ -125,7 +125,7 @@ export function toOpenRaceCard(race: SummaryDto, now: Date = new Date()): RaceSu
 }
 
 /** 종목별 파일 목록에서 대표 이미지 URL (없으면 첫 이미지) */
-function courseImage(files: FileDto[] | undefined): string | undefined {
+export function courseImage(files: FileDto[] | undefined): string | undefined {
   const images = (files ?? []).filter((f) => f.url)
   return (images.find((f) => f.fileType === 'THUMBNAIL') ?? images[0])?.url ?? undefined
 }

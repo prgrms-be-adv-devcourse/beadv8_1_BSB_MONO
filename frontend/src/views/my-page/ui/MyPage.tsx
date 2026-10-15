@@ -7,15 +7,17 @@ import type { ReactNode } from 'react'
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
 import { useAuthStatus, useLogout } from '@/features/auth'
+import { useMyBalance } from '@/entities/wallet'
 import { memberApi, unwrapData } from '@/shared/api'
-import { cn } from '@/shared/lib'
+import { cn, formatWon } from '@/shared/lib'
 import { buttonClassName, FOCUS_RING, Icon, KeyValue, Switch, type IconName } from '@/shared/ui'
 
 import { maskPhone, toDotDate } from '../model/member-format'
 
 // 피그마 V2 · M30 마이 · 설정 (+ M30-2 판매자 승인 후)
 // 회원 정보는 내 정보 조회(GET /api/v1/member/members/me)로 불러온다.
-// TODO(api): 알림 설정 · 판매자 상태 · 참가 대회 수 · 예치금 API가 아직 없다. 지금은 시안 값을 보여 준다.
+// 예치금은 지갑 잔액 API(useMyBalance)로 불러온다.
+// TODO(api): 알림 설정 · 판매자 상태 · 참가 대회 수 API가 아직 없다. 지금은 시안 값을 보여 준다.
 export function MyPage({ seller = false }: { seller?: boolean }) {
   const logout = useLogout()
   const me = memberApi.useFindMe({
@@ -23,6 +25,7 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
     query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated' },
   })
   const member = me.data
+  const { balance } = useMyBalance()
   return (
     <>
       <AppHeader />
@@ -73,7 +76,12 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
 
         <MenuCard>
           <MenuRow href="/tickets" icon="Calendar" label="내 참가 대회" value="2개" />
-          <MenuRow href="/me/deposit" icon="Package" label="예치금" value="₩5,000" />
+          <MenuRow
+            href="/me/deposit"
+            icon="Package"
+            label="예치금"
+            value={balance === undefined ? '-' : formatWon(balance)}
+          />
         </MenuCard>
 
         <h2 className="pt-2 text-label-strong">알림 설정</h2>

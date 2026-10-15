@@ -152,7 +152,7 @@ export interface CartCheckoutRequestDto {
 }
 
 /**
- * 키트 배송지
+ * 키트 배송지 응답
  */
 export interface ShippingAddressDto {
   recipientName?: string;
@@ -172,7 +172,7 @@ export const ParticipantInfoDtoGender = {
 } as const;
 
 /**
- * 참가자 정보
+ * 참가자 정보 응답
  */
 export interface ParticipantInfoDto {
   name?: string;
@@ -219,7 +219,8 @@ export interface ParticipationDto {
   participationType?: ParticipationDtoParticipationType;
   status?: ParticipationDtoStatus;
   participant?: ParticipantInfoDto;
-  thirdPartyConsent?: boolean;
+  /** @nullable */
+  thirdPartyConsent?: boolean | null;
   /** @nullable */
   consentedAt?: string | null;
   /** @nullable */
@@ -262,7 +263,7 @@ export const OrderDtoStatus = {
 } as const;
 
 /**
- * 주문
+ * 주문 상세
  */
 export interface OrderDto {
   id?: number;
@@ -273,7 +274,8 @@ export interface OrderDto {
   status?: OrderDtoStatus;
   totalAmount?: number;
   canceledAmount?: number;
-  paymentDueAt?: string;
+  /** @nullable */
+  paymentDueAt?: string | null;
   /** @nullable */
   paidAt?: string | null;
   shippingAddress?: ShippingAddressDto | null;
@@ -334,10 +336,53 @@ export interface CartCheckoutDto {
   results?: CartCheckoutItemDto[];
 }
 
+export type OrderSummaryDtoStatus = typeof OrderSummaryDtoStatus[keyof typeof OrderSummaryDtoStatus];
+
+
+export const OrderSummaryDtoStatus = {
+  CREATED: 'CREATED',
+  PAID: 'PAID',
+  PARTIAL_CANCELED: 'PARTIAL_CANCELED',
+  CANCELED: 'CANCELED',
+  EXPIRED: 'EXPIRED',
+} as const;
+
+/**
+ * 주문 목록의 한 줄
+ */
+export interface OrderSummaryDto {
+  id?: number;
+  createDate?: string;
+  orderNo?: string;
+  status?: OrderSummaryDtoStatus;
+  totalAmount?: number;
+  /** @nullable */
+  paymentDueAt?: string | null;
+  itemName?: string;
+  itemCount?: number;
+}
+
+/**
+ * 주문 목록 한 페이지
+ */
+export interface OrderPageDto {
+  orders?: OrderSummaryDto[];
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+}
+
 export interface RsDataParticipationDto {
   status?: number;
   message?: string;
   data?: ParticipationDto;
+}
+
+export interface RsDataOrderPageDto {
+  status?: number;
+  message?: string;
+  data?: OrderPageDto;
 }
 
 export interface RsDataOrderDto {

@@ -22,6 +22,7 @@ import type {
   RsDataCartDto,
   RsDataCartItemDto,
   RsDataOrderDto,
+  RsDataOrderPageDto,
   RsDataParticipantInfoDto,
   RsDataParticipationDto
 } from './order.schemas';
@@ -31,13 +32,21 @@ export const getChangeParticipantResponseMock = (): RsDataParticipationDto => ({
 
 export const getApplyResponseMock = (): RsDataParticipationDto => ({"status":201,"message":"참가 신청서를 저장했습니다.","data":{"id":1,"createDate":"2026-10-12T10:15:30","modifyDate":"2026-10-12T10:15:30","raceId":1,"raceCourseId":1,"memberId":1,"participationType":"INDIVIDUAL","status":"PENDING","participant":{"name":"김러너","birth":"1994-06-25","gender":"MALE","phone":"010-1234-5678","emergencyContactName":"김가족","emergencyContactPhone":"010-9876-5432","tshirtSize":"L","shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"}},"thirdPartyConsent":true,"consentedAt":"2026-10-12T10:15:30","paymentDueAt":null}})
 
+export const getCancelBeforePaymentResponseMock = (): RsDataParticipationDto => ({"status":200,"message":"참가 신청서를 취소했습니다.","data":{"id":1,"createDate":"2026-10-12T10:15:30","modifyDate":"2026-10-12T10:20:05","raceId":1,"raceCourseId":1,"memberId":1,"participationType":"INDIVIDUAL","status":"CANCELED","participant":{"name":"김러너","birth":"1994-06-25","gender":"MALE","phone":"010-1234-5678","emergencyContactName":"김가족","emergencyContactPhone":"010-9876-5432","tshirtSize":"L","shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"}},"thirdPartyConsent":true,"consentedAt":"2026-10-12T10:15:30","paymentDueAt":null}})
+
+export const getFindMineResponseMock = (): RsDataOrderPageDto => ({"status":200,"message":"주문 내역을 조회했습니다.","data":{"orders":[{"id":2,"createDate":"2026-10-12T10:00:00","orderNo":"OD-20261012-0002","status":"CREATED","totalAmount":50000,"paymentDueAt":"2026-10-12T10:10:00","itemName":"2026 서울 하프 마라톤 10K","itemCount":1},{"id":1,"createDate":"2026-10-10T09:00:00","orderNo":"OD-20261010-0001","status":"EXPIRED","totalAmount":45000,"paymentDueAt":"2026-10-10T09:10:00","itemName":"2026 부산 바다 마라톤 5K","itemCount":1}],"page":0,"size":20,"totalElements":2,"totalPages":1}})
+
 export const getCreateResponseMock = (): RsDataOrderDto => (faker.helpers.arrayElement([{"status":200,"message":"이미 처리한 주문 요청입니다.","data":{"id":1,"createDate":"2026-10-12T10:00:00","orderNo":"OD-20261012-0001","buyerId":1,"raceId":1,"status":"CREATED","totalAmount":50000,"canceledAmount":0,"paymentDueAt":"2026-10-12T10:10:00","paidAt":null,"shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"},"items":[{"id":1,"participationId":1,"raceCourseId":1,"sellerId":1,"itemName":"2026 서울 하프 마라톤 10K","unitPrice":50000,"quantity":1,"amount":50000,"status":"ORDERED"}]}}, {"status":201,"message":"자리를 확보했습니다. 결제 기한 안에 결제해주세요.","data":{"id":1,"createDate":"2026-10-12T10:00:00","orderNo":"OD-20261012-0001","buyerId":1,"raceId":1,"status":"CREATED","totalAmount":50000,"canceledAmount":0,"paymentDueAt":"2026-10-12T10:10:00","paidAt":null,"shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"},"items":[{"id":1,"participationId":1,"raceCourseId":1,"sellerId":1,"itemName":"2026 서울 하프 마라톤 10K","unitPrice":50000,"quantity":1,"amount":50000,"status":"ORDERED"}]}}]))
 
 export const getPayResponseMock = (): RsDataOrderDto => ({"status":200,"message":"결제했습니다. 참가가 확정되었습니다.","data":{"id":1,"createDate":"2026-10-12T10:00:00","orderNo":"OD-20261012-0001","buyerId":1,"raceId":1,"status":"PAID","totalAmount":50000,"canceledAmount":0,"paymentDueAt":"2026-10-12T10:10:00","paidAt":"2026-10-12T10:04:12","shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"},"items":[{"id":1,"participationId":1,"raceCourseId":1,"sellerId":1,"itemName":"2026 서울 하프 마라톤 10K","unitPrice":50000,"quantity":1,"amount":50000,"status":"PAID"}]}})
 
+export const getCancelItemResponseMock = (): RsDataOrderDto => ({"status":200,"message":"취소했습니다. 예치금 50,000원을 돌려드렸습니다.","data":{"id":1,"createDate":"2026-10-12T10:00:00","orderNo":"OD-20261012-0001","buyerId":1,"raceId":1,"status":"CANCELED","totalAmount":50000,"canceledAmount":50000,"paymentDueAt":"2026-10-12T10:10:00","paidAt":"2026-10-12T10:04:12","shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"},"items":[{"id":1,"participationId":1,"raceCourseId":1,"sellerId":1,"itemName":"2026 서울 하프 마라톤 10K","unitPrice":50000,"quantity":1,"amount":50000,"status":"CANCELED"}]}})
+
 export const getAddItemResponseMock = (): RsDataCartItemDto => (faker.helpers.arrayElement([{"status":200,"message":"이미 장바구니에 담긴 참가권입니다.","data":{"id":1,"createDate":"2026-10-12T10:15:30","raceCourseId":1}}, {"status":201,"message":"장바구니에 담았습니다.","data":{"id":1,"createDate":"2026-10-12T10:15:30","raceCourseId":1}}]))
 
 export const getCheckoutResponseMock = (): RsDataCartCheckoutDto => ({"status":200,"message":"참가권 3건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.","data":{"orderedCount":1,"results":[{"participationId":11,"outcome":"CREATED","message":"자리를 확보했습니다. 결제 기한 안에 결제해주세요.","order":{"id":1,"createDate":"2026-10-13T10:00:00","orderNo":"OD-20261013-0001","buyerId":1,"raceId":1,"status":"CREATED","totalAmount":50000,"canceledAmount":0,"paymentDueAt":"2026-10-13T10:10:00","paidAt":null,"shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"},"items":[{"id":1,"participationId":11,"raceCourseId":1,"sellerId":1,"itemName":"2026 서울 하프 마라톤 10K","unitPrice":50000,"quantity":1,"amount":50000,"status":"ORDERED"}]}},{"participationId":12,"outcome":"SOLD_OUT","code":"ORDER_SOLD_OUT","message":"남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.","order":null},{"participationId":13,"outcome":"FAILED","code":"ORDER_APPLICATION_CLOSED","message":"접수 기간이 아닙니다.","order":null}]}})
+
+export const getFindByIdResponseMock = (): RsDataParticipationDto => ({"status":200,"message":"참가 신청을 조회했습니다.","data":{"id":1,"createDate":"2026-10-12T10:15:30","modifyDate":"2026-10-12T10:15:30","raceId":1,"raceCourseId":1,"memberId":1,"participationType":"INDIVIDUAL","status":"PENDING","participant":{"name":"김러너","birth":"1994-06-25","gender":"MALE","phone":"010-1234-5678","emergencyContactName":"김가족","emergencyContactPhone":"010-9876-5432","tshirtSize":"L","shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"}},"thirdPartyConsent":true,"consentedAt":"2026-10-12T10:15:30","paymentDueAt":null}})
 
 export const getFindLatestParticipantResponseMock = (): RsDataParticipantInfoDto => ({"status":200,"message":"최근 참가자 정보를 조회했습니다.","data":{"name":"김러너","birth":"1994-06-25","gender":"MALE","phone":"010-1234-5678","emergencyContactName":"김가족","emergencyContactPhone":"010-9876-5432","tshirtSize":"L","shippingAddress":{"recipientName":"김러너","recipientPhone":"010-1234-5678","zipcode":"04700","address":"서울 성동구 왕십리로 00","addressDetail":"101동 1001호"}}})
 
@@ -72,21 +81,25 @@ export const getApplyMockHandler = (overrideResponse?: RsDataParticipationDto | 
   }, options)
 }
 
-export const getCancelBeforePaymentMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getCancelBeforePaymentMockHandler = (overrideResponse?: RsDataParticipationDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataParticipationDto> | RsDataParticipationDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/order/participations/:participationId/cancel', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCancelBeforePaymentResponseMock(),
       { status: 200
       })
   }, options)
 }
 
-export const getFindMineMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getFindMineMockHandler = (overrideResponse?: RsDataOrderPageDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataOrderPageDto> | RsDataOrderPageDto), options?: RequestHandlerOptions) => {
   return http.get('*/api/v1/order/orders', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getFindMineResponseMock(),
       { status: 200
       })
   }, options)
@@ -116,11 +129,13 @@ export const getPayMockHandler = (overrideResponse?: RsDataOrderDto | ((info: Pa
   }, options)
 }
 
-export const getCancelItemMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getCancelItemMockHandler = (overrideResponse?: RsDataOrderDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataOrderDto> | RsDataOrderDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/order/orders/:orderId/items/:orderItemId/cancel', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCancelItemResponseMock(),
       { status: 200
       })
   }, options)
@@ -160,11 +175,13 @@ export const getFindAdmissionMockHandler = (overrideResponse?: unknown | ((info:
   }, options)
 }
 
-export const getFindByIdMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getFindByIdMockHandler = (overrideResponse?: RsDataParticipationDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataParticipationDto> | RsDataParticipationDto), options?: RequestHandlerOptions) => {
   return http.get('*/api/v1/order/participations/:participationId', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getFindByIdResponseMock(),
       { status: 200
       })
   }, options)

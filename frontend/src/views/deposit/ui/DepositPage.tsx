@@ -4,12 +4,14 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { Alert, buttonClassName, Chip, KeyValue } from '@/shared/ui'
+import { useMyBalance } from '@/entities/wallet'
+import { formatWon } from '@/shared/lib'
+import { Alert, buttonClassName, Chip, KeyValue, Skeleton } from '@/shared/ui'
 
 type Kind = 'all' | 'charge' | 'pay' | 'refund'
 type History = { title: string; at: string; amount: string; kind: Exclude<Kind, 'all'> }
 
-// TODO(api): 예치금 · 내역 API로 바꾼다. 시안 예시 값.
+// TODO(api): 예치금 내역 API가 생기면 바꾼다. 시안 예시 값. (잔액은 API로 불러온다)
 const HISTORY: History[] = [
   { title: '결제 · 쿠키RUN 10K', at: '10/5 14:22', amount: '− ₩45,000', kind: 'pay' },
   { title: '충전 · 토스페이먼츠', at: '10/5 14:21', amount: '+ ₩10,000', kind: 'charge' },
@@ -36,6 +38,7 @@ const FILTERS: { value: Kind; label: string }[] = [
 // 피그마 V2 · M17 예치금 (+ M17-1 돌려받는 중)
 export function DepositPage({ refunding = false }: { refunding?: boolean }) {
   const [kind, setKind] = useState<Kind>('all')
+  const { balance, isPending, isError } = useMyBalance()
   const history = refunding ? [REFUNDING, ...HISTORY] : HISTORY
   const rows = kind === 'all' ? history : history.filter((h) => h.kind === kind)
 
@@ -46,7 +49,16 @@ export function DepositPage({ refunding = false }: { refunding?: boolean }) {
         <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <div className="flex flex-col gap-1">
             <p className="text-label-m text-text-secondary">보유 예치금</p>
-            <p className="font-display text-display-m">{refunding ? '₩0' : '₩5,000'}</p>
+            {isPending ? (
+              <Skeleton shape="rect" className="h-9 w-32" />
+            ) : (
+              <p className="font-display text-display-m">
+                {isError || balance === undefined ? '-' : formatWon(balance)}
+              </p>
+            )}
+            {isError && (
+              <p className="text-caption text-text-tertiary">잔액을 불러오지 못했어요.</p>
+            )}
           </div>
           {refunding && (
             <Alert

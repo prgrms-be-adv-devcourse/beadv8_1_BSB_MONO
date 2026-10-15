@@ -90,9 +90,9 @@ export const ChangeParticipantResponse = zod.object({
   "zipcode": zod.string().optional(),
   "address": zod.string().optional(),
   "addressDetail": zod.string().nullish()
-}).describe('키트 배송지'),zod.null()]).optional()
-}).optional().describe('참가자 정보'),
-  "thirdPartyConsent": zod.boolean().optional(),
+}).describe('키트 배송지 응답'),zod.null()]).optional()
+}).optional().describe('참가자 정보 응답'),
+  "thirdPartyConsent": zod.boolean().nullish(),
   "consentedAt": zod.iso.datetime({"offset":true}).nullish(),
   "paymentDueAt": zod.iso.datetime({"offset":true}).nullish()
 }).optional().describe('참가 신청')
@@ -184,9 +184,9 @@ export const ApplyResponse = zod.object({
   "zipcode": zod.string().optional(),
   "address": zod.string().optional(),
   "addressDetail": zod.string().nullish()
-}).describe('키트 배송지'),zod.null()]).optional()
-}).optional().describe('참가자 정보'),
-  "thirdPartyConsent": zod.boolean().optional(),
+}).describe('키트 배송지 응답'),zod.null()]).optional()
+}).optional().describe('참가자 정보 응답'),
+  "thirdPartyConsent": zod.boolean().nullish(),
   "consentedAt": zod.iso.datetime({"offset":true}).nullish(),
   "paymentDueAt": zod.iso.datetime({"offset":true}).nullish()
 }).optional().describe('참가 신청')
@@ -201,7 +201,39 @@ export const CancelBeforePaymentParams = zod.object({
   "participationId": zod.int().describe('참가 신청 ID')
 })
 
-export const CancelBeforePaymentResponse = zod.unknown()
+export const CancelBeforePaymentResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "raceId": zod.int().optional(),
+  "raceCourseId": zod.int().optional(),
+  "memberId": zod.int().optional(),
+  "participationType": zod.enum(['INDIVIDUAL', 'CREW']).optional(),
+  "status": zod.enum(['PENDING', 'APPLIED', 'CONFIRMED', 'RELEASED', 'FAILED', 'CANCELED']).optional(),
+  "participant": zod.object({
+  "name": zod.string().optional(),
+  "birth": zod.iso.date().optional(),
+  "gender": zod.enum(['MALE', 'FEMALE']).optional(),
+  "phone": zod.string().optional(),
+  "emergencyContactName": zod.string().optional(),
+  "emergencyContactPhone": zod.string().optional(),
+  "tshirtSize": zod.string().nullish(),
+  "shippingAddress": zod.union([zod.object({
+  "recipientName": zod.string().optional(),
+  "recipientPhone": zod.string().optional(),
+  "zipcode": zod.string().optional(),
+  "address": zod.string().optional(),
+  "addressDetail": zod.string().nullish()
+}).describe('키트 배송지 응답'),zod.null()]).optional()
+}).optional().describe('참가자 정보 응답'),
+  "thirdPartyConsent": zod.boolean().nullish(),
+  "consentedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "paymentDueAt": zod.iso.datetime({"offset":true}).nullish()
+}).optional().describe('참가 신청')
+})
 
 
 /**
@@ -223,7 +255,26 @@ export const FindMineQueryParams = zod.object({
   "size": zod.int().min(1).max(findMineQuerySizeMax).default(findMineQuerySizeDefault).describe('페이지 크기 (1~100)')
 })
 
-export const FindMineResponse = zod.unknown()
+export const FindMineResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "orders": zod.array(zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "orderNo": zod.string().optional(),
+  "status": zod.enum(['CREATED', 'PAID', 'PARTIAL_CANCELED', 'CANCELED', 'EXPIRED']).optional(),
+  "totalAmount": zod.int().optional(),
+  "paymentDueAt": zod.iso.datetime({"offset":true}).nullish(),
+  "itemName": zod.string().optional(),
+  "itemCount": zod.int().optional()
+}).describe('주문 목록의 한 줄')).optional(),
+  "page": zod.int().optional(),
+  "size": zod.int().optional(),
+  "totalElements": zod.int().optional(),
+  "totalPages": zod.int().optional()
+}).optional().describe('주문 목록 한 페이지')
+})
 
 
 /**
@@ -258,7 +309,7 @@ export const CreateResponse = zod.object({
   "status": zod.enum(['CREATED', 'PAID', 'PARTIAL_CANCELED', 'CANCELED', 'EXPIRED']).optional(),
   "totalAmount": zod.int().optional(),
   "canceledAmount": zod.int().optional(),
-  "paymentDueAt": zod.iso.datetime({"offset":true}).optional(),
+  "paymentDueAt": zod.iso.datetime({"offset":true}).nullish(),
   "paidAt": zod.iso.datetime({"offset":true}).nullish(),
   "shippingAddress": zod.union([zod.object({
   "recipientName": zod.string().optional(),
@@ -266,7 +317,7 @@ export const CreateResponse = zod.object({
   "zipcode": zod.string().optional(),
   "address": zod.string().optional(),
   "addressDetail": zod.string().nullish()
-}).describe('키트 배송지'),zod.null()]).optional(),
+}).describe('키트 배송지 응답'),zod.null()]).optional(),
   "items": zod.array(zod.object({
   "id": zod.int().optional(),
   "participationId": zod.int().optional(),
@@ -278,7 +329,7 @@ export const CreateResponse = zod.object({
   "amount": zod.int().optional(),
   "status": zod.enum(['ORDERED', 'PAID', 'CANCELED']).optional()
 }).describe('주문 상품')).optional()
-}).optional().describe('주문')
+}).optional().describe('주문 상세')
 })
 
 
@@ -302,7 +353,7 @@ export const PayResponse = zod.object({
   "status": zod.enum(['CREATED', 'PAID', 'PARTIAL_CANCELED', 'CANCELED', 'EXPIRED']).optional(),
   "totalAmount": zod.int().optional(),
   "canceledAmount": zod.int().optional(),
-  "paymentDueAt": zod.iso.datetime({"offset":true}).optional(),
+  "paymentDueAt": zod.iso.datetime({"offset":true}).nullish(),
   "paidAt": zod.iso.datetime({"offset":true}).nullish(),
   "shippingAddress": zod.union([zod.object({
   "recipientName": zod.string().optional(),
@@ -310,7 +361,7 @@ export const PayResponse = zod.object({
   "zipcode": zod.string().optional(),
   "address": zod.string().optional(),
   "addressDetail": zod.string().nullish()
-}).describe('키트 배송지'),zod.null()]).optional(),
+}).describe('키트 배송지 응답'),zod.null()]).optional(),
   "items": zod.array(zod.object({
   "id": zod.int().optional(),
   "participationId": zod.int().optional(),
@@ -322,7 +373,7 @@ export const PayResponse = zod.object({
   "amount": zod.int().optional(),
   "status": zod.enum(['ORDERED', 'PAID', 'CANCELED']).optional()
 }).describe('주문 상품')).optional()
-}).optional().describe('주문')
+}).optional().describe('주문 상세')
 })
 
 
@@ -335,7 +386,40 @@ export const CancelItemParams = zod.object({
   "orderItemId": zod.int().describe('취소할 주문 상품 ID')
 })
 
-export const CancelItemResponse = zod.unknown()
+export const CancelItemResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "orderNo": zod.string().optional(),
+  "buyerId": zod.int().optional(),
+  "raceId": zod.int().optional(),
+  "status": zod.enum(['CREATED', 'PAID', 'PARTIAL_CANCELED', 'CANCELED', 'EXPIRED']).optional(),
+  "totalAmount": zod.int().optional(),
+  "canceledAmount": zod.int().optional(),
+  "paymentDueAt": zod.iso.datetime({"offset":true}).nullish(),
+  "paidAt": zod.iso.datetime({"offset":true}).nullish(),
+  "shippingAddress": zod.union([zod.object({
+  "recipientName": zod.string().optional(),
+  "recipientPhone": zod.string().optional(),
+  "zipcode": zod.string().optional(),
+  "address": zod.string().optional(),
+  "addressDetail": zod.string().nullish()
+}).describe('키트 배송지 응답'),zod.null()]).optional(),
+  "items": zod.array(zod.object({
+  "id": zod.int().optional(),
+  "participationId": zod.int().optional(),
+  "raceCourseId": zod.int().optional(),
+  "sellerId": zod.int().optional(),
+  "itemName": zod.string().optional(),
+  "unitPrice": zod.int().optional(),
+  "quantity": zod.int().optional(),
+  "amount": zod.int().optional(),
+  "status": zod.enum(['ORDERED', 'PAID', 'CANCELED']).optional()
+}).describe('주문 상품')).optional()
+}).optional().describe('주문 상세')
+})
 
 
 /**
@@ -403,7 +487,7 @@ export const CheckoutResponse = zod.object({
   "status": zod.enum(['CREATED', 'PAID', 'PARTIAL_CANCELED', 'CANCELED', 'EXPIRED']).optional(),
   "totalAmount": zod.int().optional(),
   "canceledAmount": zod.int().optional(),
-  "paymentDueAt": zod.iso.datetime({"offset":true}).optional(),
+  "paymentDueAt": zod.iso.datetime({"offset":true}).nullish(),
   "paidAt": zod.iso.datetime({"offset":true}).nullish(),
   "shippingAddress": zod.union([zod.object({
   "recipientName": zod.string().optional(),
@@ -411,7 +495,7 @@ export const CheckoutResponse = zod.object({
   "zipcode": zod.string().optional(),
   "address": zod.string().optional(),
   "addressDetail": zod.string().nullish()
-}).describe('키트 배송지'),zod.null()]).optional(),
+}).describe('키트 배송지 응답'),zod.null()]).optional(),
   "items": zod.array(zod.object({
   "id": zod.int().optional(),
   "participationId": zod.int().optional(),
@@ -423,7 +507,7 @@ export const CheckoutResponse = zod.object({
   "amount": zod.int().optional(),
   "status": zod.enum(['ORDERED', 'PAID', 'CANCELED']).optional()
 }).describe('주문 상품')).optional()
-}).describe('주문'),zod.null()]).optional()
+}).describe('주문 상세'),zod.null()]).optional()
 }).describe('장바구니 결제 항목별 결과')).optional()
 }).optional().describe('장바구니 결제 결과')
 })
@@ -455,7 +539,39 @@ export const FindByIdParams = zod.object({
   "participationId": zod.int().describe('참가 신청 ID')
 })
 
-export const FindByIdResponse = zod.unknown()
+export const FindByIdResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "raceId": zod.int().optional(),
+  "raceCourseId": zod.int().optional(),
+  "memberId": zod.int().optional(),
+  "participationType": zod.enum(['INDIVIDUAL', 'CREW']).optional(),
+  "status": zod.enum(['PENDING', 'APPLIED', 'CONFIRMED', 'RELEASED', 'FAILED', 'CANCELED']).optional(),
+  "participant": zod.object({
+  "name": zod.string().optional(),
+  "birth": zod.iso.date().optional(),
+  "gender": zod.enum(['MALE', 'FEMALE']).optional(),
+  "phone": zod.string().optional(),
+  "emergencyContactName": zod.string().optional(),
+  "emergencyContactPhone": zod.string().optional(),
+  "tshirtSize": zod.string().nullish(),
+  "shippingAddress": zod.union([zod.object({
+  "recipientName": zod.string().optional(),
+  "recipientPhone": zod.string().optional(),
+  "zipcode": zod.string().optional(),
+  "address": zod.string().optional(),
+  "addressDetail": zod.string().nullish()
+}).describe('키트 배송지 응답'),zod.null()]).optional()
+}).optional().describe('참가자 정보 응답'),
+  "thirdPartyConsent": zod.boolean().nullish(),
+  "consentedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "paymentDueAt": zod.iso.datetime({"offset":true}).nullish()
+}).optional().describe('참가 신청')
+})
 
 
 /**
@@ -479,8 +595,8 @@ export const FindLatestParticipantResponse = zod.object({
   "zipcode": zod.string().optional(),
   "address": zod.string().optional(),
   "addressDetail": zod.string().nullish()
-}).describe('키트 배송지'),zod.null()]).optional()
-}).describe('참가자 정보'),zod.null()]).optional()
+}).describe('키트 배송지 응답'),zod.null()]).optional()
+}).describe('참가자 정보 응답'),zod.null()]).optional()
 })
 
 
@@ -504,7 +620,7 @@ export const FindById1Response = zod.object({
   "status": zod.enum(['CREATED', 'PAID', 'PARTIAL_CANCELED', 'CANCELED', 'EXPIRED']).optional(),
   "totalAmount": zod.int().optional(),
   "canceledAmount": zod.int().optional(),
-  "paymentDueAt": zod.iso.datetime({"offset":true}).optional(),
+  "paymentDueAt": zod.iso.datetime({"offset":true}).nullish(),
   "paidAt": zod.iso.datetime({"offset":true}).nullish(),
   "shippingAddress": zod.union([zod.object({
   "recipientName": zod.string().optional(),
@@ -512,7 +628,7 @@ export const FindById1Response = zod.object({
   "zipcode": zod.string().optional(),
   "address": zod.string().optional(),
   "addressDetail": zod.string().nullish()
-}).describe('키트 배송지'),zod.null()]).optional(),
+}).describe('키트 배송지 응답'),zod.null()]).optional(),
   "items": zod.array(zod.object({
   "id": zod.int().optional(),
   "participationId": zod.int().optional(),
@@ -524,7 +640,7 @@ export const FindById1Response = zod.object({
   "amount": zod.int().optional(),
   "status": zod.enum(['ORDERED', 'PAID', 'CANCELED']).optional()
 }).describe('주문 상품')).optional()
-}).optional().describe('주문')
+}).optional().describe('주문 상세')
 })
 
 
