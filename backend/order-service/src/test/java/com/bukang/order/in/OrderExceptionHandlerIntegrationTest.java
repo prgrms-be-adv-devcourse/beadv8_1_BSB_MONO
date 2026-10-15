@@ -32,7 +32,8 @@ class OrderExceptionHandlerIntegrationTest {
 	void withoutMemberId() throws Exception {
 		mockMvc.perform(get("/test/member"))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_LOGIN_REQUIRED"));
 	}
 
 	@Test
@@ -40,9 +41,11 @@ class OrderExceptionHandlerIntegrationTest {
 	void withoutOtherHeaderOrParam() throws Exception {
 		mockMvc.perform(get("/test/idempotent").header("X-Member-Id", "7"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		mockMvc.perform(get("/test/param").header("X-Member-Id", "7"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 값(keyword)이 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 값(keyword)이 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 }

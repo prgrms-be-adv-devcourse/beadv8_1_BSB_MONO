@@ -14,6 +14,7 @@ import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,7 +54,8 @@ class HttpRaceCourseAdapterTest {
 		RaceCourseInfo info = adapter.findCourse(7).orElseThrow();
 		assertThat(info).isEqualTo(new RaceCourseInfo(7, 3, LocalDateTime.of(2026, 11, 15, 8, 0),
 			LocalDateTime.of(2026, 10, 1, 10, 0), LocalDateTime.of(2026, 11, 1, 23, 59, 59), 14, null, 9,
-			"2026 서울 하프 마라톤 10K", 50_000, true, LocalDate.of(2026, 11, 8), null));
+			"2026 서울 하프 마라톤 10K", 50_000, true, LocalDate.of(2026, 11, 8), null, false,
+			List.of("S", "M", "L")));
 		RaceCourseInfo changed = adapter.findCourse(7).orElseThrow();
 		assertThat(changed.maxAge()).isEqualTo(60);
 		assertThat(changed.scheduleChangedAt()).isEqualTo(LocalDateTime.of(2026, 10, 20, 9, 0));

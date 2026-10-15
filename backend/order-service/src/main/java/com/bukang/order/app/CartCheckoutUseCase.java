@@ -37,6 +37,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CartCheckoutUseCase {
 	private static final String UNEXPECTED_MESSAGE = "처리하지 못했습니다. 같은 Idempotency-Key로 다시 시도해주세요.";
+	// 예상하지 못한 오류의 코드 (common UnexpectedExceptionResolver의 500 응답과 같은 값)
+	static final String UNEXPECTED_CODE = "INTERNAL_ERROR";
 
 	private final ParticipationRepository participationRepository;
 	private final CartRepository cartRepository;
@@ -96,23 +98,24 @@ public class CartCheckoutUseCase {
 			return transactionTemplate.execute(status -> {
 				OrderCreateResult result = orderCreateUseCase.create(memberId, participationId, key, now);
 				return switch (result.outcome()) {
-					case CREATED -> new CartCheckoutItemDto(participationId, Outcome.CREATED,
+					case CREATED -> new CartCheckoutItemDto(participationId, Outcome.CREATED, null,
 						OrderCreateResult.CREATED_MESSAGE, result.order());
-					case EXISTING -> new CartCheckoutItemDto(participationId, Outcome.EXISTING,
+					case EXISTING -> new CartCheckoutItemDto(participationId, Outcome.EXISTING, null,
 						OrderCreateResult.EXISTING_MESSAGE, result.order());
 					case SOLD_OUT -> new CartCheckoutItemDto(participationId, Outcome.SOLD_OUT,
-						OrderCreateResult.SOLD_OUT_MESSAGE, null);
+						OrderCreateResult.SOLD_OUT_CODE, OrderCreateResult.SOLD_OUT_MESSAGE, null);
 				};
 			});
 		} catch (BusinessException exception) {
 			// 이 항목만 롤백된다. 앞에서 주문한 항목은 이미 커밋되어 그대로 남는다
-			return new CartCheckoutItemDto(participationId, Outcome.FAILED, exception.getMessage(), null);
+			return new CartCheckoutItemDto(participationId, Outcome.FAILED, exception.getCode(), exception.getMessage(),
+				null);
 		} catch (RuntimeException exception) {
 			// DB 오류·외부 호출 실패처럼 예상하지 못한 오류도 이 항목만 실패로 돌려준다.
 			// 여기서 던지면 앞 항목은 주문이 끝났는데 500만 나가, 회원이 어떤 주문이 생겼는지 알 수 없다
 			log.error("장바구니 결제 중 항목을 처리하지 못했습니다. memberId={}, participationId={}", memberId, participationId,
 				exception);
-			return new CartCheckoutItemDto(participationId, Outcome.FAILED, UNEXPECTED_MESSAGE, null);
+			return new CartCheckoutItemDto(participationId, Outcome.FAILED, UNEXPECTED_CODE, UNEXPECTED_MESSAGE, null);
 		}
 	}
 

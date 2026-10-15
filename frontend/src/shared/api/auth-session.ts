@@ -16,6 +16,14 @@ import type { RsDataTokenReissueResponseDto } from './generated/member/member.sc
  */
 const REISSUE_URL = '/api/v1/auth/reissue'
 
+/**
+ * 재발급을 탭 사이에서 한 번에 하나씩 보내기 위한 Web Locks 이름.
+ * 아래 single-flight(reissuing)는 모듈 변수라 탭마다 따로 있다. 탭 두 개가 동시에 401을 받으면
+ * 둘 다 같은 Refresh Token으로 재발급을 보내고, 늦게 간 쪽이 재사용(탈취)으로 보여 로그인이 끊긴다.
+ * 쿠키는 탭끼리 공유되므로 차례대로만 보내면 뒤 탭은 앞 탭이 받아 온 새 쿠키로 보낸다.
+ */
+const REISSUE_LOCK_NAME = 'auth:reissue'
+
 let reissuing: Promise<string | null> | null = null
 let restoring: Promise<void> | null = null
 
@@ -37,8 +45,10 @@ export function reissueAccessToken(): Promise<string | null> {
 
 async function requestReissue(): Promise<string | null> {
   const startedAt = getAuthGeneration()
-  const response = await fetch(REISSUE_URL, { method: 'POST', credentials: 'same-origin' })
-  // 재발급을 기다리는 사이에 로그아웃했다면 결과를 버린다
+  const response = await withReissueLock(() =>
+    fetch(REISSUE_URL, { method: 'POST', credentials: 'same-origin' }),
+  )
+  // 잠금이나 재발급을 기다리는 사이에 로그아웃했다면 결과를 버린다
   if (getAuthGeneration() !== startedAt) return null
 
   const token = response.ok ? await readAccessToken(response) : null
@@ -48,6 +58,17 @@ async function requestReissue(): Promise<string | null> {
   }
   setAccessToken(token)
   return token
+}
+
+/**
+ * 다른 탭의 재발급이 끝날 때까지 기다렸다가 보낸다. 새 쿠키는 응답 헤더를 받을 때 저장되므로
+ * fetch가 끝나면 잠금을 푼다. navigator.locks가 없는 환경(구형 브라우저, 서버, jsdom)에서는 잠금 없이 보낸다.
+ */
+async function withReissueLock(send: () => Promise<Response>): Promise<Response> {
+  const locks =
+    typeof navigator === 'undefined' ? undefined : (navigator.locks as LockManager | undefined)
+  if (!locks) return send()
+  return await locks.request(REISSUE_LOCK_NAME, send)
 }
 
 async function readAccessToken(response: Response): Promise<string | null> {
