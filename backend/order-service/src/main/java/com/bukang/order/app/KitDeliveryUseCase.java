@@ -47,9 +47,10 @@ public class KitDeliveryUseCase {
 	// 배송 준비 → 배송 중. 택배사·송장 번호를 함께 남긴다
 	public OrderItemDto ship(int sellerId, int orderItemId, String carrier, String trackingNumber,
 		LocalDateTime now) {
+		// 입력과 주문 상품만 보고 알 수 있는 이유는 모두 상품 서비스에 묻기 전에 알린다
+		OrderItem.checkShippingInfo(carrier, trackingNumber);
 		OrderItem target = transactionTemplate.execute(status -> {
 			OrderItem item = findSellersItem(sellerId, orderItemId);
-			// 주문 상품만 보고 알 수 있는 이유(키트 없음, 이미 보냄, 결제 전)는 상품 서비스에 묻기 전에 알린다
 			item.checkKitShippable();
 			return item;
 		});

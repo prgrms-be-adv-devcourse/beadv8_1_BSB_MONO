@@ -154,13 +154,10 @@ public class OrderItem extends BaseIdAndTime {
 	// 환불 기한이 지났는지는 종목 정보를 알아야 해서 부르는 쪽(KitDeliveryUseCase)이 확인한다
 	public void shipKit(String carrier, String trackingNumber, LocalDateTime shippedAt) {
 		checkKitShippable();
-		if (isInvalidText(carrier, MAX_CARRIER_LENGTH) || isInvalidText(trackingNumber, MAX_TRACKING_NUMBER_LENGTH)) {
-			throw new KitShippingInfoInvalidException("택배사(%d자 이하)와 송장 번호(%d자 이하)를 넣어 주세요."
-				.formatted(MAX_CARRIER_LENGTH, MAX_TRACKING_NUMBER_LENGTH));
-		}
+		checkShippingInfo(carrier, trackingNumber);
 		this.kitDeliveryStatus = KitDeliveryStatus.SHIPPING;
-		this.kitCarrier = carrier;
-		this.kitTrackingNumber = trackingNumber;
+		this.kitCarrier = carrier.strip();
+		this.kitTrackingNumber = trackingNumber.strip();
 		this.kitShippedAt = shippedAt;
 	}
 
@@ -194,8 +191,16 @@ public class OrderItem extends BaseIdAndTime {
 		}
 	}
 
+	// 택배사·송장 번호가 있고 길이 안인지. 앞뒤 공백은 빼고 센다
+	public static void checkShippingInfo(String carrier, String trackingNumber) {
+		if (isInvalidText(carrier, MAX_CARRIER_LENGTH) || isInvalidText(trackingNumber, MAX_TRACKING_NUMBER_LENGTH)) {
+			throw new KitShippingInfoInvalidException("택배사(%d자 이하)와 송장 번호(%d자 이하)를 넣어 주세요."
+				.formatted(MAX_CARRIER_LENGTH, MAX_TRACKING_NUMBER_LENGTH));
+		}
+	}
+
 	private static boolean isInvalidText(String value, int maxLength) {
-		return value == null || value.isBlank() || value.length() > maxLength;
+		return value == null || value.isBlank() || value.strip().length() > maxLength;
 	}
 
 	private void checkHasKit() {

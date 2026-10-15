@@ -256,6 +256,24 @@ class KitDeliveryTest {
 			"1".repeat(OrderItem.MAX_TRACKING_NUMBER_LENGTH + 1), LocalDateTime.now()))
 			.isInstanceOf(KitShippingInfoInvalidException.class);
 		assertThat(itemOf(orderId).getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.PREPARING);
+
+		// 종목을 묻기 전에 막으므로, 상품 서비스에 종목이 없어도 입력 오류로 알린다
+		raceCoursePort.clear();
+		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemId, "", TRACKING_NUMBER, LocalDateTime.now()))
+			.isInstanceOf(KitShippingInfoInvalidException.class);
+	}
+
+	@Test
+	@DisplayName("택배사·송장 번호의 앞뒤 공백은 빼고 저장한다")
+	void shipStripsShippingInfo() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		int itemId = itemIdOf(paidOrder());
+
+		OrderItemDto shipped = kitDeliveryUseCase.ship(SELLER_ID, itemId, " " + CARRIER + " ",
+			" " + TRACKING_NUMBER + " ", LocalDateTime.now());
+
+		assertThat(shipped.getKitCarrier()).isEqualTo(CARRIER);
+		assertThat(shipped.getKitTrackingNumber()).isEqualTo(TRACKING_NUMBER);
 	}
 
 	@Test
