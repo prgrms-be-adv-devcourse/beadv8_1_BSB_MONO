@@ -36,7 +36,7 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
       <main className="flex flex-1 flex-col bg-bg-surface">
         <div className="flex-1" />
         <form
-          className="flex flex-col items-center px-6"
+          className="flex flex-col items-center px-4"
           noValidate
           onSubmit={handleSubmit(() => {
             // TODO(api): ApiV1AuthController 로그인에 연결한다. 실패하면 AUTH_ERRORS.loginFailed를 띄운다.

@@ -128,7 +128,7 @@ function HomeSkeleton() {
           <div className="grid grid-cols-2 gap-x-4 gap-y-6">
             {Array.from({ length: count }, (_, i) => (
               <div key={i} className="flex flex-col gap-2">
-                <Skeleton shape="rect" className="aspect-square w-full rounded-[12px]" />
+                <Skeleton shape="rect" className="aspect-square w-full rounded-md" />
                 <Skeleton className="w-11/12" />
                 <Skeleton className="w-2/3" />
                 <Skeleton className="w-1/2" />
