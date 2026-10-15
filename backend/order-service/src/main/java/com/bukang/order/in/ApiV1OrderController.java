@@ -109,7 +109,8 @@ public class ApiV1OrderController {
 			case EXISTING -> ResponseEntity.ok()
 				.body(RsData.of(HttpStatus.OK, OrderCreateResult.EXISTING_MESSAGE, result.order()));
 			case SOLD_OUT -> ResponseEntity.status(HttpStatus.CONFLICT)
-				.body(RsData.of(HttpStatus.CONFLICT, OrderCreateResult.SOLD_OUT_MESSAGE, null));
+				.body(RsData.of(HttpStatus.CONFLICT, OrderCreateResult.SOLD_OUT_CODE,
+					OrderCreateResult.SOLD_OUT_MESSAGE, null));
 		};
 	}
 

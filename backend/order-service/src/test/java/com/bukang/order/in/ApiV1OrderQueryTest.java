@@ -135,13 +135,16 @@ class ApiV1OrderQueryTest {
 	void findMineInvalidRequest() throws Exception {
 		findMine(MEMBER_ID, "?from=2026-10-12&to=2026-10-11")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("조회 시작일이 종료일보다 늦습니다."));
+			.andExpect(jsonPath("$.message").value("조회 시작일이 종료일보다 늦습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_INVALID_SEARCH_PERIOD"));
 		findMine(MEMBER_ID, "?size=101")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("한 번에 100개까지 조회할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("한 번에 100개까지 조회할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		findMine(MEMBER_ID, "?from=2026/10/11")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
+			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -163,10 +166,12 @@ class ApiV1OrderQueryTest {
 
 		mockMvc.perform(get(BASE_URL + "/" + orderId).header("X-Member-Id", OTHER_MEMBER_ID))
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 주문만 볼 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 주문만 볼 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"));
 		mockMvc.perform(get(BASE_URL + "/999999").header("X-Member-Id", MEMBER_ID))
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
 	}
 
 	private ResultActions findMine(int memberId, String query) throws Exception {
