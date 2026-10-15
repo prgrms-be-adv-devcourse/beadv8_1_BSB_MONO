@@ -1,3 +1,5 @@
 import { WithdrawPage } from '@/views/my-page'
 
-export default WithdrawPage
+export default function Page() {
+  return <WithdrawPage />
+}
