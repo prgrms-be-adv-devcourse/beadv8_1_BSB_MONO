@@ -1,6 +1,7 @@
 package com.bukang.order.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -92,7 +94,8 @@ class ApiV1QueueAdmissionTest {
 				.content("{\"participationId\": %d}".formatted(participationId)))
 			.andExpect(status().isCreated());
 		Order order = orderRepository.findAll().getFirst();
-		assertThat(order.getPaymentDueAt()).isEqualTo(LocalDateTime.parse(endsAt));
+		// DB는 마이크로초까지만 저장한다. 리눅스(CI)는 지금 시각을 나노초까지 줘 그 아래 자리만 다를 수 있다
+		assertThat(order.getPaymentDueAt()).isCloseTo(LocalDateTime.parse(endsAt), within(1, ChronoUnit.MICROS));
 	}
 
 	@Test
