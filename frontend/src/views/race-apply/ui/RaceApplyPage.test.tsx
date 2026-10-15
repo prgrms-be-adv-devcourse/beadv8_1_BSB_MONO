@@ -23,6 +23,7 @@ const COURSE: RaceOption = {
   kitIncluded: true,
   shirtSizes: ['S', 'M', 'L'],
 }
+const RACE = { ...RACE_DETAIL, options: [COURSE] }
 
 beforeEach(() => push.mockClear())
 
@@ -38,7 +39,7 @@ function renderPage(initialState: BookingFlowInitial = {}) {
   render(
     <QueryClientProvider client={client}>
       <BookingFlowProvider initialState={initialState}>
-        <RaceApplyPage race={RACE_DETAIL} option={COURSE} />
+        <RaceApplyPage race={RACE} option={COURSE} />
         <StoreProbe />
       </BookingFlowProvider>
     </QueryClientProvider>,
@@ -56,6 +57,24 @@ function captureApply() {
   )
   return bodies
 }
+
+function captureAddItem() {
+  const added: unknown[] = []
+  server.use(
+    http.post('*/api/v1/order/cart/items', async ({ request }) => {
+      added.push(await request.json())
+      return HttpResponse.json(orderMock.getAddItemResponseMock())
+    }),
+  )
+  return added
+}
+
+const cartWith = (items: { id: number; createDate: string; raceCourseId: number }[]) =>
+  orderMock.getFindCartMockHandler({
+    status: 200,
+    message: '장바구니를 조회했습니다.',
+    data: { memberId: 1, items },
+  })
 
 const agree = (user: ReturnType<typeof userEvent.setup>) =>
   user.click(screen.getByRole('checkbox', { name: '[필수] 개인정보 제3자 제공 동의' }))
@@ -120,15 +139,10 @@ describe('참가 신청 · 참가자 정보', () => {
     expect(screen.getByLabelText('이름')).toHaveValue('')
   })
 
-  it('장바구니 담기를 누르면 참가 신청을 저장하고 그 종목을 장바구니에 담는다', async () => {
+  it('장바구니가 비어 있으면 참가 신청을 저장하고 그 종목을 바로 담는다', async () => {
     captureApply()
-    const added: unknown[] = []
-    server.use(
-      http.post('*/api/v1/order/cart/items', async ({ request }) => {
-        added.push(await request.json())
-        return HttpResponse.json(orderMock.getAddItemResponseMock())
-      }),
-    )
+    const added = captureAddItem()
+    server.use(cartWith([]))
     const user = userEvent.setup()
     renderPage()
 
@@ -138,6 +152,49 @@ describe('참가 신청 · 참가자 정보', () => {
 
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/cart'))
     expect(added).toEqual([{ raceCourseId: 3 }])
+    expect(screen.queryByText('장바구니의 대회를 바꿀까요?')).not.toBeInTheDocument()
+  })
+
+  it('장바구니에 다른 대회가 담겨 있으면 바꿀지 묻고, 바꾸면 그 항목을 빼고 담는다', async () => {
+    captureApply()
+    const added = captureAddItem()
+    const removed: string[] = []
+    server.use(
+      cartWith([{ id: 9, createDate: '2026-10-12T10:15:30', raceCourseId: 1 }]),
+      http.delete('*/api/v1/order/cart/items/:cartItemId', ({ params }) => {
+        removed.push(String(params.cartItemId))
+        return HttpResponse.json(orderMock.getRemoveItemResponseMock())
+      }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByLabelText('이름')
+    await agree(user)
+    await user.click(screen.getByRole('button', { name: '장바구니 담기' }))
+
+    expect(await screen.findByText('장바구니의 대회를 바꿀까요?')).toBeInTheDocument()
+    expect(added).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: '바꾸기' }))
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/cart'))
+    expect(removed).toEqual(['9'])
+    expect(added).toEqual([{ raceCourseId: 3 }])
+  })
+
+  it('같은 대회의 종목이 담겨 있으면 묻지 않고 담는다', async () => {
+    captureApply()
+    captureAddItem()
+    server.use(cartWith([{ id: 2, createDate: '2026-10-12T10:15:30', raceCourseId: 3 }]))
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByLabelText('이름')
+    await agree(user)
+    await user.click(screen.getByRole('button', { name: '장바구니 담기' }))
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/cart'))
   })
 
   it('같은 대회에 이미 신청했으면(409) 서버 문구를 보여 주고 넘어가지 않는다', async () => {

@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -9,7 +9,12 @@ import { Controller, useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { useBookingFlow, type BookingParticipant } from '@/features/booking'
-import { RaceTicketCard, type RaceDetail, type RaceOption } from '@/entities/race'
+import {
+  raceDetailQueryOptions,
+  RaceTicketCard,
+  type RaceDetail,
+  type RaceOption,
+} from '@/entities/race'
 import { ApiError, memberApi, orderApi, unwrapData } from '@/shared/api'
 import { cn, formatWon } from '@/shared/lib'
 import {
@@ -17,6 +22,7 @@ import {
   BottomCta,
   Button,
   Checkbox,
+  Dialog,
   Divider,
   FOCUS_RING,
   KeyValue,
@@ -43,7 +49,15 @@ const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 /** 신청서를 저장한 뒤 어디로 갈지 */
 type NextStep = 'cart' | 'checkout'
 
-// 피그마 V2 · M05 참가 신청 · 참가자 정보
+/** 장바구니에 다른 대회가 담겨 있을 때 바꿀지 묻는 확인 창(M05-1)의 내용 */
+type ReplaceCart = {
+  /** 빼야 할 장바구니 항목 */
+  cartItemIds: number[]
+  /** 담아 둔 대회 · 종목 이름. 이 기기에서 담지 않아 모르면 undefined */
+  label?: string
+}
+
+// 피그마 V2 · M05 참가 신청 · 참가자 정보 (+ M05-1 장바구니 바꾸기 확인)
 // 종목은 page.tsx에서 정원이 남은 종목 중에 골라 넘긴다 (상품 API의 대회 상세 courses).
 // 입력 칸은 이번에 입력해 둔 값(결제에서 돌아온 경우) → 지난 신청 값 → 회원 정보 순으로 채운다.
 export function RaceApplyPage({ race, option }: { race: RaceDetail; option: RaceOption }) {
@@ -95,6 +109,7 @@ function ParticipantForm({
   defaults: ParticipantFormValues
 }) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const refundDeadline = race.schedule.find((row) => row.label === '전액 환불 기한')?.value
   const sizes = (option.shirtSizes ?? []).map((v) => ({ value: v, label: v }))
   const applications = useBookingFlow((s) => s.applications)
@@ -110,6 +125,7 @@ function ParticipantForm({
   })
   // 필수 동의는 사용자가 직접 체크해야 버튼이 켜진다.
   const [agreed, setAgreed] = useState(false)
+  const [replace, setReplace] = useState<ReplaceCart | null>(null)
 
   // 참가 신청을 저장하고(이번에 이미 저장한 종목이면 참가자 정보만 고친다) 다음 단계로 넘어간다.
   const save = useMutation({
@@ -125,11 +141,54 @@ function ParticipantForm({
         },
         participant,
       )
-      if (next === 'cart') await orderApi.addItem({ raceCourseId: Number(option.id) })
-      return next
+      if (next === 'checkout') return null
+      // 장바구니에는 대회 1개만 담을 수 있다. 다른 대회가 담겨 있으면 담기 전에 바꿀지 묻는다.
+      const others = await otherRaceItems()
+      if (others.length > 0)
+        return { cartItemIds: others.map((i) => i.id ?? 0), label: await cartLabel(others[0]) }
+      await addToCart()
+      return null
     },
-    onSuccess: (next) => router.push(next === 'cart' ? '/cart' : '/checkout'),
+    onSuccess: (pending, { next }) => {
+      if (pending) setReplace(pending)
+      else router.push(next === 'cart' ? '/cart' : '/checkout')
+    },
   })
+
+  // 확인 창에서 바꾸기를 누르면 담아 둔 다른 대회를 빼고 이 대회를 담는다.
+  const replaceCart = useMutation({
+    mutationFn: async (cartItemIds: number[]) => {
+      for (const id of cartItemIds) await orderApi.removeItem(id)
+      await addToCart()
+    },
+    onSuccess: () => router.push('/cart'),
+    onSettled: () => setReplace(null),
+  })
+
+  async function addToCart() {
+    await orderApi.addItem({ raceCourseId: Number(option.id) })
+    await queryClient.invalidateQueries({ queryKey: orderApi.getFindCartQueryKey() })
+  }
+
+  async function otherRaceItems() {
+    const cart = unwrapData(await queryClient.fetchQuery(orderApi.getFindCartQueryOptions()))
+    const thisRace = new Set(race.options.map((o) => o.id))
+    return (cart.items ?? []).filter((item) => !thisRace.has(String(item.raceCourseId)))
+  }
+
+  /** 담아 둔 항목의 대회 · 종목 이름. 이 기기에서 저장한 참가 신청이 있어야 대회를 알 수 있다. */
+  async function cartLabel(item: { raceCourseId?: number }) {
+    const courseId = String(item.raceCourseId)
+    const application = applications[courseId]
+    if (!application) return undefined
+    try {
+      const other = await queryClient.fetchQuery(raceDetailQueryOptions(application.raceId))
+      const course = other?.options.find((o) => o.id === courseId)
+      return other && course ? `${other.title} · ${course.name}` : undefined
+    } catch {
+      return undefined
+    }
+  }
 
   async function saveParticipation(participant: BookingParticipant) {
     const existing = applications[option.id]
@@ -147,10 +206,12 @@ function ParticipantForm({
 
   const submit = (next: NextStep) => handleSubmit((values) => save.mutate({ values, next }))
   // 409(이미 신청함 · 접수 기간 아님) · 400(나이 제한 밖 · 키트 배송 주소 없음)은 서버 문구를 그대로 보여 준다.
-  const saveError = save.error
-    ? ((save.error instanceof ApiError ? save.error.serverMessage : undefined) ??
+  const failure = save.error ?? replaceCart.error
+  const saveError = failure
+    ? ((failure instanceof ApiError ? failure.serverMessage : undefined) ??
       PARTICIPANT_ERRORS.unavailable)
     : null
+  const busy = save.isPending || replaceCart.isPending
 
   return (
     <>
@@ -297,21 +358,32 @@ function ParticipantForm({
       <BottomCta
         className="sticky bottom-0 z-10"
         secondary={
-          // TODO(api): PRO-150에서 장바구니에 다른 대회가 담겨 있으면 바꿀지 묻는다(M05-1).
-          <Button
-            variant="secondary"
-            size="l"
-            disabled={!agreed || save.isPending}
-            onClick={submit('cart')}
-          >
+          <Button variant="secondary" size="l" disabled={!agreed || busy} onClick={submit('cart')}>
             장바구니 담기
           </Button>
         }
         primary={
-          <Button size="l" disabled={!agreed || save.isPending} onClick={submit('checkout')}>
+          <Button size="l" disabled={!agreed || busy} onClick={submit('checkout')}>
             바로 결제
           </Button>
         }
+      />
+      <Dialog
+        open={replace !== null}
+        onOpenChange={(open) => !open && setReplace(null)}
+        title="장바구니의 대회를 바꿀까요?"
+        body={
+          <>
+            장바구니에는 대회 1개만 담을 수 있어요.
+            <br />
+            {replace?.label
+              ? `담아 둔 「${replace.label}」를 빼고 이 대회를 담아요.`
+              : '담아 둔 대회를 빼고 이 대회를 담아요.'}
+          </>
+        }
+        confirmLabel="바꾸기"
+        cancelLabel="그대로 두기"
+        onConfirm={() => replace && replaceCart.mutate(replace.cartItemIds)}
       />
     </>
   )

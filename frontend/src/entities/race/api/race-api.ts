@@ -90,3 +90,15 @@ export async function fetchRaceDetail(raceId: string): Promise<RaceDetail | null
   const files = await Promise.all(courseIds.map(fetchCourseFiles))
   return toRaceDetail(race, Object.fromEntries(courseIds.map((id, i) => [id, files[i]])))
 }
+
+/**
+ * 대회 상세를 클라이언트에서 불러올 때 (장바구니 · 결제처럼 로그인한 뒤 그리는 화면).
+ * 종목 이미지 URL이 30분 뒤 만료되므로 그보다 짧게 캐시한다.
+ */
+export function raceDetailQueryOptions(raceId: string) {
+  return queryOptions({
+    queryKey: ['race-detail', raceId],
+    queryFn: () => fetchRaceDetail(raceId),
+    staleTime: 5 * 60 * 1000,
+  })
+}

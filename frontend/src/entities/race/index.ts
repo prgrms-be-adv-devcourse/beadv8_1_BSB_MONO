@@ -3,6 +3,7 @@ export {
   fetchRaceDetail,
   fetchRacePage,
   RACE_PAGE_SIZE,
+  raceDetailQueryOptions,
   raceListQueryOptions,
   RaceSort,
   raceSuggestionsQueryOptions,
