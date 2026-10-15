@@ -39,6 +39,8 @@ import com.bukang.order.out.CartItemRepository;
 import com.bukang.order.out.CartRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.support.StubQueueAdmissionPort;
+import com.bukang.order.support.StubQueueAdmissionPortConfig;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -48,7 +50,7 @@ import com.jayway.jsonpath.JsonPath;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class})
+@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class, StubQueueAdmissionPortConfig.class})
 class ApiV1CartCheckoutTest {
 	private static final String CHECKOUT_URL = "/api/v1/order/cart/checkout";
 	private static final int MEMBER_ID = 1;
@@ -79,6 +81,9 @@ class ApiV1CartCheckoutTest {
 	@Autowired
 	private StubSeatHoldPort seatHoldPort;
 
+	@Autowired
+	private StubQueueAdmissionPort queueAdmissionPort;
+
 	@BeforeEach
 	void setUp() {
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, 100, 14, null));
@@ -93,6 +98,7 @@ class ApiV1CartCheckoutTest {
 		cartRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
+		queueAdmissionPort.clear();
 	}
 
 	@Test
@@ -136,6 +142,7 @@ class ApiV1CartCheckoutTest {
 			.andExpect(jsonPath("$.data.orderedCount").value(1))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"))
 			.andExpect(jsonPath("$.data.results[1].outcome").value("SOLD_OUT"))
+			.andExpect(jsonPath("$.data.results[1].code").value("ORDER_SOLD_OUT"))
 			.andExpect(jsonPath("$.data.results[1].message").value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."))
 			.andExpect(jsonPath("$.data.results[1].order").doesNotExist());
 
@@ -160,10 +167,32 @@ class ApiV1CartCheckoutTest {
 			.andExpect(jsonPath("$.data.orderedCount").value(1))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("FAILED"))
 			.andExpect(jsonPath("$.data.results[0].message").value("접수 기간이 아닙니다."))
+			.andExpect(jsonPath("$.data.results[0].code").value("ORDER_APPLICATION_CLOSED"))
+			.andExpect(jsonPath("$.data.results[1].code").doesNotExist())
 			.andExpect(jsonPath("$.data.results[1].outcome").value("CREATED"));
 
 		assertThat(orderRepository.count()).isEqualTo(1);
 		assertThat(statusOf(closed)).isEqualTo(ParticipationStatus.PENDING);
+		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(COURSE_ID);
+	}
+
+	@Test
+	@DisplayName("장바구니 결제도 종목마다 대기열 입장을 확인해, 입장 중이 아닌 종목만 FAILED로 남기고 나머지는 주문한다")
+	void checkoutChecksQueuePerCourse() throws Exception {
+		addToCart(MEMBER_ID, COURSE_ID);
+		addToCart(MEMBER_ID, OTHER_COURSE_ID);
+		int notAdmitted = apply(MEMBER_ID, COURSE_ID);
+		int admitted = apply(MEMBER_ID, OTHER_COURSE_ID);
+		queueAdmissionPort.notAdmitted(COURSE_ID);
+
+		checkout(MEMBER_ID, newKey(), notAdmitted, admitted)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.orderedCount").value(1))
+			.andExpect(jsonPath("$.data.results[0].outcome").value("FAILED"))
+			.andExpect(jsonPath("$.data.results[0].message").value("대기열에서 입장한 뒤 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.data.results[1].outcome").value("CREATED"));
+
+		assertThat(statusOf(notAdmitted)).isEqualTo(ParticipationStatus.PENDING);
 		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(COURSE_ID);
 	}
 
@@ -181,7 +210,8 @@ class ApiV1CartCheckoutTest {
 			.andExpect(jsonPath("$.data.orderedCount").value(1))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"))
 			.andExpect(jsonPath("$.data.results[1].outcome").value("FAILED"))
-			.andExpect(jsonPath("$.data.results[1].message").value("처리하지 못했습니다. 같은 Idempotency-Key로 다시 시도해주세요."));
+			.andExpect(jsonPath("$.data.results[1].message").value("처리하지 못했습니다. 같은 Idempotency-Key로 다시 시도해주세요."))
+			.andExpect(jsonPath("$.data.results[1].code").value("INTERNAL_ERROR"));
 
 		assertThat(orderRepository.count()).isEqualTo(1);
 		assertThat(statusOf(broken)).isEqualTo(ParticipationStatus.PENDING);
@@ -300,10 +330,12 @@ class ApiV1CartCheckoutTest {
 
 		checkout(MEMBER_ID, newKey(), mine, others)
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_FORBIDDEN"));
 		checkout(MEMBER_ID, newKey(), mine, 999999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_FOUND"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 		assertThat(orderRepository.count()).isZero();
@@ -318,16 +350,20 @@ class ApiV1CartCheckoutTest {
 
 		checkout(MEMBER_ID, newKey())
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."));
+			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		checkout(MEMBER_ID, newKey(), eleven)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("한 번에 10건까지 결제할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("한 번에 10건까지 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		checkout(MEMBER_ID, newKey(), participationId, participationId)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("같은 참가 신청을 두 번 보낼 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("같은 참가 신청을 두 번 보낼 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_CART_CHECKOUT_INVALID"));
 		checkout(MEMBER_ID, newKey(), 0)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("참가 신청 ID가 올바르지 않습니다."));
+			.andExpect(jsonPath("$.message").value("참가 신청 ID가 올바르지 않습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 	}
@@ -342,10 +378,12 @@ class ApiV1CartCheckoutTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body(participationId)))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		checkout(MEMBER_ID, "k".repeat(65), participationId)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("Idempotency-Key는 1~64자로 보내주세요."));
+			.andExpect(jsonPath("$.message").value("Idempotency-Key는 1~64자로 보내주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 	}

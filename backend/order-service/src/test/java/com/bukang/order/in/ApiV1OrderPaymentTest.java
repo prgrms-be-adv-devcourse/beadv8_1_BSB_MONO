@@ -147,7 +147,9 @@ class ApiV1OrderPaymentTest {
 
 		pay(MEMBER_ID, orderId)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("예치금이 12,000원 부족합니다. 충전한 뒤 결제 기한 안에 다시 결제해주세요."));
+			.andExpect(jsonPath("$.message").value("예치금이 12,000원 부족합니다. 충전한 뒤 결제 기한 안에 다시 결제해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_INSUFFICIENT_BALANCE"))
+			.andExpect(jsonPath("$.data.shortage").value(12_000));
 		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
 		assertThat(participationOf(orderId).getStatus()).isEqualTo(ParticipationStatus.APPLIED);
 
@@ -165,7 +167,8 @@ class ApiV1OrderPaymentTest {
 
 		pay(MEMBER_ID, orderId)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제 기한이 지나 결제하지 못했습니다. 빠져나간 예치금은 돌려드렸습니다."));
+			.andExpect(jsonPath("$.message").value("결제 기한이 지나 결제하지 못했습니다. 빠져나간 예치금은 돌려드렸습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYMENT_DEADLINE_PASSED"));
 
 		assertThat(walletPort.canceledOrders()).containsExactly(orderId);
 		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
@@ -173,7 +176,7 @@ class ApiV1OrderPaymentTest {
 	}
 
 	@Test
-	@DisplayName("주문의 결제 기한이 지났으면 예치금을 건드리지 않고 409, 만료 처리된 주문도 409다")
+	@DisplayName("주문의 결제 기한이 지났으면 예치금을 건드리지 않고 409, 만료 처리된 주문도 같은 기한 지남 409다")
 	void payAfterDue() throws Exception {
 		int orderId = orderAndGetId(MEMBER_ID);
 		Order order = orderRepository.findById(orderId).orElseThrow();
@@ -182,12 +185,14 @@ class ApiV1OrderPaymentTest {
 
 		pay(MEMBER_ID, orderId)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제 기한이 지났습니다."));
+			.andExpect(jsonPath("$.message").value("결제 기한이 지났습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYMENT_DEADLINE_PASSED"));
 
 		orderExpiryUseCase.expireOverdue(LocalDateTime.now());
 		pay(MEMBER_ID, orderId)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제할 수 없는 주문입니다(현재 상태: 기한 만료)."));
+			.andExpect(jsonPath("$.message").value("결제 기한이 지났습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYMENT_DEADLINE_PASSED"));
 		assertThat(walletPort.payCalls()).isEmpty();
 	}
 
@@ -273,10 +278,12 @@ class ApiV1OrderPaymentTest {
 
 		pay(OTHER_MEMBER_ID, orderId)
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 주문만 결제할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 주문만 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"));
 		pay(MEMBER_ID, 999999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
 		assertThat(walletPort.payCalls()).isEmpty();
 	}
 
