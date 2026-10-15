@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -125,9 +126,12 @@ class ApiV1MemberModifyTest {
 			.satisfies(event -> {
 				assertThat(event.id()).isEqualTo(memberId);
 				assertThat(event.nickname()).isEqualTo("새닉네임");
-				assertThat(event.createDate()).isEqualTo(saved.getCreateDate());
+				// DB는 시각을 마이크로초까지만 저장하고, 리눅스(CI)의 now()는 나노초까지 만들므로 마이크로초로 맞춰 비교한다
+				assertThat(event.createDate().truncatedTo(ChronoUnit.MICROS))
+					.isEqualTo(saved.getCreateDate().truncatedTo(ChronoUnit.MICROS));
 				// flush 뒤에 발행해야 옛 수정 시각이 아니라 DB에 저장된 수정 시각이 담긴다
-				assertThat(event.modifyDate()).isEqualTo(saved.getModifyDate());
+				assertThat(event.modifyDate().truncatedTo(ChronoUnit.MICROS))
+					.isEqualTo(saved.getModifyDate().truncatedTo(ChronoUnit.MICROS));
 			});
 	}
 
