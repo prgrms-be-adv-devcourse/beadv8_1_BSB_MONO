@@ -21,6 +21,13 @@ class QueueAdmissionDtoTest {
 	}
 
 	@Test
+	@DisplayName("1초 미만이 남아도 입장 중이면 남은 초는 1이다 (올림)")
+	void roundsUpRemainingSeconds() {
+		assertThat(QueueAdmissionDto.of(NOW.plusNanos(500_000_000), NOW).getRemainingSeconds()).isEqualTo(1);
+		assertThat(QueueAdmissionDto.of(NOW.plusSeconds(583), NOW).getRemainingSeconds()).isEqualTo(583);
+	}
+
+	@Test
 	@DisplayName("끝 시각이 없거나 지금이거나 지났으면 입장 중이 아니고 남은 초는 0이다")
 	void notAdmitted() {
 		for (LocalDateTime endsAt : new LocalDateTime[] {null, NOW, NOW.minusSeconds(1)}) {

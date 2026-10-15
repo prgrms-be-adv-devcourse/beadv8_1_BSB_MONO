@@ -1,6 +1,7 @@
 package com.bukang.order.out.queue;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 
@@ -32,6 +33,28 @@ class FakeQueueAdmissionAdapterTest {
 		LocalDateTime later = NOW.plusMinutes(20);
 		assertThat(adapter.enter(MEMBER_ID, COURSE_ID, later)).isEqualTo(later.plusMinutes(10));
 		assertThat(adapter.findAdmissionEndsAt(MEMBER_ID, RACE_ID, COURSE_ID, later)).contains(later.plusMinutes(10));
+	}
+
+	@Test
+	@DisplayName("끝난 입장은 [결제하기]에서는 그대로 끝났고, 결제 페이지를 다시 열면 다시 입장한다 (운영에도 다시 살 길이 있다)")
+	void reentersOnPageOpen() {
+		assertThat(adapter.findAdmissionEndsAtOnPageOpen(MEMBER_ID, RACE_ID, COURSE_ID, NOW))
+			.contains(NOW.plusMinutes(10));
+		assertThat(adapter.findAdmissionEndsAtOnPageOpen(MEMBER_ID, RACE_ID, COURSE_ID, NOW.plusMinutes(3)))
+			.contains(NOW.plusMinutes(10));
+
+		LocalDateTime later = NOW.plusMinutes(12);
+		assertThat(adapter.findAdmissionEndsAt(MEMBER_ID, RACE_ID, COURSE_ID, later)).isEmpty();
+		assertThat(adapter.findAdmissionEndsAtOnPageOpen(MEMBER_ID, RACE_ID, COURSE_ID, later))
+			.contains(later.plusMinutes(10));
+		assertThat(adapter.findAdmissionEndsAt(MEMBER_ID, RACE_ID, COURSE_ID, later)).contains(later.plusMinutes(10));
+	}
+
+	@Test
+	@DisplayName("입장 시간 설정은 1~10분만 받는다 (10분보다 길면 결제 기한과 타이머가 어긋난다)")
+	void rejectsInvalidMinutes() {
+		assertThatThrownBy(() -> new FakeQueueAdmissionAdapter(0)).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> new FakeQueueAdmissionAdapter(11)).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test

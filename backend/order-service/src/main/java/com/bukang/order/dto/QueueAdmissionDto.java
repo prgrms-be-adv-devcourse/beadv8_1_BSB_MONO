@@ -24,6 +24,8 @@ public class QueueAdmissionDto {
 		if (admissionEndsAt == null || !admissionEndsAt.isAfter(now)) {
 			return new QueueAdmissionDto(false, null, 0);
 		}
-		return new QueueAdmissionDto(true, admissionEndsAt, Duration.between(now, admissionEndsAt).toSeconds());
+		// 1초 미만이 남아도 입장 중이므로 올림으로 센다 (입장 중인데 0초로 보이지 않게)
+		long remainingMillis = Duration.between(now, admissionEndsAt).toMillis();
+		return new QueueAdmissionDto(true, admissionEndsAt, (remainingMillis + 999) / 1000);
 	}
 }

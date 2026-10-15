@@ -15,8 +15,10 @@ import lombok.extern.slf4j.Slf4j;
  * 가짜 어댑터: 대기열 내부 API(PRO-182)가 나오기 전까지 대기열 대신 답한다 (10/15 호빈님 요청)
  * - (회원, 종목)마다 입장 끝 시각을 메모리에 기억한다. 처음 물을 때 지금 입장한 것으로 치고, 그 뒤로는 같은 끝 시각을 돌려준다
  *   그래서 프론트 타이머(남은 시간 API)와 [결제하기]의 결제 기한이 같은 시각이 된다
- * - 끝 시각이 지나면 입장 중이 아니다. 다시 입장하려면 enter(dev 더미 API)를 부른다
- * - 입장 시간은 order.clients.queue.fake-admission-minutes(기본 10분, 정책 4장 2-4)로 줄여 만료를 빨리 확인할 수 있다
+ * - 끝 시각이 지나면 [결제하기]는 입장 중이 아니다(403). 결제 페이지를 다시 열면(남은 시간 API) 대기열을 다시 통과한 것으로 보고
+ *   다시 입장시킨다. 그래서 운영(prod, 더미 API 없음)에서도 입장이 끝난 회원이 다시 살 수 있다
+ * - 입장 시간은 order.clients.queue.fake-admission-minutes(1~10분, 기본 10분, 정책 4장 2-4)로 줄여 만료를 빨리 확인할 수 있다
+ *   10분보다 길면 [결제하기]가 결제 기한을 10분으로 잘라 타이머와 어긋나므로 받지 않는다
  * 메모리에만 두므로 앱을 다시 켜면 모두 처음 입장으로 돌아간다
  * order.clients.queue.mode=fake(기본값)일 때만 쓴다. 대기열 내부 API가 나오면 HTTP 어댑터를 붙인다
  */
@@ -24,11 +26,18 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @ConditionalOnProperty(prefix = "order.clients.queue", name = "mode", havingValue = "fake", matchIfMissing = true)
 public class FakeQueueAdmissionAdapter implements QueueAdmissionPort {
+	// 정책상 가장 긴 입장 시간 (OrderCreateUseCase.MAX_ADMISSION_MINUTES와 같다)
+	static final long MAX_ADMISSION_MINUTES = 10;
+
 	private final long admissionMinutes;
 	private final Map<Admission, LocalDateTime> admissionEndsAt = new ConcurrentHashMap<>();
 
 	// 호출마다 경고를 남기면 로그가 묻히므로, 앱을 켤 때 한 번만 알린다
 	public FakeQueueAdmissionAdapter(@Value("${order.clients.queue.fake-admission-minutes:10}") long admissionMinutes) {
+		if (admissionMinutes < 1 || admissionMinutes > MAX_ADMISSION_MINUTES) {
+			throw new IllegalArgumentException("order.clients.queue.fake-admission-minutes는 1~%d분이어야 합니다: %d"
+				.formatted(MAX_ADMISSION_MINUTES, admissionMinutes));
+		}
 		this.admissionMinutes = admissionMinutes;
 		log.warn("대기열 입장 확인은 가짜 응답(FakeQueueAdmissionAdapter)을 씁니다. 처음 물을 때 입장해 {}분 뒤 끝납니다",
 			admissionMinutes);
@@ -40,6 +49,17 @@ public class FakeQueueAdmissionAdapter implements QueueAdmissionPort {
 		LocalDateTime endsAt = admissionEndsAt.computeIfAbsent(new Admission(memberId, raceCourseId),
 			admission -> now.plusMinutes(admissionMinutes));
 		return endsAt.isAfter(now) ? Optional.of(endsAt) : Optional.empty();
+	}
+
+	// 결제 페이지를 다시 열면, 끝난 입장은 대기열을 다시 통과한 것으로 보고 다시 입장시킨다
+	@Override
+	public Optional<LocalDateTime> findAdmissionEndsAtOnPageOpen(int memberId, int raceId, int raceCourseId,
+		LocalDateTime now) {
+		LocalDateTime endsAt = admissionEndsAt.compute(new Admission(memberId, raceCourseId),
+			(admission, current) -> current != null && current.isAfter(now)
+				? current
+				: now.plusMinutes(admissionMinutes));
+		return Optional.of(endsAt);
 	}
 
 	// 대기열을 다시 통과한 것으로 친다 (dev 더미 API). 입장 끝 시각을 지금부터 다시 센다

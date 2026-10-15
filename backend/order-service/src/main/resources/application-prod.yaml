@@ -30,7 +30,7 @@ order:
     cash:
       mode: http
       base-url: http://bukang-cash-service:8081
-    # 대기열 입장 확인은 대기열 내부 API(PRO-182)가 나오기 전이라 운영도 가짜(누구든 입장 중)다. http 어댑터는 아직 없다
+    # 대기열 입장 확인은 대기열 내부 API(PRO-182)가 나오기 전이라 운영도 가짜다(결제 페이지를 열면 입장, 10분). http 어댑터는 아직 없다
     queue:
       mode: fake
 

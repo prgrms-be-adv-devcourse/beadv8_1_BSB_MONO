@@ -20,7 +20,7 @@ public class QueueAdmissionUseCase {
 	private final QueueAdmissionPort queueAdmissionPort;
 
 	public QueueAdmissionDto find(int memberId, int raceId, int raceCourseId, LocalDateTime now) {
-		LocalDateTime endsAt = queueAdmissionPort.findAdmissionEndsAt(memberId, raceId, raceCourseId, now)
+		LocalDateTime endsAt = queueAdmissionPort.findAdmissionEndsAtOnPageOpen(memberId, raceId, raceCourseId, now)
 			.orElse(null);
 		return QueueAdmissionDto.of(endsAt, now);
 	}

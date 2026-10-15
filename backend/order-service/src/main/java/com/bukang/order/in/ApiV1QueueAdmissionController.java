@@ -36,7 +36,8 @@ public class ApiV1QueueAdmissionController {
 	@Operation(summary = "대기열 입장 상태 (결제 페이지 타이머)",
 		description = "이 종목에 대기열로 입장 중인지와 입장 끝 시각, 남은 초를 돌려준다. 입장 끝 시각이 [결제하기]의 결제 기한이다. "
 			+ "타이머는 remainingSeconds로 센다(서버 시각 기준). 입장 중이 아니면 admitted=false이고 [결제하기]가 403이다. "
-			+ "대기열 API(PRO-182)가 나오기 전에는 가짜 대기열이 답한다: 처음 물을 때 입장해 10분 뒤 끝난다.")
+			+ "대기열 API(PRO-182)가 나오기 전에는 가짜 대기열이 답한다: 결제 페이지를 처음 열 때 입장해 10분 뒤 끝나고, "
+			+ "끝난 뒤 이 API를 다시 부르면(페이지를 다시 열면) 다시 입장한다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = {
@@ -44,8 +45,10 @@ public class ApiV1QueueAdmissionController {
 				@ExampleObject(name = "입장 중 아님", value = QueueApiExamples.NOT_ADMITTED)
 			})),
 		@ApiResponse(responseCode = "400", description = "회원 ID·대회 ID·종목 ID 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = QueueApiExamples.INVALID_MEMBER_ID))),
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "회원 ID가 0 이하", value = QueueApiExamples.INVALID_MEMBER_ID),
+				@ExampleObject(name = "대회 ID가 0 이하", value = QueueApiExamples.INVALID_RACE_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = QueueApiExamples.LOGIN_REQUIRED)))
