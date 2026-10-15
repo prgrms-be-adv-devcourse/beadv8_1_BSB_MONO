@@ -10,6 +10,8 @@ export const AUTH_ERRORS = {
   passwordRule: '영문 · 숫자 포함 8자 이상으로 정해 주세요.',
   passwordMismatch: '비밀번호가 서로 달라요.',
   loginFailed: '이메일 또는 비밀번호가 맞지 않아요.',
+  // 시안에 없는 문구. 서버에 닿지 못했거나 서버 문구가 없을 때
+  loginUnavailable: '지금은 로그인할 수 없어요. 잠시 후 다시 시도해 주세요.',
   emailTaken: '이미 가입된 이메일이에요. 로그인하거나 비밀번호를 재설정해 주세요.',
   nameRequired: '이름을 입력해 주세요.',
   birthFormat: '생년월일을 1995.03.02처럼 입력해 주세요.',

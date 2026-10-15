@@ -140,59 +140,61 @@ final class ParticipationApiExamples {
 		""";
 
 	static final String INVALID_INPUT = """
-		{ "status": 400, "message": "참가자 이름을 작성해주세요.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "참가자 이름을 작성해주세요.", "data": null }
 		""";
 
 	static final String CONSENT_REQUIRED = """
-		{ "status": 400, "message": "개인정보 제3자 제공에 동의해야 신청할 수 있습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "개인정보 제3자 제공에 동의해야 신청할 수 있습니다.", "data": null }
 		""";
 
 	static final String INVALID_BODY = """
-		{ "status": 400, "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
 		""";
 
 	static final String AGE_RESTRICTED = """
-		{ "status": 400, "message": "참가할 수 있는 나이가 아닙니다(대회 당일 만 14세 이상, 신청자 만 12세).", "data": null }
+		{ "status": 400, "code": "ORDER_AGE_RESTRICTED",
+			"message": "참가할 수 있는 나이가 아닙니다(대회 당일 만 14세 이상, 신청자 만 12세).", "data": null }
 		""";
 
 	static final String INVALID_VALUE_TYPE = """
-		{ "status": 400, "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
 		""";
 
 	static final String INVALID_MEMBER_ID = """
-		{ "status": 400, "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
 		""";
 
 	static final String LOGIN_REQUIRED = """
-		{ "status": 401, "message": "로그인이 필요합니다.", "data": null }
+		{ "status": 401, "code": "ORDER_LOGIN_REQUIRED", "message": "로그인이 필요합니다.", "data": null }
 		""";
 
 	static final String NOT_OWNER = """
-		{ "status": 403, "message": "본인의 참가 신청만 보거나 고칠 수 있습니다.", "data": null }
+		{ "status": 403, "code": "ORDER_PARTICIPATION_FORBIDDEN", "message": "본인의 참가 신청만 보거나 고칠 수 있습니다.", "data": null }
 		""";
 
 	static final String COURSE_NOT_FOUND = """
-		{ "status": 404, "message": "존재하지 않는 종목입니다.", "data": null }
+		{ "status": 404, "code": "ORDER_COURSE_NOT_FOUND", "message": "존재하지 않는 종목입니다.", "data": null }
 		""";
 
 	static final String PARTICIPATION_NOT_FOUND = """
-		{ "status": 404, "message": "존재하지 않는 참가 신청입니다.", "data": null }
+		{ "status": 404, "code": "ORDER_PARTICIPATION_NOT_FOUND", "message": "존재하지 않는 참가 신청입니다.", "data": null }
 		""";
 
 	static final String DUPLICATE_PARTICIPATION = """
-		{ "status": 409, "message": "이미 이 대회에 신청했습니다.", "data": null }
+		{ "status": 409, "code": "ORDER_DUPLICATE_PARTICIPATION", "message": "이미 이 대회에 신청했습니다.", "data": null }
 		""";
 
 	static final String NOT_ACCEPTING = """
-		{ "status": 409, "message": "접수 기간이 아닙니다.", "data": null }
+		{ "status": 409, "code": "ORDER_APPLICATION_CLOSED", "message": "접수 기간이 아닙니다.", "data": null }
 		""";
 
 	static final String APPLICATION_CLOSED = """
-		{ "status": 409, "message": "접수가 마감되어 참가자 정보를 고칠 수 없습니다.", "data": null }
+		{ "status": 409, "code": "ORDER_APPLICATION_CLOSED", "message": "접수가 마감되어 참가자 정보를 고칠 수 없습니다.", "data": null }
 		""";
 
 	static final String NOT_EDITABLE = """
-		{ "status": 409, "message": "참가자 정보를 고칠 수 없는 신청입니다(현재 상태: 취소).", "data": null }
+		{ "status": 409, "code": "ORDER_PARTICIPATION_NOT_EDITABLE",
+			"message": "참가자 정보를 고칠 수 없는 신청입니다(현재 상태: 취소).", "data": null }
 		""";
 
 	static final String CANCEL_SUCCESS = """
@@ -233,26 +235,39 @@ final class ParticipationApiExamples {
 
 	static final String NOT_CANCELABLE_APPLIED = """
 		{
-			"status": 409,
+			"status": 409, "code": "ORDER_PARTICIPATION_NOT_CANCELABLE",
 			"message": "결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다.",
 			"data": null
 		}
 		""";
 
 	static final String NOT_CANCELABLE_CONFIRMED = """
-		{ "status": 409, "message": "결제한 참가권은 주문 상품 취소로 취소해주세요.", "data": null }
+		{ "status": 409, "code": "ORDER_PARTICIPATION_NOT_CANCELABLE",
+			"message": "결제한 참가권은 주문 상품 취소로 취소해주세요.", "data": null }
 		""";
 
 	static final String NOT_CANCELABLE_FINISHED = """
-		{ "status": 409, "message": "이미 끝난 신청입니다(현재 상태: 취소).", "data": null }
+		{ "status": 409, "code": "ORDER_PARTICIPATION_NOT_CANCELABLE",
+			"message": "이미 끝난 신청입니다(현재 상태: 취소).", "data": null }
 		""";
 
 	static final String SHIPPING_ADDRESS_REQUIRED = """
-		{ "status": 400, "message": "키트를 받을 배송 주소를 작성해주세요.", "data": null }
+		{ "status": 400, "code": "ORDER_SHIPPING_ADDRESS_REQUIRED", "message": "키트를 받을 배송 주소를 작성해주세요.", "data": null }
+		""";
+
+	static final String TSHIRT_SIZE_REQUIRED = """
+		{ "status": 400, "code": "ORDER_TSHIRT_SIZE_REQUIRED",
+			"message": "티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: S, M, L).", "data": null }
+		""";
+
+	static final String TSHIRT_SIZE_NOT_AVAILABLE = """
+		{ "status": 400, "code": "ORDER_TSHIRT_SIZE_NOT_AVAILABLE",
+			"message": "이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L).", "data": null }
 		""";
 
 	static final String CHANGE_RETRY = """
-		{ "status": 409, "message": "방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
+		{ "status": 409, "code": "ORDER_PARTICIPATION_CHANGE_RETRY",
+			"message": "방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
 		""";
 
 	private ParticipationApiExamples() {
