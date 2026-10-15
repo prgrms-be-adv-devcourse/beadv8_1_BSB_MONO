@@ -44,7 +44,7 @@ function FormBody({
 }: {
   width: string
   title: string
-  description: string
+  description?: string
   children: ReactNode
 }) {
   return (
@@ -52,7 +52,7 @@ function FormBody({
       <div className={cn('flex flex-col gap-6', width)}>
         <div className="flex flex-col gap-2 pb-2">
           <h1 className="text-heading-xl">{title}</h1>
-          <p className="text-body-m text-text-secondary">{description}</p>
+          {description && <p className="text-body-m text-text-secondary">{description}</p>}
         </div>
         {children}
       </div>
@@ -272,13 +272,7 @@ const RESULTS: ResultCard[] = [
 export function SellerApplyResultPage({ status = 'pending' }: { status?: SellerApplyStatus }) {
   const result = RESULTS.find((card) => card.status === status) ?? RESULTS[0]
   return (
-    <FormBody
-      width="w-180"
-      title="판매자 등록 신청 결과"
-      description={
-        '마이 > 설정(M30)의 "판매자 등록"을 누르면 신청 상태에 따라 아래 셋 중 하나를 보여 줘요.'
-      }
-    >
+    <FormBody width="w-180" title="판매자 등록 신청 결과">
       <section className="flex flex-col items-start gap-3 rounded-lg bg-bg-surface p-5 inset-ring inset-ring-border-default">
         <Badge tone={result.tone}>{result.badge}</Badge>
         <h2 className="text-heading-s">{result.title}</h2>
