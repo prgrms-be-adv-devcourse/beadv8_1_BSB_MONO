@@ -138,12 +138,14 @@ final class CartApiExamples {
 					{
 						"participationId": 12,
 						"outcome": "SOLD_OUT",
+						"code": "ORDER_SOLD_OUT",
 						"message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
 						"order": null
 					},
 					{
 						"participationId": 13,
 						"outcome": "FAILED",
+						"code": "ORDER_APPLICATION_CLOSED",
 						"message": "접수 기간이 아닙니다.",
 						"order": null
 					}
@@ -162,6 +164,7 @@ final class CartApiExamples {
 					{
 						"participationId": 12,
 						"outcome": "SOLD_OUT",
+						"code": "ORDER_SOLD_OUT",
 						"message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
 						"order": null
 					}

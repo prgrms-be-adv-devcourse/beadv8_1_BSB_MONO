@@ -136,6 +136,7 @@ class ApiV1CartCheckoutTest {
 			.andExpect(jsonPath("$.data.orderedCount").value(1))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"))
 			.andExpect(jsonPath("$.data.results[1].outcome").value("SOLD_OUT"))
+			.andExpect(jsonPath("$.data.results[1].code").value("ORDER_SOLD_OUT"))
 			.andExpect(jsonPath("$.data.results[1].message").value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."))
 			.andExpect(jsonPath("$.data.results[1].order").doesNotExist());
 
@@ -160,6 +161,8 @@ class ApiV1CartCheckoutTest {
 			.andExpect(jsonPath("$.data.orderedCount").value(1))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("FAILED"))
 			.andExpect(jsonPath("$.data.results[0].message").value("접수 기간이 아닙니다."))
+			.andExpect(jsonPath("$.data.results[0].code").value("ORDER_APPLICATION_CLOSED"))
+			.andExpect(jsonPath("$.data.results[1].code").doesNotExist())
 			.andExpect(jsonPath("$.data.results[1].outcome").value("CREATED"));
 
 		assertThat(orderRepository.count()).isEqualTo(1);
@@ -181,7 +184,8 @@ class ApiV1CartCheckoutTest {
 			.andExpect(jsonPath("$.data.orderedCount").value(1))
 			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"))
 			.andExpect(jsonPath("$.data.results[1].outcome").value("FAILED"))
-			.andExpect(jsonPath("$.data.results[1].message").value("처리하지 못했습니다. 같은 Idempotency-Key로 다시 시도해주세요."));
+			.andExpect(jsonPath("$.data.results[1].message").value("처리하지 못했습니다. 같은 Idempotency-Key로 다시 시도해주세요."))
+			.andExpect(jsonPath("$.data.results[1].code").value("INTERNAL_ERROR"));
 
 		assertThat(orderRepository.count()).isEqualTo(1);
 		assertThat(statusOf(broken)).isEqualTo(ParticipationStatus.PENDING);
