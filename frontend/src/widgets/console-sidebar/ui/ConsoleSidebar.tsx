@@ -4,6 +4,7 @@ import type { Route } from 'next'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { useLogout } from '@/features/auth'
 import { cn } from '@/shared/lib'
 import { FOCUS_RING, Icon, Logo, type IconName } from '@/shared/ui'
 
@@ -66,8 +67,7 @@ export function ConsoleSidebar({ role }: { role: ConsoleRole }) {
       <div className="flex-1" />
       <div className="flex w-full flex-col gap-1">
         <SidebarItem href={menu.settings} label="설정" icon="Settings" selected={false} />
-        {/* TODO(auth): 로그아웃 요청 연결 */}
-        <SidebarItem href="/login" label="로그아웃" icon="LogOut" selected={false} />
+        <LogoutItem />
       </div>
     </aside>
   )
@@ -79,16 +79,44 @@ function SidebarItem({ href, label, icon, selected }: Item & { selected: boolean
       href={href}
       aria-current={selected ? 'page' : undefined}
       title={label}
-      className={cn(
-        'flex size-11 items-center justify-center gap-3 rounded-md text-label-m desktop:h-11 desktop:w-full desktop:justify-start desktop:px-3',
-        selected
-          ? 'bg-bg-hero-raised text-text-on-hero-accent'
-          : 'text-text-on-hero-muted hover:bg-bg-hero-raised',
-        FOCUS_RING,
-      )}
+      className={itemClassName(selected)}
     >
+      <ItemContent label={label} icon={icon} />
+    </Link>
+  )
+}
+
+// 마이페이지 로그아웃과 같은 useLogout을 쓴다. 다른 화면으로 가는 링크가 아니라 같은 모양의 버튼
+function LogoutItem() {
+  const logout = useLogout()
+  return (
+    <button
+      type="button"
+      onClick={() => logout.mutate()}
+      disabled={logout.isPending}
+      title="로그아웃"
+      className={itemClassName(false)}
+    >
+      <ItemContent label="로그아웃" icon="LogOut" />
+    </button>
+  )
+}
+
+function ItemContent({ label, icon }: { label: string; icon: IconName }) {
+  return (
+    <>
       <Icon name={icon} className="size-5" />
       <span className="sr-only desktop:not-sr-only">{label}</span>
-    </Link>
+    </>
+  )
+}
+
+function itemClassName(selected: boolean) {
+  return cn(
+    'flex size-11 items-center justify-center gap-3 rounded-md text-label-m desktop:h-11 desktop:w-full desktop:justify-start desktop:px-3',
+    selected
+      ? 'bg-bg-hero-raised text-text-on-hero-accent'
+      : 'text-text-on-hero-muted hover:bg-bg-hero-raised',
+    FOCUS_RING,
   )
 }
