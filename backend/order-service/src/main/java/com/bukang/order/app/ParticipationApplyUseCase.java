@@ -145,7 +145,7 @@ public class ParticipationApplyUseCase {
 		}
 		String sizes = String.join(", ", course.tshirtSizeOption());
 		if (participant.getTshirtSize() == null) {
-			throw new TshirtSizeNotAvailableException("티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: %s).".formatted(sizes));
+			throw TshirtSizeNotAvailableException.required("티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: %s).".formatted(sizes));
 		}
 		if (!course.tshirtSizeOption().contains(participant.getTshirtSize())) {
 			throw new TshirtSizeNotAvailableException("이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: %s)."
@@ -164,7 +164,7 @@ public class ParticipationApplyUseCase {
 	// 취소된 대회는 접수 기간 문구 대신 취소됐다고 알린다 (취소된 대회는 isAccepting·isBeforeClose도 거짓이다)
 	static void checkNotCanceled(RaceCourseInfo course) {
 		if (course.canceled()) {
-			throw new ApplicationPeriodException("취소된 대회입니다.");
+			throw ApplicationPeriodException.raceCanceled("취소된 대회입니다.");
 		}
 	}
 }

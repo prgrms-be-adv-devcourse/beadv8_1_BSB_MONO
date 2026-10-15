@@ -150,19 +150,23 @@ class InternalV1OrderControllerTest {
 	void invalidPeriod() throws Exception {
 		mockMvc.perform(get(URL).param("to", "2026-11-15"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 값(from)이 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 값(from)이 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		findSoldEntries("2026/11/15", "2026-11-15")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
+			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		findSoldEntries("2026-11-16", "2026-11-15")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("조회 시작일이 종료일보다 늦습니다."));
+			.andExpect(jsonPath("$.message").value("조회 시작일이 종료일보다 늦습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_INVALID_SOLD_ENTRY_PERIOD"));
 		// 10/16 ~ 11/15는 31일, 10/15 ~ 11/15는 32일
 		findSoldEntries("2026-10-16", "2026-11-15")
 			.andExpect(status().isOk());
 		findSoldEntries("2026-10-15", "2026-11-15")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("판매 내역은 한 번에 31일까지 조회할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("판매 내역은 한 번에 31일까지 조회할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_INVALID_SOLD_ENTRY_PERIOD"));
 	}
 
 	private ResultActions findSoldEntries(String from, String to) throws Exception {

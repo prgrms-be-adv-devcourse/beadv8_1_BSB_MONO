@@ -148,7 +148,9 @@ class HttpWalletAdapterTest {
 			.isInstanceOf(ExternalServiceUnavailableException.class);
 		assertThatThrownBy(() -> adapter.refund(ORDER_ID, MEMBER_ID))
 			.isInstanceOf(ExternalServiceRejectedException.class)
-			.hasMessage(HttpWalletAdapter.UNAVAILABLE_MESSAGE);
+			.hasMessage(HttpWalletAdapter.UNAVAILABLE_MESSAGE)
+			// 회원·프론트에는 장애와 같은 오류 코드로 보인다
+			.hasFieldOrPropertyWithValue("code", ExternalServiceUnavailableException.CODE);
 		server.verify();
 	}
 

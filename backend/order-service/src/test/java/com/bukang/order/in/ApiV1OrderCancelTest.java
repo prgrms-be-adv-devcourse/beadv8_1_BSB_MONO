@@ -215,7 +215,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYOUT_STARTED"));
 
 		assertNothingCanceled(paid);
 	}
@@ -231,7 +232,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYOUT_STARTED"));
 
 		assertNothingCanceled(paid);
 	}
@@ -268,7 +270,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 취소한 상품입니다."));
+			.andExpect(jsonPath("$.message").value("이미 취소한 상품입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_ITEM_NOT_CANCELABLE"));
 
 		assertThat(walletPort.refundCalls()).hasSize(1);
 		assertThat(seatHoldPort.restoredParticipations()).hasSize(1);
@@ -282,7 +285,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYOUT_STARTED"));
 
 		assertNothingCanceled(paid);
 	}
@@ -295,7 +299,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, orderId, orderItemId)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제한 상품만 취소할 수 있습니다(현재 상태: 결제 대기)."));
+			.andExpect(jsonPath("$.message").value("결제한 상품만 취소할 수 있습니다(현재 상태: 결제 대기)."))
+			.andExpect(jsonPath("$.code").value("ORDER_ITEM_NOT_CANCELABLE"));
 	}
 
 	@Test
@@ -347,13 +352,16 @@ class ApiV1OrderCancelTest {
 
 		cancel(OTHER_MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 주문만 취소할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 주문만 취소할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"));
 		cancel(MEMBER_ID, 999999, paid.orderItemId())
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
 		cancel(MEMBER_ID, paid.orderId(), 999999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("주문에 없는 상품입니다."));
+			.andExpect(jsonPath("$.message").value("주문에 없는 상품입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_ITEM_NOT_FOUND"));
 		assertNothingCanceled(paid);
 	}
 

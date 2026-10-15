@@ -52,43 +52,43 @@ final class CartApiExamples {
 		""";
 
 	static final String INVALID_INPUT = """
-		{ "status": 400, "message": "담을 종목을 선택해주세요.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "담을 종목을 선택해주세요.", "data": null }
 		""";
 
 	static final String INVALID_BODY = """
-		{ "status": 400, "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
 		""";
 
 	static final String INVALID_VALUE_TYPE = """
-		{ "status": 400, "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
 		""";
 
 	static final String INVALID_MEMBER_ID = """
-		{ "status": 400, "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
 		""";
 
 	static final String LOGIN_REQUIRED = """
-		{ "status": 401, "message": "로그인이 필요합니다.", "data": null }
+		{ "status": 401, "code": "ORDER_LOGIN_REQUIRED", "message": "로그인이 필요합니다.", "data": null }
 		""";
 
 	static final String NOT_OWNER = """
-		{ "status": 403, "message": "본인의 장바구니 항목만 뺄 수 있습니다.", "data": null }
+		{ "status": 403, "code": "ORDER_CART_ITEM_FORBIDDEN", "message": "본인의 장바구니 항목만 뺄 수 있습니다.", "data": null }
 		""";
 
 	static final String COURSE_NOT_FOUND = """
-		{ "status": 404, "message": "존재하지 않는 종목입니다.", "data": null }
+		{ "status": 404, "code": "ORDER_COURSE_NOT_FOUND", "message": "존재하지 않는 종목입니다.", "data": null }
 		""";
 
 	static final String ITEM_NOT_FOUND = """
-		{ "status": 404, "message": "장바구니에 없는 항목입니다.", "data": null }
+		{ "status": 404, "code": "ORDER_CART_ITEM_NOT_FOUND", "message": "장바구니에 없는 항목입니다.", "data": null }
 		""";
 
 	static final String APPLICATION_CLOSED = """
-		{ "status": 409, "message": "접수가 마감된 종목은 담을 수 없습니다.", "data": null }
+		{ "status": 409, "code": "ORDER_APPLICATION_CLOSED", "message": "접수가 마감된 종목은 담을 수 없습니다.", "data": null }
 		""";
 
 	static final String CONFLICT = """
-		{ "status": 409, "message": "장바구니에 담는 요청이 겹쳤습니다. 다시 시도해주세요.", "data": null }
+		{ "status": 409, "code": "ORDER_CART_CONFLICT", "message": "장바구니에 담는 요청이 겹쳤습니다. 다시 시도해주세요.", "data": null }
 		""";
 
 	static final String CHECKOUT_SUCCESS = """
@@ -138,12 +138,14 @@ final class CartApiExamples {
 					{
 						"participationId": 12,
 						"outcome": "SOLD_OUT",
+						"code": "ORDER_SOLD_OUT",
 						"message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
 						"order": null
 					},
 					{
 						"participationId": 13,
 						"outcome": "FAILED",
+						"code": "ORDER_APPLICATION_CLOSED",
 						"message": "접수 기간이 아닙니다.",
 						"order": null
 					}
@@ -162,6 +164,7 @@ final class CartApiExamples {
 					{
 						"participationId": 12,
 						"outcome": "SOLD_OUT",
+						"code": "ORDER_SOLD_OUT",
 						"message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
 						"order": null
 					}
@@ -171,35 +174,35 @@ final class CartApiExamples {
 		""";
 
 	static final String CHECKOUT_EMPTY = """
-		{ "status": 400, "message": "결제할 참가 신청을 선택해주세요.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "결제할 참가 신청을 선택해주세요.", "data": null }
 		""";
 
 	static final String CHECKOUT_TOO_MANY = """
-		{ "status": 400, "message": "한 번에 10건까지 결제할 수 있습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "한 번에 10건까지 결제할 수 있습니다.", "data": null }
 		""";
 
 	static final String CHECKOUT_INVALID_ID = """
-		{ "status": 400, "message": "참가 신청 ID가 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "참가 신청 ID가 올바르지 않습니다.", "data": null }
 		""";
 
 	static final String CHECKOUT_DUPLICATE = """
-		{ "status": 400, "message": "같은 참가 신청을 두 번 보낼 수 없습니다.", "data": null }
+		{ "status": 400, "code": "ORDER_CART_CHECKOUT_INVALID", "message": "같은 참가 신청을 두 번 보낼 수 없습니다.", "data": null }
 		""";
 
 	static final String MISSING_IDEMPOTENCY_KEY = """
-		{ "status": 400, "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.", "data": null }
 		""";
 
 	static final String INVALID_IDEMPOTENCY_KEY = """
-		{ "status": 400, "message": "Idempotency-Key는 1~64자로 보내주세요.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "Idempotency-Key는 1~64자로 보내주세요.", "data": null }
 		""";
 
 	static final String PARTICIPATION_NOT_OWNER = """
-		{ "status": 403, "message": "본인의 참가 신청만 결제할 수 있습니다.", "data": null }
+		{ "status": 403, "code": "ORDER_PARTICIPATION_FORBIDDEN", "message": "본인의 참가 신청만 결제할 수 있습니다.", "data": null }
 		""";
 
 	static final String PARTICIPATION_NOT_FOUND = """
-		{ "status": 404, "message": "존재하지 않는 참가 신청입니다.", "data": null }
+		{ "status": 404, "code": "ORDER_PARTICIPATION_NOT_FOUND", "message": "존재하지 않는 참가 신청입니다.", "data": null }
 		""";
 
 	private CartApiExamples() {

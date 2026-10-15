@@ -53,7 +53,7 @@ public class OrderCreateUseCase {
 		if (existing.isPresent()) {
 			// 같은 키를 다른 신청서에 다시 쓰면 처음 주문을 돌려주지 않는다 (엉뚱한 주문을 성공으로 알리지 않게)
 			if (!existing.get().isFor(participationId)) {
-				throw new OrderConflictException("이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요.");
+				throw OrderConflictException.keyReused("이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요.");
 			}
 			return OrderCreateResult.existing(existing.get().toDto());
 		}

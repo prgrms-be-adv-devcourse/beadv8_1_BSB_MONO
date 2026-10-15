@@ -13,6 +13,8 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.order.domain.exception.InsufficientBalanceException;
+import com.bukang.order.dto.InsufficientBalanceDto;
 
 /**
  * 주문 서비스 전용 요청 예외 처리
@@ -23,17 +25,34 @@ import com.bukang.common.global.rsdata.RsData;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice
 public class OrderExceptionHandler {
+	// 입력값 오류 코드는 common GlobalExceptionHandler와 같은 값을 쓴다
+	static final String INVALID_REQUEST = "INVALID_REQUEST";
+	// 게이트웨이를 거치지 않아 회원 ID 헤더가 없음 (로그인 필요)
+	static final String LOGIN_REQUIRED = "ORDER_LOGIN_REQUIRED";
+
+	// 예치금 부족: 공통 처리와 같은 형식에 부족 금액(data.shortage)을 더한다
+	@ExceptionHandler(InsufficientBalanceException.class)
+	public ResponseEntity<RsData<InsufficientBalanceDto>> insufficientBalanceException(
+		InsufficientBalanceException exception
+	) {
+		return ResponseEntity
+			.status(exception.getStatus())
+			.body(RsData.of(exception.getStatus(), exception.getCode(), exception.getMessage(),
+				new InsufficientBalanceDto(exception.getShortage())));
+	}
+
 	// 회원 ID 헤더가 없으면 로그인이 안 된 것이고, 그 밖의 헤더(예: 중복 요청 방지 키)가 없으면 잘못된 요청이다
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<RsData<Void>> missingRequestHeaderException(MissingRequestHeaderException exception) {
 		if (MemberIdHeader.NAME.equalsIgnoreCase(exception.getHeaderName())) {
 			return ResponseEntity
 				.status(HttpStatus.UNAUTHORIZED)
-				.body(RsData.of(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.", null));
+				.body(RsData.of(HttpStatus.UNAUTHORIZED, LOGIN_REQUIRED, "로그인이 필요합니다.", null));
 		}
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
-			.body(RsData.of(HttpStatus.BAD_REQUEST, "필수 요청 헤더(%s)가 없습니다.".formatted(exception.getHeaderName()), null));
+			.body(RsData.of(HttpStatus.BAD_REQUEST, INVALID_REQUEST,
+				"필수 요청 헤더(%s)가 없습니다.".formatted(exception.getHeaderName()), null));
 	}
 
 	// 컨트롤러 파라미터에 직접 붙인 검증(예: 회원 ID @Positive) 실패. 첫 번째 오류 메시지를 응답한다
@@ -46,7 +65,7 @@ public class OrderExceptionHandler {
 			.orElse("요청 값이 올바르지 않습니다.");
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
-			.body(RsData.of(HttpStatus.BAD_REQUEST, message, null));
+			.body(RsData.of(HttpStatus.BAD_REQUEST, INVALID_REQUEST, message, null));
 	}
 
 	// 필수 쿼리 파라미터 누락. 헤더 누락처럼 이름을 넣어 어떤 값이 빠졌는지 알 수 있게 한다
@@ -56,7 +75,7 @@ public class OrderExceptionHandler {
 	) {
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
-			.body(RsData.of(HttpStatus.BAD_REQUEST,
+			.body(RsData.of(HttpStatus.BAD_REQUEST, INVALID_REQUEST,
 				"필수 요청 값(%s)이 없습니다.".formatted(exception.getParameterName()), null));
 	}
 
@@ -67,6 +86,6 @@ public class OrderExceptionHandler {
 	) {
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
-			.body(RsData.of(HttpStatus.BAD_REQUEST, "요청 값의 형식이 올바르지 않습니다.", null));
+			.body(RsData.of(HttpStatus.BAD_REQUEST, INVALID_REQUEST, "요청 값의 형식이 올바르지 않습니다.", null));
 	}
 }
