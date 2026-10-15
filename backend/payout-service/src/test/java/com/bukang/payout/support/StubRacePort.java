@@ -33,4 +33,12 @@ public class StubRacePort implements RacePort {
 				&& !race.refundDeadline().isAfter(toRefundDeadline))
 			.toList();
 	}
+
+	@Override
+	public Optional<LocalDate> findRefundDeadline(int raceId) {
+		return schedules.stream()
+			.filter(race -> race.raceId() == raceId)
+			.map(RaceSchedule::refundDeadline)
+			.findFirst();
+	}
 }

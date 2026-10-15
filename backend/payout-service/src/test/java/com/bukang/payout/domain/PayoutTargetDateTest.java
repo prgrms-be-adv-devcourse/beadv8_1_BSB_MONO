@@ -46,6 +46,16 @@ class PayoutTargetDateTest {
 	}
 
 	@Test
+	@DisplayName("환불 마감일이 9/30이면 9/30(23:59:59까지)은 환불할 수 있고, 1차 정산이 생기는 10/1부터는 환불할 수 없다")
+	void refundableUntilRefundDeadline() {
+		LocalDate refundDeadline = LocalDate.of(2026, 9, 30);
+
+		assertThat(PayoutTargetDate.isRefundableUntil(refundDeadline, LocalDate.of(2026, 9, 29))).isTrue();
+		assertThat(PayoutTargetDate.isRefundableUntil(refundDeadline, LocalDate.of(2026, 9, 30))).isTrue();
+		assertThat(PayoutTargetDate.isRefundableUntil(refundDeadline, LocalDate.of(2026, 10, 1))).isFalse();
+	}
+
+	@Test
 	@DisplayName("1차 정산 대상일은 환불 마감일 다음 날이다 (마감 9/30 → 10/1, 거꾸로 10/1 → 9/30)")
 	void firstTargetDateIsDayAfterRefundDeadline() {
 		assertThat(PayoutTargetDate.firstOf(LocalDate.of(2026, 9, 30))).isEqualTo(LocalDate.of(2026, 10, 1));

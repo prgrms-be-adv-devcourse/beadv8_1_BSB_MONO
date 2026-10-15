@@ -9,8 +9,9 @@ final class PayoutInternalApiExamples {
 			"status": 200,
 			"message": "환불 가능 여부를 조회했습니다.",
 			"data": {
-				"raceDate": "2026-09-25",
-				"payoutTargetDate": "2026-09-26",
+				"raceDate": "2026-10-10",
+				"refundDeadline": "2026-09-30",
+				"payoutTargetDate": "2026-10-01",
 				"refundable": true
 			}
 		}
@@ -21,8 +22,9 @@ final class PayoutInternalApiExamples {
 			"status": 200,
 			"message": "환불 가능 여부를 조회했습니다.",
 			"data": {
-				"raceDate": "2026-09-25",
-				"payoutTargetDate": "2026-09-26",
+				"raceDate": "2026-10-10",
+				"refundDeadline": "2026-09-30",
+				"payoutTargetDate": "2026-10-01",
 				"refundable": false
 			}
 		}

@@ -22,4 +22,9 @@ public interface RacePort {
 	 * 배치가 놓친 날을 따라잡도록 하루가 아니라 기간으로 묻는다 (PRO-61과 같은 방식)
 	 */
 	List<RaceSchedule> findRacesByRefundDeadline(LocalDate fromRefundDeadline, LocalDate toRefundDeadline);
+
+	/**
+	 * 대회의 환불 마감일을 찾는다. 모르면 빈 값을 돌려준다. 환불 가능 여부를 판단할 때 쓴다
+	 */
+	Optional<LocalDate> findRefundDeadline(int raceId);
 }
