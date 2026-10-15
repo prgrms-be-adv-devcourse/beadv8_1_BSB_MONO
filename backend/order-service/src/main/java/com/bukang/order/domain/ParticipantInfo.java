@@ -65,4 +65,10 @@ public class ParticipantInfo {
 		return new ParticipantInfo(name, birth, gender, phone, emergencyContactName, emergencyContactPhone, tshirtSize,
 			newShippingAddress);
 	}
+
+	// 티셔츠 사이즈만 바꾼 참가자 정보. 티셔츠가 없는 종목은 null을 넣어 사이즈를 남기지 않는다
+	public ParticipantInfo withTshirtSize(String newTshirtSize) {
+		return new ParticipantInfo(name, birth, gender, phone, emergencyContactName, emergencyContactPhone,
+			newTshirtSize, shippingAddress);
+	}
 }

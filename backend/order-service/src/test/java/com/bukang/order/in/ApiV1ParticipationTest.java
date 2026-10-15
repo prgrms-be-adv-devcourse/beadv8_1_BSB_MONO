@@ -89,13 +89,13 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
-	@DisplayName("휴대폰 번호는 010-1234-5678 형식으로, 빈 티셔츠 사이즈·상세 주소는 null로, 배송지는 앞뒤 공백을 빼고 저장한다")
+	@DisplayName("휴대폰 번호는 010-1234-5678 형식으로, 티셔츠 사이즈는 대문자로, 빈 상세 주소는 null로, 배송지는 앞뒤 공백을 빼고 저장한다")
 	void applyNormalizesInput() throws Exception {
 		String body = """
 			{ "raceCourseId": %d, "thirdPartyConsent": true,
 				"participant": { "name": " 김러너 ", "birth": "1994-06-25", "gender": "FEMALE",
 				"phone": "01012345678", "emergencyContactName": "김가족", "emergencyContactPhone": "011-987-6543",
-				"tshirtSize": " ", "shippingAddress": { "recipientName": " 김러너 ", "recipientPhone": "01012345678",
+				"tshirtSize": " l ", "shippingAddress": { "recipientName": " 김러너 ", "recipientPhone": "01012345678",
 				"zipcode": "04700", "address": "  서울 성동구 왕십리로 00  ", "addressDetail": " " } } }
 			""".formatted(COURSE_ID);
 
@@ -104,7 +104,7 @@ class ApiV1ParticipationTest {
 			.andExpect(jsonPath("$.data.participant.name").value("김러너"))
 			.andExpect(jsonPath("$.data.participant.phone").value("010-1234-5678"))
 			.andExpect(jsonPath("$.data.participant.emergencyContactPhone").value("011-987-6543"))
-			.andExpect(jsonPath("$.data.participant.tshirtSize").isEmpty())
+			.andExpect(jsonPath("$.data.participant.tshirtSize").value("L"))
 			.andExpect(jsonPath("$.data.participant.shippingAddress.recipientName").value("김러너"))
 			.andExpect(jsonPath("$.data.participant.shippingAddress.recipientPhone").value("010-1234-5678"))
 			.andExpect(jsonPath("$.data.participant.shippingAddress.zipcode").value("04700"))
@@ -117,7 +117,8 @@ class ApiV1ParticipationTest {
 	void applyWithoutShippingAddress() throws Exception {
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L", null), true))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("키트를 받을 배송 주소를 작성해주세요."));
+			.andExpect(jsonPath("$.message").value("키트를 받을 배송 주소를 작성해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_SHIPPING_ADDRESS_REQUIRED"));
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L", " "), true))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("주소를 작성해주세요."));
@@ -149,11 +150,44 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
+	@DisplayName("티셔츠를 주는 종목은 사이즈를 고르지 않거나 종목이 주지 않는 사이즈를 고르면 400이고 저장되지 않는다")
+	void applyWithUnavailableTshirtSize() throws Exception {
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", " "), true))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: S, M, L, XL)."))
+			.andExpect(jsonPath("$.code").value("ORDER_TSHIRT_SIZE_REQUIRED"));
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "XXL"), true))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message")
+				.value("이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L, XL)."))
+			.andExpect(jsonPath("$.code").value("ORDER_TSHIRT_SIZE_NOT_AVAILABLE"));
+
+		assertThat(participationRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("티셔츠를 주지 않는 종목은 사이즈 없이 신청되고, 사이즈를 보내도 저장하지 않는다")
+	void applyCourseWithoutTshirt() throws Exception {
+		raceCoursePort.put(StubRaceCoursePort.courseWithoutTshirt(COURSE_ID, RACE_ID));
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", ""), true))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.participant.tshirtSize").isEmpty());
+		apply(OTHER_MEMBER_ID, applyBody(COURSE_ID, participant("박러너", "1990-01-01", "L"), true))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.participant.tshirtSize").isEmpty());
+		assertThat(participationRepository.findAll())
+			.allSatisfy(saved -> assertThat(saved.getParticipant().getTshirtSize()).isNull());
+	}
+
+	@Test
 	@DisplayName("필수 항목(참가자 정보, 비상 연락처, 제3자 제공 동의)이 빠지면 400이고 저장되지 않는다")
 	void applyWithoutRequired() throws Exception {
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("", "1994-06-25", "L"), true))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("참가자 이름을 작성해주세요."));
+			.andExpect(jsonPath("$.message").value("참가자 이름을 작성해주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		String noEmergency = """
 			{ "raceCourseId": %d, "thirdPartyConsent": true,
@@ -166,7 +200,8 @@ class ApiV1ParticipationTest {
 
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), false))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("개인정보 제3자 제공에 동의해야 신청할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("개인정보 제3자 제공에 동의해야 신청할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		assertThat(participationRepository.count()).isZero();
 	}
@@ -178,7 +213,8 @@ class ApiV1ParticipationTest {
 
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김어린", birth, "S"), true))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("참가할 수 있는 나이가 아닙니다(대회 당일 만 14세 이상, 신청자 만 12세)."));
+			.andExpect(jsonPath("$.message").value("참가할 수 있는 나이가 아닙니다(대회 당일 만 14세 이상, 신청자 만 12세)."))
+			.andExpect(jsonPath("$.code").value("ORDER_AGE_RESTRICTED"));
 
 		assertThat(participationRepository.count()).isZero();
 	}
@@ -193,7 +229,8 @@ class ApiV1ParticipationTest {
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
 		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 이 대회에 신청했습니다."));
+			.andExpect(jsonPath("$.message").value("이미 이 대회에 신청했습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_DUPLICATE_PARTICIPATION"));
 
 		// 다른 회원은 신청할 수 있다
 		apply(OTHER_MEMBER_ID, applyBody(COURSE_ID, participant("박러너", "1990-01-01", "M"), true))
@@ -218,7 +255,8 @@ class ApiV1ParticipationTest {
 
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("취소된 대회입니다."));
+			.andExpect(jsonPath("$.message").value("취소된 대회입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_RACE_CANCELED"));
 	}
 
 	@Test
@@ -227,11 +265,13 @@ class ApiV1ParticipationTest {
 		raceCoursePort.put(StubRaceCoursePort.closedCourse(COURSE_ID, RACE_ID));
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("접수 기간이 아닙니다."));
+			.andExpect(jsonPath("$.message").value("접수 기간이 아닙니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_APPLICATION_CLOSED"));
 
 		apply(MEMBER_ID, applyBody(999, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_COURSE_NOT_FOUND"));
 	}
 
 	@Test
@@ -239,7 +279,8 @@ class ApiV1ParticipationTest {
 	void applyWithInvalidMemberId() throws Exception {
 		apply(0, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."));
+			.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -270,7 +311,7 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
-	@DisplayName("마지막 신청이 키트 없는 종목이면, 다음 신청서의 배송 주소는 주소를 적은 최근 신청에서 채운다")
+	@DisplayName("마지막 신청이 키트 없는 종목이면, 다음 신청서의 배송 주소·티셔츠 사이즈는 각각 적은 최근 신청에서 채운다")
 	void latestParticipantKeepsShippingAddress() throws Exception {
 		applyAndGetId(MEMBER_ID);
 		raceCoursePort.put(StubRaceCoursePort.courseWithoutKit(COURSE_ID + 1, RACE_ID + 1));
@@ -279,7 +320,7 @@ class ApiV1ParticipationTest {
 
 		mockMvc.perform(get(BASE_URL + "/latest-participant").header("X-Member-Id", MEMBER_ID))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.tshirtSize").value("M"))
+			.andExpect(jsonPath("$.data.tshirtSize").value("L"))
 			.andExpect(jsonPath("$.data.shippingAddress.address").value(ADDRESS));
 	}
 
@@ -295,11 +336,13 @@ class ApiV1ParticipationTest {
 
 		mockMvc.perform(get(BASE_URL + "/" + id).header("X-Member-Id", OTHER_MEMBER_ID))
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 보거나 고칠 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 보거나 고칠 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_FORBIDDEN"));
 
 		mockMvc.perform(get(BASE_URL + "/999999").header("X-Member-Id", MEMBER_ID))
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_FOUND"));
 	}
 
 	@Test
@@ -320,7 +363,8 @@ class ApiV1ParticipationTest {
 		// 키트가 있는 종목은 수정할 때도 배송 주소를 비울 수 없다
 		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XL", null))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("키트를 받을 배송 주소를 작성해주세요."));
+			.andExpect(jsonPath("$.message").value("키트를 받을 배송 주소를 작성해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_SHIPPING_ADDRESS_REQUIRED"));
 		ParticipantInfo unchanged = participationRepository.findById(id).orElseThrow().getParticipant();
 		assertThat(unchanged.getShippingAddress().getAddress()).isEqualTo("부산 해운대구 해운대로 00");
 	}
@@ -338,6 +382,21 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
+	@DisplayName("참가자 정보를 고칠 때도 종목이 주지 않는 티셔츠 사이즈는 400이고 원래 사이즈가 남는다")
+	void changeParticipantUnavailableTshirtSize() throws Exception {
+		int id = applyAndGetId(MEMBER_ID);
+
+		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XXXL"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message")
+				.value("이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L, XL)."))
+			.andExpect(jsonPath("$.code").value("ORDER_TSHIRT_SIZE_NOT_AVAILABLE"));
+
+		assertThat(participationRepository.findById(id).orElseThrow().getParticipant().getTshirtSize())
+			.isEqualTo("L");
+	}
+
+	@Test
 	@DisplayName("접수 마감 뒤에는 참가자 정보 수정이 409로 거절된다")
 	void changeParticipantAfterClose() throws Exception {
 		int id = applyAndGetId(MEMBER_ID);
@@ -345,7 +404,8 @@ class ApiV1ParticipationTest {
 
 		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XL"))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("접수가 마감되어 참가자 정보를 고칠 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("접수가 마감되어 참가자 정보를 고칠 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_APPLICATION_CLOSED"));
 
 		assertThat(participationRepository.findById(id).orElseThrow().getParticipant().getTshirtSize())
 			.isEqualTo("L");
@@ -361,12 +421,14 @@ class ApiV1ParticipationTest {
 
 		change(MEMBER_ID, id, participant("김러너", LocalDate.now().minusYears(10).toString(), "L"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("참가할 수 있는 나이가 아닙니다(대회 당일 만 14세 이상, 신청자 만 10세)."));
+			.andExpect(jsonPath("$.message").value("참가할 수 있는 나이가 아닙니다(대회 당일 만 14세 이상, 신청자 만 10세)."))
+			.andExpect(jsonPath("$.code").value("ORDER_AGE_RESTRICTED"));
 
 		finish(id, ParticipationStatus.CANCELED);
 		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XL"))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("참가자 정보를 고칠 수 없는 신청입니다(현재 상태: 취소)."));
+			.andExpect(jsonPath("$.message").value("참가자 정보를 고칠 수 없는 신청입니다(현재 상태: 취소)."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_EDITABLE"));
 	}
 
 	@Test
@@ -398,10 +460,12 @@ class ApiV1ParticipationTest {
 
 		cancel(OTHER_MEMBER_ID, id)
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 보거나 고칠 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 보거나 고칠 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_FORBIDDEN"));
 		cancel(MEMBER_ID, id + 1000)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_FOUND"));
 
 		assertThat(participationRepository.findById(id).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.PENDING);
@@ -415,15 +479,16 @@ class ApiV1ParticipationTest {
 		moveTo(id, ParticipationStatus.APPLIED);
 		cancel(MEMBER_ID, id)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message")
-				.value("결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다."));
+			.andExpect(jsonPath("$.message").value("결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_CANCELABLE"));
 		assertThat(participationRepository.findById(id).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.APPLIED);
 
 		moveTo(id, ParticipationStatus.CONFIRMED);
 		cancel(MEMBER_ID, id)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제한 참가권은 주문 상품 취소로 취소해주세요."));
+			.andExpect(jsonPath("$.message").value("결제한 참가권은 주문 상품 취소로 취소해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_CANCELABLE"));
 		assertThat(participationRepository.findById(id).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.CONFIRMED);
 
@@ -431,7 +496,8 @@ class ApiV1ParticipationTest {
 		cancel(MEMBER_ID, id).andExpect(status().isOk());
 		cancel(MEMBER_ID, id)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 끝난 신청입니다(현재 상태: 취소)."));
+			.andExpect(jsonPath("$.message").value("이미 끝난 신청입니다(현재 상태: 취소)."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_CANCELABLE"));
 	}
 
 	private ResultActions apply(int memberId, String body) throws Exception {

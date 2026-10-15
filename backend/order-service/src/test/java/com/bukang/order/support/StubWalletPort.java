@@ -8,13 +8,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import com.bukang.order.domain.exception.ExternalServiceRejectedException;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
+import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.out.wallet.WalletPayResult;
 import com.bukang.order.out.wallet.WalletPort;
 
 /**
  * 테스트용 예치금. 잔액을 정할 수 있고(기본은 넉넉함), 같은 주문은 한 번만 차감한다 (D의 멱등 처리 흉내)
  * 결제를 되돌리면(cancelPayment) 차감한 금액을 잔액에 돌려준다. 같은 주문을 여러 번 되돌려도 한 번만 돌려준다
+ * 되돌린 주문으로 다시 결제하면 거절한다 (D가 결제 취소로 막아 둔 주문은 409, WalletPort.cancelPayment)
  * 환불(refund)은 그 주문에서 차감한 금액 전액을 주문마다 한 번만 돌려준다
  * 응답 시간 초과를 흉내 낼 수 있다: 결제는 차감까지 끝낸 뒤 예외를 던지고(D는 처리했지만 응답을 못 받음),
  * 결제 취소는 아무것도 하지 않고 예외를 던진다
@@ -34,6 +37,8 @@ public class StubWalletPort implements WalletPort {
 	private final List<Integer> refundedAmounts = new CopyOnWriteArrayList<>();
 	private boolean payTimesOut;
 	private boolean cancelFails;
+	private boolean refundFails;
+	private boolean refundRejects;
 	private volatile CountDownLatch payEntered;
 	private volatile CountDownLatch payReleased;
 
@@ -55,6 +60,9 @@ public class StubWalletPort implements WalletPort {
 
 	private synchronized WalletPayResult payNow(int orderId, int amount) {
 		payCalls.add(amount);
+		if (canceledOrders.contains(orderId)) {
+			throw new OrderNotPayableException("이미 끝난 결제라 다시 결제할 수 없습니다.");
+		}
 		WalletPayResult result = charge(orderId, amount);
 		if (payTimesOut) {
 			throw new ExternalServiceUnavailableException(TIMEOUT_MESSAGE);
@@ -90,6 +98,13 @@ public class StubWalletPort implements WalletPort {
 	@Override
 	public synchronized void refund(int orderId, int memberId) {
 		refundCalls.add(new Call(orderId, memberId));
+		if (refundFails) {
+			throw new ExternalServiceUnavailableException(TIMEOUT_MESSAGE);
+		}
+		if (refundRejects) {
+			// HttpWalletAdapter가 D의 4xx 거절을 던지는 예외와 같게 둔다
+			throw new ExternalServiceRejectedException("환불할 수 없는 결제입니다.");
+		}
 		Integer amount = paidOrders.remove(orderId);
 		if (amount != null) {
 			refundedAmounts.add(amount);
@@ -130,6 +145,16 @@ public class StubWalletPort implements WalletPort {
 	// 결제 취소가 실패하게 한다 (예치금 서비스 장애)
 	public synchronized void setCancelFails(boolean cancelFails) {
 		this.cancelFails = cancelFails;
+	}
+
+	// 환불이 실패하게 한다 (예치금 서비스 장애)
+	public synchronized void setRefundFails(boolean refundFails) {
+		this.refundFails = refundFails;
+	}
+
+	// 환불을 D가 거절하게 한다 (다시 해도 안 되는 실패, 409)
+	public synchronized void setRefundRejects(boolean refundRejects) {
+		this.refundRejects = refundRejects;
 	}
 
 	public List<Call> cancelCalls() {
@@ -176,6 +201,8 @@ public class StubWalletPort implements WalletPort {
 		refundedAmounts.clear();
 		payTimesOut = false;
 		cancelFails = false;
+		refundFails = false;
+		refundRejects = false;
 		releasePay();
 		payEntered = null;
 		payReleased = null;

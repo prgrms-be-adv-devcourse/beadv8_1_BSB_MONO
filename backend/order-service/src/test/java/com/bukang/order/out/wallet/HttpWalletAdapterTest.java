@@ -23,6 +23,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import com.bukang.order.domain.exception.ExternalServiceRejectedException;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.out.InternalHttpClients;
@@ -110,7 +111,7 @@ class HttpWalletAdapterTest {
 
 		for (int attempt = 0; attempt < 2; attempt++) {
 			assertThatThrownBy(() -> adapter.pay(ORDER_ID, MEMBER_ID, 50_000))
-				.isInstanceOf(ExternalServiceUnavailableException.class)
+				.isInstanceOf(ExternalServiceRejectedException.class)
 				.hasMessage(HttpWalletAdapter.UNAVAILABLE_MESSAGE);
 		}
 		server.verify();
@@ -135,7 +136,7 @@ class HttpWalletAdapterTest {
 	}
 
 	@Test
-	@DisplayName("결제 취소·환불이 실패하면(4xx·5xx·지연) 503 예외를 던져, 부른 쪽이 롤백하고 다시 시도하게 한다")
+	@DisplayName("결제 취소·환불이 실패하면 503 예외를 던진다. 5xx·지연은 장애, 4xx 거절은 다시 해도 같은 거절로 나눈다")
 	void cancelAndRefundFail() {
 		server.expect(requestTo(CANCEL_URL)).andRespond(withServerError());
 		server.expect(requestTo(CANCEL_URL)).andRespond(withException(new SocketTimeoutException("read timed out")));
@@ -146,7 +147,10 @@ class HttpWalletAdapterTest {
 		assertThatThrownBy(() -> adapter.cancelPayment(ORDER_ID, MEMBER_ID))
 			.isInstanceOf(ExternalServiceUnavailableException.class);
 		assertThatThrownBy(() -> adapter.refund(ORDER_ID, MEMBER_ID))
-			.isInstanceOf(ExternalServiceUnavailableException.class);
+			.isInstanceOf(ExternalServiceRejectedException.class)
+			.hasMessage(HttpWalletAdapter.UNAVAILABLE_MESSAGE)
+			// 회원·프론트에는 장애와 같은 오류 코드로 보인다
+			.hasFieldOrPropertyWithValue("code", ExternalServiceUnavailableException.CODE);
 		server.verify();
 	}
 
