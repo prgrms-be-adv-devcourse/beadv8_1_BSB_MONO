@@ -5,11 +5,11 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.common.shared.race.event.RaceCancelEvent;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.exception.RaceAccessDeniedException;
 import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
 import com.bukang.product.domain.exception.RaceNotFoundException;

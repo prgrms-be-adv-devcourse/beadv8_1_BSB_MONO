@@ -6,7 +6,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
-import com.bukang.product.domain.RaceSaleStatus;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.out.RaceRepository;
 

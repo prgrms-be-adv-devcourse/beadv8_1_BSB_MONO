@@ -1,10 +1,10 @@
 package com.bukang.product.app;
 
-import static com.bukang.product.domain.RaceSaleStatus.CANCELED;
-import static com.bukang.product.domain.RaceSaleStatus.CLOSED;
-import static com.bukang.product.domain.RaceSaleStatus.ON_SALE;
-import static com.bukang.product.domain.RaceSaleStatus.SCHEDULED;
-import static com.bukang.product.domain.RaceSaleStatus.STOPPED;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.CANCELED;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.CLOSED;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.ON_SALE;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.SCHEDULED;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.STOPPED;
 import static com.bukang.product.support.RaceRequests.course;
 import static com.bukang.product.support.RaceRequests.race;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,8 +21,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.CourseType;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.support.ProductIntegrationTest;
 import com.bukang.product.support.RaceRequests.CourseBuilder;

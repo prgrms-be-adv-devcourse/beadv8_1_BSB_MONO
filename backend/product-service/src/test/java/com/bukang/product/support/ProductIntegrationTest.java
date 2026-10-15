@@ -40,13 +40,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.bukang.common.global.json.JsonConverter;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.product.TestcontainersConfiguration;
 import com.bukang.product.app.ProductFacade;
 import com.bukang.product.domain.ProductMember;
 import com.bukang.product.domain.ProductSeller;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.out.ParticipationHoldRepository;
