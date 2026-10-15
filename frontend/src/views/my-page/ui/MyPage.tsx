@@ -7,13 +7,15 @@ import type { ReactNode } from 'react'
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
 import { useLogout } from '@/features/auth'
-import { cn } from '@/shared/lib'
+import { useMyBalance } from '@/entities/wallet'
+import { cn, formatWon } from '@/shared/lib'
 import { buttonClassName, FOCUS_RING, Icon, KeyValue, Switch, type IconName } from '@/shared/ui'
 
 // 피그마 V2 · M30 마이 · 설정 (+ M30-2 판매자 승인 후)
 // TODO(api): 회원 정보 · 알림 설정 · 판매자 상태를 불러온다
 export function MyPage({ seller = false }: { seller?: boolean }) {
   const logout = useLogout()
+  const { balance } = useMyBalance()
   return (
     <>
       <AppHeader />
@@ -52,7 +54,12 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
 
         <MenuCard>
           <MenuRow href="/tickets" icon="Calendar" label="내 참가 대회" value="2개" />
-          <MenuRow href="/me/deposit" icon="Package" label="예치금" value="₩5,000" />
+          <MenuRow
+            href="/me/deposit"
+            icon="Package"
+            label="예치금"
+            value={balance === undefined ? '-' : formatWon(balance)}
+          />
         </MenuCard>
 
         <h2 className="pt-2 text-label-strong">알림 설정</h2>

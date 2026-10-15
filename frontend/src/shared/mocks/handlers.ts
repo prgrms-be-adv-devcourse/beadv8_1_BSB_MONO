@@ -13,9 +13,16 @@ import {
 } from '@/shared/api/generated/member/member.msw'
 import {
   getBukangOrderAPIMock,
+  getCheckoutMockHandler,
+  getCheckoutResponseMock,
   getCreateMockHandler,
   getCreateResponseMock,
   getFindById1MockHandler,
+  getFindById1ResponseMock,
+  getFindMineMockHandler,
+  getFindMineResponseMock,
+  getPayMockHandler,
+  getPayResponseMock,
 } from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
 import { getBukangProductAPIMock } from '@/shared/api/generated/product/product.msw'
@@ -81,22 +88,63 @@ const authHandlers = [
   ),
 ]
 
+/**
+ * 내 참가권 목. 생성된 주문 목록 예시는 결제 대기 · 기한 만료 주문뿐이라 참가권이 하나도 안 보인다.
+ * 결제한 주문(주문 상세 예시와 같은 1번)을 맨 앞에 더한다. 생성된 핸들러보다 앞에 둔다.
+ */
+const myOrdersHandler = getFindMineMockHandler(() => {
+  const example = getFindMineResponseMock()
+  const paid = {
+    id: 1,
+    createDate: '2026-10-12T10:00:00',
+    orderNo: 'OD-20261012-0001',
+    status: 'PAID' as const,
+    totalAmount: 50000,
+    paymentDueAt: '2026-10-12T10:10:00',
+    itemName: '2026 서울 하프 마라톤 10K',
+    itemCount: 1,
+  }
+  return { ...example, data: { ...example.data, orders: [paid, ...(example.data?.orders ?? [])] } }
+})
 /** 지금부터 minutes분 뒤의 한국 시간 (백엔드처럼 시간대 없는 2026-10-12T10:10:00 모양) */
 function kstMinutesFromNow(minutes: number): string {
   return new Date(Date.now() + (9 * 60 + minutes) * 60 * 1000).toISOString().slice(0, 19)
 }
 
 /**
+ * 명세 예시는 주문 생성 · 장바구니 주문 · 결제 · 조회가 모두 주문 1이다. 그런데 결제 화면은 주문 1이 결제 대기여야 하고,
+ * 내 참가권(위 myOrdersHandler)은 주문 1이 결제한 주문이어야 한다.
+ * 그래서 진짜 서버처럼 주문을 만들면 결제 대기로, 결제하면 결제 완료로 바꿔 두고 조회는 그 상태대로 돌려준다.
+ * 처음에는 결제 완료(내 참가권에 보이는 주문)다.
+ */
+let mockOrderAwaitingPayment = false
+
+/** 테스트 사이에 주문 1의 상태가 넘어가지 않게 처음(결제 완료)으로 돌린다. */
+export function resetMockOrderForTesting() {
+  mockOrderAwaitingPayment = false
+}
+
+/**
  * 명세 예시의 주문은 결제 기한이 이미 지난 시각이라 결제 화면이 바로 시간 초과가 된다.
- * 가짜 응답 모드에서 결제 화면을 볼 수 있게 주문 생성 · 조회는 결제 대기 · 기한 10분 뒤로 돌려준다.
+ * 가짜 응답 모드에서 결제 화면을 볼 수 있게 주문 생성 · 결제 대기 주문 조회는 결제 대기 · 기한 10분 뒤로 돌려준다.
  * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
  */
 const orderHandlers = [
   getCreateMockHandler(() => {
+    mockOrderAwaitingPayment = true
     const example = getCreateResponseMock()
     return { ...example, data: { ...example.data, paymentDueAt: kstMinutesFromNow(10) } }
   }),
+  getCheckoutMockHandler(() => {
+    mockOrderAwaitingPayment = true
+    return getCheckoutResponseMock()
+  }),
+  getPayMockHandler(() => {
+    mockOrderAwaitingPayment = false
+    return getPayResponseMock()
+  }),
   getFindById1MockHandler(() => {
+    if (!mockOrderAwaitingPayment) return getFindById1ResponseMock()
     const example = getCreateResponseMock()
     return { ...example, data: { ...example.data, paymentDueAt: kstMinutesFromNow(10) } }
   }),
@@ -121,6 +169,7 @@ export const handlers = [
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
   ...authHandlers,
+  myOrdersHandler,
   ...orderHandlers,
   ...generatedHandlers,
 ]
