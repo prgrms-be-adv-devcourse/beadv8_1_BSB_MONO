@@ -25,7 +25,22 @@ export const HoldBody = zod.object({
   "reason": zod.string().min(holdBodyReasonMin).max(holdBodyReasonMax).optional().describe('사유 상세 (선택, 500자 이하)')
 }).describe('지급보류 걸기 요청')
 
-export const HoldResponse = zod.void()
+export const HoldResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int(),
+  "holdCode": zod.string(),
+  "payoutId": zod.int(),
+  "reasonType": zod.enum(['ACCOUNT_NOT_REGISTERED', 'RACE_CANCELED']).describe('보류 사유 (ACCOUNT_NOT_REGISTERED: 정산 계좌 미등록, RACE_CANCELED: 대회 취소 처리)'),
+  "reason": zod.string().nullish(),
+  "status": zod.enum(['HELD', 'RELEASED']).describe('지급보류 상태 (HELD: 지급보류, RELEASED: 해제)'),
+  "heldBy": zod.int(),
+  "heldAt": zod.iso.datetime({"offset":true}),
+  "releasedBy": zod.int().nullish(),
+  "releasedAt": zod.iso.datetime({"offset":true}).nullish()
+}).optional()
+})
 
 
 /**
@@ -36,14 +51,37 @@ export const ReleaseParams = zod.object({
   "holdId": zod.int().describe('지급보류 ID (보류 걸기 응답의 id)')
 })
 
-export const ReleaseResponse = zod.unknown()
+export const ReleaseResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int(),
+  "holdCode": zod.string(),
+  "payoutId": zod.int(),
+  "reasonType": zod.enum(['ACCOUNT_NOT_REGISTERED', 'RACE_CANCELED']).describe('보류 사유 (ACCOUNT_NOT_REGISTERED: 정산 계좌 미등록, RACE_CANCELED: 대회 취소 처리)'),
+  "reason": zod.string().nullish(),
+  "status": zod.enum(['HELD', 'RELEASED']).describe('지급보류 상태 (HELD: 지급보류, RELEASED: 해제)'),
+  "heldBy": zod.int(),
+  "heldAt": zod.iso.datetime({"offset":true}),
+  "releasedBy": zod.int().nullish(),
+  "releasedAt": zod.iso.datetime({"offset":true}).nullish()
+}).optional()
+})
 
 
 /**
  * 다음 정산일, 정산 예정액(다음 정산일에 나갈 지급액 합계, 보류 제외), 지급보류 중인 정산 내역 수를 돌려준다. 조회 기간과 상관없이 판매자의 지금 상태로 계산한다.
  * @summary 정산 요약 조회
  */
-export const SummaryResponse = zod.unknown()
+export const SummaryResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "nextPayDate": zod.iso.date(),
+  "scheduledPayoutAmount": zod.int(),
+  "heldCount": zod.int()
+}).optional()
+})
 
 
 /**
@@ -55,7 +93,25 @@ export const PayoutsQueryParams = zod.object({
   "toMonth": zod.string().describe('조회 끝 정산 월 (yyyy-MM, 포함)')
 })
 
-export const PayoutsResponse = zod.unknown()
+export const PayoutsResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.array(zod.object({
+  "id": zod.int(),
+  "payoutCode": zod.string(),
+  "raceId": zod.int(),
+  "raceName": zod.string(),
+  "payoutMonth": zod.string(),
+  "salesAmount": zod.int(),
+  "refundAmount": zod.int(),
+  "feeAmount": zod.int(),
+  "payoutAmount": zod.int(),
+  "status": zod.enum(['CALCULATED', 'HELD', 'PAID']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)'),
+  "settledAt": zod.iso.datetime({"offset":true}),
+  "scheduledPayDate": zod.iso.date(),
+  "paidAt": zod.iso.datetime({"offset":true}).nullish()
+})).optional()
+})
 
 
 /**
@@ -72,7 +128,31 @@ export const ItemsQueryParams = zod.object({
   "size": zod.int().default(itemsQuerySizeDefault).describe('페이지 크기 (1 ~ 100)')
 })
 
-export const ItemsResponse = zod.unknown()
+export const ItemsResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "content": zod.array(zod.object({
+  "id": zod.int(),
+  "orderItemId": zod.int(),
+  "recordType": zod.enum(['SALE', 'REFUND']).describe('구분 (SALE: 판매, REFUND: 환불)'),
+  "amount": zod.int(),
+  "feeRate": zod.number(),
+  "feeAmount": zod.int(),
+  "targetDate": zod.iso.date(),
+  "payoutId": zod.int(),
+  "payoutCode": zod.string(),
+  "raceId": zod.int(),
+  "raceName": zod.string(),
+  "payoutStatus": zod.enum(['CALCULATED', 'HELD', 'PAID']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)'),
+  "scheduledPayDate": zod.iso.date()
+})),
+  "page": zod.int(),
+  "size": zod.int(),
+  "totalElements": zod.int(),
+  "totalPages": zod.int()
+}).optional()
+})
 
 
 /**
@@ -84,4 +164,21 @@ export const HoldsQueryParams = zod.object({
   "to": zod.iso.date().describe('조회 끝 보류일 (yyyy-MM-dd, 포함)')
 })
 
-export const HoldsResponse = zod.unknown()
+export const HoldsResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.array(zod.object({
+  "id": zod.int(),
+  "holdCode": zod.string(),
+  "payoutId": zod.int(),
+  "payoutCode": zod.string(),
+  "raceId": zod.int(),
+  "raceName": zod.string(),
+  "payoutAmount": zod.int(),
+  "reasonType": zod.enum(['ACCOUNT_NOT_REGISTERED', 'RACE_CANCELED']).describe('보류 사유 (ACCOUNT_NOT_REGISTERED: 정산 계좌 미등록, RACE_CANCELED: 대회 취소 처리)'),
+  "reason": zod.string().nullish(),
+  "status": zod.enum(['HELD', 'RELEASED']).describe('지급보류 상태 (HELD: 지급보류, RELEASED: 해제)'),
+  "heldAt": zod.iso.datetime({"offset":true}),
+  "releasedAt": zod.iso.datetime({"offset":true}).nullish()
+})).optional()
+})

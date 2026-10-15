@@ -1,0 +1,398 @@
+{
+  "responses": {
+    "summary": {
+      "200": {
+        "wrapper": "RsDataPayoutSummaryDto",
+        "data": {
+          "$ref": "#/components/schemas/PayoutSummaryDto"
+        }
+      }
+    },
+    "payouts": {
+      "200": {
+        "wrapper": "RsDataListPayoutDto",
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/PayoutDto"
+          }
+        }
+      }
+    },
+    "items": {
+      "200": {
+        "wrapper": "RsDataPayoutItemPageDto",
+        "data": {
+          "$ref": "#/components/schemas/PayoutItemPageDto"
+        }
+      }
+    },
+    "holds": {
+      "200": {
+        "wrapper": "RsDataListSellerPayoutHoldDto",
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SellerPayoutHoldDto"
+          }
+        }
+      }
+    },
+    "hold": {
+      "201": {
+        "wrapper": "RsDataPayoutHoldDto",
+        "data": {
+          "$ref": "#/components/schemas/PayoutHoldDto"
+        }
+      }
+    },
+    "release": {
+      "200": {
+        "wrapper": "RsDataPayoutHoldDto",
+        "data": {
+          "$ref": "#/components/schemas/PayoutHoldDto"
+        }
+      }
+    }
+  },
+  "schemas": {
+    "PayoutSummaryDto": {
+      "type": "object",
+      "properties": {
+        "nextPayDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "scheduledPayoutAmount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "heldCount": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "nextPayDate",
+        "scheduledPayoutAmount",
+        "heldCount"
+      ]
+    },
+    "PayoutDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "payoutCode": {
+          "type": "string"
+        },
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "raceName": {
+          "type": "string"
+        },
+        "payoutMonth": {
+          "type": "string"
+        },
+        "salesAmount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "refundAmount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "feeAmount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "payoutAmount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "status": {
+          "$ref": "#/components/schemas/PayoutStatus"
+        },
+        "settledAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "scheduledPayDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "paidAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "payoutCode",
+        "raceId",
+        "raceName",
+        "payoutMonth",
+        "salesAmount",
+        "refundAmount",
+        "feeAmount",
+        "payoutAmount",
+        "status",
+        "settledAt",
+        "scheduledPayDate"
+      ]
+    },
+    "PayoutItemDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "orderItemId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "recordType": {
+          "$ref": "#/components/schemas/PayoutRecordType"
+        },
+        "amount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "feeRate": {
+          "type": "number"
+        },
+        "feeAmount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "targetDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "payoutId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "payoutCode": {
+          "type": "string"
+        },
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "raceName": {
+          "type": "string"
+        },
+        "payoutStatus": {
+          "$ref": "#/components/schemas/PayoutStatus"
+        },
+        "scheduledPayDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "id",
+        "orderItemId",
+        "recordType",
+        "amount",
+        "feeRate",
+        "feeAmount",
+        "targetDate",
+        "payoutId",
+        "payoutCode",
+        "raceId",
+        "raceName",
+        "payoutStatus",
+        "scheduledPayDate"
+      ]
+    },
+    "PayoutItemPageDto": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/PayoutItemDto"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalElements": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "totalPages": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements",
+        "totalPages"
+      ]
+    },
+    "SellerPayoutHoldDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "holdCode": {
+          "type": "string"
+        },
+        "payoutId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "payoutCode": {
+          "type": "string"
+        },
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "raceName": {
+          "type": "string"
+        },
+        "payoutAmount": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "reasonType": {
+          "$ref": "#/components/schemas/PayoutHoldReason"
+        },
+        "reason": {
+          "type": "string",
+          "nullable": true
+        },
+        "status": {
+          "$ref": "#/components/schemas/PayoutHoldStatus"
+        },
+        "heldAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "releasedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "holdCode",
+        "payoutId",
+        "payoutCode",
+        "raceId",
+        "raceName",
+        "payoutAmount",
+        "reasonType",
+        "status",
+        "heldAt"
+      ]
+    },
+    "PayoutHoldDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "holdCode": {
+          "type": "string"
+        },
+        "payoutId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "reasonType": {
+          "$ref": "#/components/schemas/PayoutHoldReason"
+        },
+        "reason": {
+          "type": "string",
+          "nullable": true
+        },
+        "status": {
+          "$ref": "#/components/schemas/PayoutHoldStatus"
+        },
+        "heldBy": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "heldAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "releasedBy": {
+          "type": "integer",
+          "format": "int32",
+          "nullable": true
+        },
+        "releasedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "holdCode",
+        "payoutId",
+        "reasonType",
+        "status",
+        "heldBy",
+        "heldAt"
+      ]
+    },
+    "PayoutStatus": {
+      "type": "string",
+      "enum": [
+        "CALCULATED",
+        "HELD",
+        "PAID"
+      ],
+      "description": "정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)"
+    },
+    "PayoutHoldStatus": {
+      "type": "string",
+      "enum": [
+        "HELD",
+        "RELEASED"
+      ],
+      "description": "지급보류 상태 (HELD: 지급보류, RELEASED: 해제)"
+    },
+    "PayoutHoldReason": {
+      "type": "string",
+      "enum": [
+        "ACCOUNT_NOT_REGISTERED",
+        "RACE_CANCELED"
+      ],
+      "description": "보류 사유 (ACCOUNT_NOT_REGISTERED: 정산 계좌 미등록, RACE_CANCELED: 대회 취소 처리)"
+    },
+    "PayoutRecordType": {
+      "type": "string",
+      "enum": [
+        "SALE",
+        "REFUND"
+      ],
+      "description": "구분 (SALE: 판매, REFUND: 환불)"
+    }
+  }
+}
