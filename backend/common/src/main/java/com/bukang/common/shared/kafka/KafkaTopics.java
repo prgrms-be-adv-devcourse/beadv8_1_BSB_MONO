@@ -3,7 +3,7 @@ package com.bukang.common.shared.kafka;
 /**
  * Kafka 토픽 이름을 모두 이곳에 모은다 (생산자와 소비자가 같은 상수를 쓴다)
  * 같은 이벤트는 토픽 하나로 보내고, 받는 서비스마다 groupId를 달리해 구독한다 (그룹마다 모든 메시지를 받는다).
- * 회원·판매자·대회 토픽은 queuing.<도메인>.<이벤트>(.claude/rules/kafka-topic-convention.md)로 맞췄고, 나머지는 쓰던 이름 그대로다.
+ * 회원·판매자·대회·종목 토픽은 queuing.<도메인>.<이벤트>(.claude/rules/kafka-topic-convention.md)로 맞췄고, 나머지는 쓰던 이름 그대로다.
  * 공용 토픽을 @RetryableTopic으로 받는 서비스는 재시도·DLT 토픽 접미사에 서비스 이름을 넣어, 다른 서비스와 겹치지 않게 한다.
  */
 public final class KafkaTopics {
@@ -14,6 +14,8 @@ public final class KafkaTopics {
 	public static final String SELLER_CHANGED = "queuing.seller.changed";
 	// 대회가 바뀌었다 (등록·수정·취소, 상태 배치의 판매 상태 변경). 대기열 서비스가 대회 복제본에 저장한다
 	public static final String RACE_CHANGED = "queuing.race.changed";
+	// 종목이 바뀌었다 (등록한 종목, 수정 때 바뀐·새·뺀 종목). 대기열 서비스가 종목 복제본에 저장한다
+	public static final String RACE_COURSE_CHANGED = "queuing.racecourse.changed";
 
 	// 캐시 회원 복제본을 처음 저장한 뒤 지갑을 만든다 (cash → cash)
 	public static final String CASH_MEMBER_CREATED = "cash.member.created";

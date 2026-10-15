@@ -63,7 +63,7 @@ public class ProductFacade {
 		return productSyncSellerUseCase.syncSeller(event);
 	}
 
-	// 대회 저장(등록·수정)은 DB에 커밋한 뒤에 검색 색인과 파일 연결·대회 변경 메시지 발행을 한다
+	// 대회 저장(등록·수정)은 DB에 커밋한 뒤에 검색 색인과 파일 연결·대회 변경·종목 변경 메시지 발행을 한다
 	// 롤백된 저장을 색인하거나, 롤백된 대회에 파일을 연결하지 않기 위해서다
 	// NOT_SUPPORTED: 이 메서드는 트랜잭션 없이 실행한다 (클래스에 붙은 readOnly 트랜잭션을 쓰지 않는다)
 	// transactionTemplate.execute(): 넘긴 람다만 새 트랜잭션으로 실행하고, execute()가 값을 돌려주기 전에 커밋한다
@@ -75,6 +75,7 @@ public class ProductFacade {
 		indexRaceCourses(result);
 		publishFileLink(result);
 		publishRaceChanged(result);
+		publishRaceCourseChanged(result);
 		return result.dto();
 	}
 
@@ -85,6 +86,7 @@ public class ProductFacade {
 		indexRaceCourses(result);
 		publishFileLink(result);
 		publishRaceChanged(result);
+		publishRaceCourseChanged(result);
 		return result.dto();
 	}
 
@@ -194,6 +196,13 @@ public class ProductFacade {
 		if (result.raceChanged() != null) {
 			publish(KafkaTopics.RACE_CHANGED, String.valueOf(result.raceId()), result.raceChanged(), "대회 변경");
 		}
+	}
+
+	// 대기열 서비스에 종목 변경 메시지를 종목마다 1건씩 보낸다 (queuing.racecourse.changed). 보낼 종목이 없으면 보내지 않는다
+	// 보내지 못하면 대기열 복제본에 새 종목이 없거나 뺀 종목이 남으므로 로그의 메시지를 다시 보내야 한다
+	private void publishRaceCourseChanged(RaceSaveResult result) {
+		result.courseChanges().forEach(event ->
+			publish(KafkaTopics.RACE_COURSE_CHANGED, String.valueOf(result.raceId()), event, "종목 변경"));
 	}
 
 	// 커밋한 뒤 Kafka 메시지를 보낸다. 같은 대회의 메시지가 순서대로 처리되도록 대회 ID를 key로 보낸다 (같은 key는 같은 파티션)
