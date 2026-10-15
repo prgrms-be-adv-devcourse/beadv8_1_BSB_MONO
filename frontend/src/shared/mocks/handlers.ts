@@ -17,7 +17,6 @@ import {
   getCheckoutResponseMock,
   getCreateMockHandler,
   getCreateResponseMock,
-  getExtendDeadlineResponseMock,
   getFindById1MockHandler,
   getFindById1ResponseMock,
   getFindMineMockHandler,
@@ -146,7 +145,7 @@ const orderHandlers = [
   }),
   getFindById1MockHandler(() => {
     if (!mockOrderAwaitingPayment) return getFindById1ResponseMock()
-    const example = getExtendDeadlineResponseMock()
+    const example = getCreateResponseMock()
     return { ...example, data: { ...example.data, paymentDueAt: kstMinutesFromNow(10) } }
   }),
 ]

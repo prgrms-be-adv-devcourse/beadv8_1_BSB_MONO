@@ -5,6 +5,29 @@
  * 크루 중심 마라톤 대회 예매·커머스 플랫폼 API
  * OpenAPI spec version: v1
  */
+export interface RsData {
+  status?: number;
+  code?: string;
+  message?: string;
+  data?: unknown;
+}
+
+/**
+ * 로그인 요청
+ */
+export interface MemberLoginRequestDto {
+  /**
+     * 이메일
+     * @minLength 1
+     */
+  email: string;
+  /**
+     * 비밀번호
+     * @minLength 1
+     */
+  password: string;
+}
+
 /**
  * 성별 (선택)
  * @nullable
@@ -38,9 +61,9 @@ export interface MemberJoinRequestDto {
      */
   name: string;
   /**
-     * 닉네임 (30자 이하)
-     * @minLength 0
-     * @maxLength 30
+     * 닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)
+     * @minLength 1
+     * @pattern ^[가-힣A-Za-z0-9]+$
      */
   nickname: string;
   /**
@@ -56,28 +79,6 @@ export interface MemberJoinRequestDto {
      * @nullable
      */
   gender?: MemberJoinRequestDtoGender;
-}
-
-/**
- * 로그인 요청
- */
-export interface MemberLoginRequestDto {
-  /**
-     * 이메일
-     * @minLength 1
-     */
-  email: string;
-  /**
-     * 비밀번호
-     * @minLength 1
-     */
-  password: string;
-}
-
-export interface RsData {
-  status?: number;
-  message?: string;
-  data?: unknown;
 }
 
 export interface MemberDto {
@@ -107,16 +108,16 @@ export interface TokenReissueResponseDto {
   accessToken?: string;
 }
 
-export interface RsDataMemberLoginResponseDto {
-  status?: number;
-  message?: string;
-  data?: MemberLoginResponseDto;
-}
-
 export interface RsDataTokenReissueResponseDto {
   status?: number;
   message?: string;
   data?: TokenReissueResponseDto;
+}
+
+export interface RsDataMemberLoginResponseDto {
+  status?: number;
+  message?: string;
+  data?: MemberLoginResponseDto;
 }
 
 export interface RsDataMemberDto {

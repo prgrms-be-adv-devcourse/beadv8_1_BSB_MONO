@@ -24,7 +24,7 @@ const DUE_AT = '2026-10-14T10:10:00'
 function orderResponse(
   patch: { status?: 'CREATED' | 'EXPIRED' | 'PAID'; paymentDueAt?: string } = {},
 ) {
-  const example = orderMock.getExtendDeadlineResponseMock()
+  const example = orderMock.getFindById1ResponseMock()
   return {
     ...example,
     data: {
@@ -109,15 +109,8 @@ describe('결제 화면', () => {
     expect(paid).toBe(true)
   })
 
-  it('잔액이 모자라면 충전 안내를 보이고, 충전하러 갈 때 결제 기한을 늘린다', async () => {
-    let extended = false
-    server.use(
-      balanceHandler(40_000),
-      http.post('*/api/v1/order/orders/:orderId/deadline-extension', () => {
-        extended = true
-        return HttpResponse.json(orderResponse({ paymentDueAt: '2026-10-14T10:12:00' }))
-      }),
-    )
+  it('잔액이 모자라면 충전 안내를 보이고, 충전하러 가기는 결제 기한을 늘리지 않고 충전창으로 간다', async () => {
+    server.use(balanceHandler(40_000))
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderCheckout()
 
@@ -128,7 +121,6 @@ describe('결제 화면', () => {
     await user.click(button)
 
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/me/deposit/charge'))
-    expect(extended).toBe(true)
   })
 
   it('결제 때 예치금이 모자라다고 하면(409) 서버 문구로 충전 안내를 보여 준다', async () => {
