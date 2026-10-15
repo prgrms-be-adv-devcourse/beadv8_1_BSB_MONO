@@ -95,8 +95,18 @@ public class OrderItem extends BaseIdAndTime {
 	@Column(name = "kit_delivery_status", columnDefinition = "varchar(20)")
 	private KitDeliveryStatus kitDeliveryStatus;
 
+	// 판매자가 발송할 때 넣은 택배사·송장 번호 (배송 중부터 있다)
+	@Column(name = "kit_carrier", length = 30)
+	private String kitCarrier;
+
+	@Column(name = "kit_tracking_number", length = 50)
+	private String kitTrackingNumber;
+
 	@Column(name = "kit_shipped_at")
 	private LocalDateTime kitShippedAt;
+
+	@Column(name = "kit_delivered_at")
+	private LocalDateTime kitDeliveredAt;
 
 	static OrderItem ticket(Order order, Participation participation, RaceCourseInfo course) {
 		OrderItem item = new OrderItem();
@@ -137,25 +147,49 @@ public class OrderItem extends BaseIdAndTime {
 		this.canceledAt = canceledAt;
 	}
 
-	// 판매자가 키트를 보냈다. 결제한 키트만, 한 번만 발송한다
+	// 판매자가 키트를 보냈다(배송 준비 → 배송 중). 결제한 키트만, 한 번만 발송한다
 	// 환불 기한이 지났는지는 종목 정보를 알아야 해서 부르는 쪽(KitDeliveryUseCase)이 확인한다
-	public void shipKit(LocalDateTime shippedAt) {
+	public void shipKit(String carrier, String trackingNumber, LocalDateTime shippedAt) {
 		checkKitShippable();
-		this.kitDeliveryStatus = KitDeliveryStatus.SHIPPED;
+		this.kitDeliveryStatus = KitDeliveryStatus.SHIPPING;
+		this.kitCarrier = carrier;
+		this.kitTrackingNumber = trackingNumber;
 		this.kitShippedAt = shippedAt;
 	}
 
 	// 키트를 보낼 수 있는 주문 상품인지 (키트 있음, 아직 안 보냄, 결제 완료)
 	public void checkKitShippable() {
-		if (kitDeliveryStatus == null) {
-			throw new KitNotShippableException("키트가 없는 참가권입니다.");
-		}
-		if (kitDeliveryStatus == KitDeliveryStatus.SHIPPED) {
+		checkHasKit();
+		if (kitDeliveryStatus != KitDeliveryStatus.PREPARING) {
 			throw new KitNotShippableException("이미 발송한 키트입니다.");
 		}
 		if (status != OrderItemStatus.PAID) {
 			throw new KitNotShippableException(
 				"결제한 참가권의 키트만 발송할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+	}
+
+	// 구매자가 키트를 받았다(배송 중 → 배송 완료). 보낸 키트만, 한 번만 완료한다
+	// 결제 상태는 보지 않는다. 발송 뒤 대회 취소로 환불돼도 이미 보낸 키트는 받게 된다 (정책 5장 4-3)
+	public void completeKitDelivery(LocalDateTime deliveredAt) {
+		checkKitDeliverable();
+		this.kitDeliveryStatus = KitDeliveryStatus.DELIVERED;
+		this.kitDeliveredAt = deliveredAt;
+	}
+
+	public void checkKitDeliverable() {
+		checkHasKit();
+		if (kitDeliveryStatus == KitDeliveryStatus.PREPARING) {
+			throw new KitNotShippableException("아직 발송하지 않은 키트입니다.");
+		}
+		if (kitDeliveryStatus == KitDeliveryStatus.DELIVERED) {
+			throw new KitNotShippableException("이미 배송 완료한 키트입니다.");
+		}
+	}
+
+	private void checkHasKit() {
+		if (kitDeliveryStatus == null) {
+			throw new KitNotShippableException("키트가 없는 참가권입니다.");
 		}
 	}
 
@@ -165,6 +199,6 @@ public class OrderItem extends BaseIdAndTime {
 
 	public OrderItemDto toDto() {
 		return new OrderItemDto(getId(), participationId, raceCourseId, sellerId, itemName, unitPrice, quantity,
-			amount, status, kitDeliveryStatus, kitShippedAt);
+			amount, status, kitDeliveryStatus, kitCarrier, kitTrackingNumber, kitShippedAt, kitDeliveredAt);
 	}
 }

@@ -21,8 +21,12 @@ public class OrderItemDto {
 	private final int quantity;
 	private final int amount;
 	private final OrderItemStatus status;
-	// 키트 배송 상태 (PREPARING 배송 준비 / SHIPPED 발송). 키트가 없는 참가권은 null
+	// 키트 배송 상태 (PREPARING 배송 준비 / SHIPPING 배송 중 / DELIVERED 배송 완료). 키트가 없는 참가권은 null
 	private final KitDeliveryStatus kitDeliveryStatus;
-	// 키트를 발송한 시각. 발송 전이면 null
+	// 판매자가 발송할 때 넣은 택배사·송장 번호. 발송 전이면 null
+	private final String kitCarrier;
+	private final String kitTrackingNumber;
+	// 키트를 발송한 시각, 배송 완료로 바꾼 시각. 그 단계 전이면 null
 	private final LocalDateTime kitShippedAt;
+	private final LocalDateTime kitDeliveredAt;
 }

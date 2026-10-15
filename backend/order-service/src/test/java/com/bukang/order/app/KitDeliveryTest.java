@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -31,6 +32,8 @@ import com.bukang.order.domain.exception.KitNotShippableException;
 import com.bukang.order.domain.exception.OrderAccessDeniedException;
 import com.bukang.order.domain.exception.OrderItemNotFoundException;
 import com.bukang.order.dto.OrderItemDto;
+import com.bukang.order.dto.SellerKitDto;
+import com.bukang.order.dto.SellerKitSummaryDto;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.out.race.RaceCourseInfo;
@@ -53,6 +56,9 @@ import com.jayway.jsonpath.JsonPath;
 	StubRefundEligibilityPortConfig.class})
 class KitDeliveryTest {
 	private static final int COURSE_ID = 40;
+	private static final int OPEN_COURSE_ID = 41;
+	private static final String CARRIER = "CJ대한통운";
+	private static final String TRACKING_NUMBER = "684912345678";
 	private static final int RACE_ID = 400;
 	private static final int MEMBER_ID = 1;
 	private static final int SELLER_ID = StubRaceCoursePort.SELLER_ID;
@@ -98,23 +104,88 @@ class KitDeliveryTest {
 	}
 
 	@Test
-	@DisplayName("결제한 키트는 배송 준비로 보이고, 환불 기한이 지나면 판매자가 발송 처리해 구매자 주문 조회에 발송으로 보인다")
-	void shipAfterRefundDeadline() throws Exception {
+	@DisplayName("결제한 키트는 배송 준비 → 배송 중(송장) → 배송 완료로 바뀌고, 구매자 주문 조회에 그대로 보인다")
+	void shipAndDeliverAfterRefundDeadline() throws Exception {
 		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
 		int orderId = paidOrder();
 		int itemId = itemIdOf(orderId);
 		findOrder(orderId)
 			.andExpect(jsonPath("$.data.items[0].kitDeliveryStatus").value("PREPARING"))
+			.andExpect(jsonPath("$.data.items[0].kitTrackingNumber").isEmpty())
 			.andExpect(jsonPath("$.data.items[0].kitShippedAt").isEmpty());
 
-		LocalDateTime now = LocalDateTime.now();
-		OrderItemDto shipped = kitDeliveryUseCase.ship(SELLER_ID, itemId, now);
+		LocalDateTime shippedAt = LocalDateTime.now();
+		OrderItemDto shipped = kitDeliveryUseCase.ship(SELLER_ID, itemId, CARRIER, TRACKING_NUMBER, shippedAt);
 
-		assertThat(shipped.getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.SHIPPED);
+		assertThat(shipped.getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.SHIPPING);
 		findOrder(orderId)
-			.andExpect(jsonPath("$.data.items[0].kitDeliveryStatus").value("SHIPPED"))
-			.andExpect(jsonPath("$.data.items[0].kitShippedAt").isNotEmpty());
-		assertThat(itemOf(orderId).getKitShippedAt()).isEqualTo(now);
+			.andExpect(jsonPath("$.data.items[0].kitDeliveryStatus").value("SHIPPING"))
+			.andExpect(jsonPath("$.data.items[0].kitCarrier").value(CARRIER))
+			.andExpect(jsonPath("$.data.items[0].kitTrackingNumber").value(TRACKING_NUMBER))
+			.andExpect(jsonPath("$.data.items[0].kitDeliveredAt").isEmpty());
+		assertThat(itemOf(orderId).getKitShippedAt()).isEqualTo(shippedAt);
+
+		LocalDateTime deliveredAt = shippedAt.plusDays(2);
+		kitDeliveryUseCase.completeDelivery(SELLER_ID, itemId, deliveredAt);
+
+		findOrder(orderId)
+			.andExpect(jsonPath("$.data.items[0].kitDeliveryStatus").value("DELIVERED"))
+			.andExpect(jsonPath("$.data.items[0].kitDeliveredAt").isNotEmpty());
+		assertThat(itemOf(orderId).getKitDeliveredAt()).isEqualTo(deliveredAt);
+	}
+
+	@Test
+	@DisplayName("배송 완료는 배송 중인 키트만, 한 번만 바꾼다")
+	void completeDeliveryRejected() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		int itemId = itemIdOf(paidOrder());
+
+		assertThatThrownBy(() -> kitDeliveryUseCase.completeDelivery(SELLER_ID, itemId, LocalDateTime.now()))
+			.isInstanceOf(KitNotShippableException.class)
+			.hasMessage("아직 발송하지 않은 키트입니다.");
+		kitDeliveryUseCase.ship(SELLER_ID, itemId, CARRIER, TRACKING_NUMBER, LocalDateTime.now());
+		assertThatThrownBy(() -> kitDeliveryUseCase.completeDelivery(OTHER_SELLER_ID, itemId, LocalDateTime.now()))
+			.isInstanceOf(OrderAccessDeniedException.class);
+		kitDeliveryUseCase.completeDelivery(SELLER_ID, itemId, LocalDateTime.now());
+		assertThatThrownBy(() -> kitDeliveryUseCase.completeDelivery(SELLER_ID, itemId, LocalDateTime.now()))
+			.isInstanceOf(KitNotShippableException.class)
+			.hasMessage("이미 배송 완료한 키트입니다.");
+		assertThatThrownBy(() -> ship(itemId))
+			.isInstanceOf(KitNotShippableException.class)
+			.hasMessage("이미 발송한 키트입니다.");
+	}
+
+	@Test
+	@DisplayName("판매자 키트 목록은 결제한 내 키트만 상태로 걸러 보이고, 건수는 상태별·환불 기한 전으로 센다")
+	void sellerKitsAndSummary() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		raceCoursePort.put(StubRaceCoursePort.openCourse(OPEN_COURSE_ID, RACE_ID, 14, null,
+			LocalDate.now().plusDays(10)));
+		int shippingItemId = itemIdOf(paidOrder(MEMBER_ID));
+		int preparingOrderId = paidOrder(MEMBER_ID + 1);
+		int beforeDeadlineItemId = itemIdOf(paidOrder(MEMBER_ID + 2, OPEN_COURSE_ID));
+		createOrder(MEMBER_ID + 3, COURSE_ID);
+		ship(shippingItemId);
+
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, null))
+			.extracting(SellerKitDto::getOrderItemId)
+			.containsExactly(beforeDeadlineItemId, itemIdOf(preparingOrderId), shippingItemId);
+		List<SellerKitDto> preparing = kitDeliveryUseCase.findKits(SELLER_ID, RACE_ID, KitDeliveryStatus.PREPARING);
+		assertThat(preparing).extracting(SellerKitDto::getOrderItemId)
+			.containsExactly(beforeDeadlineItemId, itemIdOf(preparingOrderId));
+		SellerKitDto row = preparing.get(1);
+		assertThat(row.getOrderNo()).isNotBlank();
+		assertThat(row.getParticipantName()).isEqualTo("김러너");
+		assertThat(row.getTshirtSize()).isEqualTo("L");
+		assertThat(row.getShippingAddress().getAddress()).isEqualTo("서울 성동구 왕십리로 00");
+		assertThat(kitDeliveryUseCase.findKits(OTHER_SELLER_ID, null, null)).isEmpty();
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, RACE_ID + 1, null)).isEmpty();
+
+		SellerKitSummaryDto summary = kitDeliveryUseCase.summarize(SELLER_ID, null, LocalDateTime.now());
+		assertThat(summary.getPreparing()).isEqualTo(2);
+		assertThat(summary.getShipping()).isEqualTo(1);
+		assertThat(summary.getDelivered()).isZero();
+		assertThat(summary.getBeforeRefundDeadline()).isEqualTo(1);
 	}
 
 	@Test
@@ -124,7 +195,7 @@ class KitDeliveryTest {
 		raceCoursePort.put(courseWithRefundDeadline(refundDeadline));
 		int orderId = paidOrder();
 
-		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemIdOf(orderId), LocalDateTime.now()))
+		assertThatThrownBy(() -> ship(itemIdOf(orderId)))
 			.isInstanceOf(KitNotShippableException.class)
 			.hasMessage("환불 기한(%s)이 지난 뒤 발송할 수 있습니다.".formatted(refundDeadline));
 		assertThat(itemOf(orderId).getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.PREPARING);
@@ -136,13 +207,14 @@ class KitDeliveryTest {
 		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
 		int itemId = itemIdOf(paidOrder());
 
-		assertThatThrownBy(() -> kitDeliveryUseCase.ship(OTHER_SELLER_ID, itemId, LocalDateTime.now()))
+		assertThatThrownBy(() -> kitDeliveryUseCase.ship(OTHER_SELLER_ID, itemId, CARRIER, TRACKING_NUMBER,
+			LocalDateTime.now()))
 			.isInstanceOf(OrderAccessDeniedException.class);
-		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, 999_999, LocalDateTime.now()))
+		assertThatThrownBy(() -> ship(999_999))
 			.isInstanceOf(OrderItemNotFoundException.class);
 
-		kitDeliveryUseCase.ship(SELLER_ID, itemId, LocalDateTime.now());
-		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemId, LocalDateTime.now()))
+		ship(itemId);
+		assertThatThrownBy(() -> ship(itemId))
 			.isInstanceOf(KitNotShippableException.class)
 			.hasMessage("이미 발송한 키트입니다.");
 	}
@@ -160,10 +232,10 @@ class KitDeliveryTest {
 		// 환불 기한이 지난 뒤에도 결제 상태를 따로 확인한다
 		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
 
-		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemIdOf(waitingOrderId), LocalDateTime.now()))
+		assertThatThrownBy(() -> ship(itemIdOf(waitingOrderId)))
 			.isInstanceOf(KitNotShippableException.class)
 			.hasMessage("결제한 참가권의 키트만 발송할 수 있습니다(현재 상태: 결제 대기).");
-		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, canceledItemId, LocalDateTime.now()))
+		assertThatThrownBy(() -> ship(canceledItemId))
 			.isInstanceOf(KitNotShippableException.class)
 			.hasMessage("결제한 참가권의 키트만 발송할 수 있습니다(현재 상태: 취소).");
 	}
@@ -175,13 +247,17 @@ class KitDeliveryTest {
 		int orderId = paidOrder();
 
 		findOrder(orderId).andExpect(jsonPath("$.data.items[0].kitDeliveryStatus").isEmpty());
-		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemIdOf(orderId), LocalDateTime.now()))
+		assertThatThrownBy(() -> ship(itemIdOf(orderId)))
 			.isInstanceOf(KitNotShippableException.class)
 			.hasMessage("키트가 없는 참가권입니다.");
 	}
 
 	private RaceCourseInfo courseWithRefundDeadline(LocalDate refundDeadline) {
 		return StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, refundDeadline);
+	}
+
+	private OrderItemDto ship(int orderItemId) {
+		return kitDeliveryUseCase.ship(SELLER_ID, orderItemId, CARRIER, TRACKING_NUMBER, LocalDateTime.now());
 	}
 
 	private ResultActions findOrder(int orderId) throws Exception {
@@ -194,19 +270,27 @@ class KitDeliveryTest {
 	}
 
 	private int paidOrder(int memberId) throws Exception {
-		int orderId = createOrder(memberId);
+		return paidOrder(memberId, COURSE_ID);
+	}
+
+	private int paidOrder(int memberId, int courseId) throws Exception {
+		int orderId = createOrder(memberId, courseId);
 		transactionTemplate.execute(status -> orderPayUseCase.pay(memberId, orderId, LocalDateTime.now()));
 		return orderId;
 	}
 
 	private int createOrder(int memberId) throws Exception {
-		int participationId = apply(memberId);
+		return createOrder(memberId, COURSE_ID);
+	}
+
+	private int createOrder(int memberId, int courseId) throws Exception {
+		int participationId = apply(memberId, courseId);
 		OrderCreateResult result = transactionTemplate.execute(status -> orderCreateUseCase.create(memberId,
 			participationId, UUID.randomUUID().toString(), LocalDateTime.now()));
 		return result.order().getId();
 	}
 
-	private int apply(int memberId) throws Exception {
+	private int apply(int memberId, int courseId) throws Exception {
 		String body = mockMvc.perform(post("/api/v1/order/participations")
 				.header("X-Member-Id", memberId)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -217,7 +301,7 @@ class KitDeliveryTest {
 							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
 						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
 							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
-					""".formatted(COURSE_ID)))
+					""".formatted(courseId)))
 			.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(body, "$.data.id");
 	}
