@@ -34,10 +34,4 @@ public class FakeRaceAdapter implements RacePort {
 	public List<RaceSchedule> findRacesByRefundDeadline(LocalDate fromRefundDeadline, LocalDate toRefundDeadline) {
 		return List.of();
 	}
-
-	// 환불 마감일을 모르므로, 환불 가능 여부는 대회일 기준(대회 다음 날부터 불가)으로 판단된다
-	@Override
-	public Optional<LocalDate> findRefundDeadline(int raceId) {
-		return Optional.empty();
-	}
 }
