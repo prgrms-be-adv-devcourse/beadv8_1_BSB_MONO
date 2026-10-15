@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
@@ -15,7 +15,7 @@ import {
   type RaceDetail,
   type RaceOption,
 } from '@/entities/race'
-import { ApiError, memberApi, orderApi, unwrapData } from '@/shared/api'
+import { ApiError, createIdempotencyKey, memberApi, orderApi, unwrapData } from '@/shared/api'
 import { cn, formatWon } from '@/shared/lib'
 import {
   Alert,
@@ -126,6 +126,8 @@ function ParticipantForm({
   // 필수 동의는 사용자가 직접 체크해야 버튼이 켜진다.
   const [agreed, setAgreed] = useState(false)
   const [replace, setReplace] = useState<ReplaceCart | null>(null)
+  // 같은 참가 신청으로 바로 결제를 다시 누르면(두 번 클릭 · 실패 뒤 재시도) 같은 Idempotency-Key를 보낸다.
+  const orderAttempt = useRef<{ participationId: number; key: string } | null>(null)
 
   // 참가 신청을 저장하고(이번에 이미 저장한 종목이면 참가자 정보만 고친다) 다음 단계로 넘어간다.
   const save = useMutation({
@@ -141,19 +143,35 @@ function ParticipantForm({
         },
         participant,
       )
-      if (next === 'checkout') return null
+      if (next === 'checkout') {
+        return { orderId: await createOrder(participation.id ?? 0), replace: null }
+      }
       // 장바구니에는 대회 1개만 담을 수 있다. 다른 대회가 담겨 있으면 담기 전에 바꿀지 묻는다.
       const others = await otherRaceItems()
-      if (others.length > 0)
-        return { cartItemIds: others.map((i) => i.id ?? 0), label: await cartLabel(others[0]) }
+      if (others.length > 0) {
+        const label = await cartLabel(others[0])
+        return { orderId: null, replace: { cartItemIds: others.map((i) => i.id ?? 0), label } }
+      }
       await addToCart()
-      return null
+      return { orderId: null, replace: null }
     },
-    onSuccess: (pending, { next }) => {
-      if (pending) setReplace(pending)
-      else router.push(next === 'cart' ? '/cart' : '/checkout')
+    onSuccess: ({ orderId, replace: pending }) => {
+      if (orderId !== null) router.push(`/checkout?orderId=${orderId}`)
+      else if (pending) setReplace(pending)
+      else router.push('/cart')
     },
   })
+
+  /** 바로 결제: 참가 신청으로 주문을 만들어 자리를 잡는다. */
+  async function createOrder(participationId: number) {
+    const key =
+      orderAttempt.current?.participationId === participationId
+        ? orderAttempt.current.key
+        : createIdempotencyKey()
+    orderAttempt.current = { participationId, key }
+    const order = unwrapData(await orderApi.create({ participationId }, { idempotencyKey: key }))
+    return order.id ?? 0
+  }
 
   // 확인 창에서 바꾸기를 누르면 담아 둔 다른 대회를 빼고 이 대회를 담는다.
   const replaceCart = useMutation({

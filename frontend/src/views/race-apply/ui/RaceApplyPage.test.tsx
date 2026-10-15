@@ -96,7 +96,7 @@ describe('참가 신청 · 참가자 정보', () => {
     await agree(user)
     await user.click(screen.getByRole('button', { name: '바로 결제' }))
 
-    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout'))
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout?orderId=1'))
     expect(bodies[0]).toEqual({
       raceCourseId: 3,
       thirdPartyConsent: true,
@@ -123,6 +123,55 @@ describe('참가 신청 · 참가자 정보', () => {
       participationId: 1,
       participantName: '김러너',
     })
+  })
+
+  it('바로 결제는 참가 신청 ID로 주문을 만들고(Idempotency-Key), 실패 뒤 다시 눌러도 같은 키를 보낸다', async () => {
+    captureApply()
+    const calls: { key: string | null; body: unknown }[] = []
+    server.use(
+      http.post('*/api/v1/order/orders', async ({ request }) => {
+        calls.push({ key: request.headers.get('Idempotency-Key'), body: await request.json() })
+        if (calls.length === 1) {
+          return HttpResponse.json(
+            { status: 409, message: '같은 주문 요청을 처리하고 있습니다.', data: null },
+            { status: 409 },
+          )
+        }
+        return HttpResponse.json(orderMock.getCreateResponseMock(), { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByLabelText('이름')
+    await agree(user)
+    await user.click(screen.getByRole('button', { name: '바로 결제' }))
+    expect(await screen.findByText('같은 주문 요청을 처리하고 있습니다.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '바로 결제' }))
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout?orderId=1'))
+    expect(calls[0].body).toEqual({ participationId: 1 })
+    expect(calls[0].key).toBeTruthy()
+    expect(calls[1].key).toBe(calls[0].key)
+  })
+
+  it('남은 자리가 없으면(409) 서버 문구를 보여 준다', async () => {
+    captureApply()
+    const message = '남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.'
+    server.use(
+      http.post('*/api/v1/order/orders', () =>
+        HttpResponse.json({ status: 409, message, data: null }, { status: 409 }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByLabelText('이름')
+    await agree(user)
+    await user.click(screen.getByRole('button', { name: '바로 결제' }))
+
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
   })
 
   it('지난 신청이 없으면 회원 정보의 휴대폰 번호만 채운다', async () => {
@@ -277,7 +326,7 @@ describe('참가 신청 · 참가자 정보', () => {
     await agree(user)
     await user.click(screen.getByRole('button', { name: '바로 결제' }))
 
-    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout'))
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout?orderId=1'))
     expect(changedId).toBe('7')
     expect(bodies).toHaveLength(0)
   })
