@@ -68,6 +68,6 @@ order:
     cash:
       mode: fake
       base-url: http://localhost:8081
-    # 대기열 입장 확인 (PRO-191). 대기열 내부 API(PRO-182)가 나오기 전이라 fake만 있다. 누구든 입장 중으로 본다
+    # 대기열 입장 확인 (PRO-191). 대기열 내부 API(PRO-182)가 나오기 전이라 fake만 있다(http는 아직 없어 켜면 앱이 뜨지 않는다)
     queue:
       mode: fake

@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface QueueAdmissionPort {
 	/**
 	 * @return 입장 중이면 입장이 끝나는 시각, 입장 중이 아니면(줄 서는 중, 입장 끝남, 대기열에 없음) 빈 값
+	 * 대기열에 연결하지 못하거나 응답이 이상하면 빈 값이 아니라 ExternalServiceUnavailableException(503)을 던진다
+	 * (빈 값을 돌려주면 장애를 "입장 전" 403으로 잘못 알리게 된다)
 	 */
 	Optional<LocalDateTime> findAdmissionEndsAt(int memberId, int raceId, int raceCourseId, LocalDateTime now);
 }

@@ -24,15 +24,20 @@ import com.bukang.order.out.seat.SeatHoldPort;
 import com.bukang.order.out.seat.SeatHoldResult;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 바로 결제 예매 ([결제하기], 정책 3장·4장). 대기열에 입장 중인지 확인하고(PRO-191), 상품 서비스(B)에 자리 1석을 확보받아
  * 입장 끝 시각을 결제 기한으로 하는 주문을 만든다 (정책 4장 2-4 "입장 뒤 10분 안에 신청서 + 결제")
  * 확보하면 참가 신청 PENDING → APPLIED, 주문 CREATED. 매진이면 참가 신청 FAILED, 주문 없음 (ERD 추천안 v4 8·9쪽)
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderCreateUseCase {
+	// 정책상 가장 긴 입장 시간 (정책 4장 2-4 "입장 뒤 10분 안에 신청서 + 결제"). 대기열이 더 긴 끝 시각을 줘도 여기까지만 자리를 잡는다
+	static final long MAX_ADMISSION_MINUTES = 10;
+
 	// Order·OrderItem의 @UniqueConstraint 이름과 같아야 한다
 	private static final List<String> ORDER_CONSTRAINTS = List.of("uk_order_idempotency",
 		"uk_order_item_participation");
@@ -77,7 +82,8 @@ public class OrderCreateUseCase {
 				course.raceCourseId(), now)
 			.filter(endsAt -> endsAt.isAfter(now))
 			.orElseThrow(() -> new QueueNotAdmittedException("대기열에서 입장한 뒤 결제할 수 있습니다."));
-		SeatHoldResult hold = seatHoldPort.hold(course.raceCourseId(), participation.getId(), admissionEndsAt);
+		SeatHoldResult hold = seatHoldPort.hold(course.raceCourseId(), participation.getId(),
+			capAdmissionEndsAt(admissionEndsAt, now, memberId, course.raceCourseId()));
 		if (!hold.held()) {
 			participation.markHoldFailed();
 			return OrderCreateResult.soldOut();
@@ -95,6 +101,18 @@ public class OrderCreateUseCase {
 		}
 		order.assignOrderNo();
 		return OrderCreateResult.created(order.toDto());
+	}
+
+	// 대기열 데이터가 잘못돼 끝 시각이 너무 멀면, 매진 자리를 오래 묶지 않게 정책상 최대 입장 시간으로 자른다
+	private LocalDateTime capAdmissionEndsAt(LocalDateTime admissionEndsAt, LocalDateTime now, int memberId,
+		int raceCourseId) {
+		LocalDateTime max = now.plusMinutes(MAX_ADMISSION_MINUTES);
+		if (admissionEndsAt.isAfter(max)) {
+			log.warn("대기열 입장 끝 시각이 정책상 최대 입장 시간보다 멀어 줄입니다. memberId={}, raceCourseId={}, admissionEndsAt={}",
+				memberId, raceCourseId, admissionEndsAt);
+			return max;
+		}
+		return admissionEndsAt;
 	}
 
 	private boolean isOrderConflict(DataIntegrityViolationException exception) {
