@@ -25,6 +25,12 @@ springdoc:
   swagger-ui:
     enabled: false
 
+cash:
+  clients:
+    pg:
+      mode: http
+      secret-key: ${TOSS_SECRET_KEY}
+
 logging:
   level:
     com:
