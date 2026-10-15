@@ -8,6 +8,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.order.domain.exception.ExternalServiceRejectedException;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -109,11 +110,12 @@ public class HttpWalletAdapter implements WalletPort {
 
 	// 4xx는 다시 시도해도 풀리지 않는다. 경로·요청 계약이 어긋났거나 지갑이 아직 없을 수 있어 장애와 구분해 남긴다
 	// D가 처리하지 않은 것은 확실하므로 결제도 "결과를 모름"이 아니라 "연결하지 못함"으로 알린다
-	private ExternalServiceUnavailableException contractError(String action, int orderId,
+	// 다시 해도 같으므로 장애와 다른 예외로 던진다 (대회 취소 환불이 연속 장애로 세지 않게)
+	private ExternalServiceRejectedException contractError(String action, int orderId,
 		HttpClientErrorException exception) {
 		log.error("예치금 서비스가 {} 요청을 거절했습니다. 계약(경로·요청)이나 지갑을 확인해야 합니다. status={}, orderId={}, body={}",
 			action, exception.getStatusCode(), orderId, abbreviate(exception.getResponseBodyAsString()));
-		return new ExternalServiceUnavailableException(UNAVAILABLE_MESSAGE);
+		return new ExternalServiceRejectedException(UNAVAILABLE_MESSAGE);
 	}
 
 	static String abbreviate(String body) {
