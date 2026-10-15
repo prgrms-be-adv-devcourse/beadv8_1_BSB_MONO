@@ -27,8 +27,10 @@ import type {
 import type {
   RaceSaveRequestDto,
   RsData,
+  RsDataListSellerRaceDto,
   RsDataRaceDetailDto,
   RsDataRacePageDto,
+  RsDataRaceSaveDto,
   RsDataRaceSuggestionDto,
   SearchParams,
   SuggestParams
@@ -171,7 +173,7 @@ export const getUpdateUrl = (raceId: number,) => {
  * @summary 대회 수정
  */
 export const update = async (raceId: number,
-    raceSaveRequestDto: RaceSaveRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+    raceSaveRequestDto: RaceSaveRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataRaceSaveDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -187,7 +189,7 @@ export const update = async (raceId: number,
     }
     return headers;
   };
-return customFetch<unknown>(getUpdateUrl(raceId),
+return customFetch<RsDataRaceSaveDto>(getUpdateUrl(raceId),
   {
     ...options,
     method: 'PUT',
@@ -377,7 +379,7 @@ export const getRegisterUrl = () => {
  * 승인된 판매자가 대회와 종목을 작성 중(DRAFT)으로 등록한다. 판매 시작 일시는 크루 예매 시작·개인 예매 오픈 중 이른 시각으로 채운다. 이미지는 종목마다 받고(대표 이미지 1장 필수), 등록이 커밋된 뒤 file-service에 연결을 요청한다. 파일이 없거나 본인이 올린 파일이 아니어서 연결에 실패하면 응답에는 나오지 않고 file-service 로그에 남는다.
  * @summary 대회 등록
  */
-export const register = async (raceSaveRequestDto: RaceSaveRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const register = async (raceSaveRequestDto: RaceSaveRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataRaceSaveDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -393,7 +395,7 @@ export const register = async (raceSaveRequestDto: RaceSaveRequestDto, options?:
     }
     return headers;
   };
-return customFetch<unknown>(getRegisterUrl(),
+return customFetch<RsDataRaceSaveDto>(getRegisterUrl(),
   {
     ...options,
     method: 'POST',
@@ -541,9 +543,9 @@ export const getCancelUrl = (raceId: number,) => {
  * 본인이 등록한 대회를 취소한다. 판매가 끝나기 전(대회일 다음 날 0시 전)이면 작성 중·판매 예정·판매 중·판매 중지 어느 상태든 취소할 수 있고, 되돌릴 수 없다. 결제 대기 자리는 모두 해제되고 공개 목록에서 빠진다. 판매를 시작했던 대회면 주문 서비스에 취소 메시지(Kafka order.race.cancel)를 보내 참가권을 일괄 환불하게 한다. 취소된 대회는 수정·판매 시작·자리 확보를 할 수 없고, 상세는 등록한 판매자만 볼 수 있다.
  * @summary 대회 취소
  */
-export const cancel = async (raceId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const cancel = async (raceId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataRaceSaveDto> => {
 
-  return customFetch<unknown>(getCancelUrl(raceId),
+  return customFetch<RsDataRaceSaveDto>(getCancelUrl(raceId),
   {
     ...options,
     method: 'POST'
@@ -725,9 +727,9 @@ export const getFindMineUrl = () => {
  * 승인된 판매자가 등록한 대회를 최근 등록 순으로 모두 돌려준다(작성 중 포함). 종목마다 정원·결제 대기·판매 수를 함께 준다.
  * @summary 판매자 내 대회 목록
  */
-export const findMine = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const findMine = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataListSellerRaceDto> => {
 
-  return customFetch<unknown>(getFindMineUrl(),
+  return customFetch<RsDataListSellerRaceDto>(getFindMineUrl(),
   {
     ...options,
     method: 'GET'

@@ -23,6 +23,41 @@
           "$ref": "#/components/schemas/RaceDetailDto"
         }
       }
+    },
+    "register": {
+      "201": {
+        "wrapper": "RsDataRaceSaveDto",
+        "data": {
+          "$ref": "#/components/schemas/RaceSaveDto"
+        }
+      }
+    },
+    "update": {
+      "200": {
+        "wrapper": "RsDataRaceSaveDto",
+        "data": {
+          "$ref": "#/components/schemas/RaceSaveDto"
+        }
+      }
+    },
+    "cancel": {
+      "200": {
+        "wrapper": "RsDataRaceSaveDto",
+        "data": {
+          "$ref": "#/components/schemas/RaceSaveDto"
+        }
+      }
+    },
+    "findMine": {
+      "200": {
+        "wrapper": "RsDataListSellerRaceDto",
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SellerRaceDto"
+          }
+        }
+      }
     }
   },
   "schemas": {
@@ -79,7 +114,6 @@
         "saleStatus": {
           "type": "string",
           "enum": [
-            "DRAFT",
             "SCHEDULED",
             "ON_SALE",
             "STOPPED",
@@ -87,7 +121,25 @@
             "CANCELED"
           ]
         },
-        "saleOpenAt": {
+        "saleOpenDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "crewSaleStartAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "crewSaleEndAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "individualOpenAt": {
           "type": "string",
           "format": "date-time"
         },
@@ -224,7 +276,6 @@
         "saleStatus": {
           "type": "string",
           "enum": [
-            "DRAFT",
             "SCHEDULED",
             "ON_SALE",
             "STOPPED",
@@ -232,9 +283,9 @@
             "CANCELED"
           ]
         },
-        "saleOpenAt": {
+        "saleOpenDate": {
           "type": "string",
-          "format": "date-time"
+          "format": "date"
         },
         "crewSaleStartAt": {
           "type": [
@@ -421,6 +472,111 @@
         },
         "representativeName": {
           "type": "string"
+        }
+      }
+    },
+    "RaceSaveDto": {
+      "type": "object",
+      "properties": {
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "saleStatus": {
+          "type": "string",
+          "enum": [
+            "SCHEDULED",
+            "ON_SALE",
+            "STOPPED",
+            "CLOSED",
+            "CANCELED"
+          ]
+        },
+        "saleOpenDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "courseIds": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      }
+    },
+    "SellerRaceDto": {
+      "type": "object",
+      "properties": {
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "title": {
+          "type": "string"
+        },
+        "raceDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "saleStatus": {
+          "type": "string",
+          "enum": [
+            "SCHEDULED",
+            "ON_SALE",
+            "STOPPED",
+            "CLOSED",
+            "CANCELED"
+          ]
+        },
+        "saleOpenDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "applicationCloseAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "courses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SellerRaceCourseDto"
+          }
+        }
+      }
+    },
+    "SellerRaceCourseDto": {
+      "type": "object",
+      "properties": {
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "OPEN",
+            "SOLD_OUT"
+          ]
+        },
+        "quota": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "reserved": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sold": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     }

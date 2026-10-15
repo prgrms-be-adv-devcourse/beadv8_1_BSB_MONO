@@ -70,7 +70,7 @@ async function fetchCourseFiles(raceCourseId: number) {
 
 /**
  * 대회 상세. 없는 대회(404)나 숫자가 아닌 ID(400)면 null → 화면에서 notFound().
- * 작성 중 · 취소된 대회도 다른 사람에게는 404로 온다.
+ * 취소된 대회도 다른 사람에게는 404로 온다.
  */
 export async function fetchRaceDetail(raceId: string): Promise<RaceDetail | null> {
   const id = Number(raceId)
