@@ -45,6 +45,9 @@ class GatewayAuthenticationTest {
 
 	private static final List<String> SERVICES = List.of("member", "cash", "payout", "file", "order", "product");
 	private static final String MEMBER_ID_HEADER = "X-Member-Id";
+	private static final String LOGIN_REQUIRED = "AUTH_LOGIN_REQUIRED";
+	private static final String TOKEN_EXPIRED = "AUTH_TOKEN_EXPIRED";
+	private static final String INVALID_TOKEN = "AUTH_INVALID_TOKEN";
 	// 가짜 서버가 받은 X-Member-Id 헤더 값 (없으면 "없음")
 	private static final List<String> RECEIVED_MEMBER_IDS = new CopyOnWriteArrayList<>();
 	private static HttpServer stub;
@@ -114,7 +117,7 @@ class GatewayAuthenticationTest {
 	void rejectsRequestWithoutToken() throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/order/orders"));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	@Test
@@ -122,17 +125,25 @@ class GatewayAuthenticationTest {
 	void rejectsSpoofedMemberIdWithoutToken() throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/order/orders").header(MEMBER_ID_HEADER, "999"));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
+	}
+
+	@Test
+	@DisplayName("JWT 형식이 아닌 토큰이면 401과 AUTH_INVALID_TOKEN으로 응답한다")
+	void rejectsMalformedToken() throws Exception {
+		HttpResponse<String> response = send(request("/api/v1/order/orders")
+			.header("Authorization", "Bearer not-a-jwt"));
+
+		assertUnauthorized(response, INVALID_TOKEN, "유효하지 않은 토큰입니다.");
 	}
 
 	@ParameterizedTest(name = "Authorization: {0}")
-	@DisplayName("Bearer 형식이 아니거나 서명이 다른 토큰이면 401로 응답한다")
-	@ValueSource(strings = {"Bearer not-a-jwt", "Basic abc", "Bearer "})
-	void rejectsMalformedToken(String authorization) throws Exception {
+	@DisplayName("Bearer 형식이 아니거나 토큰이 비어 있으면 토큰이 없는 것으로 보고 AUTH_LOGIN_REQUIRED로 응답한다")
+	@ValueSource(strings = {"Basic abc", "Bearer "})
+	void rejectsNonBearerAuthorizationAsMissingToken(String authorization) throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/order/orders").header("Authorization", authorization));
 
-		assertThat(response.statusCode()).isEqualTo(401);
-		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	@Test
@@ -145,7 +156,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/order/orders")
 			.header("Authorization", "Bearer " + otherProvider.issueAccessToken(42L)));
 
-		assertUnauthorized(response, "유효하지 않은 토큰입니다.");
+		assertUnauthorized(response, INVALID_TOKEN, "유효하지 않은 토큰입니다.");
 	}
 
 	@Test
@@ -158,7 +169,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/order/orders")
 			.header("Authorization", "Bearer " + pastProvider.issueAccessToken(42L)));
 
-		assertUnauthorized(response, "만료된 토큰입니다.");
+		assertUnauthorized(response, TOKEN_EXPIRED, "만료된 토큰입니다.");
 	}
 
 	@Test
@@ -167,7 +178,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/order/orders")
 			.header("Authorization", "Bearer " + refreshToken(42L)));
 
-		assertUnauthorized(response, "유효하지 않은 토큰입니다.");
+		assertUnauthorized(response, INVALID_TOKEN, "유효하지 않은 토큰입니다.");
 	}
 
 	@ParameterizedTest(name = "{0}")
@@ -188,7 +199,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/auth/login-history")
 			.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	@Test
@@ -230,7 +241,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/product/races")
 			.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	@ParameterizedTest(name = "{0}")
@@ -249,7 +260,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/file/files")
 			.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	// 게이트웨이는 Refresh Token을 발급하지 않으므로, 발급 규칙(jti·familyId 등)에 기대지 않고 type만 REFRESH인 토큰을 직접 서명한다
@@ -264,11 +275,12 @@ class GatewayAuthenticationTest {
 			.compact();
 	}
 
-	private void assertUnauthorized(HttpResponse<String> response, String message) {
+	private void assertUnauthorized(HttpResponse<String> response, String code, String message) {
 		assertThat(response.statusCode()).isEqualTo(401);
 		assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
 			contentType -> assertThat(contentType).startsWith("application/json"));
-		assertThat(response.body()).isEqualTo("{\"status\":401,\"message\":\"" + message + "\",\"data\":null}");
+		assertThat(response.body())
+			.isEqualTo("{\"status\":401,\"code\":\"" + code + "\",\"message\":\"" + message + "\",\"data\":null}");
 		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
 	}
 
