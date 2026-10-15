@@ -114,6 +114,10 @@ final class OrderApiExamples {
 		{ "status": 403, "code": "ORDER_PARTICIPATION_FORBIDDEN", "message": "본인의 참가 신청만 결제할 수 있습니다.", "data": null }
 		""";
 
+	static final String QUEUE_NOT_ADMITTED = """
+		{ "status": 403, "code": "ORDER_QUEUE_NOT_ADMITTED", "message": "대기열에서 입장한 뒤 결제할 수 있습니다.", "data": null }
+		""";
+
 	static final String PARTICIPATION_NOT_FOUND = """
 		{ "status": 404, "code": "ORDER_PARTICIPATION_NOT_FOUND", "message": "존재하지 않는 참가 신청입니다.", "data": null }
 		""";
