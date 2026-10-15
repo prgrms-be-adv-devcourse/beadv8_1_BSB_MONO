@@ -177,7 +177,6 @@ final class CartApiExamples {
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "참가 신청 ID가 올바르지 않습니다.", "data": null }
 		""";
 
-
 	static final String MISSING_IDEMPOTENCY_KEY = """
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.", "data": null }
 		""";

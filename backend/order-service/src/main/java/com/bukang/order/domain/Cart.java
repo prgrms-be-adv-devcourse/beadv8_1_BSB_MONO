@@ -37,7 +37,7 @@ public class Cart extends BaseIdAndTime {
 	@Column(name = "member_id", nullable = false)
 	private int memberId;
 
-	// 최근에 담은 항목이 먼저 보인다
+	// 최근에 담은 항목이 먼저 보인다 (한 종목만 담으므로 지금은 하나뿐이다. 예전에 여러 개 담긴 장바구니를 위해 둔다)
 	@OneToMany(mappedBy = "cart", cascade = ALL, orphanRemoval = true)
 	@OrderBy("id DESC")
 	private List<CartItem> items = new ArrayList<>();

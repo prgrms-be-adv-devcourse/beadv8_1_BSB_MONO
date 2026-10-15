@@ -14,7 +14,11 @@ import jakarta.persistence.LockModeType;
 public interface CartRepository extends JpaRepository<Cart, Integer> {
 	Optional<Cart> findByMemberId(int memberId);
 
+	boolean existsByMemberId(int memberId);
+
 	// 담기를 한 요청씩 처리해, 같은 회원이 동시에 다른 종목을 담아도 한 종목만 남게 한다 (PRO-192)
+	// 없는 장바구니를 이것으로 읽으면 MySQL이 gap lock을 잡아 동시 첫 담기가 데드락이 나므로, 있는 장바구니에만 쓴다
+	// 항목을 join fetch로 같이 읽으면 H2에서는 FOR UPDATE가 빠지므로 장바구니 행만 잠근다 (항목은 잠근 뒤 지연 로딩)
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select c from Cart c where c.memberId = :memberId")
 	Optional<Cart> findByMemberIdForUpdate(@Param("memberId") int memberId);

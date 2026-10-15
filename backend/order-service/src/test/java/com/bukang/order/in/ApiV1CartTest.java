@@ -163,27 +163,33 @@ class ApiV1CartTest {
 	}
 
 	@Test
-	@DisplayName("장바구니가 있을 때 다른 종목을 동시에 담아도 한 종목만 남는다")
+	@DisplayName("장바구니가 있을 때 다른 종목을 동시에 담아도 한 종목만 남고, 늦은 쪽은 한 종목 규칙으로 409다")
 	void addOtherCoursesTogether() throws Exception {
 		int itemId = addAndGetId(MEMBER_ID, COURSE_ID);
 		remove(MEMBER_ID, itemId).andExpect(status().isOk());
 
-		CountDownLatch start = new CountDownLatch(1);
-		List<Integer> statuses = new ArrayList<>();
-		try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-			List<Future<Integer>> futures = List.of(COURSE_ID, OTHER_COURSE_ID).stream()
-				.map(courseId -> executor.submit(() -> {
-					start.await();
-					return add(MEMBER_ID, courseId).andReturn().getResponse().getStatus();
-				}))
-				.toList();
-			start.countDown();
-			for (Future<Integer> future : futures) {
-				statuses.add(future.get(30, TimeUnit.SECONDS));
-			}
-		}
+		List<String> bodies = addTogether(MEMBER_ID, COURSE_ID, OTHER_COURSE_ID);
 
-		assertThat(statuses).containsExactlyInAnyOrder(201, 409);
+		assertThat(bodies).extracting(body -> (Integer)JsonPath.read(body, "$.status"))
+			.containsExactlyInAnyOrder(201, 409);
+		// 장바구니를 잠그므로 늦은 쪽은 먼저 담긴 종목을 보고 한 종목 규칙으로 거절된다
+		assertThat(bodies).filteredOn(body -> JsonPath.<Integer>read(body, "$.status") == 409)
+			.extracting(body -> (String)JsonPath.read(body, "$.code"))
+			.containsExactly("ORDER_CART_ONE_COURSE_ONLY");
+		find(MEMBER_ID).andExpect(jsonPath("$.data.items.length()").value(1));
+	}
+
+	@Test
+	@DisplayName("장바구니가 없는 회원이 다른 종목을 동시에 처음 담아도 한 종목만 남고, 늦은 쪽은 한 종목 규칙으로 409다")
+	void firstAddsTogether() throws Exception {
+		List<String> bodies = addTogether(MEMBER_ID, COURSE_ID, OTHER_COURSE_ID);
+
+		assertThat(bodies).extracting(body -> (Integer)JsonPath.read(body, "$.status"))
+			.containsExactlyInAnyOrder(201, 409);
+		// 장바구니 만들기가 겹쳐도 이미 생긴 장바구니로 이어 가, 잠근 뒤 먼저 담긴 종목을 본다
+		assertThat(bodies).filteredOn(body -> JsonPath.<Integer>read(body, "$.status") == 409)
+			.extracting(body -> (String)JsonPath.read(body, "$.code"))
+			.containsExactly("ORDER_CART_ONE_COURSE_ONLY");
 		find(MEMBER_ID).andExpect(jsonPath("$.data.items.length()").value(1));
 	}
 
@@ -252,6 +258,25 @@ class ApiV1CartTest {
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
 			.andExpect(jsonPath("$.code").value("ORDER_LOGIN_REQUIRED"));
+	}
+
+	// 같은 회원이 두 종목을 동시에 담고 응답 본문을 모은다
+	private List<String> addTogether(int memberId, int firstCourseId, int secondCourseId) throws Exception {
+		CountDownLatch start = new CountDownLatch(1);
+		List<String> bodies = new ArrayList<>();
+		try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+			List<Future<String>> futures = List.of(firstCourseId, secondCourseId).stream()
+				.map(courseId -> executor.submit(() -> {
+					start.await();
+					return add(memberId, courseId).andReturn().getResponse().getContentAsString();
+				}))
+				.toList();
+			start.countDown();
+			for (Future<String> future : futures) {
+				bodies.add(future.get(30, TimeUnit.SECONDS));
+			}
+		}
+		return bodies;
 	}
 
 	private ResultActions find(int memberId) throws Exception {
