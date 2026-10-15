@@ -14,11 +14,9 @@ import com.bukang.order.out.seat.SeatHoldResult;
 import com.bukang.order.out.seat.SeatSellResult;
 
 /**
- * 테스트용 자리 확보. 종목별 남은 자리를 정할 수 있고(정하지 않으면 무제한), 결제 기한은 주문이 보낸 값(지금부터 10분)이다
+ * 테스트용 자리 확보. 종목별 남은 자리를 정할 수 있고(정하지 않으면 무제한), 결제 기한은 주문이 보낸 값(대기열 입장 끝 시각)이다
  */
 public class StubSeatHoldPort implements SeatHoldPort {
-	public static final long PAYMENT_MINUTES = 10;
-
 	private final Map<Integer, Integer> remainingSeats = new ConcurrentHashMap<>();
 	private final AtomicInteger holdCalls = new AtomicInteger();
 	private final List<Integer> restoredParticipations = new CopyOnWriteArrayList<>();

@@ -45,7 +45,7 @@ export function LoginPage({ failed = false, next }: { failed?: boolean; next?: s
       <main className="flex flex-1 flex-col bg-bg-surface">
         <div className="flex-1" />
         <form
-          className="flex flex-col items-center px-6"
+          className="flex flex-col items-center px-4"
           noValidate
           onSubmit={handleSubmit((values) =>
             login.mutate(values, { onSuccess: () => router.replace(safeNextPath(next)) }),

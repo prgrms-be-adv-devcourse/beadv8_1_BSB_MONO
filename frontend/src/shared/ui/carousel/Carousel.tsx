@@ -235,7 +235,7 @@ export type CarouselSlideProps = {
 export function CarouselSlide({ image, title, tags }: CarouselSlideProps) {
   return (
     // 둥글기 20은 피그마 배너 값 그대로다(radius 토큰에 없음).
-    <div className="relative aspect-[10/7] overflow-hidden rounded-[20px] bg-bg-subtle">
+    <div className="relative aspect-[10/7] overflow-hidden rounded-lg bg-bg-subtle">
       {image}
       {title && (
         <>
