@@ -13,7 +13,10 @@ final class AuthApiExamples {
 				"createDate": "2026-10-05T21:25:35",
 				"modifyDate": "2026-10-05T21:25:35",
 				"nickname": "러너1",
-				"email": "runner1@crewrun.com"
+				"email": "runner1@crewrun.com",
+				"phone": "010-1234-5678",
+				"name": "김러너",
+				"birthDate": "1995-04-12"
 			}
 		}
 		""";
@@ -30,7 +33,9 @@ final class AuthApiExamples {
 					"modifyDate": "2026-10-05T21:25:35",
 					"nickname": "러너1",
 					"email": "runner1@crewrun.com",
-					"phone": "010-1234-5678"
+					"phone": "010-1234-5678",
+					"name": "김러너",
+					"birthDate": "1995-04-12"
 				}
 			}
 		}
