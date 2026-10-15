@@ -4,3 +4,4 @@ src/shared/api/generated/
 docs/
 .claude/
 storybook-static/
+openapi/

@@ -1,0 +1,8 @@
+{
+  "member": 8080,
+  "cash": 8081,
+  "payout": 8082,
+  "file": 8083,
+  "order": 8084,
+  "product": 8085
+}

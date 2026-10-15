@@ -6,6 +6,6 @@ import com.bukang.common.global.exception.BusinessException;
 
 public class DuplicatePhoneException extends BusinessException {
 	public DuplicatePhoneException(String message) {
-		super(HttpStatus.CONFLICT, message);
+		super(HttpStatus.CONFLICT, "MEMBER_DUPLICATE_PHONE", message);
 	}
 }
