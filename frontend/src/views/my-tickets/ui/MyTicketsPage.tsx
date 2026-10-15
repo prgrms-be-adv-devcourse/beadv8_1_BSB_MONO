@@ -6,7 +6,8 @@ import { useState } from 'react'
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
 import { PAST_TICKETS, UPCOMING_TICKETS, type Ticket } from '@/entities/ticket'
-import { cn } from '@/shared/lib'
+import { useMyBalance } from '@/entities/wallet'
+import { cn, formatWon } from '@/shared/lib'
 import {
   Badge,
   BibCard,
@@ -32,6 +33,7 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
   const loading = state === 'loading'
   const upcoming = state === 'empty' ? [] : UPCOMING_TICKETS
   const tickets = tab === 'upcoming' ? upcoming : PAST_TICKETS
+  const wallet = useMyBalance()
 
   return (
     <>
@@ -65,10 +67,12 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
             >
               예치금
             </Link>
-            {loading ? (
+            {loading || wallet.isPending ? (
               <Skeleton className="h-5 w-16" />
             ) : (
-              <p className="font-display text-display-s">₩5,000</p>
+              <p className="font-display text-display-s">
+                {wallet.balance === undefined ? '-' : formatWon(wallet.balance)}
+              </p>
             )}
           </div>
           <div className="flex gap-2">
