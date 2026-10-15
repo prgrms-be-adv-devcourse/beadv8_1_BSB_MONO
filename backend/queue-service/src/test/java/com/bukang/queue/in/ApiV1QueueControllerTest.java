@@ -1,6 +1,7 @@
 package com.bukang.queue.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -22,7 +23,8 @@ import com.bukang.queue.dto.QueueRegisterRequestDto;
 import com.bukang.queue.support.QueueIntegrationTest;
 
 /**
- * 대기열 등록 API(POST /api/v1/queue)를 실제 Redis 컨테이너와 H2 복제본으로 확인한다.
+ * 대기열 등록 API(POST /api/v1/queue)와 순번 조회 API(GET /api/v1/queue/races/{raceId}/racecourses/{raceCourseId})를
+ * 실제 Redis 컨테이너와 H2 복제본으로 확인한다.
  * 등록 시각은 Facade가 실제 지금으로 만들므로, 복제본의 접수 일정도 실제 지금을 기준으로 잡는다.
  * 승격 스케줄러가 아직 없어, active 회원은 active ZSet에 끝 시각을 직접 넣어 만든다.
  */
@@ -30,11 +32,13 @@ class ApiV1QueueControllerTest extends QueueIntegrationTest {
 	private static final int RACE_ID = 1;
 	private static final int OTHER_RACE_ID = 2;
 	private static final int RACE_COURSE_ID = 11;
+	private static final int OTHER_RACE_COURSE_ID = 12;
 	private static final int MEMBER_ID = 7;
 	private static final int OTHER_MEMBER_ID = 8;
 	private static final String WAITING_KEY = "race:1:racecourse:11:waiting";
 	private static final String ACTIVE_KEY = "race:1:racecourse:11:active";
 	private static final String QUEUES_KEY = "queue:waiting";
+	private static final String STATUS_URL = "/api/v1/queue/races/{raceId}/racecourses/{raceCourseId}";
 	// QueueRedisRepository가 score(epoch ms)를 만들 때 쓰는 시간대
 	private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
@@ -231,6 +235,113 @@ class ApiV1QueueControllerTest extends QueueIntegrationTest {
 			.andExpect(jsonPath("$.message").value("대회 ID를 작성해주세요."));
 	}
 
+	// 대기열 상태 조회 API TEST
+	@Test
+	@DisplayName("getStatus: 등록한 회원이 조회하면 등록 때와 같이 1번이고 앞에 0명, 전체 1명이며 아직 입장할 수 없다")
+	void getStatusAfterRegister() throws Exception {
+		saveOpenRaceAndCourse();
+		register(MEMBER_ID);
+
+		getStatus(MEMBER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("대기열 상태를 조회했습니다."))
+			.andExpect(jsonPath("$.data.myRank").value(1))
+			.andExpect(jsonPath("$.data.ahead").value(0))
+			.andExpect(jsonPath("$.data.total").value(1))
+			.andExpect(jsonPath("$.data.canEnter").value(false));
+	}
+
+	@Test
+	@DisplayName("getStatus: 1분 전에 줄을 선 회원 7은 1번, 30초 전에 선 회원 8은 2번(앞에 1명)이고 둘 다 전체 2명을 본다")
+	void getStatusInRegistrationOrder() throws Exception {
+		LocalDateTime now = LocalDateTime.now();
+		redisTemplate.opsForZSet().add(WAITING_KEY, "7", epochMillis(now.minusMinutes(1)));
+		redisTemplate.opsForZSet().add(WAITING_KEY, "8", epochMillis(now.minusSeconds(30)));
+
+		getStatus(MEMBER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.myRank").value(1))
+			.andExpect(jsonPath("$.data.ahead").value(0))
+			.andExpect(jsonPath("$.data.total").value(2));
+		getStatus(OTHER_MEMBER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.myRank").value(2))
+			.andExpect(jsonPath("$.data.ahead").value(1))
+			.andExpect(jsonPath("$.data.total").value(2));
+	}
+
+	@Test
+	@DisplayName("getStatus: 앞에 선 회원 7이 승격돼 waiting에서 빠지면, 회원 8의 순번이 2번에서 1번으로 당겨진다")
+	void moveUpWhenMemberAheadIsPromoted() throws Exception {
+		LocalDateTime now = LocalDateTime.now();
+		redisTemplate.opsForZSet().add(WAITING_KEY, "7", epochMillis(now.minusMinutes(1)));
+		redisTemplate.opsForZSet().add(WAITING_KEY, "8", epochMillis(now.minusSeconds(30)));
+		getStatus(OTHER_MEMBER_ID)
+			.andExpect(jsonPath("$.data.myRank").value(2));
+
+		// 승격 스케줄러가 아직 없어 직접 옮긴다: waiting에서 빼고 active에 끝 시각(10분 뒤)을 넣는다
+		redisTemplate.opsForZSet().remove(WAITING_KEY, "7");
+		redisTemplate.opsForZSet().add(ACTIVE_KEY, "7", epochMillis(now.plusMinutes(10)));
+
+		getStatus(OTHER_MEMBER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.myRank").value(1))
+			.andExpect(jsonPath("$.data.ahead").value(0))
+			.andExpect(jsonPath("$.data.total").value(1))
+			.andExpect(jsonPath("$.data.canEnter").value(false));
+	}
+
+	@Test
+	@DisplayName("getStatus: 입장한 회원(active 끝 시각이 10분 뒤)은 입장할 수 있고(canEnter), 순번 칸은 모두 0이다")
+	void canEnterWhenActive() throws Exception {
+		redisTemplate.opsForZSet().add(ACTIVE_KEY, "7", epochMillis(LocalDateTime.now().plusMinutes(10)));
+
+		getStatus(MEMBER_ID)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.myRank").value(0))
+			.andExpect(jsonPath("$.data.ahead").value(0))
+			.andExpect(jsonPath("$.data.total").value(0))
+			.andExpect(jsonPath("$.data.canEnter").value(true));
+	}
+
+	@Test
+	@DisplayName("getStatus: 다른 회원(8)만 줄에 있고 등록하지 않은 회원 7이 조회하면 404이다")
+	void rejectMemberNotInQueue() throws Exception {
+		redisTemplate.opsForZSet().add(WAITING_KEY, "8", epochMillis(LocalDateTime.now()));
+
+		getStatus(MEMBER_ID)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("대기열에 없는 회원입니다."));
+	}
+
+	@Test
+	@DisplayName("getStatus: active 끝 시각이 1분 전에 지난 회원은 스케줄러가 지우기 전이라도 404이다")
+	void rejectMemberWhoseActiveEnded() throws Exception {
+		redisTemplate.opsForZSet().add(ACTIVE_KEY, "7", epochMillis(LocalDateTime.now().minusMinutes(1)));
+
+		getStatus(MEMBER_ID)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("대기열에 없는 회원입니다."));
+	}
+
+	@Test
+	@DisplayName("getStatus: 종목 11의 줄에 선 회원이 같은 대회의 종목 12로 조회하면 404이다 (줄은 종목마다 따로 있다)")
+	void rejectOtherCourse() throws Exception {
+		redisTemplate.opsForZSet().add(WAITING_KEY, "7", epochMillis(LocalDateTime.now()));
+
+		getStatus(MEMBER_ID, OTHER_RACE_COURSE_ID)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("대기열에 없는 회원입니다."));
+	}
+
+	@Test
+	@DisplayName("getStatus: 회원 ID 헤더가 없으면 401이다")
+	void rejectStatusWithoutMemberIdHeader() throws Exception {
+		mockMvc.perform(get(STATUS_URL, RACE_ID, RACE_COURSE_ID))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
 	// 대회 1·종목 11로 등록한다
 	private ResultActions register(int memberId) throws Exception {
 		return mockMvc.perform(post("/api/v1/queue")
@@ -241,6 +352,16 @@ class ApiV1QueueControllerTest extends QueueIntegrationTest {
 
 	private String requestBody() {
 		return jsonConverter.toJson(new QueueRegisterRequestDto(RACE_ID, RACE_COURSE_ID));
+	}
+
+	// 대회 1·종목 11의 순번을 조회한다
+	private ResultActions getStatus(int memberId) throws Exception {
+		return getStatus(memberId, RACE_COURSE_ID);
+	}
+
+	private ResultActions getStatus(int memberId, int raceCourseId) throws Exception {
+		return mockMvc.perform(get(STATUS_URL, RACE_ID, raceCourseId)
+			.header(MemberIdHeader.NAME, memberId));
 	}
 
 	// 지금 접수 중인 대회 1(판매 중, 1시간 전 개인 예매 오픈, 하루 뒤 접수 마감)과 그 종목 11
