@@ -256,11 +256,13 @@ final class ParticipationApiExamples {
 		""";
 
 	static final String TSHIRT_SIZE_REQUIRED = """
-		{ "status": 400, "message": "티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: S, M, L).", "data": null }
+		{ "status": 400, "code": "ORDER_TSHIRT_SIZE_REQUIRED",
+			"message": "티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: S, M, L).", "data": null }
 		""";
 
 	static final String TSHIRT_SIZE_NOT_AVAILABLE = """
-		{ "status": 400, "message": "이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L).", "data": null }
+		{ "status": 400, "code": "ORDER_TSHIRT_SIZE_NOT_AVAILABLE",
+			"message": "이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L).", "data": null }
 		""";
 
 	static final String CHANGE_RETRY = """

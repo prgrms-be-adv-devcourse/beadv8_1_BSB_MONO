@@ -154,12 +154,14 @@ class ApiV1ParticipationTest {
 	void applyWithUnavailableTshirtSize() throws Exception {
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", " "), true))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: S, M, L, XL)."));
+			.andExpect(jsonPath("$.message").value("티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: S, M, L, XL)."))
+			.andExpect(jsonPath("$.code").value("ORDER_TSHIRT_SIZE_REQUIRED"));
 
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "XXL"), true))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message")
-				.value("이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L, XL)."));
+				.value("이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L, XL)."))
+			.andExpect(jsonPath("$.code").value("ORDER_TSHIRT_SIZE_NOT_AVAILABLE"));
 
 		assertThat(participationRepository.count()).isZero();
 	}
@@ -387,7 +389,8 @@ class ApiV1ParticipationTest {
 		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XXXL"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message")
-				.value("이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L, XL)."));
+				.value("이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L, XL)."))
+			.andExpect(jsonPath("$.code").value("ORDER_TSHIRT_SIZE_NOT_AVAILABLE"));
 
 		assertThat(participationRepository.findById(id).orElseThrow().getParticipant().getTshirtSize())
 			.isEqualTo("L");
