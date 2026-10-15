@@ -1,9 +1,10 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
+import { format, isBefore, startOfToday } from 'date-fns'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
 import { ApiError } from '@/shared/api'
@@ -12,6 +13,7 @@ import {
   Alert,
   Button,
   DataTable,
+  DateTimeField,
   FOCUS_RING,
   ImageCropDialog,
   ImageListDialog,
@@ -35,6 +37,14 @@ import {
 import { useRegisterRace } from '../model/use-register-race'
 
 const FORM_ID = 'seller-race-new'
+
+// 지난 날은 대회 일시·접수 기간·환불 기한으로 고를 수 없다
+const today = startOfToday()
+const isPast = (date: Date) => isBefore(date, today)
+
+// 달력 칸의 Date ↔ 폼 값 문자열 (race-form.ts의 'yyyy-MM-dd HH:mm' · 'yyyy-MM-dd' 형식)
+const toDateTimeText = (date: Date | undefined) => (date ? format(date, 'yyyy-MM-dd HH:mm') : '')
+const toDateText = (date: Date | undefined) => (date ? format(date, 'yyyy-MM-dd') : '')
 
 const KITS = [
   {
@@ -76,7 +86,8 @@ export function SellerRaceNewPage() {
     control,
     register,
     handleSubmit,
-    formState: { errors },
+    setValue,
+    formState: { errors, isSubmitted },
   } = useForm<RaceFormValues>({
     resolver: zodResolver(raceFormSchema),
     mode: 'onTouched',
@@ -171,12 +182,20 @@ export function SellerRaceNewPage() {
               className="flex-1"
               {...register('title')}
             />
-            <TextField
-              label="대회 일시"
-              placeholder="2026-11-01 08:00"
-              error={errors.raceDate?.message}
-              className="flex-1"
-              {...register('raceDate')}
+            <Controller
+              control={control}
+              name="raceDate"
+              render={({ field }) => (
+                <DateTimeField
+                  mode="single"
+                  label="대회 일시"
+                  error={errors.raceDate?.message}
+                  isDateDisabled={isPast}
+                  startMonth={today}
+                  onValueChange={(date) => field.onChange(toDateTimeText(date))}
+                  className="flex-1"
+                />
+              )}
             />
           </div>
           <div className="flex gap-4">
@@ -204,20 +223,23 @@ export function SellerRaceNewPage() {
             />
           </div>
           <div className="flex gap-4">
-            <TextField
-              label="접수 시작"
-              placeholder="2026-10-20 10:00"
+            {/* 시작은 개인 예매 오픈, 끝은 접수 마감으로 보낸다 */}
+            <DateTimeField
+              mode="range"
+              label="접수 기간"
               helper="이날부터 판매 중으로 보여요 · 오늘로부터 이틀 뒤부터"
-              error={errors.individualOpenAt?.message}
+              error={errors.individualOpenAt?.message ?? errors.applicationCloseAt?.message}
+              isDateDisabled={isPast}
+              startMonth={today}
+              onValueChange={(range) => {
+                setValue('individualOpenAt', toDateTimeText(range.from), {
+                  shouldValidate: isSubmitted,
+                })
+                setValue('applicationCloseAt', toDateTimeText(range.to), {
+                  shouldValidate: isSubmitted,
+                })
+              }}
               className="flex-1"
-              {...register('individualOpenAt')}
-            />
-            <TextField
-              label="접수 마감"
-              placeholder="2026-10-31 18:00"
-              error={errors.applicationCloseAt?.message}
-              className="flex-1"
-              {...register('applicationCloseAt')}
             />
             <TextField
               label="참가 가능 나이"
@@ -295,12 +317,21 @@ export function SellerRaceNewPage() {
         </ConsoleCard>
 
         <ConsoleCard title="취소 · 환불 정책">
-          <TextField
-            label="환불 기한"
-            placeholder="2026-10-31"
-            helper="이 날짜(23:59)까지 취소하면 전액 환불, 그 뒤 개인 사정 환불은 안 돼요. 결제 전에 구매자에게 보여 줘요."
-            error={errors.refundDeadline?.message}
-            {...register('refundDeadline')}
+          <Controller
+            control={control}
+            name="refundDeadline"
+            render={({ field }) => (
+              // 백엔드는 날짜만 받는다. 시간은 고르게 되어 있지만 그 날 23:59까지로 본다
+              <DateTimeField
+                mode="single"
+                label="환불 기한"
+                helper="이 날짜(23:59)까지 취소하면 전액 환불, 그 뒤 개인 사정 환불은 안 돼요. 결제 전에 구매자에게 보여 줘요."
+                error={errors.refundDeadline?.message}
+                isDateDisabled={isPast}
+                startMonth={today}
+                onValueChange={(date) => field.onChange(toDateText(date))}
+              />
+            )}
           />
         </ConsoleCard>
 

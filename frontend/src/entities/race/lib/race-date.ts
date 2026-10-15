@@ -4,6 +4,11 @@ import { ko } from 'date-fns/locale'
 // 백엔드 일시는 시간대 없는 한국 시간(LocalDateTime, 예: 2026-11-01T08:00:00)이다.
 // parseISO는 시간대 없는 값을 실행 환경의 현지 시각으로 읽으므로, 벽시계 글자 그대로 보여 주는 데만 쓴다.
 
+/** 시간대 없는 한국 시간(2026-11-01T08:00:00)을 그 순간의 Date로. 지금 시각과 앞뒤를 비교할 때 쓴다. */
+export function parseKstDateTime(value: string): Date {
+  return new Date(`${value}+09:00`)
+}
+
 /** 2026-11-01T08:00:00 → 11/1 (일) 08:00 */
 export function formatRaceDateTime(value: string): string {
   return format(parseISO(value), 'M/d (EEE) HH:mm', { locale: ko })

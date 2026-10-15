@@ -2,6 +2,7 @@ package com.bukang.member;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
@@ -13,6 +14,8 @@ import jakarta.persistence.EntityManager;
 // 엔티티와 Repository는 이 클래스의 패키지(com.bukang.member) 기준으로 스캔된다
 @SpringBootApplication(scanBasePackages = {"com.bukang.member", "com.bukang.common"})
 @EnableJpaAuditing
+// @ConfigurationProperties 설정 클래스(config/auth/RefreshTokenProperties 등)를 빈으로 등록한다
+@ConfigurationPropertiesScan
 public class MemberApplication {
 
 	public static void main(String[] args) {

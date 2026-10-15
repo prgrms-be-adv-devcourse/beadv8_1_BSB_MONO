@@ -144,6 +144,17 @@ public class Participation extends BaseIdAndTime {
 		this.confirmedAt = confirmedAt;
 	}
 
+	// 결제하지 않고 기한이 지나 미결제 해제했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다 (OrderExpiryUseCase)
+	// 결제 대기(APPLIED)일 때만 바꾸고, 바꿨는지 돌려준다
+	public boolean markReleased(LocalDateTime releasedAt) {
+		if (status != ParticipationStatus.APPLIED) {
+			return false;
+		}
+		changeStatus(ParticipationStatus.RELEASED);
+		this.releasedAt = releasedAt;
+		return true;
+	}
+
 	// 결제한 참가권을 취소했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다 (정책 5장)
 	public void markCanceled(LocalDateTime canceledAt) {
 		if (status != ParticipationStatus.CONFIRMED) {
@@ -169,20 +180,6 @@ public class Participation extends BaseIdAndTime {
 			default -> throw new ParticipationNotCancelableException(
 				"이미 끝난 신청입니다(현재 상태: %s).".formatted(status.getLabel()));
 		}
-	}
-
-	// 결제 기한을 늘릴 수 있는지: 결제 대기(APPLIED)여야 한다. 상품 서비스에 연장을 요청하기 전에 확인한다
-	public void checkExtendable() {
-		if (status != ParticipationStatus.APPLIED) {
-			throw new ParticipationNotPayableException(
-				"결제 대기 중인 신청만 결제 기한을 늘릴 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
-		}
-	}
-
-	// 결제 기한을 늘렸다 (PG 충전창 진입 때 2분, 한 번). 결제 대기(APPLIED) 신청만 늘린다
-	public void extendPaymentDue(LocalDateTime newPaymentDueAt) {
-		checkExtendable();
-		this.paymentDueAt = newPaymentDueAt;
 	}
 
 	// 남은 자리가 없어 확보하지 못했다. 끝난 신청이 되어 같은 대회에 다시 신청할 수 있다

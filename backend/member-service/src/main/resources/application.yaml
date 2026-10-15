@@ -19,6 +19,14 @@ spring:
     ansi:
       enabled: always
 
+  # Redis가 응답하지 않을 때 오래 기다리지 않도록 대기 시간을 줄인다 (Lettuce 기본값은 명령 60초, 연결 10초)
+  # 로그인은 Redis 저장이 실패해도 진행하므로, 장애 때 로그인이 이 시간만큼만 늦어진다 (TokenIssueUseCase)
+  # 접속 주소(host, port)는 프로파일별 yaml에 있다
+  data:
+    redis:
+      timeout: 2s
+      connect-timeout: 2s
+
 
   # Kafka
   ## JacksonJsonSerializer / JacksonJsonDeserializer 안쓴 이유
@@ -33,6 +41,9 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        # 브로커 연결 대기 3초 (Kafka가 죽어 있으면 커밋 뒤 보내기가 가입 응답을 기본 60초 붙잡는다, BE-011)
+        "[max.block.ms]": 3000
 
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -59,6 +70,16 @@ springdoc:
       version: v1
 
 # JWT 유효 기간 (서명 키 jwt.secret은 프로파일별 yaml에 있다)
+# refresh-token-expiration은 Refresh Token을 회전할 때마다 한 번에 늘리는 기간이다
 jwt:
   access-token-expiration: 30m
   refresh-token-expiration: 14d
+
+# Refresh Token 회전 정책 (RefreshTokenProperties). 회전은 member-service만 하므로 공용 jwt.*와 따로 둔다
+member:
+  auth:
+    refresh-token:
+      # 회전 직후 바로 전 토큰이 다시 와도 탈취로 보지 않는 시간 (탭 두 개, 동시 요청, 응답 유실)
+      reuse-grace: 5s
+      # 로그인부터 회전을 이어 갈 수 있는 최대 기간. 계속 써도 이 기간이 지나면 다시 로그인한다
+      max-lifetime: 30d

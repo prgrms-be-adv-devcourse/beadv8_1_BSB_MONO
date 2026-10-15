@@ -145,10 +145,15 @@ export function RaceDetailPage({
         </div>
 
         {alreadyApplied && (
-          <div className="bg-bg-surface px-4 py-5">
+          <div className="bg-bg-surface px-4 py-4">
             <Alert
               title="이 대회에 이미 신청했어요"
-              description="한 사람은 한 대회에 1건만 가질 수 있어요. 내 참가 대회에서 확인해 주세요."
+              description={
+                <>
+                  한 사람은 한 대회에 1건만 가질 수 있어요.
+                  <br />내 참가 대회에서 확인해 주세요.
+                </>
+              }
             />
           </div>
         )}
@@ -249,6 +254,10 @@ export function RaceDetailPage({
           alreadyApplied ? (
             <Button size="l" disabled>
               이미 신청했어요
+            </Button>
+          ) : race.phase !== 'open' ? (
+            <Button size="l" disabled>
+              {race.phase === 'upcoming' ? '아직 접수 전이에요' : '접수가 마감됐어요'}
             </Button>
           ) : optionId === '' ? (
             <Button size="l" disabled>

@@ -18,12 +18,11 @@ import {
   type BadgeTone,
 } from '@/shared/ui'
 
-export type SettlementTab = 'monthly' | 'orders' | 'holds' | 'clawbacks'
+export type SettlementTab = 'monthly' | 'orders' | 'holds'
 
 type Monthly = {
   id: string
   race: string
-  kind: string
   sales: string
   refund: string
   fee: string
@@ -48,7 +47,6 @@ const MONTHLY: Monthly[] = [
   {
     id: 'ST-20261120-0A3F',
     race: '쿠키RUN',
-    kind: '1차 정산',
     sales: '₩5,200,000',
     refund: '₩400,000',
     fee: '₩0',
@@ -60,7 +58,6 @@ const MONTHLY: Monthly[] = [
   {
     id: 'ST-20261020-09B2',
     race: '한강 나이트런',
-    kind: '최종 정산',
     sales: '₩2,100,000',
     refund: '₩100,000',
     fee: '₩110,000',
@@ -79,7 +76,7 @@ const HOLDS: Hold[] = [
     reason: '정산 계좌 미등록',
     status: '지급보류',
     tone: 'warning',
-    heldAt: '10/27',
+    heldAt: '10/8',
   },
   {
     id: 'HD-20260918-0B71',
@@ -115,7 +112,7 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
     >
       <div className="flex gap-6">
         <StatTile label="다음 정산일" value="11/20" unit="(금)" />
-        <StatTile tone="accent" label="정산 예정액" value="1,920,000" unit="원" />
+        <StatTile tone="accent" label="정산 예정액" value="₩1,920,000" />
         <StatTile label="지급보류" value="1" unit="건" />
       </div>
 
@@ -127,8 +124,7 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
         items={[
           { value: 'monthly', label: '월별 정산' },
           { value: 'orders', label: '건별 정산' },
-          { value: 'holds', label: '지급보류 내역', count: 1 },
-          { value: 'clawbacks', label: '회수 내역' },
+          { value: 'holds', label: '지급보류', count: 1 },
         ]}
       />
 
@@ -151,7 +147,6 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
             columns={[
               { key: 'id', header: '정산 ID', width: 'w-42.5', render: (r) => r.id },
               { key: 'race', header: '대회', render: (r) => r.race },
-              { key: 'kind', header: '구분', render: (r) => r.kind },
               { key: 'sales', header: '판매액', align: 'right', render: (r) => r.sales },
               { key: 'refund', header: '환불액', align: 'right', render: (r) => r.refund },
               { key: 'fee', header: '수수료', align: 'right', render: (r) => r.fee },
@@ -165,8 +160,7 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
             ]}
           />
           <p className="text-caption text-text-tertiary">
-            환불 기한이 지나면 1차 정산(판매액의 40%, 수수료 없음), 대회가 끝나면 최종 정산.
-            수수료는 (판매액 − 환불액)의 5.5%(부가세 포함), 최종 정산에서만 떼요.
+            대회가 끝나면 한 번에 정산해요. 수수료는 (판매액 − 환불액)의 5.5%(부가세 포함)예요.
           </p>
         </ConsoleCard>
       )}
@@ -229,11 +223,11 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
         </ConsoleCard>
       )}
 
-      {/* 건별 정산 · 회수 내역은 시안이 없어 빈 화면만 둔다 */}
-      {(tab === 'orders' || tab === 'clawbacks') && (
+      {/* 건별 정산은 시안이 없어 빈 화면만 둔다 */}
+      {tab === 'orders' && (
         <ConsoleCard>
           <EmptyState
-            title={tab === 'orders' ? '이 기간에 건별 정산이 없어요' : '회수 내역이 없어요'}
+            title="이 기간에 건별 정산이 없어요"
             description="조회 기간을 바꿔 다시 찾아보세요."
           />
         </ConsoleCard>

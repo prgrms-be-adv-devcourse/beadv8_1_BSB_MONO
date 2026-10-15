@@ -213,11 +213,10 @@ function ChangeContent({
           <StatTile label="알림 받을 참가자" value={n(sold)} unit="명" className="flex-none" />
           <div className="flex flex-col gap-3 rounded-md bg-bg-subtle p-4">
             <KeyValue label="전액 환불 허용" value={`알린 날부터 7일 (~${refundUntil()})`} />
-            <KeyValue label="최종 정산 대상일" value="바뀐 대회일로 다시 잡혀요" />
+            <KeyValue label="정산 대상일" value="바뀐 대회일로 다시 잡혀요" />
           </div>
           <p className="text-body-s text-text-tertiary">
-            지금은 1차 정산 전이라 환불이 바로 돼요. 1차 정산 뒤였다면 1차 정산금을 회수한 뒤
-            환불해요.
+            정산은 대회가 끝난 뒤 한 번만 해서, 지금 환불하면 바로 돌려줘요.
           </p>
         </ConsoleCard>
       </div>
@@ -274,12 +273,7 @@ function cancelSummary(sold: number) {
     {
       label: '참가권 (키트 포함)',
       title: `${n(sold)}건 전액 자동 환불`,
-      body: '1차 정산 전이라 바로 예치금으로 돌려줘요. 이미 받은 키트는 돌려받지 않아요.',
-    },
-    {
-      label: '1차 정산 뒤 취소라면',
-      title: '1차 정산금 회수 뒤 환불',
-      body: '회수가 끝나야 구매자에게 환불돼요. 그동안 기다린다는 걸 구매자에게 알려요.',
+      body: '바로 예치금으로 돌려줘요. 이미 받은 키트는 돌려받지 않아요.',
     },
     {
       label: '정산',

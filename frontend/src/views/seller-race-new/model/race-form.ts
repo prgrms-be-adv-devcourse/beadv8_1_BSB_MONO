@@ -12,8 +12,9 @@ export const RACE_FORM_ERRORS = {
   sidoMax: `시·도는 ${productZod.registerBodyRegionSidoMax}자 이하로 입력해 주세요.`,
   sigunguRequired: '시·군·구를 입력해 주세요.',
   sigunguMax: `시·군·구는 ${productZod.registerBodyRegionSigunguMax}자 이하로 입력해 주세요.`,
-  dateTimeFormat: '2026-11-01 08:00처럼 입력해 주세요.',
-  dateFormat: '2026-10-31처럼 입력해 주세요.',
+  // 달력 칸은 날짜와 시간을 둘 다 골라야 값이 들어간다
+  dateTimeFormat: '날짜와 시간을 골라 주세요.',
+  dateFormat: '날짜와 시간을 골라 주세요.',
   closeAfterOpen: '접수 마감은 접수 시작보다 늦어야 해요.',
   closeBeforeRace: '접수 마감은 대회 일시보다 늦을 수 없어요.',
   refundBeforeRace: '환불 기한은 대회 날짜보다 늦을 수 없어요.',
