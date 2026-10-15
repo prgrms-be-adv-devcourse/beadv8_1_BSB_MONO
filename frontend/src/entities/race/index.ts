@@ -1,15 +1,26 @@
 export {
+  courseImageQueryOptions,
   DEFAULT_RACE_SORT,
   fetchRaceDetail,
   fetchRacePage,
   RACE_PAGE_SIZE,
   raceDetailQueryOptions,
   raceListQueryOptions,
+  raceQueryOptions,
   RaceSort,
   raceSuggestionsQueryOptions,
   type RaceSearchFilters,
 } from './api/race-api'
-export { parseKstDateTime } from './lib/race-date'
+export {
+  daysUntil,
+  formatDDay,
+  formatRaceDate,
+  formatRaceDateTime,
+  parseKstDateTime,
+  parseRaceDateInput,
+  parseRaceDateTimeInput,
+  toRaceDateTimeInput,
+} from './lib/race-date'
 export { RACE_BANNERS, RACE_DETAIL, type RaceBanner } from './model/fixtures'
 export {
   applicationPhase,
@@ -28,13 +39,6 @@ export type {
 export { RaceCard, type RaceCardProps } from './ui/RaceCard'
 export { RacePoster, type RacePosterProps } from './ui/RacePoster'
 export { RaceTicketCard, type RaceTicketCardProps } from './ui/RaceTicketCard'
-export {
-  formatRaceDate,
-  formatRaceDateTime,
-  parseRaceDateInput,
-  parseRaceDateTimeInput,
-  toRaceDateTimeInput,
-} from './lib/race-date'
 export {
   fetchRaceForEdit,
   myRacesQueryOptions,

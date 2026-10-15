@@ -98,6 +98,38 @@
           "$ref": "#/components/schemas/CartCheckoutDto"
         }
       }
+    },
+    "findMine": {
+      "200": {
+        "wrapper": "RsDataOrderPageDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderPageDto"
+        }
+      }
+    },
+    "cancelItem": {
+      "200": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      }
+    },
+    "findById": {
+      "200": {
+        "wrapper": "RsDataParticipationDto",
+        "data": {
+          "$ref": "#/components/schemas/ParticipationDto"
+        }
+      }
+    },
+    "cancelBeforePayment": {
+      "200": {
+        "wrapper": "RsDataParticipationDto",
+        "data": {
+          "$ref": "#/components/schemas/ParticipationDto"
+        }
+      }
     }
   },
   "schemas": {
@@ -123,7 +155,7 @@
           ]
         }
       },
-      "description": "키트 배송지"
+      "description": "키트 배송지 응답"
     },
     "ParticipantInfoDto": {
       "type": "object",
@@ -165,10 +197,18 @@
             {
               "type": "null"
             }
+          ],
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/ShippingAddressDto"
+            },
+            {
+              "type": "null"
+            }
           ]
         }
       },
-      "description": "참가자 정보"
+      "description": "참가자 정보 응답"
     },
     "ParticipationDto": {
       "type": "object",
@@ -219,7 +259,10 @@
           "$ref": "#/components/schemas/ParticipantInfoDto"
         },
         "thirdPartyConsent": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "consentedAt": {
           "type": [
@@ -324,7 +367,10 @@
           "format": "int32"
         },
         "paymentDueAt": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "date-time"
         },
         "paidAt": {
@@ -342,6 +388,14 @@
             {
               "type": "null"
             }
+          ],
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/ShippingAddressDto"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "items": {
@@ -351,7 +405,7 @@
           }
         }
       },
-      "description": "주문"
+      "description": "주문 상세"
     },
     "CartItemDto": {
       "type": "object",
@@ -442,6 +496,79 @@
         }
       },
       "description": "장바구니 결제 결과"
+    },
+    "OrderSummaryDto": {
+      "type": "object",
+      "description": "주문 목록의 한 줄",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "orderNo": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CREATED",
+            "PAID",
+            "PARTIAL_CANCELED",
+            "CANCELED",
+            "EXPIRED"
+          ]
+        },
+        "totalAmount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "paymentDueAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "itemName": {
+          "type": "string"
+        },
+        "itemCount": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "OrderPageDto": {
+      "type": "object",
+      "description": "주문 목록 한 페이지",
+      "properties": {
+        "orders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/OrderSummaryDto"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalElements": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "totalPages": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
     }
   }
 }

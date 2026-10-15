@@ -13,13 +13,21 @@ import type {
   RequestHandlerOptions
 } from 'msw';
 
+import type {
+  RsDataWalletBalanceDto
+} from './cash.schemas';
 
 
-export const getGetBalanceMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getGetBalanceResponseMock = (): RsDataWalletBalanceDto => ({"status":200,"message":"잔액 조회 성공","data":{"holderId":3,"balance":50000}})
+
+
+export const getGetBalanceMockHandler = (overrideResponse?: RsDataWalletBalanceDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataWalletBalanceDto> | RsDataWalletBalanceDto), options?: RequestHandlerOptions) => {
   return http.get('*/api/v1/cash/wallets/:holderId/balance', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getGetBalanceResponseMock(),
       { status: 200
       })
   }, options)
