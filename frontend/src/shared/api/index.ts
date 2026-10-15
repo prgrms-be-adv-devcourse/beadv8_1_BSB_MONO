@@ -1,4 +1,13 @@
+export {
+  clearAccessToken,
+  getAuthStatus,
+  onSessionExpired,
+  setAccessToken,
+  subscribeAuthStatus,
+  type AuthStatus,
+} from './access-token'
 export { ApiError } from './api-error'
+export { restoreSession } from './auth-session'
 export { customFetch, type CustomFetchInit } from './fetcher'
 export { createIdempotencyKey } from './idempotency'
 export { getQueryClient } from './query-client'

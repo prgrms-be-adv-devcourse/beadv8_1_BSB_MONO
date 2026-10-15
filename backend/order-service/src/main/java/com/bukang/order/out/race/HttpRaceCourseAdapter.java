@@ -2,6 +2,7 @@ package com.bukang.order.out.race;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.core.ParameterizedTypeReference;
@@ -68,6 +69,7 @@ public class HttpRaceCourseAdapter implements RaceCoursePort {
 	}
 
 	// 상품 서비스 응답의 data (product RaceCourseInfoDto). 주문 RaceCourseInfo와 이름이 같은 필드와 판매 상태만 받는다
+	// 티셔츠 사이즈 목록은 B enum(TshirtSize) 이름 그대로 문자열로 받는다. 없으면 티셔츠가 없는 종목이다
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record CourseBody(
 		Integer raceCourseId,
@@ -83,7 +85,8 @@ public class HttpRaceCourseAdapter implements RaceCoursePort {
 		Boolean kitIncluded,
 		LocalDate refundDeadline,
 		LocalDateTime scheduleChangedAt,
-		String saleStatus
+		String saleStatus,
+		List<String> tshirtSizeOption
 	) {
 		// maxAge·scheduleChangedAt은 없을 수 있다(제한 없음, 바뀐 적 없음). 나머지가 비면 판정할 수 없다
 		boolean isComplete() {
@@ -95,7 +98,7 @@ public class HttpRaceCourseAdapter implements RaceCoursePort {
 		RaceCourseInfo toInfo() {
 			return new RaceCourseInfo(raceCourseId, raceId, raceDate, applicationOpenAt, applicationCloseAt, minAge,
 				maxAge, sellerId, courseName, price, kitIncluded, refundDeadline, scheduleChangedAt,
-				CANCELED.equals(saleStatus));
+				CANCELED.equals(saleStatus), tshirtSizeOption);
 		}
 	}
 }

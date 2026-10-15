@@ -5,14 +5,25 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { UPCOMING_TICKETS } from '@/entities/ticket'
-import { cn } from '@/shared/lib'
+import { daysUntil, formatRaceDate, formatRaceDateTime } from '@/entities/race'
+import {
+  maskPhone,
+  TICKET_STATUS,
+  ticketErrorMessage,
+  ticketNumber,
+  useCancelTicket,
+} from '@/entities/ticket'
+import { cn, formatWon } from '@/shared/lib'
 import { Alert, Badge, BibCard, Button, Dialog, FOCUS_RING, KeyValue } from '@/shared/ui'
+
+import { fullRefundLastDay } from '../model/refund-period'
+import { useTicket } from '../model/use-ticket'
+import { TicketStateView, ticketViewState } from './TicketStateView'
 
 const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 
 // 피그마 V2 · M16 참가권 상세 · 취소 (+ M16-1 참가 취소 확인)
-// TODO(api): 참가권을 불러오고 취소 요청을 보낸다. 지금은 시안 예시 값.
+// confirmOpen은 시안 미리보기(?preview=confirm)용. 취소 확인 창을 연 채로 보여 준다.
 export function TicketDetailPage({
   ticketId,
   confirmOpen = false,
@@ -21,72 +32,140 @@ export function TicketDetailPage({
   confirmOpen?: boolean
 }) {
   const router = useRouter()
-  const ticket = UPCOMING_TICKETS.find((t) => t.id === ticketId) ?? UPCOMING_TICKETS[0]
+  const data = useTicket(ticketId)
+  const cancel = useCancelTicket()
   const [cancelOpen, setCancelOpen] = useState(confirmOpen)
+  const viewState = ticketViewState(data)
+  const { ticket, order, participation, race, course, status } = data
+
+  if (viewState || !ticket || !order || !race || !status) {
+    return (
+      <>
+        <AppHeader type="sub" title="참가권" backHref="/tickets" />
+        <main className="flex flex-1 flex-col gap-4 px-4 py-6">
+          <TicketStateView state={viewState ?? 'loading'} />
+        </main>
+      </>
+    )
+  }
+
+  const participant = participation?.participant
+  const closeAt = race.applicationCloseAt
+  const editable = status === 'confirmed' && closeAt !== undefined && new Date(closeAt) > new Date()
+  const refundDeadline = race.refundDeadline
+  const refundLastDay = fullRefundLastDay(refundDeadline, race.scheduleChangedAt)
+  const refundable =
+    status === 'confirmed' && refundLastDay !== undefined && daysUntil(refundLastDay) >= 0
+  const amount = formatWon(ticket.amount)
+  const kitNote = course?.kitIncluded ? '키트도 함께 취소돼요.' : undefined
+  const participantLine = [
+    participant?.tshirtSize ? `사이즈 ${participant.tshirtSize}` : undefined,
+    participant?.emergencyContactPhone
+      ? `비상 연락처 ${maskPhone(participant.emergencyContactPhone)}`
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <>
       <AppHeader type="sub" title="참가권" backHref="/tickets" />
       <main className="flex flex-1 flex-col gap-4 px-4 py-6">
         <BibCard
-          image={ticket.image}
+          image={data.image}
           imagePosition="50% 12%"
-          eyebrow={ticket.eyebrow}
-          status={<Badge tone="live">참가 확정</Badge>}
+          eyebrow={race.title ?? ticket.itemName}
+          status={<Badge tone={TICKET_STATUS[status].tone}>{TICKET_STATUS[status].label}</Badge>}
           unit="No."
-          number={ticket.bib}
-          title={`${ticket.runner} · ${ticket.course}`}
-          meta={`주문번호 ${ticket.id} · 11/1 (일) 08:00`}
+          number={ticketNumber(ticket.orderNo)}
+          title={[participant?.name, course?.name ?? ticket.itemName].filter(Boolean).join(' · ')}
+          meta={[
+            `주문번호 ${ticket.orderNo}`,
+            race.raceDate ? formatRaceDateTime(race.raceDate) : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         />
 
         <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <div className="flex items-center justify-between">
             <h2 className="text-[18px] leading-6.5 font-bold tracking-[-0.015em]">참가자 정보</h2>
-            <Link href={`/tickets/${ticket.id}/edit`} className={LINK}>
-              고치기
-            </Link>
+            {editable && (
+              <Link href={`/tickets/${ticket.id}/edit`} className={LINK}>
+                고치기
+              </Link>
+            )}
           </div>
           <div className="flex flex-col gap-2">
-            <p className="text-body-m text-text-secondary">
-              사이즈 M (95) · 비상 연락처 010-98**-5432
-            </p>
+            {participantLine && (
+              <p className="text-body-m text-text-secondary">{participantLine}</p>
+            )}
+            {editable && closeAt && (
+              <p className="text-caption text-text-tertiary">
+                접수 마감({formatRaceDate(closeAt)}) 전까지 고칠 수 있어요.
+              </p>
+            )}
+          </div>
+        </section>
+
+        {refundDeadline && (
+          <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
+            <h2 className="text-[18px] leading-6.5 font-bold tracking-[-0.015em]">환불 기준</h2>
+            <div className="flex flex-col gap-2">
+              <KeyValue label={`~ ${formatRaceDate(refundDeadline)} 23:59`} value="전액 환불" />
+              <KeyValue label="환불 기한이 지난 뒤" value="개인 사정 환불 불가" />
+            </div>
+          </section>
+        )}
+
+        {cancel.isError && (
+          <Alert
+            tone="danger"
+            title="참가를 취소하지 못했어요"
+            description={ticketErrorMessage(cancel.error)}
+          />
+        )}
+
+        {refundable && (
+          <Alert title={`오늘 취소하면 ${amount}을 예치금으로 돌려받아요`} description={kitNote} />
+        )}
+
+        {status === 'confirmed' && (
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="danger"
+              size="l"
+              className="w-full"
+              onClick={() => setCancelOpen(true)}
+            >
+              참가 취소하기
+            </Button>
             <p className="text-caption text-text-tertiary">
-              접수 마감(10/31) 전까지 고칠 수 있어요.
+              취소하면 자리는 바로 다른 사람에게 열려요.
             </p>
           </div>
-        </section>
-
-        <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
-          <h2 className="text-[18px] leading-6.5 font-bold tracking-[-0.015em]">환불 기준</h2>
-          <div className="flex flex-col gap-2">
-            <KeyValue label="~ 10/31 (토) 23:59 (지금)" value="전액 환불" />
-            <KeyValue label="11/1 (일) 00:00 ~" value="개인 사정 환불 불가" />
-          </div>
-        </section>
-
-        <Alert
-          title="오늘 취소하면 ₩45,000을 예치금으로 돌려받아요"
-          description="키트도 함께 취소돼요."
-        />
-
-        <div className="flex flex-col gap-2">
-          <Button variant="danger" size="l" className="w-full" onClick={() => setCancelOpen(true)}>
-            참가 취소하기
-          </Button>
-          <p className="text-caption text-text-tertiary">
-            취소하면 자리는 바로 다른 사람에게 열려요.
-          </p>
-        </div>
+        )}
       </main>
       <Dialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
         type="danger"
         title="참가를 취소할까요?"
-        body="₩45,000을 예치금으로 돌려받고 키트도 함께 취소돼요. 되돌릴 수 없어요."
+        body={[`${amount}을 예치금으로 돌려받아요.`, kitNote, '되돌릴 수 없어요.']
+          .filter(Boolean)
+          .join(' ')}
         confirmLabel="취소하기"
         cancelLabel="그대로 두기"
-        onConfirm={() => router.push(`/tickets/${ticket.id}/canceled`)}
+        confirming={cancel.isPending}
+        onConfirm={() =>
+          cancel.mutate(
+            { orderId: ticket.orderId, orderItemId: ticket.orderItemId },
+            {
+              onSuccess: () => router.push(`/tickets/${ticket.id}/canceled`),
+              onError: () => setCancelOpen(false),
+            },
+          )
+        }
       />
     </>
   )

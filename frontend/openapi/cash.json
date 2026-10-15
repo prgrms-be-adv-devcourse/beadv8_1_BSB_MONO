@@ -7,6 +7,10 @@
   },
   "tags": [
     {
+      "name": "CashInternal",
+      "description": "주문 결제, 결제 취소(환원), 환불 API (서비스 간 내부 호출 전용)"
+    },
+    {
       "name": "Cash",
       "description": "예치금 지갑 잔액 조회 API"
     }
@@ -76,6 +80,9 @@
           "status": {
             "type": "integer",
             "format": "int32"
+          },
+          "code": {
+            "type": "string"
           },
           "message": {
             "type": "string"

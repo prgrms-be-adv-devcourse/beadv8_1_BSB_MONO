@@ -21,7 +21,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
-  RsData
+  RsData,
+  RsDataWalletBalanceDto
 } from './cash.schemas';
 
 import { customFetch } from '../../fetcher';
@@ -58,9 +59,9 @@ export const getGetBalanceUrl = (holderId: number,) => {
  * 회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.
  * @summary 지갑 잔액 조회
  */
-export const getBalance = async (holderId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const getBalance = async (holderId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataWalletBalanceDto> => {
 
-  return customFetch<unknown>(getGetBalanceUrl(holderId),
+  return customFetch<RsDataWalletBalanceDto>(getGetBalanceUrl(holderId),
   {
     ...options,
     method: 'GET'

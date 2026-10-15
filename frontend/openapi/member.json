@@ -7,15 +7,243 @@
   },
   "tags": [
     {
-      "name": "Auth",
-      "description": "회원가입, 로그인 API"
+      "name": "Member",
+      "description": "내 정보 조회 API"
     },
     {
-      "name": "Member",
-      "description": "회원 정보 API"
+      "name": "Auth",
+      "description": "회원가입, 로그인, 토큰 재발급, 로그아웃 API"
     }
   ],
   "paths": {
+    "/api/v1/auth/reissue": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "토큰 재발급",
+        "description": "쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). 이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).",
+        "operationId": "reissue",
+        "parameters": [
+          {
+            "name": "refreshToken",
+            "in": "cookie",
+            "description": "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "재발급 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=...; Path=/api/v1/auth; Max-Age=1209600; Secure; HttpOnly; SameSite=Lax (Max-Age는 토큰 만료까지 남은 초. 로그인 30일 상한에 가까우면 14일보다 짧다)",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "토큰 재발급 성공",
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Refresh Token 쿠키 없음, 만료 또는 유효하지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "쿠키 없음": {
+                    "description": "쿠키 없음",
+                    "value": {
+                      "status": 401,
+                      "code": "MEMBER_INVALID_REFRESH_TOKEN",
+                      "message": "Refresh Token이 없습니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  },
+                  "만료": {
+                    "description": "만료",
+                    "value": {
+                      "status": 401,
+                      "code": "MEMBER_INVALID_REFRESH_TOKEN",
+                      "message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  },
+                  "유효하지 않음": {
+                    "description": "유효하지 않음",
+                    "value": {
+                      "status": 401,
+                      "code": "MEMBER_INVALID_REFRESH_TOKEN",
+                      "message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "로그아웃",
+        "description": "Redis의 Refresh Token을 지우고 Refresh Token 쿠키를 만료시킨다. 쿠키가 없거나 이미 무효한 토큰이어도 성공으로 응답한다.",
+        "operationId": "logout",
+        "parameters": [
+          {
+            "name": "refreshToken",
+            "in": "cookie",
+            "description": "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "로그아웃 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=; Path=/api/v1/auth; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "로그아웃 성공",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "로그인",
+        "description": "이메일과 비밀번호로 로그인하고 Access Token은 응답 본문으로, Refresh Token은 httpOnly 쿠키로 내려준다. Refresh Token은 Redis에도 저장한다.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberLoginRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "로그인 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=...; Path=/api/v1/auth; Max-Age=1209600; Secure; HttpOnly; SameSite=Lax",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "로그인 성공",
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature",
+                    "member": {
+                      "id": 1,
+                      "createDate": "2026-10-05T21:25:35",
+                      "modifyDate": "2026-10-05T21:25:35",
+                      "nickname": "러너1",
+                      "email": "runner1@crewrun.com",
+                      "phone": "010-1234-5678"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 검증 실패 또는 요청 본문 형식 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "이메일을 입력해주세요.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "이메일 또는 비밀번호 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "code": "MEMBER_LOGIN_FAILED",
+                  "message": "이메일 또는 비밀번호가 올바르지 않습니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/join": {
       "post": {
         "tags": [
@@ -54,7 +282,7 @@
             }
           },
           "400": {
-            "description": "입력값 검증 실패 또는 요청 본문 형식 오류",
+            "description": "입력값 검증 실패, 요청 본문 형식 오류 또는 만 14세 미만",
             "content": {
               "application/json": {
                 "schema": {
@@ -65,6 +293,7 @@
                     "description": "입력값 검증 실패",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "비밀번호는 10자 이상 작성해야합니다.",
                       "data": null
                     }
@@ -73,7 +302,17 @@
                     "description": "요청 본문 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  },
+                  "만 14세 미만": {
+                    "description": "만 14세 미만",
+                    "value": {
+                      "status": 400,
+                      "code": "MEMBER_UNDER_AGE",
+                      "message": "만 14세 미만은 가입할 수 없습니다.",
                       "data": null
                     }
                   }
@@ -93,6 +332,7 @@
                     "description": "이메일 중복",
                     "value": {
                       "status": 409,
+                      "code": "MEMBER_DUPLICATE_EMAIL",
                       "message": "이미 사용 중인 이메일입니다.",
                       "data": null
                     }
@@ -101,6 +341,7 @@
                     "description": "닉네임 중복",
                     "value": {
                       "status": 409,
+                      "code": "MEMBER_DUPLICATE_NICKNAME",
                       "message": "이미 사용 중인 닉네임입니다.",
                       "data": null
                     }
@@ -109,6 +350,7 @@
                     "description": "휴대폰 번호 중복",
                     "value": {
                       "status": 409,
+                      "code": "MEMBER_DUPLICATE_PHONE",
                       "message": "이미 사용 중인 전화번호입니다.",
                       "data": null
                     }
@@ -120,73 +362,49 @@
         }
       }
     },
-    "/api/v1/auth/login": {
-      "post": {
+    "/api/v1/member/members/me": {
+      "get": {
         "tags": [
-          "Auth"
+          "Member"
         ],
-        "summary": "로그인",
-        "description": "이메일과 비밀번호로 로그인하고 세션에 인증 정보를 저장한다.",
-        "operationId": "login",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MemberLoginRequestDto"
-              }
-            }
-          },
-          "required": true
-        },
+        "summary": "내 정보 조회",
+        "description": "게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.",
+        "operationId": "findMe",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
         "responses": {
           "200": {
-            "description": "로그인 성공",
+            "description": "조회 성공",
             "content": {
               "application/json": {
                 "example": {
                   "status": 200,
-                  "message": "로그인 성공",
+                  "message": "내 정보를 조회했습니다.",
                   "data": {
                     "id": 1,
                     "createDate": "2026-10-05T21:25:35",
                     "modifyDate": "2026-10-05T21:25:35",
                     "nickname": "러너1",
-                    "email": "runner1@crewrun.com"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "입력값 검증 실패 또는 요청 본문 형식 오류",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RsData"
-                },
-                "examples": {
-                  "입력값 검증 실패": {
-                    "description": "입력값 검증 실패",
-                    "value": {
-                      "status": 400,
-                      "message": "이메일을 입력해주세요.",
-                      "data": null
-                    }
-                  },
-                  "요청 본문 형식 오류": {
-                    "description": "요청 본문 형식 오류",
-                    "value": {
-                      "status": 400,
-                      "message": "요청 본문 형식이 올바르지 않습니다.",
-                      "data": null
-                    }
+                    "email": "runner1@crewrun.com",
+                    "phone": "010-1234-5678"
                   }
                 }
               }
             }
           },
           "401": {
-            "description": "이메일 또는 비밀번호 불일치",
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
             "content": {
               "application/json": {
                 "schema": {
@@ -194,7 +412,22 @@
                 },
                 "example": {
                   "status": 401,
-                  "message": "이메일 또는 비밀번호가 올바르지 않습니다.",
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 회원입니다.",
                   "data": null
                 }
               }
@@ -206,6 +439,44 @@
   },
   "components": {
     "schemas": {
+      "RsData": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "MemberLoginRequestDto": {
+        "type": "object",
+        "description": "로그인 요청",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "이메일",
+            "example": "runner1@crewrun.com",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "description": "비밀번호",
+            "example": "password1234",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
       "MemberJoinRequestDto": {
         "type": "object",
         "description": "회원가입 요청",
@@ -232,10 +503,10 @@
           },
           "nickname": {
             "type": "string",
-            "description": "닉네임 (30자 이하)",
+            "description": "닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)",
             "example": "러너1",
-            "maxLength": 30,
-            "minLength": 0
+            "minLength": 1,
+            "pattern": "^[가-힣A-Za-z0-9]+$"
           },
           "phone": {
             "type": "string",
@@ -271,41 +542,6 @@
           "password",
           "phone"
         ]
-      },
-      "MemberLoginRequestDto": {
-        "type": "object",
-        "description": "로그인 요청",
-        "properties": {
-          "email": {
-            "type": "string",
-            "description": "이메일",
-            "example": "runner1@crewrun.com",
-            "minLength": 1
-          },
-          "password": {
-            "type": "string",
-            "description": "비밀번호",
-            "example": "password1234",
-            "minLength": 1
-          }
-        },
-        "required": [
-          "email",
-          "password"
-        ]
-      },
-      "RsData": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "message": {
-            "type": "string"
-          },
-          "data": {}
-        }
       }
     }
   }

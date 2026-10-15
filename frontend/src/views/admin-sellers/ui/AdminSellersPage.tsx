@@ -3,7 +3,16 @@
 import { useState } from 'react'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
-import { Alert, Button, DataTable, Dialog, Segmented, Textarea, TextField } from '@/shared/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  DataTable,
+  Dialog,
+  Segmented,
+  Textarea,
+  TextField,
+} from '@/shared/ui'
 
 type Application = {
   id: string
@@ -109,14 +118,12 @@ export function AdminSellersPage({ rejectOpen = false }: { rejectOpen?: boolean 
             ].map(([label, value]) => (
               <div key={label} className="flex items-start justify-between gap-4">
                 <dt className="text-body-s text-text-secondary">{label}</dt>
-                <dd
-                  className={
-                    noAccount && label === '정산 계좌'
-                      ? 'text-label-m text-text-warning'
-                      : 'text-label-m'
-                  }
-                >
-                  {value}
+                <dd className="text-label-m">
+                  {noAccount && label === '정산 계좌' ? (
+                    <Badge tone="warning">{value}</Badge>
+                  ) : (
+                    value
+                  )}
                 </dd>
               </div>
             ))}

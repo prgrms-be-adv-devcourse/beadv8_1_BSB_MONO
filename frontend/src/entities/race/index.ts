@@ -1,13 +1,23 @@
 export {
+  courseImageQueryOptions,
   DEFAULT_RACE_SORT,
   fetchRaceDetail,
   fetchRacePage,
   RACE_PAGE_SIZE,
+  raceDetailQueryOptions,
   raceListQueryOptions,
+  raceQueryOptions,
   RaceSort,
   raceSuggestionsQueryOptions,
   type RaceSearchFilters,
 } from './api/race-api'
+export {
+  daysUntil,
+  formatDDay,
+  formatRaceDate,
+  formatRaceDateTime,
+  parseKstDateTime,
+} from './lib/race-date'
 export { RACE_BANNERS, RACE_DETAIL, type RaceBanner } from './model/fixtures'
 export {
   applicationPhase,
