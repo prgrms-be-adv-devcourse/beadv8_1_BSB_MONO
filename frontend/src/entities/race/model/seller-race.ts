@@ -35,10 +35,21 @@ export type SellerRaceRow = {
   title: string
   /** 대회일 11/1 (일) */
   date: string
+  /** 접수 10/14~10/31 · 대회 11/1 */
+  period: string
   sold: number
   capacity: number
   saleStatus?: SellerSaleStatus
   badge: SellerRaceBadge
+}
+
+function monthDay(value: string | undefined): string {
+  const match = value ? /^\d{4}-(\d{2})-(\d{2})/.exec(value) : null
+  return match ? `${Number(match[1])}/${Number(match[2])}` : '-'
+}
+
+function toPeriodText(race: productModel.SellerRaceDto): string {
+  return `접수 ${monthDay(race.saleOpenDate)}~${monthDay(race.applicationCloseAt)} · 대회 ${monthDay(race.raceDate)}`
 }
 
 export function toSellerRaceRow(race: productModel.SellerRaceDto): SellerRaceRow {
@@ -47,6 +58,7 @@ export function toSellerRaceRow(race: productModel.SellerRaceDto): SellerRaceRow
     id: race.raceId ?? 0,
     title: race.title ?? '',
     date: race.raceDate ? formatRaceDate(race.raceDate) : '-',
+    period: toPeriodText(race),
     sold: courses.reduce((sum, c) => sum + (c.sold ?? 0), 0),
     capacity: courses.reduce((sum, c) => sum + (c.quota ?? 0), 0),
     saleStatus: race.saleStatus,
