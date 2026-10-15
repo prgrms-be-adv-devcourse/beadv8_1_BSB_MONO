@@ -301,7 +301,7 @@ final class OrderApiExamples {
 		""";
 
 	static final String NOT_PAYABLE_ORDER = """
-		{ "status": 409, "code": "ORDER_NOT_PAYABLE", "message": "결제할 수 없는 주문입니다(현재 상태: 기한 만료).", "data": null }
+		{ "status": 409, "code": "ORDER_NOT_PAYABLE", "message": "결제할 수 없는 주문입니다(현재 상태: 취소).", "data": null }
 		""";
 
 	static final String CANCEL_SUCCESS = """

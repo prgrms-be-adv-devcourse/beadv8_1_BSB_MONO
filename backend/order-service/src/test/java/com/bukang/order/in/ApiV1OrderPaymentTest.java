@@ -176,7 +176,7 @@ class ApiV1OrderPaymentTest {
 	}
 
 	@Test
-	@DisplayName("주문의 결제 기한이 지났으면 예치금을 건드리지 않고 409, 만료 처리된 주문도 409다")
+	@DisplayName("주문의 결제 기한이 지났으면 예치금을 건드리지 않고 409, 만료 처리된 주문도 같은 기한 지남 409다")
 	void payAfterDue() throws Exception {
 		int orderId = orderAndGetId(MEMBER_ID);
 		Order order = orderRepository.findById(orderId).orElseThrow();
@@ -191,8 +191,8 @@ class ApiV1OrderPaymentTest {
 		orderExpiryUseCase.expireOverdue(LocalDateTime.now());
 		pay(MEMBER_ID, orderId)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제할 수 없는 주문입니다(현재 상태: 기한 만료)."))
-			.andExpect(jsonPath("$.code").value("ORDER_NOT_PAYABLE"));
+			.andExpect(jsonPath("$.message").value("결제 기한이 지났습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYMENT_DEADLINE_PASSED"));
 		assertThat(walletPort.payCalls()).isEmpty();
 	}
 
