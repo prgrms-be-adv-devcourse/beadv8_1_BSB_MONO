@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import com.bukang.payout.app.PayoutGroupCreator.PayoutGroup;
 import com.bukang.payout.domain.PayoutTargetDate;
+import com.bukang.payout.dto.PayoutCreateResultDto;
 import com.bukang.payout.out.PayoutRepository;
 import com.bukang.payout.out.RacePort;
 import com.bukang.payout.out.SellerAccountPort;
@@ -50,7 +51,7 @@ public class PayoutCreateUseCase {
 	 * today의 배치를 돌린다. 어제까지 LOOKBACK_DAYS일 동안 열린 대회를 모두 보고, 아직 없는 묶음만 만든다 (PRO-61)
 	 * 03:00 실행을 놓쳐도(서버 중단, 배포, 실패한 묶음) 다음 실행들이 따라잡는다. @Scheduled는 놓친 실행을 다시 돌리지 않는다
 	 */
-	public void run(LocalDate today, LocalDateTime now) {
+	public PayoutCreateResultDto run(LocalDate today, LocalDateTime now) {
 		LocalDate toRaceDate = PayoutTargetDate.raceDateFor(today);
 		LocalDate fromRaceDate = toRaceDate.minusDays(LOOKBACK_DAYS - 1);
 
@@ -93,6 +94,7 @@ public class PayoutCreateUseCase {
 
 		log.info("정산 대상일 배치 완료. 대회일 {} ~ {}, 생성 {}, 이미 있음 {}, 실패 {}",
 			fromRaceDate, toRaceDate, created, skipped, failed);
+		return new PayoutCreateResultDto(fromRaceDate, toRaceDate, created, skipped, failed);
 	}
 
 	// 한 대회는 대회일이 하나다. 참가권마다 다르면 주문 쪽 데이터가 어긋난 것이므로, 어느 날로 정산할지 고르지 않고 실패로 남긴다

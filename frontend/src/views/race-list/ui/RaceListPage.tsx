@@ -62,7 +62,7 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
   const loading = state === 'loading' || list.isPending
   const races = empty
     ? []
-    : (list.data?.pages.flatMap((p) => p.races ?? []) ?? []).map(toRaceListItem)
+    : (list.data?.pages.flatMap((p) => p.races ?? []) ?? []).map((race) => toRaceListItem(race))
   const total = empty ? 0 : (list.data?.pages[0]?.totalElements ?? 0)
   // 'preview': ?preview=menu로 첫 대회의 더보기 메뉴를 열어 둔다
   const [menuRace, setMenuRace] = useState<RaceListItem | 'preview' | null>(

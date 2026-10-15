@@ -9,7 +9,7 @@ import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceSaveDto;
 
 /**
- * 대회 저장(등록·수정·판매 시작) 유스케이스의 결과. ProductFacade가 커밋한 뒤 검색 색인과 파일 연결 메시지 발행에 쓴다.
+ * 대회 저장(등록·수정·취소) 유스케이스의 결과. ProductFacade가 커밋한 뒤 검색 색인과 파일 연결 메시지 발행에 쓴다.
  * 커밋 뒤에는 엔티티의 지연 로딩(race.getCourses())을 쓸 수 없으므로, 필요한 값은 트랜잭션 안에서 미리 만들어 담는다.
  */
 public record RaceSaveResult(
@@ -19,7 +19,7 @@ public record RaceSaveResult(
 	List<RaceCourseDocument> documents,
 	// 수정 때 뺀 종목의 문서 ID
 	List<String> deletedDocumentIds,
-	// 이미지 연결 메시지. 이미지를 바꾸지 않는 저장(판매 시작)이면 null
+	// 이미지 연결 메시지. 이미지를 바꾸지 않는 저장(취소)이면 null
 	FileLinkRequestedEvent fileLink
 ) {
 	public static RaceSaveResult of(Race race, List<Integer> deletedCourseIds, FileLinkRequestedEvent fileLink) {
@@ -27,7 +27,7 @@ public record RaceSaveResult(
 		RaceSaveDto dto = new RaceSaveDto(
 			race.getId(),
 			race.getSaleStatus(),
-			race.getSaleOpenAt(),
+			race.getSaleOpenDate(),
 			courses.stream().map(RaceCourse::getId).toList()
 		);
 		return new RaceSaveResult(

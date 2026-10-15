@@ -2,7 +2,6 @@ package com.bukang.product.app;
 
 import static com.bukang.product.domain.RaceSaleStatus.CANCELED;
 import static com.bukang.product.domain.RaceSaleStatus.CLOSED;
-import static com.bukang.product.domain.RaceSaleStatus.DRAFT;
 import static com.bukang.product.domain.RaceSaleStatus.ON_SALE;
 import static com.bukang.product.domain.RaceSaleStatus.SCHEDULED;
 import static com.bukang.product.domain.RaceSaleStatus.STOPPED;
@@ -34,9 +33,9 @@ import jakarta.persistence.PersistenceContext;
 
 /**
  * 판매 상태 배치(RaceSaleStatusUseCase.refresh)가 배치 시각에 맞춰 대회 판매 상태를 바꾸는지 확인한다.
- * - 판매 시작 일시가 지난 판매 예정 → 판매 중 (지나지 않았으면 그대로)
+ * - 판매 시작일이 된 판매 예정 → 판매 중 (판매 시작일 0시부터. 개인 예매 오픈 시각 전이어도 바뀐다)
  * - 대회 날짜가 지난 판매 예정·판매 중 → 판매 종료 (대회 당일은 그대로, 다음 날 0시부터). 둘 다 지났으면 바로 판매 종료
- * - 작성 중·판매 중지·대회 취소는 건드리지 않고, 상태가 바뀐 대회의 종목 검색 문서만 바뀐 상태로 돌려준다
+ * - 판매 중지·대회 취소는 건드리지 않고, 상태가 바뀐 대회의 종목 검색 문서만 바뀐 상태로 돌려준다
  * - ProductFacade.refreshSaleStatuses가 바뀐 문서를 다시 색인해 공개 목록에 반영한다
  * 스케줄러(RaceSaleStatusScheduler)는 test 프로파일에서 돌지 않으므로, refresh에 원하는 시각을 넣어 직접 부른다.
  */
@@ -48,13 +47,13 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 	private EntityManager entityManager;
 
 	@Test
-	@DisplayName("배치 시각이 4일 뒤면 판매 시작 일시가 3일 뒤인 판매 예정 대회는 판매 중이 되고, 5일 뒤인 대회는 그대로다")
-	void openScheduledRaceWhoseSaleOpenAtPassed() throws Exception {
+	@DisplayName("배치 시각이 4일 뒤면 판매 시작일이 3일 뒤인 판매 예정 대회는 판매 중이 되고, 5일 뒤인 대회는 그대로다")
+	void openScheduledRaceWhoseSaleOpenDateCame() throws Exception {
 		LocalDateTime base = LocalDateTime.now().withNano(0);
-		RegisteredRace opening = registerOnSale(race().title("사흘 뒤 판매 시작 대회")
+		RegisteredRace opening = register(race().title("사흘 뒤 판매 시작 대회")
 			.individualOpenAt(base.plusDays(3))
 			.build());
-		RegisteredRace waiting = registerOnSale(race().title("닷새 뒤 판매 시작 대회")
+		RegisteredRace waiting = register(race().title("닷새 뒤 판매 시작 대회")
 			.individualOpenAt(base.plusDays(5))
 			.build());
 		assertThat(saleStatusOf(opening.raceId())).isEqualTo(SCHEDULED);
@@ -73,15 +72,16 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("판매 시작 일시 1분 전에는 판매 예정 그대로이고, 판매 시작 일시와 같은 시각이면 판매 중이 된다")
-	void openAtExactSaleOpenAt() throws Exception {
-		LocalDateTime saleOpenAt = LocalDateTime.now().withNano(0).plusDays(3);
-		RegisteredRace registered = registerOnSale(race().individualOpenAt(saleOpenAt).build());
+	@DisplayName("개인 예매가 3일 뒤 10:00에 열리면 판매 시작일 전날 23:59:59에는 판매 예정 그대로이고, "
+		+ "판매 시작일 0시에는 개인 예매 오픈 전이어도 판매 중이 된다")
+	void openAtStartOfSaleOpenDate() throws Exception {
+		LocalDate saleOpenDate = LocalDate.now().plusDays(3);
+		RegisteredRace registered = register(race().individualOpenAt(saleOpenDate.atTime(10, 0)).build());
 
-		assertThat(refresh(saleOpenAt.minusMinutes(1))).isEmpty();
+		assertThat(refresh(saleOpenDate.atStartOfDay().minusSeconds(1))).isEmpty();
 		assertThat(saleStatusOf(registered.raceId())).isEqualTo(SCHEDULED);
 
-		assertThat(refresh(saleOpenAt)).hasSize(1);
+		assertThat(refresh(saleOpenDate.atStartOfDay())).hasSize(1);
 		assertThat(saleStatusOf(registered.raceId())).isEqualTo(ON_SALE);
 	}
 
@@ -107,11 +107,11 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("판매 시작 일시(3일 뒤)와 대회일(15일 뒤)이 모두 지난 판매 예정 대회는 판매 중을 거치지 않고 판매 종료된다")
+	@DisplayName("판매 시작일(3일 뒤)과 대회일(15일 뒤)이 모두 지난 판매 예정 대회는 판매 중을 거치지 않고 판매 종료된다")
 	void closeScheduledRaceWithoutOpening() throws Exception {
 		LocalDateTime base = LocalDateTime.now().withNano(0);
 		LocalDate raceDay = base.toLocalDate().plusDays(15);
-		RegisteredRace registered = registerOnSale(race()
+		RegisteredRace registered = register(race()
 			.individualOpenAt(base.plusDays(3))
 			.raceDate(raceDay.atTime(9, 0))
 			.course(course(), fiveKm())
@@ -130,9 +130,8 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("작성 중·판매 중지·대회 취소 대회는 판매 시작 일시와 대회일(15일 뒤)이 지난 30일 뒤에도 상태가 그대로다")
-	void keepDraftStoppedAndCanceledRaces() throws Exception {
-		RegisteredRace draft = register(race().title("작성 중 대회").build());
+	@DisplayName("판매 중지·대회 취소 대회는 판매 시작일과 대회일(15일 뒤)이 지난 30일 뒤에도 상태가 그대로다")
+	void keepStoppedAndCanceledRaces() throws Exception {
 		RegisteredRace stopped = registerOnSale(race().title("판매 중지 대회").build());
 		// 판매 중지로 바꾸는 API가 아직 없어 상태 칸을 직접 바꾼다
 		updateRace(stopped.raceId(), "saleStatus", STOPPED);
@@ -144,7 +143,6 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 		List<RaceCourseDocument> documents = refresh(LocalDate.now().plusDays(30).atStartOfDay());
 
 		assertThat(documents).isEmpty();
-		assertThat(saleStatusOf(draft.raceId())).isEqualTo(DRAFT);
 		assertThat(saleStatusOf(stopped.raceId())).isEqualTo(STOPPED);
 		assertThat(saleStatusOf(canceled.raceId())).isEqualTo(CANCELED);
 	}
@@ -154,7 +152,7 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 	void returnDocumentsOfChangedRacesOnly() throws Exception {
 		LocalDateTime base = LocalDateTime.now().withNano(0);
 		LocalDate today = base.toLocalDate();
-		RegisteredRace opening = registerOnSale(race().title("사흘 뒤 판매 시작 대회")
+		RegisteredRace opening = register(race().title("사흘 뒤 판매 시작 대회")
 			.individualOpenAt(base.plusDays(3))
 			.course(course(), fiveKm())
 			.build());
@@ -200,15 +198,15 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("판매 시작 일시가 지난 판매 예정 대회는 상태 배치를 돌리면 검색 문서가 판매 중으로 다시 색인되고 공개 목록에 그대로 나온다")
+	@DisplayName("판매 시작일이 된 판매 예정 대회는 상태 배치를 돌리면 검색 문서가 판매 중으로 다시 색인되고 공개 목록에 그대로 나온다")
 	void refreshSaleStatusesReindexesOpenedRace() throws Exception {
-		RegisteredRace registered = registerOnSale(race()
+		RegisteredRace registered = register(race()
 			.individualOpenAt(LocalDateTime.now().plusDays(3))
 			.build());
 		assertThat(documentStatusOf(registered.courseId())).isEqualTo(SCHEDULED);
 		assertThat(publicRaceIds()).containsExactly(registered.raceId());
-		// 기다리지 않고 판매 시작 일시가 지난 상태를 만들려고 판매 시작 일시만 한 시간 전으로 옮긴다
-		updateRace(registered.raceId(), "saleOpenAt", LocalDateTime.now().withNano(0).minusHours(1));
+		// 기다리지 않고 판매 시작일이 된 상태를 만들려고 판매 시작일만 오늘로 옮긴다
+		updateRace(registered.raceId(), "saleOpenDate", LocalDate.now());
 
 		int reindexed = productFacade.refreshSaleStatuses();
 

@@ -44,7 +44,7 @@ const EARLIER: Notice[] = [
     id: 'n3',
     icon: 'CircleCheck',
     title: '대회가 취소됐어요',
-    body: '한강 나이트런 10K · 판매자에게 정산금 회수가 끝나면\n₩45,000이 예치금으로 환불돼요.',
+    body: '한강 나이트런 10K · 참가비 전액\n₩45,000을 예치금으로 돌려드렸어요.',
     at: '10/5',
     href: '/tickets',
     unread: false,

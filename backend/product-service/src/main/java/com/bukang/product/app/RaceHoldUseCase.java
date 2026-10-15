@@ -59,10 +59,8 @@ public class RaceHoldUseCase {
 		// 대회 행을 공유 잠금으로 먼저 읽고, 종목 행은 그다음에 잠근다 (취소·수정과 같은 대회 → 종목 순서)
 		// 취소가 진행 중이면 커밋을 기다렸다가 취소된 상태를 보고 막힌다
 		// 이 트랜잭션에서 대회를 처음 읽는 조회여야 해서, 종목 엔티티가 아니라 대회 ID만 먼저 읽는다
-		// 작성 중인 대회의 종목은 공개 전이라 없는 종목으로 본다 (주문용 종목 정보 API와 같게)
 		Race race = raceCourseRepository.findRaceIdById(raceCourseId)
 			.flatMap(raceRepository::findByIdForShare)
-			.filter(found -> found.getSaleStatus() != RaceSaleStatus.DRAFT)
 			.orElseThrow(RaceCourseNotFoundException::new);
 		if (!race.isAcceptingIndividual(now)) {
 			throw new RaceNotAcceptingException();

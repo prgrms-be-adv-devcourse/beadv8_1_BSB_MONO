@@ -25,14 +25,14 @@ import lombok.NoArgsConstructor;
 @Getter
 @Table(name = "CASH_PAYMENT")
 public class Payment extends BaseIdAndTime {
-	// 주문은 다른 서비스의 테이블이라 연관관계(FK) 없이 ID 값으로만 보관한다
-	@Column(nullable = false)
+	// 주문은 다른 서비스의 테이블이라 연관관계(FK) 없이 ID 값으로만 보관한다, 주문 id를 멱등 키로 사용
+	@Column(nullable = false, unique = true)
 	private int orderId;
 
 	@ManyToOne(fetch = LAZY, optional = false)
 	private Wallet wallet;
 
-	private long amount;
+	private int amount;
 
 	@Enumerated(STRING)
 	@Column(nullable = false, length = 20)
@@ -41,15 +41,34 @@ public class Payment extends BaseIdAndTime {
 	@Column(length = 50) // status가 FAILED일 때만 채운다
 	private PaymentFailReason failReason;
 
-	@Column(nullable = false, unique = true, length = 64) // 중복 결제 방지
-	private String idempotencyKey;
 	private LocalDateTime completedAt;
 
-	public Payment(int orderId, Wallet wallet, long amount, String idempotencyKey) {
+	public Payment(int orderId, Wallet wallet, int amount) {
 		this.orderId = orderId;
 		this.wallet = wallet;
 		this.amount = amount;
-		this.idempotencyKey = idempotencyKey;
 		this.status = PaymentStatus.PENDING;
 	}
+
+	public void markCompleted(LocalDateTime completedAt) {
+		this.status = PaymentStatus.COMPLETED;
+		this.completedAt = completedAt;
+		this.failReason = null;
+	}
+
+	public void markFailed(PaymentFailReason failReason) {
+		this.status = PaymentStatus.FAILED;
+		this.failReason = failReason;
+	}
+	public void markCanceled() {
+		this.status = PaymentStatus.CANCELED;
+		this.failReason = null;
+	}
+
+
+	public void markRefunded() {
+		this.status = PaymentStatus.REFUNDED;
+		this.failReason = null;
+	}
+
 }

@@ -3,6 +3,7 @@ package com.bukang.member.dto;
 import java.time.LocalDate;
 
 import com.bukang.member.domain.Gender;
+import com.bukang.member.dto.validation.NicknameWidth;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -33,9 +34,11 @@ public class MemberJoinRequestDto {
 	@NotBlank(message = "이름을 작성해주세요.")
 	private final String name;
 
-	@Schema(description = "닉네임 (30자 이하)", example = "러너1")
+	// 칸 수는 한글 2칸, 영문·숫자 1칸으로 센다 (BE-013)
+	@Schema(description = "닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)", example = "러너1")
 	@NotBlank(message = "닉네임을 작성해주세요.")
-	@Size(max = 30, message = "닉네임은 30자 이하로 작성해야합니다.")
+	@Pattern(regexp = "^[가-힣A-Za-z0-9]+$", message = "닉네임은 한글, 영문, 숫자만 쓸 수 있습니다.")
+	@NicknameWidth
 	private final String nickname;
 
 	// 010-1234-5678, 01012345678 형식 모두 허용

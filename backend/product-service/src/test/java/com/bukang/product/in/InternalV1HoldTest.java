@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -201,16 +202,31 @@ class InternalV1HoldTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("개인 예매가 하루 뒤 열리는 판매 예정(SCHEDULED) 대회의 종목을 확보하면 409 '접수 기간이 아닙니다.'")
+	@DisplayName("개인 예매가 이틀 뒤 열리는 판매 예정(SCHEDULED) 대회의 종목을 확보하면 409 '접수 기간이 아닙니다.'")
 	void rejectBeforeIndividualOpen() throws Exception {
-		LocalDateTime openAt = LocalDateTime.now().withNano(0).plusDays(1);
-		RegisteredRace registered = registerOnSale(race().individualOpenAt(openAt).build());
+		LocalDateTime openAt = LocalDateTime.now().withNano(0).plusDays(2);
+		RegisteredRace registered = register(race().individualOpenAt(openAt).build());
 		assertThat(raceRepository.findById(registered.raceId()).orElseThrow().getSaleStatus())
 			.isEqualTo(RaceSaleStatus.SCHEDULED);
 
 		hold(registered.courseId(), PARTICIPATION_ID)
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.status").value(409))
+			.andExpect(jsonPath("$.message").value("접수 기간이 아닙니다."));
+
+		assertNothingHeld(registered.courseId());
+	}
+
+	@Test
+	@DisplayName("판매 시작일이 오늘이라 판매 중(ON_SALE)이어도, 개인 예매가 오늘 23:59에 열리면 그 전에는 확보가 409 '접수 기간이 아닙니다.'")
+	void rejectOnSaleRaceBeforeIndividualOpen() throws Exception {
+		LocalDateTime openAt = LocalDate.now().atTime(23, 59);
+		RegisteredRace registered = registerOnSale(race().individualOpenAt(openAt).build());
+		assertThat(raceRepository.findById(registered.raceId()).orElseThrow().getSaleStatus())
+			.isEqualTo(RaceSaleStatus.ON_SALE);
+
+		hold(registered.courseId(), PARTICIPATION_ID)
+			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("접수 기간이 아닙니다."));
 
 		assertNothingHeld(registered.courseId());
@@ -233,19 +249,14 @@ class InternalV1HoldTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("판매를 시작하지 않은(작성 중) 대회의 종목과 없는 종목(999999)은 404 '존재하지 않는 종목입니다.'")
-	void rejectDraftOrUnknownCourse() throws Exception {
-		int draftCourseId = register(race().build()).courseId();
-
-		hold(draftCourseId, PARTICIPATION_ID)
+	@DisplayName("없는 종목(999999)을 확보하면 404 '존재하지 않는 종목입니다.'이고 자리 행을 만들지 않는다")
+	void rejectUnknownCourse() throws Exception {
+		hold(UNKNOWN_COURSE_ID, PARTICIPATION_ID)
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.status").value(404))
 			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."));
-		hold(UNKNOWN_COURSE_ID, OTHER_PARTICIPATION_ID)
-			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."));
 
-		assertNothingHeld(draftCourseId);
+		assertThat(participationHoldRepository.count()).isZero();
 	}
 
 	@Test

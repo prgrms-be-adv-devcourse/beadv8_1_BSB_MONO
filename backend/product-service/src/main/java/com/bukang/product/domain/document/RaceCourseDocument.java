@@ -4,6 +4,7 @@ import static lombok.AccessLevel.PROTECTED;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import org.springframework.data.elasticsearch.annotations.DateFormat;
@@ -132,8 +133,9 @@ public class RaceCourseDocument extends BaseDocument {
 	@Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
 	private LocalDateTime applicationCloseAt;
 
-	@Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
-	private LocalDateTime saleOpenAt;
+	// 판매 시작일 (이날 0시부터 판매 중)
+	@Field(type = FieldType.Date, format = DateFormat.date)
+	private LocalDate saleOpenDate;
 
 	// 대회 등록 일시 (최신 등록순). 문서의 createdAt은 종목 등록 일시라 따로 둔다
 	@Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
@@ -176,7 +178,7 @@ public class RaceCourseDocument extends BaseDocument {
 		this.courseStatus = course.getStatus();
 		this.raceDate = race.getRaceDate();
 		this.applicationCloseAt = race.getApplicationCloseAt();
-		this.saleOpenAt = race.getSaleOpenAt();
+		this.saleOpenDate = race.getSaleOpenDate();
 		this.raceCreatedAt = race.getCreateDate();
 		this.price = course.getPrice();
 		this.kitIncluded = course.isKitIncluded();

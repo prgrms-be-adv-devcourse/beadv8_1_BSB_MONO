@@ -70,6 +70,7 @@ export const RACE_DETAIL: RaceDetail = {
   heroTitle: '「10K · 5K 접수 중」',
   heroTags: '#함께뛰자  #5K  #10K',
   status: { label: '접수중', tone: 'brand' },
+  phase: 'open',
   startsAt: '11/1 (일) 08:00 출발',
   place: '서울숲 일대 · 5K / 10K',
   dDay: 'D-12',

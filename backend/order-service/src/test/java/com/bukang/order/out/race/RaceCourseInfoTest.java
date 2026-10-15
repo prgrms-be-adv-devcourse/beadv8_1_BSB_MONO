@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.bukang.order.support.StubRaceCoursePort;
+
 class RaceCourseInfoTest {
 	private static final LocalDateTime RACE_DATE = LocalDateTime.of(2026, 11, 15, 8, 0);
 	private static final LocalDateTime OPEN_AT = LocalDateTime.of(2026, 10, 1, 10, 0);
@@ -94,6 +96,17 @@ class RaceCourseInfoTest {
 		RaceCourseInfo course = course(14, null);
 
 		assertThat(course.isWithinScheduleChangeRefund(REFUND_DEADLINE.plusDays(1))).isFalse();
+	}
+
+	@Test
+	@DisplayName("취소된 대회는 접수 기간 안이어도 신청·담기를 막고, 환불 기한이 지나도 전액 환불한다 (정책 5장 1-2)")
+	void canceledRace() {
+		RaceCourseInfo course = StubRaceCoursePort.canceled(course(14, null));
+
+		assertThat(course.isAccepting(OPEN_AT.plusDays(1))).isFalse();
+		assertThat(course.isBeforeClose(OPEN_AT.plusDays(1))).isFalse();
+		assertThat(course.isRefundableOn(REFUND_DEADLINE.plusDays(30))).isTrue();
+		assertThat(course(14, null).canceled()).isFalse();
 	}
 
 	private RaceCourseInfo course(int minAge, Integer maxAge) {
