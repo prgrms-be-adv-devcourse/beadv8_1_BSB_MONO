@@ -61,7 +61,9 @@ export const LoginResponse = zod.object({
   "modifyDate": zod.iso.datetime({"offset":true}).optional(),
   "nickname": zod.string().optional(),
   "email": zod.string().optional(),
-  "phone": zod.string().optional()
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
 }).optional().describe('로그인한 회원')
 }).optional().describe('로그인 응답')
 })
@@ -100,6 +102,45 @@ export const FindMeResponse = zod.object({
   "modifyDate": zod.iso.datetime({"offset":true}).optional(),
   "nickname": zod.string().optional(),
   "email": zod.string().optional(),
-  "phone": zod.string().optional()
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
+}).optional()
+})
+
+
+/**
+ * X-Member-Id 헤더의 회원의 이름, 생년월일, 휴대폰 번호, 닉네임을 바꾼다. 다른 회원이 쓰는 닉네임·휴대폰 번호인지 검사하고(내 행은 제외, 휴대폰은 하이픈 유무 무관), 4칸이 모두 그대로면 저장하지 않는다.
+ * @summary 내 정보 수정
+ */
+export const modifyMeBodyNameMax = 255;
+
+
+
+export const modifyMeBodyNicknameRegExp = new RegExp('^[가-힣A-Za-z0-9]+$');
+
+
+export const modifyMeBodyPhoneRegExp = new RegExp('^01[016789]-?\\d{3,4}-?\\d{4}$');
+
+
+export const ModifyMeBody = zod.object({
+  "name": zod.string().min(1).max(modifyMeBodyNameMax).describe('실명'),
+  "nickname": zod.string().min(1).regex(modifyMeBodyNicknameRegExp).describe('닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)'),
+  "phone": zod.string().min(1).regex(modifyMeBodyPhoneRegExp).describe('휴대폰 번호 (하이픈 생략 가능)'),
+  "birthDate": zod.iso.date().describe('생년월일')
+}).describe('내 정보 수정 요청')
+
+export const ModifyMeResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "nickname": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
 }).optional()
 })

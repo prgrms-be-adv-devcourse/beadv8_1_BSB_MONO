@@ -12,7 +12,7 @@
     },
     {
       "name": "Member",
-      "description": "내 정보 조회 API"
+      "description": "내 정보 조회, 내 정보 수정 API"
     }
   ],
   "paths": {
@@ -163,7 +163,9 @@
                       "modifyDate": "2026-10-05T21:25:35",
                       "nickname": "러너1",
                       "email": "runner1@crewrun.com",
-                      "phone": "010-1234-5678"
+                      "phone": "010-1234-5678",
+                      "name": "김러너",
+                      "birthDate": "1995-04-12"
                     }
                   }
                 }
@@ -377,7 +379,9 @@
                     "modifyDate": "2026-10-05T21:25:35",
                     "nickname": "러너1",
                     "email": "runner1@crewrun.com",
-                    "phone": "010-1234-5678"
+                    "phone": "010-1234-5678",
+                    "name": "김러너",
+                    "birthDate": "1995-04-12"
                   }
                 }
               }
@@ -409,6 +413,159 @@
                   "status": 404,
                   "message": "존재하지 않는 회원입니다.",
                   "data": null
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Member"
+        ],
+        "summary": "내 정보 수정",
+        "description": "X-Member-Id 헤더의 회원의 이름, 생년월일, 휴대폰 번호, 닉네임을 바꾼다. 다른 회원이 쓰는 닉네임·휴대폰 번호인지 검사하고(내 행은 제외, 휴대폰은 하이픈 유무 무관), 4칸이 모두 그대로면 저장하지 않는다.",
+        "operationId": "modifyMe",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberModifyRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "수정 성공 (바뀐 게 없어도 200)",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "내 정보를 수정했습니다.",
+                  "data": {
+                    "id": 1,
+                    "createDate": "2026-10-05T21:25:35",
+                    "modifyDate": "2026-10-15T10:12:08",
+                    "nickname": "러너2",
+                    "email": "runner1@crewrun.com",
+                    "phone": "010-9876-5432",
+                    "name": "김러너",
+                    "birthDate": "1995-04-12"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 검증 실패, 요청 본문 형식 오류 또는 만 14세 미만",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "휴대폰 번호 형식에 맞게 작성해주세요.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  },
+                  "만 14세 미만": {
+                    "description": "만 14세 미만",
+                    "value": {
+                      "status": 400,
+                      "code": "MEMBER_UNDER_AGE",
+                      "message": "만 14세 미만의 생년월일로는 수정할 수 없습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 회원입니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "다른 회원이 쓰는 닉네임 또는 휴대폰 번호",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "닉네임 중복": {
+                    "description": "닉네임 중복",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_DUPLICATE_NICKNAME",
+                      "message": "이미 사용 중인 닉네임입니다.",
+                      "data": null
+                    }
+                  },
+                  "휴대폰 번호 중복": {
+                    "description": "휴대폰 번호 중복",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_DUPLICATE_PHONE",
+                      "message": "이미 사용 중인 전화번호입니다.",
+                      "data": null
+                    }
+                  }
                 }
               }
             }
@@ -519,6 +676,45 @@
           },
           "data": {}
         }
+      },
+      "MemberModifyRequestDto": {
+        "type": "object",
+        "description": "내 정보 수정 요청",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "실명",
+            "example": "김러너",
+            "maxLength": 255,
+            "minLength": 1
+          },
+          "nickname": {
+            "type": "string",
+            "description": "닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)",
+            "example": "러너1",
+            "minLength": 1,
+            "pattern": "^[가-힣A-Za-z0-9]+$"
+          },
+          "phone": {
+            "type": "string",
+            "description": "휴대폰 번호 (하이픈 생략 가능)",
+            "example": "010-1234-5678",
+            "minLength": 1,
+            "pattern": "^01[016789]-?\\d{3,4}-?\\d{4}$"
+          },
+          "birthDate": {
+            "type": "string",
+            "format": "date",
+            "description": "생년월일",
+            "example": "1995-04-12"
+          }
+        },
+        "required": [
+          "birthDate",
+          "name",
+          "nickname",
+          "phone"
+        ]
       }
     }
   }
