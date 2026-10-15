@@ -195,6 +195,19 @@ class KitDeliveryTest {
 	}
 
 	@Test
+	@DisplayName("건수를 셀 때 상품 서비스에서 찾지 못한 종목은 환불 기한 전 건수에서만 빼고 나머지는 센다")
+	void summarizeWithMissingCourse() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().plusDays(10)));
+		paidOrder();
+		raceCoursePort.clear();
+
+		SellerKitSummaryDto summary = kitDeliveryUseCase.summarize(SELLER_ID, null, LocalDateTime.now());
+
+		assertThat(summary.getPreparing()).isEqualTo(1);
+		assertThat(summary.getBeforeRefundDeadline()).isZero();
+	}
+
+	@Test
 	@DisplayName("일정 변경 뒤 7일처럼 환불 기한이 지나도 환불할 수 있는 동안은 발송을 막는다 (취소와 같은 기준)")
 	void shipWhileScheduleChangeRefund() throws Exception {
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, LocalDate.now().minusDays(1),
