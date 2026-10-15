@@ -300,10 +300,12 @@ class ApiV1CartCheckoutTest {
 
 		checkout(MEMBER_ID, newKey(), mine, others)
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_FORBIDDEN"));
 		checkout(MEMBER_ID, newKey(), mine, 999999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_FOUND"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 		assertThat(orderRepository.count()).isZero();
@@ -318,16 +320,20 @@ class ApiV1CartCheckoutTest {
 
 		checkout(MEMBER_ID, newKey())
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."));
+			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		checkout(MEMBER_ID, newKey(), eleven)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("한 번에 10건까지 결제할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("한 번에 10건까지 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		checkout(MEMBER_ID, newKey(), participationId, participationId)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("같은 참가 신청을 두 번 보낼 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("같은 참가 신청을 두 번 보낼 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_CART_CHECKOUT_INVALID"));
 		checkout(MEMBER_ID, newKey(), 0)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("참가 신청 ID가 올바르지 않습니다."));
+			.andExpect(jsonPath("$.message").value("참가 신청 ID가 올바르지 않습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 	}
@@ -342,10 +348,12 @@ class ApiV1CartCheckoutTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(body(participationId)))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		checkout(MEMBER_ID, "k".repeat(65), participationId)
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("Idempotency-Key는 1~64자로 보내주세요."));
+			.andExpect(jsonPath("$.message").value("Idempotency-Key는 1~64자로 보내주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 	}

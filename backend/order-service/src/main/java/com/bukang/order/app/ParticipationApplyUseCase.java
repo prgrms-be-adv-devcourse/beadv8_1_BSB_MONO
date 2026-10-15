@@ -146,7 +146,7 @@ public class ParticipationApplyUseCase {
 	// 취소된 대회는 접수 기간 문구 대신 취소됐다고 알린다 (취소된 대회는 isAccepting·isBeforeClose도 거짓이다)
 	static void checkNotCanceled(RaceCourseInfo course) {
 		if (course.canceled()) {
-			throw new ApplicationPeriodException("취소된 대회입니다.");
+			throw ApplicationPeriodException.raceCanceled("취소된 대회입니다.");
 		}
 	}
 }

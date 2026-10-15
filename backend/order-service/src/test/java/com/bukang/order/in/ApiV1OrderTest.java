@@ -196,7 +196,8 @@ class ApiV1OrderTest {
 							"zipcode": "48094", "address": "부산 해운대구 해운대로 00" } }
 					"""))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요."));
+			.andExpect(jsonPath("$.message").value("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_CHANGE_RETRY"));
 
 		assertThat(orderRepository.findAll().getFirst().getShippingAddress().getZipcode()).isEqualTo("04700");
 		assertThat(participationRepository.findById(participationId).orElseThrow()
@@ -253,7 +254,8 @@ class ApiV1OrderTest {
 
 		create(MEMBER_ID, otherRace, key)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요."));
+			.andExpect(jsonPath("$.message").value("이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_IDEMPOTENCY_KEY_REUSED"));
 
 		assertThat(participationRepository.findById(otherRace).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.PENDING);
@@ -267,7 +269,8 @@ class ApiV1OrderTest {
 
 		create(MEMBER_ID, participationId, newKey())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제를 시작할 수 없는 신청입니다(현재 상태: 결제 대기)."));
+			.andExpect(jsonPath("$.message").value("결제를 시작할 수 없는 신청입니다(현재 상태: 결제 대기)."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_PAYABLE"));
 
 		assertThat(orderRepository.count()).isEqualTo(1);
 		assertThat(seatHoldPort.holdCalls()).isEqualTo(1);
@@ -283,6 +286,7 @@ class ApiV1OrderTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.status").value(409))
 			.andExpect(jsonPath("$.message").value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_SOLD_OUT"))
 			.andExpect(jsonPath("$.data").isEmpty());
 
 		Participation participation = participationRepository.findById(participationId).orElseThrow();
@@ -303,8 +307,8 @@ class ApiV1OrderTest {
 
 		create(MEMBER_ID, participationId, key)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message")
-				.value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_SOLD_OUT"));
 		assertThat(seatHoldPort.holdCalls()).isEqualTo(1);
 	}
 
@@ -340,7 +344,8 @@ class ApiV1OrderTest {
 
 		create(MEMBER_ID, participationId, newKey())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("접수 기간이 아닙니다."));
+			.andExpect(jsonPath("$.message").value("접수 기간이 아닙니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_APPLICATION_CLOSED"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 		assertThat(participationRepository.findById(participationId).orElseThrow().getStatus())
@@ -354,10 +359,12 @@ class ApiV1OrderTest {
 
 		create(OTHER_MEMBER_ID, participationId, newKey())
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_FORBIDDEN"));
 		create(MEMBER_ID, 999999, newKey())
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_FOUND"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 	}
@@ -372,10 +379,12 @@ class ApiV1OrderTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(createBody(participationId)))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		create(MEMBER_ID, participationId, "k".repeat(65))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("Idempotency-Key는 1~64자로 보내주세요."));
+			.andExpect(jsonPath("$.message").value("Idempotency-Key는 1~64자로 보내주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -387,7 +396,8 @@ class ApiV1OrderTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{}"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."));
+			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test

@@ -133,7 +133,7 @@ public class Order extends BaseIdAndTime {
 				"결제할 수 없는 주문입니다(현재 상태: %s).".formatted(status.getLabel()));
 		}
 		if (!now.isBefore(paymentDueAt)) {
-			throw new OrderNotPayableException("결제 기한이 지났습니다.");
+			throw OrderNotPayableException.deadlinePassed("결제 기한이 지났습니다.");
 		}
 	}
 
