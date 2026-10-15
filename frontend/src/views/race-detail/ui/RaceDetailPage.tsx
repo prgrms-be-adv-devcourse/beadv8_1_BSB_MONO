@@ -220,7 +220,7 @@ export function RaceDetailPage({
                   <p className="text-body-m whitespace-pre-line">{race.description}</p>
                 )}
                 {race.images.map((src, i) => (
-                  <div key={src} className="relative h-112 overflow-hidden rounded-[12px]">
+                  <div key={src} className="relative h-112 overflow-hidden rounded-md">
                     <Image
                       src={src}
                       alt={`상세 정보 이미지 ${i + 1}`}
@@ -330,9 +330,7 @@ function OptionCard({
         </span>
         <span className="text-caption text-text-secondary">{option.includes}</span>
       </span>
-      <span className={cn('text-label-strong', selected ? 'text-text-brand' : 'text-text-primary')}>
-        {formatWon(option.price)}
-      </span>
+      <span className="text-label-strong text-text-primary">{formatWon(option.price)}</span>
     </button>
   )
 }

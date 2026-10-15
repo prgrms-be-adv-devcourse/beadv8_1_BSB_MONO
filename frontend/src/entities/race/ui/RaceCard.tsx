@@ -22,14 +22,14 @@ export function RaceCard({ race, className }: RaceCardProps) {
           alt=""
           width={216}
           height={216}
-          className="aspect-square w-full rounded-[12px] object-cover"
+          className="aspect-square w-full rounded-md object-cover"
         />
       ) : (
         <RacePoster
           seed={race.id}
           title={race.title}
           label={race.posterLabel}
-          className="aspect-square w-full rounded-[12px]"
+          className="aspect-square w-full rounded-md"
         />
       )}
       <p className="text-heading-s break-keep whitespace-pre-line">{race.title}</p>

@@ -7,6 +7,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -68,22 +76,20 @@ class ApiV1CartTest {
 	}
 
 	@Test
-	@DisplayName("담은 장바구니는 서버에 저장되어, 다른 요청(다른 기기)에서 조회해도 같고 최근에 담은 항목이 먼저 보인다")
+	@DisplayName("담은 장바구니는 서버에 저장되어, 다른 요청(다른 기기)에서 조회해도 같다")
 	void sameCartAcrossRequests() throws Exception {
 		add(MEMBER_ID, COURSE_ID)
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value(201))
 			.andExpect(jsonPath("$.message").value("장바구니에 담았습니다."))
 			.andExpect(jsonPath("$.data.raceCourseId").value(COURSE_ID));
-		add(MEMBER_ID, OTHER_COURSE_ID).andExpect(status().isCreated());
 
 		find(MEMBER_ID)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("장바구니를 조회했습니다."))
 			.andExpect(jsonPath("$.data.memberId").value(MEMBER_ID))
-			.andExpect(jsonPath("$.data.items.length()").value(2))
-			.andExpect(jsonPath("$.data.items[0].raceCourseId").value(OTHER_COURSE_ID))
-			.andExpect(jsonPath("$.data.items[1].raceCourseId").value(COURSE_ID));
+			.andExpect(jsonPath("$.data.items.length()").value(1))
+			.andExpect(jsonPath("$.data.items[0].raceCourseId").value(COURSE_ID));
 
 		// 다른 회원의 장바구니에는 보이지 않는다
 		find(OTHER_MEMBER_ID)
@@ -126,18 +132,65 @@ class ApiV1CartTest {
 	}
 
 	@Test
-	@DisplayName("담은 항목을 빼면 남은 장바구니를 돌려준다")
+	@DisplayName("담은 항목을 빼면 빈 장바구니를 돌려주고, 그 뒤에는 다른 종목을 담을 수 있다")
 	void removeItem() throws Exception {
 		int itemId = addAndGetId(MEMBER_ID, COURSE_ID);
-		add(MEMBER_ID, OTHER_COURSE_ID).andExpect(status().isCreated());
 
 		remove(MEMBER_ID, itemId)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("장바구니에서 뺐습니다."))
-			.andExpect(jsonPath("$.data.items.length()").value(1))
-			.andExpect(jsonPath("$.data.items[0].raceCourseId").value(OTHER_COURSE_ID));
+			.andExpect(jsonPath("$.data.items.length()").value(0));
 
 		assertThat(cartItemRepository.existsById(itemId)).isFalse();
+		add(MEMBER_ID, OTHER_COURSE_ID).andExpect(status().isCreated());
+	}
+
+	@Test
+	@DisplayName("장바구니에 다른 종목이 담겨 있으면 409이고, 담긴 종목은 그대로다 (장바구니는 한 종목)")
+	void addOtherCourse() throws Exception {
+		add(MEMBER_ID, COURSE_ID).andExpect(status().isCreated());
+
+		add(MEMBER_ID, OTHER_COURSE_ID)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("ORDER_CART_ONE_COURSE_ONLY"))
+			.andExpect(jsonPath("$.message").value("장바구니에는 한 종목만 담을 수 있습니다. 담긴 종목을 뺀 뒤 담아주세요."));
+		// 같은 종목을 다시 담는 것은 그대로 된다
+		add(MEMBER_ID, COURSE_ID).andExpect(status().isOk());
+
+		find(MEMBER_ID)
+			.andExpect(jsonPath("$.data.items.length()").value(1))
+			.andExpect(jsonPath("$.data.items[0].raceCourseId").value(COURSE_ID));
+	}
+
+	@Test
+	@DisplayName("장바구니가 있을 때 다른 종목을 동시에 담아도 한 종목만 남고, 늦은 쪽은 한 종목 규칙으로 409다")
+	void addOtherCoursesTogether() throws Exception {
+		int itemId = addAndGetId(MEMBER_ID, COURSE_ID);
+		remove(MEMBER_ID, itemId).andExpect(status().isOk());
+
+		List<String> bodies = addTogether(MEMBER_ID, COURSE_ID, OTHER_COURSE_ID);
+
+		assertThat(bodies).extracting(body -> (Integer)JsonPath.read(body, "$.status"))
+			.containsExactlyInAnyOrder(201, 409);
+		// 장바구니를 잠그므로 늦은 쪽은 먼저 담긴 종목을 보고 한 종목 규칙으로 거절된다
+		assertThat(bodies).filteredOn(body -> JsonPath.<Integer>read(body, "$.status") == 409)
+			.extracting(body -> (String)JsonPath.read(body, "$.code"))
+			.containsExactly("ORDER_CART_ONE_COURSE_ONLY");
+		find(MEMBER_ID).andExpect(jsonPath("$.data.items.length()").value(1));
+	}
+
+	@Test
+	@DisplayName("장바구니가 없는 회원이 다른 종목을 동시에 처음 담아도 한 종목만 남고, 늦은 쪽은 한 종목 규칙으로 409다")
+	void firstAddsTogether() throws Exception {
+		List<String> bodies = addTogether(MEMBER_ID, COURSE_ID, OTHER_COURSE_ID);
+
+		assertThat(bodies).extracting(body -> (Integer)JsonPath.read(body, "$.status"))
+			.containsExactlyInAnyOrder(201, 409);
+		// 장바구니 만들기가 겹쳐도 이미 생긴 장바구니로 이어 가, 잠근 뒤 먼저 담긴 종목을 본다
+		assertThat(bodies).filteredOn(body -> JsonPath.<Integer>read(body, "$.status") == 409)
+			.extracting(body -> (String)JsonPath.read(body, "$.code"))
+			.containsExactly("ORDER_CART_ONE_COURSE_ONLY");
+		find(MEMBER_ID).andExpect(jsonPath("$.data.items.length()").value(1));
 	}
 
 	@Test
@@ -205,6 +258,25 @@ class ApiV1CartTest {
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
 			.andExpect(jsonPath("$.code").value("ORDER_LOGIN_REQUIRED"));
+	}
+
+	// 같은 회원이 두 종목을 동시에 담고 응답 본문을 모은다
+	private List<String> addTogether(int memberId, int firstCourseId, int secondCourseId) throws Exception {
+		CountDownLatch start = new CountDownLatch(1);
+		List<String> bodies = new ArrayList<>();
+		try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+			List<Future<String>> futures = List.of(firstCourseId, secondCourseId).stream()
+				.map(courseId -> executor.submit(() -> {
+					start.await();
+					return add(memberId, courseId).andReturn().getResponse().getContentAsString();
+				}))
+				.toList();
+			start.countDown();
+			for (Future<String> future : futures) {
+				bodies.add(future.get(30, TimeUnit.SECONDS));
+			}
+		}
+		return bodies;
 	}
 
 	private ResultActions find(int memberId) throws Exception {

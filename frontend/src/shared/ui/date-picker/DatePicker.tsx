@@ -190,7 +190,7 @@ function Header({
         aria-label={`${label}, 연·월 고르기`}
         onClick={onToggleWheel}
         className={cn(
-          'flex items-center gap-1 rounded-[8px] px-1 py-2.5 text-heading-m text-text-primary',
+          'flex items-center gap-1 rounded-md px-1 py-2.5 text-heading-m text-text-primary',
           FOCUS_RING,
         )}
       >

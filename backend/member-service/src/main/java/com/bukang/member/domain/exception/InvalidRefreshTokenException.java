@@ -10,6 +10,6 @@ import com.bukang.common.global.exception.BusinessException;
  */
 public class InvalidRefreshTokenException extends BusinessException {
 	public InvalidRefreshTokenException(String message) {
-		super(HttpStatus.UNAUTHORIZED, message);
+		super(HttpStatus.UNAUTHORIZED, "MEMBER_INVALID_REFRESH_TOKEN", message);
 	}
 }

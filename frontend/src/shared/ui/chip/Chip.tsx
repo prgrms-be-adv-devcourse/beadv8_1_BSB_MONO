@@ -16,7 +16,7 @@ export function Chip({ selected = false, type = 'button', className, ...props }:
       type={type}
       aria-pressed={selected}
       className={cn(
-        'inline-flex h-9 shrink-0 items-center gap-1 rounded-[8px] px-3.5 whitespace-nowrap disabled:cursor-not-allowed',
+        'inline-flex h-9 shrink-0 items-center gap-1 rounded-md px-3.5 whitespace-nowrap disabled:cursor-not-allowed',
         FOCUS_RING,
         selected
           ? 'bg-bg-brand text-label-strong text-text-on-brand enabled:hover:bg-bg-brand-hover'
