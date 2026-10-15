@@ -155,7 +155,7 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
         <p className="text-heading-s tabular-nums">{formatTimer(remaining)}</p>
       </div>
       <main className="flex flex-1 flex-col px-4 py-6">
-        <div className="flex flex-col gap-7 rounded-lg bg-bg-surface p-6 shadow-sm inset-ring inset-ring-border-default">
+        <div className="flex flex-col gap-7 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <Stepper steps={['종목 선택', '참가자 정보', '결제']} current={2} />
 
           {offline && (
@@ -194,7 +194,7 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
           </fieldset>
 
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2 rounded-[12px] px-4 pt-3 pb-4 inset-ring inset-ring-border-default">
+            <div className="flex flex-col gap-2 rounded-md px-4 pt-3 pb-4 inset-ring inset-ring-border-default">
               <p className="text-body-s text-text-secondary">환불 규정</p>
               {race.refund.map((row) => (
                 <KeyValue key={row.label} label={row.label} value={row.value} />
