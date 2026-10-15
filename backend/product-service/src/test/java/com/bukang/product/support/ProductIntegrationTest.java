@@ -144,6 +144,14 @@ public abstract class ProductIntegrationTest {
 		return payloads.getAllValues();
 	}
 
+	// 이 테스트에서 토픽으로 보낸 메시지의 key (보낸 순서대로)
+	// 기록용 KafkaTemplate(spy)에 남은 send(토픽, key, 본문) 호출 중 이 토픽으로 보낸 호출의 key만 꺼낸다
+	protected List<String> sentKeys(String topic) {
+		ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
+		verify(kafka(), atLeast(0)).send(eq(topic), keys.capture(), anyString());
+		return keys.getAllValues();
+	}
+
 	protected void seedSeller(int memberId, int sellerId) {
 		LocalDateTime now = LocalDateTime.now();
 		ProductMember member = productMemberRepository.save(new ProductMember(memberId, now, now, "러너" + memberId));
