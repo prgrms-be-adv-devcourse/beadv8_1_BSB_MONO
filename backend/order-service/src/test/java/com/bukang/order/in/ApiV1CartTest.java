@@ -156,7 +156,8 @@ class ApiV1CartTest {
 
 		remove(OTHER_MEMBER_ID, itemId)
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 장바구니 항목만 뺄 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 장바구니 항목만 뺄 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_CART_ITEM_FORBIDDEN"));
 
 		assertThat(cartItemRepository.existsById(itemId)).isTrue();
 	}
@@ -166,7 +167,8 @@ class ApiV1CartTest {
 	void removeMissingItem() throws Exception {
 		remove(MEMBER_ID, 999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("장바구니에 없는 항목입니다."));
+			.andExpect(jsonPath("$.message").value("장바구니에 없는 항목입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_CART_ITEM_NOT_FOUND"));
 	}
 
 	@Test
@@ -174,10 +176,12 @@ class ApiV1CartTest {
 	void addInvalidCourse() throws Exception {
 		add(MEMBER_ID, 999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 종목입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_COURSE_NOT_FOUND"));
 		add(MEMBER_ID, CLOSED_COURSE_ID)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("접수가 마감된 종목은 담을 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("접수가 마감된 종목은 담을 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_APPLICATION_CLOSED"));
 
 		assertThat(cartItemRepository.count()).isZero();
 	}
@@ -190,7 +194,8 @@ class ApiV1CartTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{}"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("담을 종목을 선택해주세요."));
+			.andExpect(jsonPath("$.message").value("담을 종목을 선택해주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -198,7 +203,8 @@ class ApiV1CartTest {
 	void findWithoutMemberId() throws Exception {
 		mockMvc.perform(get(BASE_URL))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_LOGIN_REQUIRED"));
 	}
 
 	private ResultActions find(int memberId) throws Exception {

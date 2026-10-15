@@ -1,10 +1,47 @@
 {
   "responses": {
-    "findMine": {
-      "200": {
-        "wrapper": "RsDataOrderPageDto",
+    "apply": {
+      "201": {
+        "wrapper": "RsDataParticipationDto",
         "data": {
-          "$ref": "#/components/schemas/OrderPageDto"
+          "$ref": "#/components/schemas/ParticipationDto"
+        }
+      }
+    },
+    "changeParticipant": {
+      "200": {
+        "wrapper": "RsDataParticipationDto",
+        "data": {
+          "$ref": "#/components/schemas/ParticipationDto"
+        }
+      }
+    },
+    "findLatestParticipant": {
+      "200": {
+        "wrapper": "RsDataParticipantInfoDto",
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/ParticipantInfoDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "create": {
+      "201": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      },
+      "200": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
         }
       }
     },
@@ -13,6 +50,68 @@
         "wrapper": "RsDataOrderDto",
         "data": {
           "$ref": "#/components/schemas/OrderDto"
+        }
+      }
+    },
+    "pay": {
+      "200": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      }
+    },
+    "extendDeadline": {
+      "200": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      }
+    },
+    "findCart": {
+      "200": {
+        "wrapper": "RsDataCartDto",
+        "data": {
+          "$ref": "#/components/schemas/CartDto"
+        }
+      }
+    },
+    "removeItem": {
+      "200": {
+        "wrapper": "RsDataCartDto",
+        "data": {
+          "$ref": "#/components/schemas/CartDto"
+        }
+      }
+    },
+    "addItem": {
+      "201": {
+        "wrapper": "RsDataCartItemDto",
+        "data": {
+          "$ref": "#/components/schemas/CartItemDto"
+        }
+      },
+      "200": {
+        "wrapper": "RsDataCartItemDto",
+        "data": {
+          "$ref": "#/components/schemas/CartItemDto"
+        }
+      }
+    },
+    "checkout": {
+      "200": {
+        "wrapper": "RsDataCartCheckoutDto",
+        "data": {
+          "$ref": "#/components/schemas/CartCheckoutDto"
+        }
+      }
+    },
+    "findMine": {
+      "200": {
+        "wrapper": "RsDataOrderPageDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderPageDto"
         }
       }
     },
@@ -25,14 +124,6 @@
       }
     },
     "findById": {
-      "200": {
-        "wrapper": "RsDataParticipationDto",
-        "data": {
-          "$ref": "#/components/schemas/ParticipationDto"
-        }
-      }
-    },
-    "changeParticipant": {
       "200": {
         "wrapper": "RsDataParticipationDto",
         "data": {
@@ -76,7 +167,6 @@
     },
     "ParticipantInfoDto": {
       "type": "object",
-      "description": "참가자 정보 응답",
       "properties": {
         "name": {
           "type": "string"
@@ -108,6 +198,14 @@
           ]
         },
         "shippingAddress": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/ShippingAddressDto"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "oneOf": [
             {
               "$ref": "#/components/schemas/ShippingAddressDto"
@@ -117,11 +215,11 @@
             }
           ]
         }
-      }
+      },
+      "description": "참가자 정보 응답"
     },
     "ParticipationDto": {
       "type": "object",
-      "description": "참가 신청",
       "properties": {
         "id": {
           "type": "integer",
@@ -188,11 +286,11 @@
           ],
           "format": "date-time"
         }
-      }
+      },
+      "description": "참가 신청"
     },
     "OrderItemDto": {
       "type": "object",
-      "description": "주문 상품",
       "properties": {
         "id": {
           "type": "integer",
@@ -233,11 +331,11 @@
             "CANCELED"
           ]
         }
-      }
+      },
+      "description": "주문 상품"
     },
     "OrderDto": {
       "type": "object",
-      "description": "주문 상세",
       "properties": {
         "id": {
           "type": "integer",
@@ -291,6 +389,14 @@
           "format": "date-time"
         },
         "shippingAddress": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/ShippingAddressDto"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "oneOf": [
             {
               "$ref": "#/components/schemas/ShippingAddressDto"
@@ -306,7 +412,91 @@
             "$ref": "#/components/schemas/OrderItemDto"
           }
         }
-      }
+      },
+      "description": "주문 상세"
+    },
+    "CartItemDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "장바구니 항목"
+    },
+    "CartDto": {
+      "type": "object",
+      "properties": {
+        "memberId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/CartItemDto"
+          }
+        }
+      },
+      "description": "장바구니"
+    },
+    "CartCheckoutItemDto": {
+      "type": "object",
+      "properties": {
+        "participationId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "CREATED",
+            "EXISTING",
+            "SOLD_OUT",
+            "FAILED"
+          ],
+          "description": "CREATED·EXISTING이면 order가 있다"
+        },
+        "message": {
+          "type": "string"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/OrderDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "description": "장바구니 결제 항목별 결과"
+    },
+    "CartCheckoutDto": {
+      "type": "object",
+      "properties": {
+        "orderedCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/CartCheckoutItemDto"
+          }
+        }
+      },
+      "description": "장바구니 결제 결과"
     },
     "OrderSummaryDto": {
       "type": "object",

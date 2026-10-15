@@ -281,6 +281,55 @@ export interface OrderDto {
   items?: OrderItemDto[];
 }
 
+/**
+ * 장바구니 항목
+ */
+export interface CartItemDto {
+  id?: number;
+  createDate?: string;
+  raceCourseId?: number;
+}
+
+/**
+ * 장바구니
+ */
+export interface CartDto {
+  memberId?: number;
+  items?: CartItemDto[];
+}
+
+/**
+ * CREATED·EXISTING이면 order가 있다
+ */
+export type CartCheckoutItemDtoOutcome = typeof CartCheckoutItemDtoOutcome[keyof typeof CartCheckoutItemDtoOutcome];
+
+
+export const CartCheckoutItemDtoOutcome = {
+  CREATED: 'CREATED',
+  EXISTING: 'EXISTING',
+  SOLD_OUT: 'SOLD_OUT',
+  FAILED: 'FAILED',
+} as const;
+
+/**
+ * 장바구니 결제 항목별 결과
+ */
+export interface CartCheckoutItemDto {
+  participationId?: number;
+  /** CREATED·EXISTING이면 order가 있다 */
+  outcome?: CartCheckoutItemDtoOutcome;
+  message?: string;
+  order?: OrderDto | null;
+}
+
+/**
+ * 장바구니 결제 결과
+ */
+export interface CartCheckoutDto {
+  orderedCount?: number;
+  results?: CartCheckoutItemDto[];
+}
+
 export type OrderSummaryDtoStatus = typeof OrderSummaryDtoStatus[keyof typeof OrderSummaryDtoStatus];
 
 
@@ -334,6 +383,30 @@ export interface RsDataOrderDto {
   status?: number;
   message?: string;
   data?: OrderDto;
+}
+
+export interface RsDataCartItemDto {
+  status?: number;
+  message?: string;
+  data?: CartItemDto;
+}
+
+export interface RsDataCartCheckoutDto {
+  status?: number;
+  message?: string;
+  data?: CartCheckoutDto;
+}
+
+export interface RsDataParticipantInfoDto {
+  status?: number;
+  message?: string;
+  data?: ParticipantInfoDto | null;
+}
+
+export interface RsDataCartDto {
+  status?: number;
+  message?: string;
+  data?: CartDto;
 }
 
 export type FindMineParams = {

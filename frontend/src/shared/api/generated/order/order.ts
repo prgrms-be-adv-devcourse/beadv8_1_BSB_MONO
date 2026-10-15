@@ -32,8 +32,12 @@ import type {
   ParticipantInfoRequestDto,
   ParticipationApplyRequestDto,
   RsData,
+  RsDataCartCheckoutDto,
+  RsDataCartDto,
+  RsDataCartItemDto,
   RsDataOrderDto,
   RsDataOrderPageDto,
+  RsDataParticipantInfoDto,
   RsDataParticipationDto
 } from './order.schemas';
 
@@ -161,7 +165,7 @@ export const getApplyUrl = () => {
  * 결제 전에 참가자 정보와 개인정보 제3자 제공 동의를 받아 참가 신청을 자리 확보 전(PENDING) 상태로 저장한다. 종목의 접수 기간, 대회 당일 만 나이 제한, 같은 대회에 살아 있는 신청이 있는지(한 사람 한 대회 1건)를 확인한다. 키트가 있는 종목은 배송 주소가 필수이고, 키트가 없는 종목은 배송 주소를 저장하지 않는다.
  * @summary 참가 신청서 작성
  */
-export const apply = async (participationApplyRequestDto: ParticipationApplyRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const apply = async (participationApplyRequestDto: ParticipationApplyRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataParticipationDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -177,7 +181,7 @@ export const apply = async (participationApplyRequestDto: ParticipationApplyRequ
     }
     return headers;
   };
-return customFetch<unknown>(getApplyUrl(),
+return customFetch<RsDataParticipationDto>(getApplyUrl(),
   {
     ...options,
     method: 'POST',
@@ -434,7 +438,7 @@ export const getCreateUrl = () => {
  * 자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받고, 결제 기한 10분짜리 주문(CREATED)을 만든다. 같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. 남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.
  * @summary 바로 결제 예매 ([결제하기])
  */
-export const create = async (orderCreateRequestDto: OrderCreateRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const create = async (orderCreateRequestDto: OrderCreateRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -450,7 +454,7 @@ export const create = async (orderCreateRequestDto: OrderCreateRequestDto, optio
     }
     return headers;
   };
-return customFetch<unknown>(getCreateUrl(),
+return customFetch<RsDataOrderDto>(getCreateUrl(),
   {
     ...options,
     method: 'POST',
@@ -523,9 +527,9 @@ export const getPayUrl = (orderId: number,) => {
  * 결제 대기(CREATED) 주문을 예치금으로 결제하고 참가를 확정한다. 순서: 예치금 차감 → 자리 판매 → 주문 PAID·참가 신청 CONFIRMED. 잔액이 부족하면 주문과 자리를 그대로 두므로, 충전한 뒤 같은 주문으로 다시 결제한다. 기한이 지나 자리 판매가 거절되면 차감한 예치금을 돌려주고 409를 돌려준다. 이미 결제한 주문은 다시 차감하지 않고 200으로 돌려준다.
  * @summary 예치금 결제
  */
-export const pay = async (orderId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const pay = async (orderId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderDto> => {
 
-  return customFetch<unknown>(getPayUrl(orderId),
+  return customFetch<RsDataOrderDto>(getPayUrl(orderId),
   {
     ...options,
     method: 'POST'
@@ -675,9 +679,9 @@ export const getExtendDeadlineUrl = (orderId: number,) => {
  * PG 충전창에 들어갈 때 프론트가 부른다. 결제 대기(CREATED) 주문의 결제 기한을 2분 늘리고, 주문당 한 번만 된다. 상품 서비스의 자리 기한을 먼저 늘린 뒤 주문·참가 신청의 결제 기한을 함께 바꾼다.
  * @summary 결제 기한 2분 늘리기
  */
-export const extendDeadline = async (orderId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const extendDeadline = async (orderId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderDto> => {
 
-  return customFetch<unknown>(getExtendDeadlineUrl(orderId),
+  return customFetch<RsDataOrderDto>(getExtendDeadlineUrl(orderId),
   {
     ...options,
     method: 'POST'
@@ -750,7 +754,7 @@ export const getAddItemUrl = () => {
  * 종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. 담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다.
  * @summary 장바구니에 참가권 담기
  */
-export const addItem = async (cartItemAddRequestDto: CartItemAddRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const addItem = async (cartItemAddRequestDto: CartItemAddRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCartItemDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -766,7 +770,7 @@ export const addItem = async (cartItemAddRequestDto: CartItemAddRequestDto, opti
     }
     return headers;
   };
-return customFetch<unknown>(getAddItemUrl(),
+return customFetch<RsDataCartItemDto>(getAddItemUrl(),
   {
     ...options,
     method: 'POST',
@@ -839,7 +843,7 @@ export const getCheckoutUrl = () => {
  * 장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. 항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. 매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.
  * @summary 장바구니 결제
  */
-export const checkout = async (cartCheckoutRequestDto: CartCheckoutRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const checkout = async (cartCheckoutRequestDto: CartCheckoutRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCartCheckoutDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -855,7 +859,7 @@ export const checkout = async (cartCheckoutRequestDto: CartCheckoutRequestDto, o
     }
     return headers;
   };
-return customFetch<unknown>(getCheckoutUrl(),
+return customFetch<RsDataCartCheckoutDto>(getCheckoutUrl(),
   {
     ...options,
     method: 'POST',
@@ -1030,9 +1034,9 @@ export const getFindLatestParticipantUrl = () => {
  * 다음 신청서에 미리 채울 수 있도록, 회원이 가장 최근에 작성한 참가 신청의 참가자 정보를 돌려준다. 그 신청에 배송 주소가 없으면(키트 없는 종목) 주소를 적은 최근 신청의 주소를 채운다. 신청한 적이 없으면 data가 null이다.
  * @summary 최근 참가자 정보 조회
  */
-export const findLatestParticipant = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const findLatestParticipant = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataParticipantInfoDto> => {
 
-  return customFetch<unknown>(getFindLatestParticipantUrl(),
+  return customFetch<RsDataParticipantInfoDto>(getFindLatestParticipantUrl(),
   {
     ...options,
     method: 'GET'
@@ -1234,9 +1238,9 @@ export const getFindCartUrl = () => {
  * 회원별로 서버에 저장한 장바구니를 최근에 담은 항목부터 돌려준다. 담은 적이 없으면 빈 목록이다.
  * @summary 내 장바구니 조회
  */
-export const findCart = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const findCart = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataCartDto> => {
 
-  return customFetch<unknown>(getFindCartUrl(),
+  return customFetch<RsDataCartDto>(getFindCartUrl(),
   {
     ...options,
     method: 'GET'
@@ -1336,9 +1340,9 @@ export const getRemoveItemUrl = (cartItemId: number,) => {
  * 본인 장바구니의 항목을 빼고, 남은 장바구니를 돌려준다.
  * @summary 장바구니에서 빼기
  */
-export const removeItem = async (cartItemId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const removeItem = async (cartItemId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCartDto> => {
 
-  return customFetch<unknown>(getRemoveItemUrl(cartItemId),
+  return customFetch<RsDataCartDto>(getRemoveItemUrl(cartItemId),
   {
     ...options,
     method: 'DELETE'

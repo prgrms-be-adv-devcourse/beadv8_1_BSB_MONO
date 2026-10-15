@@ -155,6 +155,8 @@ export function toRaceDetail(
     price: course.price ?? 0,
     image: courseImage(courseFiles[course.raceCourseId ?? -1]),
     soldOut: course.status === 'SOLD_OUT',
+    kitIncluded: course.kitIncluded ?? false,
+    shirtSizes: course.tshirtSizeOption ?? [],
   }))
   // 대표 이미지(종목 순) → 나머지 이미지(소개·코스·키트) 순으로, 같은 주소는 한 번만
   const allFiles = courses.flatMap((c) => courseFiles[c.raceCourseId ?? -1] ?? [])
