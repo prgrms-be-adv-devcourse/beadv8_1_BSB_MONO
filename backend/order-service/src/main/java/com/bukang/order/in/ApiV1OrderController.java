@@ -52,7 +52,8 @@ public class ApiV1OrderController {
 	// 에러 응답은 GlobalExceptionHandler, OrderExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	@PostMapping
 	@Operation(summary = "바로 결제 예매 ([결제하기])",
-		description = "자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받고, 결제 기한 10분짜리 주문(CREATED)을 만든다. "
+		description = "대기열에 입장 중인지 확인하고, 자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받아 "
+			+ "입장 끝 시각을 결제 기한으로 하는 주문(CREATED)을 만든다. 입장 중이 아니면 403(ORDER_QUEUE_NOT_ADMITTED). "
 			+ "같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. "
 			+ "남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.")
 	@ApiResponses({
@@ -72,9 +73,11 @@ public class ApiV1OrderController {
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED))),
-		@ApiResponse(responseCode = "403", description = "다른 회원의 참가 신청",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = OrderApiExamples.NOT_OWNER))),
+		@ApiResponse(responseCode = "403", description = "다른 회원의 참가 신청, 대기열에 입장 중이 아님",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "다른 회원의 참가 신청", value = OrderApiExamples.NOT_OWNER),
+				@ExampleObject(name = "대기열 입장 전", value = OrderApiExamples.QUEUE_NOT_ADMITTED)
+			})),
 		@ApiResponse(responseCode = "404", description = "없는 참가 신청 또는 종목",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "없는 참가 신청", value = OrderApiExamples.PARTICIPATION_NOT_FOUND),

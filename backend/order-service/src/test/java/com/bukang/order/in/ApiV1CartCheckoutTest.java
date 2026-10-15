@@ -39,6 +39,8 @@ import com.bukang.order.out.CartItemRepository;
 import com.bukang.order.out.CartRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.support.StubQueueAdmissionPort;
+import com.bukang.order.support.StubQueueAdmissionPortConfig;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -48,7 +50,7 @@ import com.jayway.jsonpath.JsonPath;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class})
+@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class, StubQueueAdmissionPortConfig.class})
 class ApiV1CartCheckoutTest {
 	private static final String CHECKOUT_URL = "/api/v1/order/cart/checkout";
 	private static final int MEMBER_ID = 1;
@@ -79,6 +81,9 @@ class ApiV1CartCheckoutTest {
 	@Autowired
 	private StubSeatHoldPort seatHoldPort;
 
+	@Autowired
+	private StubQueueAdmissionPort queueAdmissionPort;
+
 	@BeforeEach
 	void setUp() {
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, 100, 14, null));
@@ -93,6 +98,7 @@ class ApiV1CartCheckoutTest {
 		cartRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
+		queueAdmissionPort.clear();
 	}
 
 	@Test
@@ -164,6 +170,26 @@ class ApiV1CartCheckoutTest {
 
 		assertThat(orderRepository.count()).isEqualTo(1);
 		assertThat(statusOf(closed)).isEqualTo(ParticipationStatus.PENDING);
+		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(COURSE_ID);
+	}
+
+	@Test
+	@DisplayName("장바구니 결제도 종목마다 대기열 입장을 확인해, 입장 중이 아닌 종목만 FAILED로 남기고 나머지는 주문한다")
+	void checkoutChecksQueuePerCourse() throws Exception {
+		addToCart(MEMBER_ID, COURSE_ID);
+		addToCart(MEMBER_ID, OTHER_COURSE_ID);
+		int notAdmitted = apply(MEMBER_ID, COURSE_ID);
+		int admitted = apply(MEMBER_ID, OTHER_COURSE_ID);
+		queueAdmissionPort.notAdmitted(COURSE_ID);
+
+		checkout(MEMBER_ID, newKey(), notAdmitted, admitted)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.orderedCount").value(1))
+			.andExpect(jsonPath("$.data.results[0].outcome").value("FAILED"))
+			.andExpect(jsonPath("$.data.results[0].message").value("대기열에서 입장한 뒤 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.data.results[1].outcome").value("CREATED"));
+
+		assertThat(statusOf(notAdmitted)).isEqualTo(ParticipationStatus.PENDING);
 		assertThat(cartCourseIds(MEMBER_ID)).containsExactly(COURSE_ID);
 	}
 
