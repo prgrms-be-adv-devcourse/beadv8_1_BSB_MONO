@@ -45,6 +45,11 @@ public class QueueRaceCourse extends BaseEntity {
 		this.deleted = deleted;
 	}
 
+	// 이 대회에 묶인 종목인지. 대회에서 뺀 종목(삭제 표시)은 묶이지 않은 것으로 본다
+	public boolean belongsTo(int raceId) {
+		return !deleted && this.raceId == raceId;
+	}
+
 	// 종목 메시지에는 생성 일시가 없어 원본 수정 일시를 돌려준다
 	@Override
 	public LocalDateTime getCreateDate() {

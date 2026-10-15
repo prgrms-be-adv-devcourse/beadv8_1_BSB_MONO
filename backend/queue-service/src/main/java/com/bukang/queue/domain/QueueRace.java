@@ -57,6 +57,13 @@ public class QueueRace extends BaseEntity {
 		this.updatedAt = updatedAt;
 	}
 
+	// 대기열에 들어올 수 있는지: 판매 중이고, 개인 예매 오픈부터 접수 마감 전까지
+	// 판매 예정(SCHEDULED)은 아직 판매 전이라 들어올 수 없다 (상품의 자리 확보 판정 Race.isAcceptingIndividual과 다른 점)
+	public boolean isEnterable(LocalDateTime now) {
+		return saleStatus == RaceSaleStatus.ON_SALE
+			&& !now.isBefore(individualOpenAt) && now.isBefore(applicationCloseAt);
+	}
+
 	// 대회 메시지에는 생성 일시가 없어 원본 수정 일시를 돌려준다
 	@Override
 	public LocalDateTime getCreateDate() {
