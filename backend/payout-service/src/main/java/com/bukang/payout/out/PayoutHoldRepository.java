@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import com.bukang.payout.domain.PayoutHold;
-import com.bukang.payout.domain.PayoutHoldReason;
 
 public interface PayoutHoldRepository extends JpaRepository<PayoutHold, Integer> {
 	// 판매자 지급보류 내역 조회: [start, end) 범위. 끝 날의 23:59:59.xxx까지 넣으려고 끝은 다음 날 0시 미만으로 자른다
@@ -18,7 +17,4 @@ public interface PayoutHoldRepository extends JpaRepository<PayoutHold, Integer>
 		order by h.heldAt desc, h.id desc
 		""")
 	List<PayoutHold> findSellerHolds(int sellerId, LocalDateTime start, LocalDateTime end);
-
-	// 대회 취소 자동 보류: 이 사유로 건 적이 있는지 (해제된 보류 포함). 같은 이벤트가 다시 와도 두 번 걸지 않는다
-	boolean existsByPayoutIdAndReasonType(int payoutId, PayoutHoldReason reasonType);
 }

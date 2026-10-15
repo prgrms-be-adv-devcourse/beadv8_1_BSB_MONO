@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.race.event.RaceCancelEvent;
-import com.bukang.payout.app.RaceCancelHoldUseCase;
+import com.bukang.payout.app.RaceCancelUseCase;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,11 +38,11 @@ public class PayoutKafkaConsumer {
 	private static final String RETRY_TOPIC_SUFFIX = ".payout.retry";
 	private static final String DLT_TOPIC_SUFFIX = ".payout.dlt";
 
-	private final RaceCancelHoldUseCase raceCancelHoldUseCase;
+	private final RaceCancelUseCase raceCancelUseCase;
 	private final JsonConverter jsonConverter;
 
-	// 판매자가 대회를 취소했다 (상품 서비스가 발행, key는 대회 ID). 지급 전 정산 내역에 보류를 건다
-	// 이미 보류를 건 정산 내역은 건너뛰므로 같은 메시지를 다시 처리해도 안전하다
+	// 판매자가 대회를 취소했다 (상품 서비스가 발행, key는 대회 ID). 지급 전 정산 내역은 닫고, 지급한 돈은 회수를 만든다
+	// 이미 닫은 정산 내역과 이미 만든 회수는 건너뛰므로 같은 메시지를 다시 처리해도 안전하다
 	@KafkaListener(topics = KafkaTopics.ORDER_RACE_CANCEL, groupId = GROUP_ID)
 	@RetryableTopic(
 		attempts = RETRY_ATTEMPTS,
@@ -55,10 +55,10 @@ public class PayoutKafkaConsumer {
 	)
 	public void handleRaceCancel(String payload) {
 		RaceCancelEvent event = jsonConverter.fromJson(payload, RaceCancelEvent.class);
-		raceCancelHoldUseCase.holdUnpaidPayouts(event.raceId(), LocalDateTime.now());
+		raceCancelUseCase.cancelRace(event.raceId(), LocalDateTime.now());
 	}
 
-	// 끝까지 실패한 메시지. 보류가 안 걸린 정산 내역이 지급될 수 있으므로 운영자가 확인해 직접 보류를 걸어야 한다
+	// 끝까지 실패한 메시지. 닫히지 않은 정산 내역이 지급될 수 있으므로 운영자가 확인해 직접 보류를 걸고 다시 보내야 한다
 	@DltHandler
 	public void handleDlt(String payload, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
 		log.error("Kafka 메시지를 끝내 처리하지 못했습니다. 확인 후 다시 보내야 합니다. topic={}, payload={}", topic, payload);
