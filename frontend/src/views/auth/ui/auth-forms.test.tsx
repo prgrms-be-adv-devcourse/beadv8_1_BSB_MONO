@@ -152,18 +152,20 @@ describe('SignupProfilePage', () => {
   it('닉네임이 짧으면 오류가 뜨고 가입 완료 버튼이 꺼진다', async () => {
     const user = userEvent.setup()
     render(
-      <SignupStepProvider
-        initialState={{
-          termsAgreed: true,
-          account: {
-            email: 'runner@crewrun.kr',
-            password: 'password1',
-            passwordConfirm: 'password1',
-          },
-        }}
-      >
-        <SignupProfilePage />
-      </SignupStepProvider>,
+      withQueryClient(
+        <SignupStepProvider
+          initialState={{
+            termsAgreed: true,
+            account: {
+              email: 'runner@crewrun.kr',
+              password: 'password1',
+              passwordConfirm: 'password1',
+            },
+          }}
+        >
+          <SignupProfilePage />
+        </SignupStepProvider>,
+      ),
     )
 
     await user.type(screen.getByLabelText('이름'), '김러너')
