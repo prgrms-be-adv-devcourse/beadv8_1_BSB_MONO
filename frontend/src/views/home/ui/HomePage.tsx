@@ -116,8 +116,8 @@ function HomeSkeleton() {
   return (
     <main role="status" aria-label="불러오는 중" className="flex flex-1 flex-col">
       <div className="flex gap-2.5 overflow-hidden pt-4 pb-2 pl-4">
-        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-[20px]" />
-        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-[20px]" />
+        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-lg" />
+        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-lg" />
       </div>
       {[2, 4].map((count) => (
         <div key={count} className="flex flex-col gap-4 px-4 pt-8 pb-2">
