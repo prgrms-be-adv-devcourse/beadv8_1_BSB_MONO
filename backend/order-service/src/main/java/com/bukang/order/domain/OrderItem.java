@@ -7,6 +7,7 @@ import static lombok.AccessLevel.PROTECTED;
 import java.time.LocalDateTime;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.exception.KitNotShippableException;
 import com.bukang.order.domain.exception.OrderItemNotCancelableException;
 import com.bukang.order.dto.OrderItemDto;
 import com.bukang.order.out.race.RaceCourseInfo;
@@ -89,6 +90,14 @@ public class OrderItem extends BaseIdAndTime {
 	@Column(name = "canceled_at")
 	private LocalDateTime canceledAt;
 
+	// 키트 배송 상태. 키트가 있는 종목만 배송 준비로 시작하고, 없으면 null (PRO-136)
+	@Enumerated(STRING)
+	@Column(name = "kit_delivery_status", columnDefinition = "varchar(20)")
+	private KitDeliveryStatus kitDeliveryStatus;
+
+	@Column(name = "kit_shipped_at")
+	private LocalDateTime kitShippedAt;
+
 	static OrderItem ticket(Order order, Participation participation, RaceCourseInfo course) {
 		OrderItem item = new OrderItem();
 		item.order = order;
@@ -102,6 +111,7 @@ public class OrderItem extends BaseIdAndTime {
 		item.quantity = TICKET_QUANTITY;
 		item.amount = item.unitPrice * TICKET_QUANTITY;
 		item.status = OrderItemStatus.ORDERED;
+		item.kitDeliveryStatus = course.kitIncluded() ? KitDeliveryStatus.PREPARING : null;
 		return item;
 	}
 
@@ -127,8 +137,34 @@ public class OrderItem extends BaseIdAndTime {
 		this.canceledAt = canceledAt;
 	}
 
+	// 판매자가 키트를 보냈다. 결제한 키트만, 한 번만 발송한다
+	// 환불 기한이 지났는지는 종목 정보를 알아야 해서 부르는 쪽(KitDeliveryUseCase)이 확인한다
+	public void shipKit(LocalDateTime shippedAt) {
+		checkKitShippable();
+		this.kitDeliveryStatus = KitDeliveryStatus.SHIPPED;
+		this.kitShippedAt = shippedAt;
+	}
+
+	// 키트를 보낼 수 있는 주문 상품인지 (키트 있음, 아직 안 보냄, 결제 완료)
+	public void checkKitShippable() {
+		if (kitDeliveryStatus == null) {
+			throw new KitNotShippableException("키트가 없는 참가권입니다.");
+		}
+		if (kitDeliveryStatus == KitDeliveryStatus.SHIPPED) {
+			throw new KitNotShippableException("이미 발송한 키트입니다.");
+		}
+		if (status != OrderItemStatus.PAID) {
+			throw new KitNotShippableException(
+				"결제한 참가권의 키트만 발송할 수 있습니다(현재 상태: %s).".formatted(status.getLabel()));
+		}
+	}
+
+	public boolean isSoldBy(int sellerId) {
+		return this.sellerId == sellerId;
+	}
+
 	public OrderItemDto toDto() {
 		return new OrderItemDto(getId(), participationId, raceCourseId, sellerId, itemName, unitPrice, quantity,
-			amount, status);
+			amount, status, kitDeliveryStatus, kitShippedAt);
 	}
 }

@@ -28,4 +28,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 	// 참가 신청으로 만든 주문의 ID. 참가 신청 하나에는 주문 상품이 하나뿐이다 (uk_order_item_participation)
 	@Query("select i.order.id from OrderItem i where i.participationId = :participationId")
 	Optional<Integer> findOrderIdByParticipationId(@Param("participationId") int participationId);
+
+	// 주문 상품이 속한 주문의 ID. 주문을 잠그고 바꾸기 전에 읽는다 (키트 발송, PRO-136)
+	@Query("select i.order.id from OrderItem i where i.id = :orderItemId")
+	Optional<Integer> findOrderIdByItemId(@Param("orderItemId") int orderItemId);
 }
