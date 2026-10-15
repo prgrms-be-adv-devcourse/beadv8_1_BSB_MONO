@@ -2,6 +2,7 @@ package com.bukang.order.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -28,7 +29,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.bukang.order.domain.KitDeliveryStatus;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItem;
+import com.bukang.order.domain.OrderItemStatus;
 import com.bukang.order.domain.exception.KitNotShippableException;
+import com.bukang.order.domain.exception.KitShippingInfoInvalidException;
 import com.bukang.order.domain.exception.OrderAccessDeniedException;
 import com.bukang.order.domain.exception.OrderItemNotFoundException;
 import com.bukang.order.dto.OrderItemDto;
@@ -165,6 +168,7 @@ class KitDeliveryTest {
 		int preparingOrderId = paidOrder(MEMBER_ID + 1);
 		int beforeDeadlineItemId = itemIdOf(paidOrder(MEMBER_ID + 2, OPEN_COURSE_ID));
 		createOrder(MEMBER_ID + 3, COURSE_ID);
+		createOrder(MEMBER_ID + 4, OPEN_COURSE_ID);
 		ship(shippingItemId);
 
 		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, null))
@@ -186,6 +190,59 @@ class KitDeliveryTest {
 		assertThat(summary.getShipping()).isEqualTo(1);
 		assertThat(summary.getDelivered()).isZero();
 		assertThat(summary.getBeforeRefundDeadline()).isEqualTo(1);
+		SellerKitSummaryDto otherRace = kitDeliveryUseCase.summarize(SELLER_ID, RACE_ID + 1, LocalDateTime.now());
+		assertThat(otherRace.getPreparing() + otherRace.getShipping() + otherRace.getBeforeRefundDeadline()).isZero();
+	}
+
+	@Test
+	@DisplayName("일정 변경 뒤 7일처럼 환불 기한이 지나도 환불할 수 있는 동안은 발송을 막는다 (취소와 같은 기준)")
+	void shipWhileScheduleChangeRefund() throws Exception {
+		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, LocalDate.now().minusDays(1),
+			LocalDateTime.now().minusDays(1)));
+		int itemId = itemIdOf(paidOrder());
+
+		assertThatThrownBy(() -> ship(itemId))
+			.isInstanceOf(KitNotShippableException.class)
+			.hasMessageStartingWith("아직 환불할 수 있는 참가권이라");
+	}
+
+	@Test
+	@DisplayName("보낸 뒤 취소된 참가권도 판매자 목록에 취소 상태로 남고, 배송 완료로 바꿀 수 있다")
+	void canceledAfterShipping() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		int orderId = paidOrder();
+		int itemId = itemIdOf(orderId);
+		ship(itemId);
+		// 일정이 바뀌어 7일 동안 다시 환불할 수 있게 되자 구매자가 취소했다
+		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, LocalDate.now().minusDays(1),
+			LocalDateTime.now()));
+		mockMvc.perform(post("/api/v1/order/orders/" + orderId + "/items/" + itemId + "/cancel")
+				.header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isOk());
+
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, KitDeliveryStatus.SHIPPING))
+			.extracting(SellerKitDto::getOrderItemId, SellerKitDto::getOrderItemStatus)
+			.containsExactly(tuple(itemId, OrderItemStatus.CANCELED));
+		assertThat(kitDeliveryUseCase.summarize(SELLER_ID, null, LocalDateTime.now()).getShipping()).isEqualTo(1);
+		kitDeliveryUseCase.completeDelivery(SELLER_ID, itemId, LocalDateTime.now());
+		assertThat(itemOf(orderId).getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.DELIVERED);
+	}
+
+	@Test
+	@DisplayName("택배사·송장 번호가 비었거나 너무 길면 400으로 막고 배송 준비로 남긴다")
+	void shipWithInvalidShippingInfo() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		int orderId = paidOrder();
+		int itemId = itemIdOf(orderId);
+
+		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemId, " ", TRACKING_NUMBER, LocalDateTime.now()))
+			.isInstanceOf(KitShippingInfoInvalidException.class);
+		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemId, CARRIER, null, LocalDateTime.now()))
+			.isInstanceOf(KitShippingInfoInvalidException.class);
+		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemId, CARRIER,
+			"1".repeat(OrderItem.MAX_TRACKING_NUMBER_LENGTH + 1), LocalDateTime.now()))
+			.isInstanceOf(KitShippingInfoInvalidException.class);
+		assertThat(itemOf(orderId).getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.PREPARING);
 	}
 
 	@Test
@@ -197,7 +254,7 @@ class KitDeliveryTest {
 
 		assertThatThrownBy(() -> ship(itemIdOf(orderId)))
 			.isInstanceOf(KitNotShippableException.class)
-			.hasMessage("환불 기한(%s)이 지난 뒤 발송할 수 있습니다.".formatted(refundDeadline));
+			.hasMessage("아직 환불할 수 있는 참가권이라 발송할 수 없습니다(환불 기한: %s).".formatted(refundDeadline));
 		assertThat(itemOf(orderId).getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.PREPARING);
 	}
 

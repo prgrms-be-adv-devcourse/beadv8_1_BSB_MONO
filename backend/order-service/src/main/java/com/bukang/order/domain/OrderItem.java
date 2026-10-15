@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 import com.bukang.order.domain.exception.KitNotShippableException;
+import com.bukang.order.domain.exception.KitShippingInfoInvalidException;
 import com.bukang.order.domain.exception.OrderItemNotCancelableException;
 import com.bukang.order.dto.OrderItemDto;
 import com.bukang.order.out.race.RaceCourseInfo;
@@ -45,6 +46,8 @@ import lombok.NoArgsConstructor;
 )
 public class OrderItem extends BaseIdAndTime {
 	private static final int TICKET_QUANTITY = 1;
+	public static final int MAX_CARRIER_LENGTH = 30;
+	public static final int MAX_TRACKING_NUMBER_LENGTH = 50;
 
 	@ManyToOne(fetch = LAZY, optional = false)
 	@JoinColumn(name = "order_id", nullable = false)
@@ -96,10 +99,10 @@ public class OrderItem extends BaseIdAndTime {
 	private KitDeliveryStatus kitDeliveryStatus;
 
 	// 판매자가 발송할 때 넣은 택배사·송장 번호 (배송 중부터 있다)
-	@Column(name = "kit_carrier", length = 30)
+	@Column(name = "kit_carrier", length = MAX_CARRIER_LENGTH)
 	private String kitCarrier;
 
-	@Column(name = "kit_tracking_number", length = 50)
+	@Column(name = "kit_tracking_number", length = MAX_TRACKING_NUMBER_LENGTH)
 	private String kitTrackingNumber;
 
 	@Column(name = "kit_shipped_at")
@@ -151,6 +154,10 @@ public class OrderItem extends BaseIdAndTime {
 	// 환불 기한이 지났는지는 종목 정보를 알아야 해서 부르는 쪽(KitDeliveryUseCase)이 확인한다
 	public void shipKit(String carrier, String trackingNumber, LocalDateTime shippedAt) {
 		checkKitShippable();
+		if (isInvalidText(carrier, MAX_CARRIER_LENGTH) || isInvalidText(trackingNumber, MAX_TRACKING_NUMBER_LENGTH)) {
+			throw new KitShippingInfoInvalidException("택배사(%d자 이하)와 송장 번호(%d자 이하)를 넣어 주세요."
+				.formatted(MAX_CARRIER_LENGTH, MAX_TRACKING_NUMBER_LENGTH));
+		}
 		this.kitDeliveryStatus = KitDeliveryStatus.SHIPPING;
 		this.kitCarrier = carrier;
 		this.kitTrackingNumber = trackingNumber;
@@ -185,6 +192,10 @@ public class OrderItem extends BaseIdAndTime {
 		if (kitDeliveryStatus == KitDeliveryStatus.DELIVERED) {
 			throw new KitNotShippableException("이미 배송 완료한 키트입니다.");
 		}
+	}
+
+	private static boolean isInvalidText(String value, int maxLength) {
+		return value == null || value.isBlank() || value.length() > maxLength;
 	}
 
 	private void checkHasKit() {

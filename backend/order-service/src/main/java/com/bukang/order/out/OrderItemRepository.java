@@ -36,19 +36,21 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 	Optional<Integer> findOrderIdByItemId(@Param("orderItemId") int orderItemId);
 
 	/**
-	 * 판매자의 키트 주문 목록 (PRO-136). 결제한 참가권 중 키트가 있는 것만, 대회·배송 상태로 거른다(null이면 거르지 않음)
+	 * 판매자의 키트 주문 목록 (PRO-136). 키트가 있는 참가권 중 결제했거나 이미 보낸 것만, 대회·배송 상태로 거른다(null이면 거르지 않음)
+	 * 보낸 뒤 취소된 참가권(대회 취소 환불 등)도 키트는 가고 있으므로 남겨, 판매자가 배송 완료까지 바꿀 수 있게 한다
 	 * 배송지는 주문의 배송지(구매자가 바꾼 값)를, 참가자 이름·티셔츠 사이즈는 참가 신청의 값을 쓴다
 	 */
 	@Query("""
-		select new com.bukang.order.dto.SellerKitDto(i.id, o.orderNo, i.raceId, i.raceCourseId, i.itemName,
+		select new com.bukang.order.dto.SellerKitDto(i.id, o.orderNo, i.status, i.raceId, i.raceCourseId, i.itemName,
 			p.participant.name, p.participant.tshirtSize, o.shippingAddress,
 			i.kitDeliveryStatus, i.kitCarrier, i.kitTrackingNumber, i.kitShippedAt, i.kitDeliveredAt)
 		from OrderItem i
 			join i.order o
 			join Participation p on p.id = i.participationId
 		where i.sellerId = :sellerId
-			and i.status = com.bukang.order.domain.OrderItemStatus.PAID
 			and i.kitDeliveryStatus is not null
+			and (i.status = com.bukang.order.domain.OrderItemStatus.PAID
+				or i.kitDeliveryStatus <> com.bukang.order.domain.KitDeliveryStatus.PREPARING)
 			and (:raceId is null or i.raceId = :raceId)
 			and (:status is null or i.kitDeliveryStatus = :status)
 		order by i.id desc
@@ -61,8 +63,9 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 		select i.kitDeliveryStatus, count(i)
 		from OrderItem i
 		where i.sellerId = :sellerId
-			and i.status = com.bukang.order.domain.OrderItemStatus.PAID
 			and i.kitDeliveryStatus is not null
+			and (i.status = com.bukang.order.domain.OrderItemStatus.PAID
+				or i.kitDeliveryStatus <> com.bukang.order.domain.KitDeliveryStatus.PREPARING)
 			and (:raceId is null or i.raceId = :raceId)
 		group by i.kitDeliveryStatus
 		""")
