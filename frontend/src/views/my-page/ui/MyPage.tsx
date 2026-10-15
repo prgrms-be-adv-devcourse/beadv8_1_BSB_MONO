@@ -6,12 +6,16 @@ import type { ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
-import { cn } from '@/shared/lib'
+import { useLogout } from '@/features/auth'
+import { useMyBalance } from '@/entities/wallet'
+import { cn, formatWon } from '@/shared/lib'
 import { buttonClassName, FOCUS_RING, Icon, KeyValue, Switch, type IconName } from '@/shared/ui'
 
 // 피그마 V2 · M30 마이 · 설정 (+ M30-2 판매자 승인 후)
 // TODO(api): 회원 정보 · 알림 설정 · 판매자 상태를 불러온다
 export function MyPage({ seller = false }: { seller?: boolean }) {
+  const logout = useLogout()
+  const { balance } = useMyBalance()
   return (
     <>
       <AppHeader />
@@ -50,7 +54,12 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
 
         <MenuCard>
           <MenuRow href="/tickets" icon="Calendar" label="내 참가 대회" value="2개" />
-          <MenuRow href="/me/deposit" icon="Package" label="예치금" value="₩5,000" />
+          <MenuRow
+            href="/me/deposit"
+            icon="Package"
+            label="예치금"
+            value={balance === undefined ? '-' : formatWon(balance)}
+          />
         </MenuCard>
 
         <h2 className="pt-2 text-label-strong">알림 설정</h2>
@@ -83,8 +92,12 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
 
         <section className="flex flex-col rounded-lg bg-bg-subtle px-4 pt-4 pb-2">
           <h2 className="pb-2 text-label-strong">계정 관리</h2>
-          {/* TODO(auth): 로그아웃 요청 */}
-          <MenuRow href="/login" icon="LogOut" label="로그아웃" />
+          <MenuRow
+            onClick={() => logout.mutate()}
+            disabled={logout.isPending}
+            icon="LogOut"
+            label="로그아웃"
+          />
           <MenuRow
             href="/me/withdraw"
             icon="Settings"
@@ -106,21 +119,17 @@ function MenuCard({ children }: { children: ReactNode }) {
   )
 }
 
-function MenuRow({
-  href,
-  icon,
-  label,
-  value,
-  description,
-}: {
-  href: Route
+type MenuRowProps = {
   icon: IconName
   label: string
   value?: string
   description?: string
-}) {
-  return (
-    <Link href={href} className={cn('flex items-center gap-3 rounded-md py-3', FOCUS_RING)}>
+} & ({ href: Route } | { onClick: () => void; disabled?: boolean })
+
+// 다른 화면으로 가는 줄은 링크, 그 자리에서 실행하는 줄(로그아웃)은 같은 모양의 버튼
+function MenuRow({ icon, label, value, description, ...action }: MenuRowProps) {
+  const content = (
+    <>
       <Icon name={icon} className="size-5" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-label-m">{label}</span>
@@ -128,7 +137,25 @@ function MenuRow({
       </span>
       {value && <span className="text-label-m">{value}</span>}
       <Icon name="ChevronRight" className="size-5" />
-    </Link>
+    </>
+  )
+  const className = cn('flex items-center gap-3 rounded-md py-3', FOCUS_RING)
+  if ('href' in action) {
+    return (
+      <Link href={action.href} className={className}>
+        {content}
+      </Link>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={action.onClick}
+      disabled={action.disabled}
+      className={cn(className, 'w-full text-left')}
+    >
+      {content}
+    </button>
   )
 }
 

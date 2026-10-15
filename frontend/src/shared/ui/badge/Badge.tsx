@@ -22,12 +22,11 @@ const TONE: Record<BadgeTone, string> = {
 
 export type BadgeProps = HTMLAttributes<HTMLSpanElement> & { tone?: BadgeTone }
 
-// 모서리 3은 피그마 Radius 변수에 없는 값이라 그대로 적었다.
 export function Badge({ tone = 'neutral', className, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.25 rounded-[3px] py-0.75 pr-1.75 pl-1.5 text-label-tag whitespace-nowrap',
+        'inline-flex shrink-0 items-center gap-1.25 rounded-sm py-0.75 pr-1.75 pl-1.5 text-label-tag whitespace-nowrap',
         TONE[tone],
         className,
       )}

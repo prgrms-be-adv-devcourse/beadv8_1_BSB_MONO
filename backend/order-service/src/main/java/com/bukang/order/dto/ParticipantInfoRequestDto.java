@@ -1,6 +1,7 @@
 package com.bukang.order.dto;
 
 import java.time.LocalDate;
+import java.util.Locale;
 
 import com.bukang.order.domain.Gender;
 import com.bukang.order.domain.ParticipantInfo;
@@ -50,7 +51,8 @@ public class ParticipantInfoRequestDto {
 	@Pattern(regexp = PHONE_REGEXP, message = "비상 연락처 전화번호 형식에 맞게 작성해주세요.")
 	private final String emergencyContactPhone;
 
-	@Schema(description = "기념 티셔츠(키트) 사이즈 (키트가 없는 종목이면 비워 둔다, 10자 이하)", example = "L")
+	@Schema(description = "기념 티셔츠(키트) 사이즈. 종목이 주는 사이즈(XS~XXXL 중 종목 정보의 tshirtSizeOption) 중 하나이고, "
+		+ "티셔츠가 없는 종목이면 비워 둔다 (소문자도 받는다, 10자 이하)", example = "L")
 	@Size(max = 10, message = "티셔츠 사이즈는 10자 이하로 작성해주세요.")
 	private final String tshirtSize;
 
@@ -60,7 +62,7 @@ public class ParticipantInfoRequestDto {
 
 	public ParticipantInfo toParticipantInfo() {
 		return new ParticipantInfo(name.strip(), birth, gender, normalizePhone(phone), emergencyContactName.strip(),
-			normalizePhone(emergencyContactPhone), blankToNull(tshirtSize),
+			normalizePhone(emergencyContactPhone), normalizeTshirtSize(tshirtSize),
 			shippingAddress == null ? null : shippingAddress.toShippingAddress());
 	}
 
@@ -71,8 +73,9 @@ public class ParticipantInfoRequestDto {
 		return digits.substring(0, 3) + "-" + digits.substring(3, middleEnd) + "-" + digits.substring(middleEnd);
 	}
 
-	// 키트가 없는 종목은 사이즈를 비워 보낸다. 빈 문자열과 null이 섞이지 않게 null로 맞춘다
-	private static String blankToNull(String value) {
-		return value == null || value.isBlank() ? null : value.strip();
+	// 티셔츠가 없는 종목은 사이즈를 비워 보낸다. 빈 문자열과 null이 섞이지 않게 null로 맞추고,
+	// 상품 서비스의 사이즈 이름(XS~XXXL, 대문자)과 비교하므로 대문자로 맞춘다
+	private static String normalizeTshirtSize(String value) {
+		return value == null || value.isBlank() ? null : value.strip().toUpperCase(Locale.ROOT);
 	}
 }

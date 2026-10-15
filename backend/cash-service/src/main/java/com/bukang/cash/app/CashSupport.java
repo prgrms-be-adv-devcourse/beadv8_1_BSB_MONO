@@ -35,6 +35,11 @@ public class CashSupport {
 		return findWalletByHolderId(cashWalletProperties.systemMemberId());
 	}
 
+    // 잠그지 않고 있는지만 본다 (환원처럼 "지갑이 없으면 애초에 결제된 적도 없다"를 판단할 때 쓴다)
+    public boolean hasWallet(int holderId) {
+        return walletRepository.existsById(holderId);
+    }
+
 	//주문 존재 확인
 	public Optional<Payment> findByOrderId(int orderId) {
 		return paymentRepository.findByOrderId(orderId);

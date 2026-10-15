@@ -92,15 +92,30 @@ final class AuthApiExamples {
 		""";
 
 	static final String REISSUE_MISSING_TOKEN = """
-		{ "status": 401, "message": "Refresh Token이 없습니다. 다시 로그인해주세요.", "data": null }
+		{
+			"status": 401,
+			"code": "MEMBER_INVALID_REFRESH_TOKEN",
+			"message": "Refresh Token이 없습니다. 다시 로그인해주세요.",
+			"data": null
+		}
 		""";
 
 	static final String REISSUE_EXPIRED_TOKEN = """
-		{ "status": 401, "message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.", "data": null }
+		{
+			"status": 401,
+			"code": "MEMBER_INVALID_REFRESH_TOKEN",
+			"message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.",
+			"data": null
+		}
 		""";
 
 	static final String REISSUE_INVALID_TOKEN = """
-		{ "status": 401, "message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.", "data": null }
+		{
+			"status": 401,
+			"code": "MEMBER_INVALID_REFRESH_TOKEN",
+			"message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.",
+			"data": null
+		}
 		""";
 
 	private AuthApiExamples() {

@@ -125,7 +125,7 @@ export function toOpenRaceCard(race: SummaryDto, now: Date = new Date()): RaceSu
 }
 
 /** 종목별 파일 목록에서 대표 이미지 URL (없으면 첫 이미지) */
-function courseImage(files: FileDto[] | undefined): string | undefined {
+export function courseImage(files: FileDto[] | undefined): string | undefined {
   const images = (files ?? []).filter((f) => f.url)
   return (images.find((f) => f.fileType === 'THUMBNAIL') ?? images[0])?.url ?? undefined
 }
@@ -155,6 +155,8 @@ export function toRaceDetail(
     price: course.price ?? 0,
     image: courseImage(courseFiles[course.raceCourseId ?? -1]),
     soldOut: course.status === 'SOLD_OUT',
+    kitIncluded: course.kitIncluded ?? false,
+    shirtSizes: course.tshirtSizeOption ?? [],
   }))
   // 대표 이미지(종목 순) → 나머지 이미지(소개·코스·키트) 순으로, 같은 주소는 한 번만
   const allFiles = courses.flatMap((c) => courseFiles[c.raceCourseId ?? -1] ?? [])

@@ -50,6 +50,7 @@ class OrderExceptionHandlerTest {
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.status").value(401))
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_LOGIN_REQUIRED"))
 			.andExpect(jsonPath("$.data").doesNotExist());
 	}
 
@@ -59,7 +60,8 @@ class OrderExceptionHandlerTest {
 		mockMvc.perform(get("/test/member").header("X-Member-Id", "abc"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
+			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -68,7 +70,8 @@ class OrderExceptionHandlerTest {
 		mockMvc.perform(get("/test/idempotent").header("X-Member-Id", "7"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -77,7 +80,8 @@ class OrderExceptionHandlerTest {
 		mockMvc.perform(get("/test/param").header("X-Member-Id", "7"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.message").value("필수 요청 값(keyword)이 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 값(keyword)이 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	// standalone MockMvc는 @Controller가 붙은 클래스만 핸들러로 인식한다

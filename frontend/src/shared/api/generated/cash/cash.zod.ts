@@ -15,4 +15,11 @@ export const GetBalanceParams = zod.object({
   "holderId": zod.int().describe('지갑 주인의 회원 ID')
 })
 
-export const GetBalanceResponse = zod.unknown()
+export const GetBalanceResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "holderId": zod.int().optional(),
+  "balance": zod.int().optional()
+}).optional().describe('지갑 잔액 조회 응답')
+})

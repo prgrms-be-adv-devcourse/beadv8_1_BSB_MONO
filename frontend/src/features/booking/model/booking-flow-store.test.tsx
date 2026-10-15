@@ -1,10 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import {
   BookingFlowProvider,
-  HOLD_SECONDS,
+  SAMPLE_PARTICIPANT,
   useBookingFlow,
   type BookingFlowInitial,
 } from './booking-flow-store'
@@ -15,36 +15,30 @@ function renderBookingFlow(initialState: BookingFlowInitial = {}) {
   )
   return renderHook(
     () => ({
-      holdExpiresAt: useBookingFlow((s) => s.holdExpiresAt),
-      startHold: useBookingFlow((s) => s.startHold),
+      selection: useBookingFlow((s) => s.selection),
+      applications: useBookingFlow((s) => s.applications),
+      submitApplication: useBookingFlow((s) => s.submitApplication),
     }),
     { wrapper },
   )
 }
 
-describe('startHold', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-10-14T10:00:00+09:00'))
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+describe('submitApplication', () => {
+  it('고른 종목을 남기고, 다른 종목에 저장해 둔 참가 신청은 그대로 둔다', () => {
+    const earlier = { raceId: '2', optionId: '7', participationId: 3, participantName: '김러너' }
+    const { result } = renderBookingFlow({ applications: { '7': earlier } })
 
-  it('마감 전인 자리가 있으면 그대로 둔다', () => {
-    const expiresAt = Date.now() + 5000
-    const { result } = renderBookingFlow({ holdExpiresAt: expiresAt })
+    act(() =>
+      result.current.submitApplication(
+        { raceId: '1', optionId: '1', participationId: 11, participantName: '김러너' },
+        SAMPLE_PARTICIPANT,
+      ),
+    )
 
-    act(() => result.current.startHold())
-
-    expect(result.current.holdExpiresAt).toBe(expiresAt)
-  })
-
-  it('마감이 지난 자리는 지금부터 10분으로 새로 잡는다', () => {
-    const { result } = renderBookingFlow({ holdExpiresAt: Date.now() - 1000 })
-
-    act(() => result.current.startHold())
-
-    expect(result.current.holdExpiresAt).toBe(Date.now() + HOLD_SECONDS * 1000)
+    expect(result.current.selection).toEqual({ raceId: '1', optionId: '1' })
+    expect(result.current.applications).toEqual({
+      '7': earlier,
+      '1': { raceId: '1', optionId: '1', participationId: 11, participantName: '김러너' },
+    })
   })
 })

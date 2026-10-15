@@ -61,7 +61,7 @@ public class OrderCancelUseCase {
 			throw new RefundNotAllowedException(refundPeriodPassedMessage(course));
 		}
 		if (!isBeforePayout(target.copiedRaceDate(), course.raceDate().toLocalDate())) {
-			throw new RefundNotAllowedException("정산이 시작된 참가권이라 취소할 수 없습니다.");
+			throw RefundNotAllowedException.payoutStarted("정산이 시작된 참가권이라 취소할 수 없습니다.");
 		}
 		return transactionTemplate.execute(status -> cancelLocked(memberId, orderId, orderItemId, now));
 	}

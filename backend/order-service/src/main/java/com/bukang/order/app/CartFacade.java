@@ -31,7 +31,8 @@ public class CartFacade {
 			.orElseGet(() -> new CartDto(memberId, List.of()));
 	}
 
-	@Transactional
+	// 장바구니 만들기와 담기를 따로 커밋하므로(CartUseCase) 바깥 트랜잭션 없이 부른다
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public CartAddResult addItem(CartItemAddRequestDto request, int memberId) {
 		return cartUseCase.addItem(memberId, request.getRaceCourseId(), LocalDateTime.now());
 	}
