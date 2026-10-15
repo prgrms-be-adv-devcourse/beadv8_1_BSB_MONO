@@ -85,7 +85,7 @@ public class RaceCancelRefundUseCase {
 						break;
 					}
 				} catch (RuntimeException exception) {
-					// 다시 해도 안 될 수 있는 실패(D가 거절 등)는 그 주문만 실패로 세고 다음 주문을 계속 환불한다
+					// 다시 해도 안 될 수 있는 실패(D의 4xx 거절 ExternalServiceRejectedException 등)는 그 주문만 실패로 세고 다음 주문을 계속 환불한다
 					failed++;
 					consecutiveFailures = 0;
 					log.warn("취소된 대회의 주문을 환불하지 못했습니다. raceId={}, orderId={}, cause={}",

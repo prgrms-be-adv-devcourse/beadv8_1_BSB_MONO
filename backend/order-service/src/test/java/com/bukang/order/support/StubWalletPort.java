@@ -8,6 +8,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import com.bukang.order.domain.exception.ExternalServiceRejectedException;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.out.wallet.WalletPayResult;
@@ -101,7 +102,8 @@ public class StubWalletPort implements WalletPort {
 			throw new ExternalServiceUnavailableException(TIMEOUT_MESSAGE);
 		}
 		if (refundRejects) {
-			throw new OrderNotPayableException("환불할 수 없는 결제입니다.");
+			// HttpWalletAdapter가 D의 4xx 거절을 던지는 예외와 같게 둔다
+			throw new ExternalServiceRejectedException("환불할 수 없는 결제입니다.");
 		}
 		Integer amount = paidOrders.remove(orderId);
 		if (amount != null) {
