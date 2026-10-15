@@ -34,6 +34,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	testImplementation(testFixtures(project(":common"))) // GlobalConfigTestExecutionListener (테스트마다 EventPublisher 재설정)
 	testImplementation("org.springframework.boot:spring-boot-starter-batch-jdbc-test") // Job 테스트 (@SpringBatchTest)
 	// S3 구현 테스트: Docker로 S3Mock을 띄운다 (Docker가 없으면 그 테스트만 건너뛴다)
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")

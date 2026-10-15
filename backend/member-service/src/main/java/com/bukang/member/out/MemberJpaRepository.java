@@ -32,7 +32,9 @@ public class MemberJpaRepository {
 					member.modifyDate,
 					member.nickname,
 					member.email,
-					member.phone
+					member.phone,
+					member.name,
+					member.birthDate
 				))
 			.from(member)
 			.where(

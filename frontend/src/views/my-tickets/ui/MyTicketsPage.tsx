@@ -5,9 +5,11 @@ import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
-import { PAST_TICKETS, UPCOMING_TICKETS, type Ticket } from '@/entities/ticket'
-import { cn } from '@/shared/lib'
+import { TICKET_STATUS } from '@/entities/ticket'
+import { useMyBalance } from '@/entities/wallet'
+import { cn, formatWon } from '@/shared/lib'
 import {
+  Alert,
   Badge,
   BibCard,
   buttonClassName,
@@ -17,21 +19,22 @@ import {
   Skeleton,
 } from '@/shared/ui'
 
-const STATUS: Record<Ticket['status'], { label: string; tone: 'live' | 'onHero' }> = {
-  confirmed: { label: '참가 확정', tone: 'live' },
-  finished: { label: '종료', tone: 'onHero' },
-  canceled: { label: '취소', tone: 'onHero' },
-}
+import { useTicketCards } from '../model/use-ticket-cards'
 
 export type MyTicketsState = 'loading' | 'empty'
 
 // 피그마 V2 · M15 내 참가 대회 (+ 로딩, 없음)
-// TODO(api): 회원 · 예치금 · 참가권 API로 바꾼다
+// state는 시안 미리보기(?preview=loading|empty)용. 없으면 주문 API로 불러온다.
+// TODO(api): 닉네임 · 이름은 회원 정보 API로 바꾼다
 export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
-  const loading = state === 'loading'
-  const upcoming = state === 'empty' ? [] : UPCOMING_TICKETS
-  const tickets = tab === 'upcoming' ? upcoming : PAST_TICKETS
+  const cards = useTicketCards()
+  const loading = state === 'loading' || (state === undefined && cards.isPending)
+  const upcoming = state === 'empty' ? [] : cards.upcoming
+  const past = state === 'empty' ? [] : cards.past
+  const tickets = tab === 'upcoming' ? upcoming : past
+  const failed = state === undefined && cards.isError
+  const wallet = useMyBalance()
 
   return (
     <>
@@ -57,7 +60,7 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
           </Link>
         </div>
 
-        <div className="flex flex-col gap-3 rounded-lg bg-bg-brand-subtle px-5 py-4">
+        <div className="flex flex-col gap-3 rounded-lg bg-bg-brand-subtle p-5">
           <div className="flex items-center justify-between gap-2">
             <Link
               href="/me/deposit"
@@ -65,10 +68,12 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
             >
               예치금
             </Link>
-            {loading ? (
+            {loading || wallet.isPending ? (
               <Skeleton className="h-5 w-16" />
             ) : (
-              <p className="font-display text-display-s">₩5,000</p>
+              <p className="font-display text-display-s">
+                {wallet.balance === undefined ? '-' : formatWon(wallet.balance)}
+              </p>
             )}
           </div>
           <div className="flex gap-2">
@@ -94,11 +99,12 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
             onChange={setTab}
             items={[
               { value: 'upcoming', label: '참가 예정', count: upcoming.length },
-              { value: 'past', label: '지난 대회', count: PAST_TICKETS.length },
+              { value: 'past', label: '지난 대회', count: past.length },
             ]}
           />
           {loading && <TicketSkeletons />}
-          {!loading && tickets.length === 0 && (
+          {failed && <Alert tone="danger" title="참가권을 불러오지 못했어요" />}
+          {!loading && !failed && tickets.length === 0 && (
             <div className="flex flex-1 items-center justify-center">
               <EmptyState
                 icon="Calendar"
@@ -124,11 +130,13 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
                   imagePosition="50% 12%"
                   eyebrow={ticket.eyebrow}
                   status={
-                    <Badge tone={STATUS[ticket.status].tone}>{STATUS[ticket.status].label}</Badge>
+                    <Badge tone={TICKET_STATUS[ticket.status].tone}>
+                      {TICKET_STATUS[ticket.status].label}
+                    </Badge>
                   }
                   unit="No."
-                  number={ticket.bib}
-                  title={`${ticket.runner} · ${ticket.course}`}
+                  number={ticket.number}
+                  title={ticket.title}
                   meta={ticket.summary}
                 />
               </Link>

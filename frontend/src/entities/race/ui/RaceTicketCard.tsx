@@ -28,12 +28,7 @@ export function RaceTicketCard({
   className,
 }: RaceTicketCardProps) {
   return (
-    <div
-      className={cn(
-        'flex items-center gap-4 rounded-[12px] bg-bg-subtle py-3 pr-4 pl-3',
-        className,
-      )}
-    >
+    <div className={cn('flex items-center gap-4 rounded-lg bg-bg-subtle p-5', className)}>
       {image ? (
         <Image
           src={image}

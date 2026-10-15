@@ -7,7 +7,22 @@
  */
 export interface RsData {
   status?: number;
+  code?: string;
   message?: string;
   data?: unknown;
+}
+
+/**
+ * 지갑 잔액 조회 응답
+ */
+export interface WalletBalanceDto {
+  holderId?: number;
+  balance?: number;
+}
+
+export interface RsDataWalletBalanceDto {
+  status?: number;
+  message?: string;
+  data?: WalletBalanceDto;
 }
 
