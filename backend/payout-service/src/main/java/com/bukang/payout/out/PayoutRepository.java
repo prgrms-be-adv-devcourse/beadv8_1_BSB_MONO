@@ -8,10 +8,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import com.bukang.payout.domain.Payout;
+import com.bukang.payout.domain.PayoutStage;
 import com.bukang.payout.domain.PayoutStatus;
 
 public interface PayoutRepository extends JpaRepository<Payout, Integer> {
-	boolean existsBySellerIdAndRaceIdAndPayoutMonth(int sellerId, int raceId, String payoutMonth);
+	// 정산 생성 배치: 이미 만든 묶음인지 확인한다. 유일 조건 (seller_id, race_id, payout_month, payout_stage)과 같은 키다
+	boolean existsBySellerIdAndRaceIdAndPayoutMonthAndPayoutStage(int sellerId, int raceId, String payoutMonth,
+		PayoutStage payoutStage);
+
+	// 최종 정산 생성: 같은 판매자 × 대회의 1차 정산 내역 (선지급 차감과 보류 여부를 읽는다)
+	// 1차 정산 월은 환불 마감일로 정해지고 마감일은 움직이지 않으므로 하나뿐이다
+	Optional<Payout> findFirstBySellerIdAndRaceIdAndPayoutStageOrderByIdAsc(int sellerId, int raceId,
+		PayoutStage payoutStage);
 
 	// 지급 배치: 지급 예정일이 오늘이거나 지난 정산 내역 (지난 날을 놓쳐도 다음 실행에서 따라잡는다)
 	List<Payout> findByStatusAndScheduledPayDateLessThanEqual(PayoutStatus status, LocalDate date);

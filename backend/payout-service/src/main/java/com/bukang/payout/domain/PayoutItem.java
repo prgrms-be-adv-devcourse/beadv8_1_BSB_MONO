@@ -50,12 +50,13 @@ public class PayoutItem extends BaseIdAndTime {
 	@Column(nullable = false, precision = 5, scale = 4)
 	private BigDecimal feeRate;
 
-	// 정산 대상일: 대회 다음 날
+	// 정산 대상일: 1차는 환불 마감일 다음 날, 최종은 대회 다음 날
 	private LocalDate targetDate;
 
 	// 이 참가권 1장의 수수료: 금액 × 수수료율, 원 미만 버림. 정산 내역의 수수료는 이 값의 합이다 (payout.md 2-1)
 	// 칸으로 저장하지 않고 계산한다. 금액과 수수료율이 바뀌지 않으므로 언제 계산해도 같다
 	// 버림은 0 쪽(DOWN)이다. 음수 항목(환불)에서 FLOOR는 1원을 더 빼므로 쓰지 않는다 (PRO-114)
+	// 1차 정산 항목은 수수료율을 0으로 기록한다 (1차는 수수료를 떼지 않는다)
 	public long getFeeAmount() {
 		return TwoStagePayoutCalculator.rate(amount, feeRate);
 	}

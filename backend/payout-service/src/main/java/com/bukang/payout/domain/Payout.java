@@ -27,15 +27,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 정산 내역: 판매자 × 대회 × 월로 한 번에 지급하는 묶음
- * 판매자, 대회는 다른 도메인이라 연관관계 없이 ID만 둔다
+ * 정산 내역: 판매자 × 대회 × 월 × 단계(1차 / 최종)로 한 번에 지급하는 묶음 (payout.md 4-3)
+ * 같은 달이어도 1차와 최종은 따로 만든다. 판매자, 대회는 다른 도메인이라 연관관계 없이 ID만 둔다
  */
 @Entity
 @NoArgsConstructor(access = PROTECTED)
 @Getter
 // 정산 생성 배치가 두 번 돌아도 같은 묶음이 두 번 지급되지 않도록 DB에서 막는다
 @Table(name = "PAYOUT_PAYOUT", uniqueConstraints = {
-	@UniqueConstraint(columnNames = {"seller_id", "race_id", "payout_month"})
+	@UniqueConstraint(columnNames = {"seller_id", "race_id", "payout_month", "payout_stage"})
 })
 public class Payout extends BaseIdAndTime {
 	private static final DateTimeFormatter CODE_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -58,7 +58,11 @@ public class Payout extends BaseIdAndTime {
 	@Column(nullable = false, length = 200)
 	private String raceName;
 
-	// YYYY-MM. 정산 대상일이 속한 달
+	@Enumerated(STRING)
+	@Column(nullable = false, length = 10)
+	private PayoutStage payoutStage;
+
+	// YYYY-MM. 1차는 환불 마감일이 속한 달, 최종은 대회일이 속한 달 (실행일 · 정산 대상일이 아니다)
 	@Column(nullable = false, length = 7)
 	private String payoutMonth;
 
@@ -70,6 +74,11 @@ public class Payout extends BaseIdAndTime {
 
 	@Column(nullable = false)
 	private long feeAmount;
+
+	// 선지급 차감: 최종에서 빼는 1차 지급액 − 회수액 (손에 남은 선금). 1차는 0이다 (payout.md 4-4)
+	// 최종 정산 내역은 만들어진 뒤 금액이 바뀌지 않으므로, 만들 때 값을 저장한다
+	@Column(nullable = false)
+	private long advanceDeductionAmount;
 
 	@Column(nullable = false)
 	private long payoutAmount;
@@ -97,15 +106,31 @@ public class Payout extends BaseIdAndTime {
 	@OneToMany(mappedBy = "payout", cascade = ALL)
 	private List<PayoutItem> items = new ArrayList<>();
 
-	public Payout(int sellerId, int raceId, String raceName, YearMonth payoutMonth, LocalDateTime settledAt,
-		BusinessDayCalendar calendar) {
+	private Payout(int sellerId, int raceId, String raceName, PayoutStage payoutStage, YearMonth payoutMonth,
+		long advanceDeductionAmount, LocalDateTime settledAt, BusinessDayCalendar calendar) {
 		this.sellerId = sellerId;
 		this.raceId = raceId;
 		this.raceName = raceName;
+		this.payoutStage = payoutStage;
 		this.payoutMonth = payoutMonth.toString();
+		this.advanceDeductionAmount = advanceDeductionAmount;
 		this.settledAt = settledAt;
 		this.status = PayoutStatus.CALCULATED;
 		this.scheduledPayDate = payDayOf(payoutMonth.plusMonths(1), calendar);
+		this.payoutAmount = -advanceDeductionAmount;
+	}
+
+	// 1차 정산 내역: 정산 월은 환불 마감일의 달이다
+	public static Payout first(int sellerId, int raceId, String raceName, YearMonth payoutMonth,
+		LocalDateTime settledAt, BusinessDayCalendar calendar) {
+		return new Payout(sellerId, raceId, raceName, PayoutStage.FIRST, payoutMonth, 0L, settledAt, calendar);
+	}
+
+	// 최종 정산 내역: 정산 월은 대회일의 달이고, 선지급 차감(1차 지급액 − 회수액)을 만들 때 정한다
+	public static Payout finalStage(int sellerId, int raceId, String raceName, YearMonth payoutMonth,
+		long advanceDeductionAmount, LocalDateTime settledAt, BusinessDayCalendar calendar) {
+		return new Payout(sellerId, raceId, raceName, PayoutStage.FINAL, payoutMonth, advanceDeductionAmount,
+			settledAt, calendar);
 	}
 
 	// 바깥에서 remove, clear로 정산 기록을 바꾸지 못하도록 읽기 전용으로 내보낸다 (추가는 addItem으로만)
@@ -114,18 +139,22 @@ public class Payout extends BaseIdAndTime {
 	}
 
 	// 정산 항목(PayoutItem)은 정산 내역(Payout)을 통해서만 만든다 (payout_id NOT NULL)
-	// 세미는 정산 대상일 전에 환불된 참가권이 빠지므로 판매(SALE)만 기록한다 (payout.md 2-3)
+	// 환불 마감일까지 환불된 참가권은 판매 내역에서 빠지므로 판매(SALE)만 기록한다 (payout.md 2-3)
+	// 1차 생성 뒤 환불의 음수 항목(REFUND)은 PRO-174에서 더한다
 	public PayoutItem addItem(int orderItemId, long price, BigDecimal feeRate, LocalDate targetDate) {
 		PayoutItem item = new PayoutItem(this, orderItemId, PayoutRecordType.SALE, price, feeRate, targetDate);
 		items.add(item);
 
-		// 수수료는 참가권 1장마다 원 미만을 버리고, 정산 내역의 수수료는 그 합이다 (payout.md 2-1)
 		salesAmount += price;
+		if (payoutStage == PayoutStage.FIRST) {
+			// 1차는 수수료 없이 장마다 가격 × 40%(원 미만 버림)의 합이다 (계산식 문서 1장)
+			payoutAmount += TwoStagePayoutCalculator.firstShare(price);
+			return item;
+		}
+		// 수수료는 참가권 1장마다 원 미만을 버리고, 정산 내역의 수수료는 그 합이다 (payout.md 2-1)
 		feeAmount += item.getFeeAmount();
-		// 정책 공식(판매액 − 환불액 − 수수료)과 같은 모양으로 둔다. 세미는 refundAmount가 항상 0이다:
-		// 대상일 전 환불은 항목이 안 생기고, 대상일 후 환불은 막는다(PRO-28). 최종에서는 대상일~지급 사이 환불이
-		// 음수 정산 항목(PRO-32), 지급 뒤 환불은 회수(PRO-33)가 된다 (payout.md 2-2, 4-2)
-		payoutAmount = salesAmount - refundAmount - feeAmount;
+		// 최종 지급액 = 판매자 정산액(판매액 − 환불액 − 수수료) − 선지급 차감 (payout.md 4-1)
+		payoutAmount = salesAmount - refundAmount - feeAmount - advanceDeductionAmount;
 		return item;
 	}
 

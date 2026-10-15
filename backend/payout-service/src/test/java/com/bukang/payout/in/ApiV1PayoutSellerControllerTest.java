@@ -114,7 +114,8 @@ class ApiV1PayoutSellerControllerTest {
 	}
 
 	private Payout savePayout(int sellerId, int raceId, YearMonth month, LocalDate targetDate) {
-		Payout payout = new Payout(sellerId, raceId, "대회 %d".formatted(raceId), month, targetDate.atTime(3, 0),
+		Payout payout = Payout.finalStage(sellerId, raceId, "대회 %d".formatted(raceId), month, 0L,
+			targetDate.atTime(3, 0),
 			CALENDAR);
 		entityManager.persist(payout);
 		entityManager.flush();
