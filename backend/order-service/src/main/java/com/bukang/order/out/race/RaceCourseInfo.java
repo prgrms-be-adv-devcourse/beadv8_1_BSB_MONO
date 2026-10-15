@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 참가 신청에 필요한 종목(참가권) 정보. B(상품)의 race · race_course에서 필요한 값만 옮긴 것이다
@@ -48,7 +49,9 @@ public record RaceCourseInfo(
 	List<String> tshirtSizeOption
 ) {
 	public RaceCourseInfo {
-		tshirtSizeOption = tshirtSizeOption == null ? List.of() : List.copyOf(tshirtSizeOption);
+		// 상품이 빈 값을 섞어 보내도 종목 조회가 실패하지 않게 거른다
+		tshirtSizeOption = tshirtSizeOption == null ? List.of()
+			: tshirtSizeOption.stream().filter(Objects::nonNull).toList();
 	}
 
 	// 티셔츠 사이즈를 따로 정하지 않을 때 (티셔츠 없음)
