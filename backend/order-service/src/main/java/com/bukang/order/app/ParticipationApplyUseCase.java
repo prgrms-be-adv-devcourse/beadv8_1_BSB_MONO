@@ -17,6 +17,7 @@ import com.bukang.order.domain.exception.ParticipationChangeRetryException;
 import com.bukang.order.domain.exception.ParticipationNotFoundException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
 import com.bukang.order.domain.exception.ShippingAddressRequiredException;
+import com.bukang.order.domain.exception.TshirtSizeNotAvailableException;
 import com.bukang.order.out.OrderItemRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
@@ -47,7 +48,7 @@ public class ParticipationApplyUseCase {
 			throw new ApplicationPeriodException("접수 기간이 아닙니다.");
 		}
 		checkAge(course, participant);
-		ParticipantInfo checked = checkShippingAddress(course, participant);
+		ParticipantInfo checked = checkTshirtSize(course, checkShippingAddress(course, participant));
 		if (participationRepository.existsByRaceIdAndMemberIdAndActiveFlagTrue(course.raceId(), memberId)) {
 			throw new DuplicateParticipationException("이미 이 대회에 신청했습니다.");
 		}
@@ -92,7 +93,7 @@ public class ParticipationApplyUseCase {
 			throw new ApplicationPeriodException("접수가 마감되어 참가자 정보를 고칠 수 없습니다.");
 		}
 		checkAge(course, participant);
-		ParticipantInfo checked = checkShippingAddress(course, participant);
+		ParticipantInfo checked = checkTshirtSize(course, checkShippingAddress(course, participant));
 		participation.changeParticipant(checked);
 		order.ifPresent(found -> found.changeShippingAddress(checked.getShippingAddress()));
 		return participation;
@@ -132,6 +133,23 @@ public class ParticipationApplyUseCase {
 		}
 		if (participant.getShippingAddress() == null) {
 			throw new ShippingAddressRequiredException("키트를 받을 배송 주소를 작성해주세요.");
+		}
+		return participant;
+	}
+
+	// 티셔츠를 주는 종목은 사이즈를 종목이 주는 사이즈 중에서 골라야 한다 (10/14 김호빈님과 정함)
+	// 티셔츠가 없는 종목은 보낸 사이즈를 남기지 않는다 (배송 주소와 같은 방식)
+	private ParticipantInfo checkTshirtSize(RaceCourseInfo course, ParticipantInfo participant) {
+		if (!course.offersTshirt()) {
+			return participant.withTshirtSize(null);
+		}
+		String sizes = String.join(", ", course.tshirtSizeOption());
+		if (participant.getTshirtSize() == null) {
+			throw new TshirtSizeNotAvailableException("티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: %s).".formatted(sizes));
+		}
+		if (!course.tshirtSizeOption().contains(participant.getTshirtSize())) {
+			throw new TshirtSizeNotAvailableException("이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: %s)."
+				.formatted(sizes));
 		}
 		return participant;
 	}
