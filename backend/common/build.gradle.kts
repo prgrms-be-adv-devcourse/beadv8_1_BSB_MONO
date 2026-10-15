@@ -2,6 +2,7 @@
 // 공통 설정(Java 25, Spring Boot BOM, Lombok, Checkstyle)은 루트 build.gradle.kts에서 적용된다
 plugins {
 	`java-library`
+	`java-test-fixtures` // 테스트용 공용 코드(testFixtures)를 만든다. 운영 jar에는 들어가지 않는다
 	id("io.spring.dependency-management")
 }
 
@@ -18,6 +19,9 @@ dependencies {
 	annotationProcessor("com.querydsl:querydsl-apt:${querydslVersion}:jakarta")
 	annotationProcessor("jakarta.annotation:jakarta.annotation-api")
 	annotationProcessor("jakarta.persistence:jakarta.persistence-api")
+
+	// 테스트 공용 리스너(GlobalConfigTestExecutionListener)가 쓰는 스프링 테스트 API (버전은 Boot BOM)
+	testFixturesImplementation("org.springframework:spring-test")
 }
 
 // QueryDSL Q클래스 생성 위치 (서비스 모듈과 같은 방식)
