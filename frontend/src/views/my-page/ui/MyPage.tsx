@@ -6,25 +6,37 @@ import type { ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
-import { useLogout } from '@/features/auth'
+import { useAuthStatus, useLogout } from '@/features/auth'
+import { memberApi, unwrapData } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import { buttonClassName, FOCUS_RING, Icon, KeyValue, Switch, type IconName } from '@/shared/ui'
 
+import { maskPhone, toDotDate } from '../model/member-format'
+
 // 피그마 V2 · M30 마이 · 설정 (+ M30-2 판매자 승인 후)
-// TODO(api): 회원 정보 · 알림 설정 · 판매자 상태를 불러온다
+// 회원 정보는 내 정보 조회(GET /api/v1/member/members/me)로 불러온다.
+// TODO(api): 알림 설정 · 판매자 상태 · 참가 대회 수 · 예치금 API가 아직 없다. 지금은 시안 값을 보여 준다.
 export function MyPage({ seller = false }: { seller?: boolean }) {
   const logout = useLogout()
+  const me = memberApi.useFindMe({
+    // 로그인 확인(재발급)이 끝난 뒤에만 부른다. 로그아웃으로 캐시를 지운 뒤 다시 부르지도 않는다.
+    query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated' },
+  })
+  const member = me.data
   return (
     <>
       <AppHeader />
       <main className="flex flex-1 flex-col gap-4 px-4 py-6">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-full bg-bg-brand-subtle text-label-m text-text-brand">
-            달
+          <span
+            aria-hidden
+            className="flex size-10 items-center justify-center rounded-full bg-bg-brand-subtle text-label-m text-text-brand"
+          >
+            {member?.nickname?.slice(0, 1)}
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <p className="text-heading-m">달리는곰</p>
-            <p className="text-body-s text-text-secondary">runner@example.com</p>
+            <p className="text-heading-m">{member?.nickname ?? EMPTY}</p>
+            <p className="text-body-s text-text-secondary">{member?.email ?? EMPTY}</p>
           </div>
           <Link href="/me/edit" className={buttonClassName({ variant: 'secondary', size: 's' })}>
             닉네임 수정
@@ -32,12 +44,21 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
         </div>
 
         <section className="flex flex-col gap-2 rounded-lg bg-bg-subtle p-4">
-          <KeyValue label="이름" value="김러너" />
-          <KeyValue label="휴대폰" value="010-****-5678" />
-          <KeyValue label="생년월일" value="1995.03.02" />
-          <p className="text-caption text-text-secondary">
-            가입할 때 직접 입력한 정보예요. 바뀌면 직접 고칠 수 있어요.
-          </p>
+          <KeyValue label="이름" value={member?.name ?? EMPTY} />
+          <KeyValue label="휴대폰" value={member?.phone ? maskPhone(member.phone) : EMPTY} />
+          <KeyValue
+            label="생년월일"
+            value={member?.birthDate ? toDotDate(member.birthDate) : EMPTY}
+          />
+          {me.isError ? (
+            <p role="alert" className="text-caption text-text-danger">
+              회원 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
+            </p>
+          ) : (
+            <p className="text-caption text-text-secondary">
+              가입할 때 직접 입력한 정보예요. 바뀌면 직접 고칠 수 있어요.
+            </p>
+          )}
           <Link
             href="/me/edit"
             className={buttonClassName({
@@ -103,6 +124,9 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
     </>
   )
 }
+
+/** 아직 불러오지 못한 값 자리 */
+const EMPTY = '-'
 
 function MenuCard({ children }: { children: ReactNode }) {
   return (
