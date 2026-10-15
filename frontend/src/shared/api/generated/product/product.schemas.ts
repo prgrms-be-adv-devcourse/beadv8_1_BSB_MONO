@@ -205,7 +205,6 @@ export type RaceSummaryDtoSaleStatus = typeof RaceSummaryDtoSaleStatus[keyof typ
 
 
 export const RaceSummaryDtoSaleStatus = {
-  DRAFT: 'DRAFT',
   SCHEDULED: 'SCHEDULED',
   ON_SALE: 'ON_SALE',
   STOPPED: 'STOPPED',
@@ -250,7 +249,12 @@ export interface RaceSummaryDto {
   regionSigungu?: string;
   raceDate?: string;
   saleStatus?: RaceSummaryDtoSaleStatus;
-  saleOpenAt?: string;
+  saleOpenDate?: string;
+  /** @nullable */
+  crewSaleStartAt?: string | null;
+  /** @nullable */
+  crewSaleEndAt?: string | null;
+  individualOpenAt?: string;
   applicationCloseAt?: string;
   minPrice?: number;
   courses?: RaceSummaryCourseDto[];
@@ -284,7 +288,6 @@ export type RaceDetailDtoSaleStatus = typeof RaceDetailDtoSaleStatus[keyof typeo
 
 
 export const RaceDetailDtoSaleStatus = {
-  DRAFT: 'DRAFT',
   SCHEDULED: 'SCHEDULED',
   ON_SALE: 'ON_SALE',
   STOPPED: 'STOPPED',
@@ -381,7 +384,7 @@ export interface RaceDetailDto {
   regionSigungu?: string;
   raceDate?: string;
   saleStatus?: RaceDetailDtoSaleStatus;
-  saleOpenAt?: string;
+  saleOpenDate?: string;
   /** @nullable */
   crewSaleStartAt?: string | null;
   /** @nullable */

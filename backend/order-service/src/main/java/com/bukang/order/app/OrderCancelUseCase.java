@@ -31,7 +31,7 @@ import lombok.RequiredArgsConstructor;
  * 환불 기한 안이거나, 대회 일정이 바뀐 뒤 7일 안이면 자동 승인 (ERD v4 환불 판정):
  * 주문 상품 CANCELED, 주문 PARTIAL_CANCELED/CANCELED, 참가 신청 CANCELED
  * → 자리 되돌리기(B) → 예치금 환불(D). 정산 대상일이 지난 참가권은 정산 서비스(E)가 거절한다
- * 외부 호출은 모두 주문 상품·참가 신청 단위로 멱등이라, 중간에 실패해 롤백되면 같은 취소를 다시 요청하면 된다
+ * 외부 호출은 모두 멱등이라(자리는 참가 신청, 환불은 주문 단위), 중간에 실패해 롤백되면 같은 취소를 다시 요청하면 된다
  * 트랜잭션은 이 클래스가 단계마다 연다. 바깥 트랜잭션 없이 부른다 (OrderFacade.cancelItem)
  */
 @Service
@@ -87,7 +87,8 @@ public class OrderCancelUseCase {
 		participation.markCanceled(now);
 
 		seatHoldPort.restore(item.getParticipationId());
-		walletPort.refund(order.getId(), item.getId(), item.getAmount());
+		// 주문 하나 = 참가권 하나라, 주문 단위 전액 환불이 이 상품의 환불이다. 금액은 D가 결제 기록으로 정한다
+		walletPort.refund(order.getId(), memberId);
 		return new CancelResult(order.toDto(), item.getAmount());
 	}
 

@@ -10,7 +10,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +46,8 @@ import com.bukang.product.TestcontainersConfiguration;
 import com.bukang.product.app.ProductFacade;
 import com.bukang.product.domain.ProductMember;
 import com.bukang.product.domain.ProductSeller;
+import com.bukang.product.domain.RaceSaleStatus;
+import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.out.ParticipationHoldRepository;
 import com.bukang.product.out.ProductMemberRepository;
@@ -52,6 +56,9 @@ import com.bukang.product.out.RaceCourseDocumentRepository;
 import com.bukang.product.out.RaceCourseRepository;
 import com.bukang.product.out.RaceRepository;
 import com.jayway.jsonpath.JsonPath;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 
 /**
  * product-service 통합 테스트의 공통 설정. 모든 테스트 클래스가 이 클래스를 상속해 같은 설정을 쓰므로,
@@ -93,6 +100,8 @@ public abstract class ProductIntegrationTest {
 	protected ParticipationHoldRepository participationHoldRepository;
 	@Autowired
 	protected RaceCourseDocumentRepository raceCourseDocumentRepository;
+	@PersistenceContext
+	private EntityManager entityManager;
 
 	// 실제 KafkaTemplate을 감싼다. 자동 설정 빈의 타입이 KafkaTemplate<?, ?>라 같은 타입으로 받는다
 	@MockitoSpyBean
@@ -142,8 +151,9 @@ public abstract class ProductIntegrationTest {
 			"123-45-67890", "김대표", SellerStatus.APPROVED, now, now));
 	}
 
-	// ---------- 대회 등록·판매 시작 ----------
+	// ---------- 대회 등록 ----------
 
+	// 판매 시작일이 오늘로부터 이틀 뒤 이후인 대회를 등록한다 (판매 예정)
 	protected RegisteredRace register(RaceSaveRequestDto request) throws Exception {
 		return register(SELLER_MEMBER_ID, request);
 	}
@@ -158,15 +168,68 @@ public abstract class ProductIntegrationTest {
 		return new RegisteredRace(raceId, courseIds);
 	}
 
-	protected void startSale(int raceId) throws Exception {
-		postAs("/api/v1/product/races/" + raceId + "/sale", SELLER_MEMBER_ID).andExpect(status().isOk());
+	// 판매 시작일이 오늘이거나 지난 대회를 판매 중으로 만든다 (기본 요청이면 개인 예매가 한 시간 전에 열린 대회)
+	// 판매 시작일은 오늘로부터 이틀 뒤부터만 등록할 수 있으므로(400), 일정을 모두 같은 날수만큼 미래로 옮겨 API로 등록한 뒤
+	// DB의 일정을 요청 값으로 되돌리고, 상태 배치처럼 판매 중으로 바꿔 검색 문서를 다시 색인한다
+	// 판매 시작일이 내일이면 같은 방법으로 등록하고 판매 예정으로 둔다
+	// 대회일이 지났어도 판매 종료로는 바꾸지 않는다 (상태 배치가 아직 돌지 않은 대회)
+	// 판매 시작일이 이틀 뒤 이후인 요청이면 그대로 등록해 판매 예정이 된다
+	protected RegisteredRace registerOnSale(RaceSaveRequestDto request) throws Exception {
+		LocalDate today = LocalDate.now();
+		LocalDate saleOpenDate = saleOpenDate(request);
+		if (!saleOpenDate.isBefore(today.plusDays(2))) {
+			return register(request);
+		}
+		// 날짜 단위로 옮겨야 '크루 마감 다음 날 06:00 이후', '환불 기준일 ≤ 대회 날짜' 같은 검사 결과가 그대로다
+		long days = ChronoUnit.DAYS.between(saleOpenDate, today) + 2;
+		RaceSaleStatus saleStatus = saleOpenDate.isAfter(today) ? RaceSaleStatus.SCHEDULED : RaceSaleStatus.ON_SALE;
+		RegisteredRace race = register(shiftSchedule(request, days));
+		transactionTemplate.executeWithoutResult(status -> entityManager.createQuery("""
+				update Race r set r.raceDate = :raceDate, r.saleOpenDate = :saleOpenDate,
+					r.crewSaleStartAt = :crewSaleStartAt, r.crewSaleEndAt = :crewSaleEndAt,
+					r.individualOpenAt = :individualOpenAt, r.applicationCloseAt = :applicationCloseAt,
+					r.refundDeadline = :refundDeadline, r.saleStatus = :saleStatus
+				where r.id = :id""")
+			.setParameter("raceDate", request.getRaceDate())
+			.setParameter("saleOpenDate", saleOpenDate)
+			.setParameter("crewSaleStartAt", request.getCrewSaleStartAt())
+			.setParameter("crewSaleEndAt", request.getCrewSaleEndAt())
+			.setParameter("individualOpenAt", request.getIndividualOpenAt())
+			.setParameter("applicationCloseAt", request.getApplicationCloseAt())
+			.setParameter("refundDeadline", request.getRefundDeadline())
+			.setParameter("saleStatus", saleStatus)
+			.setParameter("id", race.raceId())
+			.executeUpdate());
+		List<RaceCourseDocument> documents = transactionTemplate.execute(status ->
+			raceRepository.findById(race.raceId()).orElseThrow().getCourses().stream()
+				.map(RaceCourseDocument::from)
+				.toList());
+		raceCourseDocumentRepository.saveAll(documents);
+		return race;
 	}
 
-	// 등록하고 판매 시작까지 누른다 (기본 요청이면 개인 예매가 이미 열려 판매 중이 된다)
-	protected RegisteredRace registerOnSale(RaceSaveRequestDto request) throws Exception {
-		RegisteredRace race = register(request);
-		startSale(race.raceId());
-		return race;
+	// 판매 시작일: 크루 예매 시작·개인 예매 오픈 중 이른 날짜 (Race와 같은 계산)
+	private static LocalDate saleOpenDate(RaceSaveRequestDto request) {
+		LocalDateTime crewSaleStartAt = request.getCrewSaleStartAt();
+		LocalDateTime individualOpenAt = request.getIndividualOpenAt();
+		if (crewSaleStartAt != null && crewSaleStartAt.isBefore(individualOpenAt)) {
+			return crewSaleStartAt.toLocalDate();
+		}
+		return individualOpenAt.toLocalDate();
+	}
+
+	// 대회 일정(대회 일시, 크루 예매, 개인 예매 오픈, 접수 마감, 환불 기준일)을 모두 days일 뒤로 옮긴 요청
+	private static RaceSaveRequestDto shiftSchedule(RaceSaveRequestDto request, long days) {
+		return new RaceSaveRequestDto(request.getTitle(), request.getDescription(), request.getLocation(),
+			request.getRegionSido(), request.getRegionSigungu(), request.getRaceDate().plusDays(days),
+			plusDays(request.getCrewSaleStartAt(), days), plusDays(request.getCrewSaleEndAt(), days),
+			request.getIndividualOpenAt().plusDays(days), request.getApplicationCloseAt().plusDays(days),
+			request.getRefundDeadline().plusDays(days), request.getRefundPolicy(), request.getCrewMinCount(),
+			request.getCrewMaxCount(), request.getCourses());
+	}
+
+	private static LocalDateTime plusDays(LocalDateTime dateTime, long days) {
+		return dateTime == null ? null : dateTime.plusDays(days);
 	}
 
 	// ---------- 자리 (주문 서비스가 부르는 내부 API) ----------

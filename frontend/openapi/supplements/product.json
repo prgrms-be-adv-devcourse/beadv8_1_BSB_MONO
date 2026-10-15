@@ -79,7 +79,6 @@
         "saleStatus": {
           "type": "string",
           "enum": [
-            "DRAFT",
             "SCHEDULED",
             "ON_SALE",
             "STOPPED",
@@ -87,7 +86,25 @@
             "CANCELED"
           ]
         },
-        "saleOpenAt": {
+        "saleOpenDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "crewSaleStartAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "crewSaleEndAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "individualOpenAt": {
           "type": "string",
           "format": "date-time"
         },
@@ -224,7 +241,6 @@
         "saleStatus": {
           "type": "string",
           "enum": [
-            "DRAFT",
             "SCHEDULED",
             "ON_SALE",
             "STOPPED",
@@ -232,9 +248,9 @@
             "CANCELED"
           ]
         },
-        "saleOpenAt": {
+        "saleOpenDate": {
           "type": "string",
-          "format": "date-time"
+          "format": "date"
         },
         "crewSaleStartAt": {
           "type": [
