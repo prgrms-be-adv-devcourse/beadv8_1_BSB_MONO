@@ -75,4 +75,48 @@ class FakeQueueAdmissionAdapterTest {
 
 		assertThat(shortAdapter.findAdmissionEndsAt(MEMBER_ID, RACE_ID, COURSE_ID, NOW)).contains(NOW.plusMinutes(1));
 	}
+
+	@Test
+	@DisplayName("기록이 많아지면 끝난 지 오래된 기록만 지우고, 막 끝난 기록은 남겨 [결제하기]가 계속 403이다")
+	void prunesOldRecords() {
+		FakeQueueAdmissionAdapter small = new FakeQueueAdmissionAdapter(10, 3, 100);
+		small.findAdmissionEndsAt(1, RACE_ID, COURSE_ID, NOW);
+		small.findAdmissionEndsAt(2, RACE_ID, COURSE_ID, NOW);
+		LocalDateTime later = NOW.plusMinutes(10 + FakeQueueAdmissionAdapter.RETENTION_MINUTES + 1);
+		small.findAdmissionEndsAt(3, RACE_ID, COURSE_ID, later.minusMinutes(15));
+		assertThat(small.size()).isEqualTo(3);
+
+		// 4번째 기록을 넣을 때 정리한다: 회원 1·2는 끝난 지 오래돼 지우고, 회원 3은 막 끝나 남긴다
+		small.findAdmissionEndsAt(4, RACE_ID, COURSE_ID, later);
+
+		assertThat(small.size()).isEqualTo(2);
+		assertThat(small.findAdmissionEndsAt(3, RACE_ID, COURSE_ID, later)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("그래도 상한을 넘으면 끝난 기록을 모두 지우고, 입장 중인 기록은 남긴다")
+	void prunesEndedRecordsAtLimit() {
+		FakeQueueAdmissionAdapter small = new FakeQueueAdmissionAdapter(10, 2, 3);
+		small.findAdmissionEndsAt(1, RACE_ID, COURSE_ID, NOW);
+		small.findAdmissionEndsAt(2, RACE_ID, COURSE_ID, NOW);
+		LocalDateTime later = NOW.plusMinutes(11);
+		small.findAdmissionEndsAt(3, RACE_ID, COURSE_ID, later);
+		assertThat(small.size()).isEqualTo(3);
+
+		small.findAdmissionEndsAt(4, RACE_ID, COURSE_ID, later);
+
+		// 회원 1·2(끝남)는 지우고 3(입장 중)·4(새 입장)만 남는다
+		assertThat(small.size()).isEqualTo(2);
+		assertThat(small.findAdmissionEndsAt(3, RACE_ID, COURSE_ID, later)).contains(later.plusMinutes(10));
+	}
+
+	@Test
+	@DisplayName("기록이 적으면 끝난 지 오래돼도 지우지 않는다 (매번 전체를 훑지 않는다)")
+	void keepsRecordsWhenSmall() {
+		adapter.findAdmissionEndsAt(MEMBER_ID, RACE_ID, COURSE_ID, NOW);
+
+		adapter.findAdmissionEndsAt(MEMBER_ID + 1, RACE_ID, COURSE_ID, NOW.plusDays(1));
+
+		assertThat(adapter.size()).isEqualTo(2);
+	}
 }
