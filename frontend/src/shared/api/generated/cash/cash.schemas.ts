@@ -7,6 +7,7 @@
  */
 export interface RsData {
   status?: number;
+  code?: string;
   message?: string;
   data?: unknown;
 }

@@ -11,6 +11,10 @@
       "description": "지급보류 걸기, 지급보류 풀기 API (관리자)"
     },
     {
+      "name": "PayoutInternal",
+      "description": "참가권 환불 가능 여부 조회 API (서비스 간 내부 호출 전용)"
+    },
+    {
       "name": "PayoutSeller",
       "description": "정산 요약, 정산 내역, 건별 정산, 지급보류 내역 조회 API (판매자)"
     }
@@ -877,6 +881,9 @@
           "status": {
             "type": "integer",
             "format": "int32"
+          },
+          "code": {
+            "type": "string"
           },
           "message": {
             "type": "string"

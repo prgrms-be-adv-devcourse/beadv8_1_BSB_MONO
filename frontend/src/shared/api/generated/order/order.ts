@@ -27,6 +27,7 @@ import type {
 import type {
   CartCheckoutRequestDto,
   CartItemAddRequestDto,
+  FindAdmissionParams,
   FindMineParams,
   OrderCreateRequestDto,
   ParticipantInfoRequestDto,
@@ -434,7 +435,7 @@ export const getCreateUrl = () => {
 }
 
 /**
- * 자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받고, 결제 기한 10분짜리 주문(CREATED)을 만든다. 같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. 남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.
+ * 대기열에 입장 중인지 확인하고, 자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받아 입장 끝 시각을 결제 기한으로 하는 주문(CREATED)을 만든다. 입장 중이 아니면 403(ORDER_QUEUE_NOT_ADMITTED). 같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. 남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.
  * @summary 바로 결제 예매 ([결제하기])
  */
 export const create = async (orderCreateRequestDto: OrderCreateRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderDto> => {
@@ -666,81 +667,6 @@ export const useCancelItem = <TError = RsData,
       return useMutation(getCancelItemMutationOptions(options), queryClient);
     }
 
-export const getExtendDeadlineUrl = (orderId: number,) => {
-
-
-
-
-  return `/api/v1/order/orders/${orderId}/deadline-extension`
-}
-
-/**
- * PG 충전창에 들어갈 때 프론트가 부른다. 결제 대기(CREATED) 주문의 결제 기한을 2분 늘리고, 주문당 한 번만 된다. 상품 서비스의 자리 기한을 먼저 늘린 뒤 주문·참가 신청의 결제 기한을 함께 바꾼다.
- * @summary 결제 기한 2분 늘리기
- */
-export const extendDeadline = async (orderId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderDto> => {
-
-  return customFetch<RsDataOrderDto>(getExtendDeadlineUrl(orderId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-
-
-export const getExtendDeadlineMutationKey = () => ['extendDeadline'] as const;
-
-export const getExtendDeadlineMutationOptions = <TError = RsData,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendDeadline>>, TError,ExtendDeadlineMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof extendDeadline>>, TError,ExtendDeadlineMutationVariables, TContext> => {
-
-const mutationKey = getExtendDeadlineMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof extendDeadline>>, ExtendDeadlineMutationVariables> = (props) => {
-          const {orderId} = props ?? {};
-
-          return  extendDeadline(orderId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ExtendDeadlineMutationResult = NonNullable<Awaited<ReturnType<typeof extendDeadline>>>
-
-    export type ExtendDeadlineMutationError = RsData
-    export type ExtendDeadlineMutationVariables = {orderId: number}
-
-    /**
- * @summary 결제 기한 2분 늘리기
- */
-export const useExtendDeadline = <TError = RsData,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendDeadline>>, TError,ExtendDeadlineMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof extendDeadline>>,
-        TError,
-        ExtendDeadlineMutationVariables,
-        TContext
-      > => {
-      return useMutation(getExtendDeadlineMutationOptions(options), queryClient);
-    }
-
 export const getAddItemUrl = () => {
 
 
@@ -839,7 +765,7 @@ export const getCheckoutUrl = () => {
 }
 
 /**
- * 장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. 항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. 매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.
+ * 장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. 항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. [결제하기]처럼 종목마다 대기열에 입장 중인지 확인해, 입장 중이 아닌 종목은 실패(FAILED)로 돌려준다. 매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.
  * @summary 장바구니 결제
  */
 export const checkout = async (cartCheckoutRequestDto: CartCheckoutRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCartCheckoutDto> => {
@@ -918,6 +844,115 @@ export const useCheckout = <TError = RsData,
       > => {
       return useMutation(getCheckoutMutationOptions(options), queryClient);
     }
+
+export const getFindAdmissionUrl = (params: FindAdmissionParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/order/queue/admission?${stringifiedParams}` : `/api/v1/order/queue/admission`
+}
+
+/**
+ * 이 종목에 대기열로 입장 중인지와 입장 끝 시각, 남은 초를 돌려준다. 입장 끝 시각이 [결제하기]의 결제 기한이다. 타이머는 remainingSeconds로 센다(서버 시각 기준). 입장 중이 아니면 admitted=false이고 [결제하기]가 403이다. 대기열 API(PRO-182)가 나오기 전에는 가짜 대기열이 답한다: 결제 페이지를 처음 열 때 입장해 10분 뒤 끝나고, 끝난 뒤 이 API를 다시 부르면(페이지를 다시 열면) 다시 입장한다.
+ * @summary 대기열 입장 상태 (결제 페이지 타이머)
+ */
+export const findAdmission = async (params: FindAdmissionParams, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getFindAdmissionUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindAdmissionQueryKey = (params?: FindAdmissionParams,) => {
+    return [
+    `/api/v1/order/queue/admission`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getFindAdmissionQueryOptions = <TData = Awaited<ReturnType<typeof findAdmission>>, TError = RsData>(params: FindAdmissionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAdmission>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindAdmissionQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findAdmission>>> = ({ signal }) => findAdmission(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findAdmission>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type FindAdmissionQueryResult = NonNullable<Awaited<ReturnType<typeof findAdmission>>>
+export type FindAdmissionQueryError = RsData
+
+
+export function useFindAdmission<TData = Awaited<ReturnType<typeof findAdmission>>, TError = RsData>(
+ params: FindAdmissionParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAdmission>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findAdmission>>,
+          TError,
+          Awaited<ReturnType<typeof findAdmission>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindAdmission<TData = Awaited<ReturnType<typeof findAdmission>>, TError = RsData>(
+ params: FindAdmissionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAdmission>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findAdmission>>,
+          TError,
+          Awaited<ReturnType<typeof findAdmission>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindAdmission<TData = Awaited<ReturnType<typeof findAdmission>>, TError = RsData>(
+ params: FindAdmissionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAdmission>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 대기열 입장 상태 (결제 페이지 타이머)
+ */
+
+export function useFindAdmission<TData = Awaited<ReturnType<typeof findAdmission>>, TError = RsData>(
+ params: FindAdmissionParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAdmission>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getFindAdmissionQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getFindByIdUrl = (participationId: number,) => {
 

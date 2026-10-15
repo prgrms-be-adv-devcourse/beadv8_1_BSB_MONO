@@ -54,7 +54,7 @@ export const ChangeParticipantBody = zod.object({
   "phone": zod.string().min(1).regex(changeParticipantBodyPhoneRegExp).describe('참가자 휴대폰 번호 (하이픈 생략 가능)'),
   "emergencyContactName": zod.string().min(changeParticipantBodyEmergencyContactNameMin).max(changeParticipantBodyEmergencyContactNameMax).describe('비상 연락처 이름 (연락받을 사람에게 알린 뒤 입력, 50자 이하)'),
   "emergencyContactPhone": zod.string().min(1).regex(changeParticipantBodyEmergencyContactPhoneRegExp).describe('비상 연락처 휴대폰 번호 (하이픈 생략 가능)'),
-  "tshirtSize": zod.string().min(changeParticipantBodyTshirtSizeMin).max(changeParticipantBodyTshirtSizeMax).optional().describe('기념 티셔츠(키트) 사이즈 (키트가 없는 종목이면 비워 둔다, 10자 이하)'),
+  "tshirtSize": zod.string().min(changeParticipantBodyTshirtSizeMin).max(changeParticipantBodyTshirtSizeMax).optional().describe('기념 티셔츠(키트) 사이즈. 종목이 주는 사이즈(XS~XXXL 중 종목 정보의 tshirtSizeOption) 중 하나이고, 티셔츠가 없는 종목이면 비워 둔다 (소문자도 받는다, 10자 이하)'),
   "shippingAddress": zod.object({
   "recipientName": zod.string().min(changeParticipantBodyShippingAddressRecipientNameMin).max(changeParticipantBodyShippingAddressRecipientNameMax).describe('받는 사람 (50자 이하)'),
   "recipientPhone": zod.string().min(1).regex(changeParticipantBodyShippingAddressRecipientPhoneRegExp).describe('받는 사람 휴대폰 번호 (하이픈 생략 가능)'),
@@ -146,7 +146,7 @@ export const ApplyBody = zod.object({
   "phone": zod.string().min(1).regex(applyBodyParticipantPhoneRegExp).describe('참가자 휴대폰 번호 (하이픈 생략 가능)'),
   "emergencyContactName": zod.string().min(applyBodyParticipantEmergencyContactNameMin).max(applyBodyParticipantEmergencyContactNameMax).describe('비상 연락처 이름 (연락받을 사람에게 알린 뒤 입력, 50자 이하)'),
   "emergencyContactPhone": zod.string().min(1).regex(applyBodyParticipantEmergencyContactPhoneRegExp).describe('비상 연락처 휴대폰 번호 (하이픈 생략 가능)'),
-  "tshirtSize": zod.string().min(applyBodyParticipantTshirtSizeMin).max(applyBodyParticipantTshirtSizeMax).optional().describe('기념 티셔츠(키트) 사이즈 (키트가 없는 종목이면 비워 둔다, 10자 이하)'),
+  "tshirtSize": zod.string().min(applyBodyParticipantTshirtSizeMin).max(applyBodyParticipantTshirtSizeMax).optional().describe('기념 티셔츠(키트) 사이즈. 종목이 주는 사이즈(XS~XXXL 중 종목 정보의 tshirtSizeOption) 중 하나이고, 티셔츠가 없는 종목이면 비워 둔다 (소문자도 받는다, 10자 이하)'),
   "shippingAddress": zod.object({
   "recipientName": zod.string().min(applyBodyParticipantShippingAddressRecipientNameMin).max(applyBodyParticipantShippingAddressRecipientNameMax).describe('받는 사람 (50자 이하)'),
   "recipientPhone": zod.string().min(1).regex(applyBodyParticipantShippingAddressRecipientPhoneRegExp).describe('받는 사람 휴대폰 번호 (하이픈 생략 가능)'),
@@ -227,7 +227,7 @@ export const FindMineResponse = zod.unknown()
 
 
 /**
- * 자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받고, 결제 기한 10분짜리 주문(CREATED)을 만든다. 같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. 남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.
+ * 대기열에 입장 중인지 확인하고, 자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받아 입장 끝 시각을 결제 기한으로 하는 주문(CREATED)을 만든다. 입장 중이 아니면 403(ORDER_QUEUE_NOT_ADMITTED). 같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. 남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.
  * @summary 바로 결제 예매 ([결제하기])
  */
 export const createHeaderIdempotencyKeyMax = 64;
@@ -339,50 +339,6 @@ export const CancelItemResponse = zod.unknown()
 
 
 /**
- * PG 충전창에 들어갈 때 프론트가 부른다. 결제 대기(CREATED) 주문의 결제 기한을 2분 늘리고, 주문당 한 번만 된다. 상품 서비스의 자리 기한을 먼저 늘린 뒤 주문·참가 신청의 결제 기한을 함께 바꾼다.
- * @summary 결제 기한 2분 늘리기
- */
-export const ExtendDeadlineParams = zod.object({
-  "orderId": zod.int().describe('주문 ID')
-})
-
-export const ExtendDeadlineResponse = zod.object({
-  "status": zod.int().optional(),
-  "message": zod.string().optional(),
-  "data": zod.object({
-  "id": zod.int().optional(),
-  "createDate": zod.iso.datetime({"offset":true}).optional(),
-  "orderNo": zod.string().optional(),
-  "buyerId": zod.int().optional(),
-  "raceId": zod.int().optional(),
-  "status": zod.enum(['CREATED', 'PAID', 'PARTIAL_CANCELED', 'CANCELED', 'EXPIRED']).optional(),
-  "totalAmount": zod.int().optional(),
-  "canceledAmount": zod.int().optional(),
-  "paymentDueAt": zod.iso.datetime({"offset":true}).optional(),
-  "paidAt": zod.iso.datetime({"offset":true}).nullish(),
-  "shippingAddress": zod.union([zod.object({
-  "recipientName": zod.string().optional(),
-  "recipientPhone": zod.string().optional(),
-  "zipcode": zod.string().optional(),
-  "address": zod.string().optional(),
-  "addressDetail": zod.string().nullish()
-}).describe('키트 배송지'),zod.null()]).optional(),
-  "items": zod.array(zod.object({
-  "id": zod.int().optional(),
-  "participationId": zod.int().optional(),
-  "raceCourseId": zod.int().optional(),
-  "sellerId": zod.int().optional(),
-  "itemName": zod.string().optional(),
-  "unitPrice": zod.int().optional(),
-  "quantity": zod.int().optional(),
-  "amount": zod.int().optional(),
-  "status": zod.enum(['ORDERED', 'PAID', 'CANCELED']).optional()
-}).describe('주문 상품')).optional()
-}).optional().describe('주문')
-})
-
-
-/**
  * 종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. 담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다.
  * @summary 장바구니에 참가권 담기
  */
@@ -406,7 +362,7 @@ export const AddItemResponse = zod.object({
 
 
 /**
- * 장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. 항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. 매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.
+ * 장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. 항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. [결제하기]처럼 종목마다 대기열에 입장 중인지 확인해, 입장 중이 아닌 종목은 실패(FAILED)로 돌려준다. 매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.
  * @summary 장바구니 결제
  */
 export const checkoutHeaderIdempotencyKeyMax = 64;
@@ -436,6 +392,7 @@ export const CheckoutResponse = zod.object({
   "results": zod.array(zod.object({
   "participationId": zod.int().optional(),
   "outcome": zod.enum(['CREATED', 'EXISTING', 'SOLD_OUT', 'FAILED']).optional().describe('CREATED·EXISTING이면 order가 있다'),
+  "code": zod.string().nullish().describe('SOLD_OUT·FAILED일 때 오류 코드 (예: ORDER_SOLD_OUT)'),
   "message": zod.string().optional(),
   "order": zod.union([zod.object({
   "id": zod.int().optional(),
@@ -470,6 +427,24 @@ export const CheckoutResponse = zod.object({
 }).describe('장바구니 결제 항목별 결과')).optional()
 }).optional().describe('장바구니 결제 결과')
 })
+
+
+/**
+ * 이 종목에 대기열로 입장 중인지와 입장 끝 시각, 남은 초를 돌려준다. 입장 끝 시각이 [결제하기]의 결제 기한이다. 타이머는 remainingSeconds로 센다(서버 시각 기준). 입장 중이 아니면 admitted=false이고 [결제하기]가 403이다. 대기열 API(PRO-182)가 나오기 전에는 가짜 대기열이 답한다: 결제 페이지를 처음 열 때 입장해 10분 뒤 끝나고, 끝난 뒤 이 API를 다시 부르면(페이지를 다시 열면) 다시 입장한다.
+ * @summary 대기열 입장 상태 (결제 페이지 타이머)
+ */
+export const findAdmissionQueryRaceIdExclusiveMin = 0;
+
+export const findAdmissionQueryRaceCourseIdExclusiveMin = 0;
+
+
+
+export const FindAdmissionQueryParams = zod.object({
+  "raceId": zod.int().gt(findAdmissionQueryRaceIdExclusiveMin).describe('대회 ID'),
+  "raceCourseId": zod.int().gt(findAdmissionQueryRaceCourseIdExclusiveMin).describe('종목 ID')
+})
+
+export const FindAdmissionResponse = zod.unknown()
 
 
 /**

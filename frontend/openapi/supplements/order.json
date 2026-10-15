@@ -61,14 +61,6 @@
         }
       }
     },
-    "extendDeadline": {
-      "200": {
-        "wrapper": "RsDataOrderDto",
-        "data": {
-          "$ref": "#/components/schemas/OrderDto"
-        }
-      }
-    },
     "findCart": {
       "200": {
         "wrapper": "RsDataCartDto",
@@ -411,6 +403,13 @@
             "FAILED"
           ],
           "description": "CREATED·EXISTING이면 order가 있다"
+        },
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "SOLD_OUT·FAILED일 때 오류 코드 (예: ORDER_SOLD_OUT)"
         },
         "message": {
           "type": "string"
