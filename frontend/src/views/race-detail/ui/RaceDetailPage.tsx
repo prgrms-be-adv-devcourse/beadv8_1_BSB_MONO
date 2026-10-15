@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { loginHref, useAuthStatus } from '@/features/auth'
 import { RacePoster, type RaceDetail, type RaceOption } from '@/entities/race'
 import { cn, formatNumber, formatWon } from '@/shared/lib'
 import {
@@ -47,11 +48,13 @@ export function RaceDetailPage({
   alreadyApplied = false,
 }: RaceDetailPageProps) {
   const toast = useToast()
+  const authStatus = useAuthStatus()
   const [optionId, setOptionId] = useState(
     race.options.find((o) => o.id === initialOptionId && !o.soldOut)?.id ??
       race.options.find((o) => !o.soldOut)?.id ??
       '',
   )
+  const applyHref = `/races/${race.id}/apply?option=${optionId}` as const
   const posterLabel = race.options.map((o) => o.name).join(' · ')
   const [anchor, setAnchor] = useState<Anchor>('options')
   const [infoTab, setInfoTab] = useState<'detail' | 'faq'>('detail')
@@ -261,9 +264,9 @@ export function RaceDetailPage({
               {race.options.length === 0 ? '신청할 수 있는 종목이 없어요' : '정원이 모두 찼어요'}
             </Button>
           ) : (
-            // TODO(auth): 로그인 전이면 로그인(M03)으로 보낸다
+            // 로그인 전이면 로그인(M03)으로 보내고, 로그인 뒤 신청 화면으로 이어 간다
             <Link
-              href={`/races/${race.id}/apply?option=${optionId}`}
+              href={authStatus === 'anonymous' ? loginHref(applyHref) : applyHref}
               className={buttonClassName({ size: 'l' })}
             >
               신청하기

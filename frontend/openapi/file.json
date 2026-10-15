@@ -9,6 +9,10 @@
     {
       "name": "File",
       "description": "이미지 업로드 URL 발급, 업로드 완료 확인, 파일 조회 API"
+    },
+    {
+      "name": "FileInternal",
+      "description": "대상(대회 등)에 파일 연결 API (서비스 간 내부 호출 전용)"
     }
   ],
   "paths": {
@@ -492,6 +496,22 @@
   },
   "components": {
     "schemas": {
+      "RsData": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
       "FileUploadRequestDto": {
         "type": "object",
         "description": "업로드 URL 발급 요청",
@@ -536,19 +556,6 @@
           "fileSize",
           "fileType"
         ]
-      },
-      "RsData": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "message": {
-            "type": "string"
-          },
-          "data": {}
-        }
       }
     }
   }

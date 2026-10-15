@@ -6,10 +6,25 @@ import {
   getFindByRefMockHandler,
   getFindByRefResponseMock,
 } from '@/shared/api/generated/file/file.msw'
-import { getBukangMemberAPIMock } from '@/shared/api/generated/member/member.msw'
-import { getBukangOrderAPIMock } from '@/shared/api/generated/order/order.msw'
+import {
+  getBukangMemberAPIMock,
+  getLoginResponseMock,
+  getReissueResponseMock,
+} from '@/shared/api/generated/member/member.msw'
+import {
+  getBukangOrderAPIMock,
+  getCreateMockHandler,
+  getCreateResponseMock,
+  getFindById1MockHandler,
+} from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
 import { getBukangProductAPIMock } from '@/shared/api/generated/product/product.msw'
+
+import {
+  clearMockRefreshCookie,
+  issueMockRefreshCookie,
+  MOCK_REFRESH_COOKIE_NAME,
+} from './mock-session'
 
 /** 경로 변수(:raceId) 수. 적은 것부터 둬야 /races/suggestions가 /races/:raceId에 먼저 걸리지 않는다. */
 function pathParamCount(handler: RequestHandler): number {
@@ -29,6 +44,64 @@ const fileImageHandler = getFindByRefMockHandler(() => {
   }
 })
 
+/**
+ * 로그인 상태를 진짜처럼 흉내 내는 인증 목. 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ * 진짜 서버처럼 로그인하면 Refresh Token 쿠키(가짜 이름)를 심고, 로그아웃하면 지운다.
+ * 재발급은 요청 쿠키에 그 값이 있을 때만 성공하고(쿠키도 새로 바꿔 준다) 없으면 401.
+ * 그래서 로그인하지 않고 새로고침하면 로그아웃 상태로 보인다.
+ */
+const authHandlers = [
+  http.post('*/api/v1/auth/login', () =>
+    HttpResponse.json(getLoginResponseMock(), {
+      headers: { 'Set-Cookie': issueMockRefreshCookie() },
+    }),
+  ),
+  http.post('*/api/v1/auth/reissue', ({ cookies }) => {
+    if (!cookies[MOCK_REFRESH_COOKIE_NAME]) {
+      return HttpResponse.json(
+        { status: 401, message: 'Refresh Token이 없습니다. 다시 로그인해주세요.', data: null },
+        { status: 401 },
+      )
+    }
+    const example = getReissueResponseMock()
+    return HttpResponse.json(
+      {
+        ...example,
+        data: {
+          ...example.data,
+          accessToken: `${example.data?.accessToken}.${crypto.randomUUID()}`,
+        },
+      },
+      { headers: { 'Set-Cookie': issueMockRefreshCookie() } },
+    )
+  }),
+  http.post(
+    '*/api/v1/auth/logout',
+    () => new HttpResponse(null, { headers: { 'Set-Cookie': clearMockRefreshCookie() } }),
+  ),
+]
+
+/** 지금부터 minutes분 뒤의 한국 시간 (백엔드처럼 시간대 없는 2026-10-12T10:10:00 모양) */
+function kstMinutesFromNow(minutes: number): string {
+  return new Date(Date.now() + (9 * 60 + minutes) * 60 * 1000).toISOString().slice(0, 19)
+}
+
+/**
+ * 명세 예시의 주문은 결제 기한이 이미 지난 시각이라 결제 화면이 바로 시간 초과가 된다.
+ * 가짜 응답 모드에서 결제 화면을 볼 수 있게 주문 생성 · 조회는 결제 대기 · 기한 10분 뒤로 돌려준다.
+ * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ */
+const orderHandlers = [
+  getCreateMockHandler(() => {
+    const example = getCreateResponseMock()
+    return { ...example, data: { ...example.data, paymentDueAt: kstMinutesFromNow(10) } }
+  }),
+  getFindById1MockHandler(() => {
+    const example = getCreateResponseMock()
+    return { ...example, data: { ...example.data, paymentDueAt: kstMinutesFromNow(10) } }
+  }),
+]
+
 /** orval이 서비스별 명세(openapi/*.json)의 응답 예시로 만든 목 */
 const generatedHandlers = [
   ...getBukangMemberAPIMock(),
@@ -47,5 +120,7 @@ export const handlers = [
   // 목 파이프라인이 살아있는지 확인하는 용도
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
+  ...authHandlers,
+  ...orderHandlers,
   ...generatedHandlers,
 ]

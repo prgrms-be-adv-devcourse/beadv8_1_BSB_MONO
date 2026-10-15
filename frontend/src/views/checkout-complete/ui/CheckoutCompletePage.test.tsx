@@ -1,0 +1,31 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+
+import { BookingFlowProvider } from '@/features/booking'
+
+import { CheckoutCompletePage } from './CheckoutCompletePage'
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/checkout/complete',
+}))
+
+describe('결제 완료', () => {
+  it('주문 조회 결과로 주문번호 · 결제 금액 · 대회를 보여 준다', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <BookingFlowProvider>
+          <CheckoutCompletePage orderId={1} />
+        </BookingFlowProvider>
+      </QueryClientProvider>,
+    )
+
+    // 주문 API 명세 예시: OD-20261012-0001, 50,000원, 종목 1 · 받는 사람 김러너
+    expect(await screen.findByText('OD-20261012-0001')).toBeInTheDocument()
+    expect(screen.getByText('₩50,000 (예치금)')).toBeInTheDocument()
+    expect(await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K')).toBeInTheDocument()
+    expect(screen.getByText('김러너 · 10K')).toBeInTheDocument()
+  })
+})
