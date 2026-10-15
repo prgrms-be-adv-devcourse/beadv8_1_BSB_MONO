@@ -29,8 +29,7 @@ import com.bukang.order.out.InternalHttpClients;
 class HttpRefundEligibilityAdapterTest {
 	private static final String BASE_URL = "http://payout";
 	private static final LocalDate RACE_DATE = LocalDate.of(2026, 11, 15);
-	private static final int RACE_ID = 10;
-	private static final String URL = BASE_URL + "/internal/v1/payout/refund-eligibility?raceId=10&raceDate=2026-11-15";
+	private static final String URL = BASE_URL + "/internal/v1/payout/refund-eligibility?raceDate=2026-11-15";
 	private static final String NULL_DATA = "{ \"status\": 200, \"message\": \"조회\", \"data\": null }";
 	private static final String EMPTY_DATA = "{ \"status\": 200, \"message\": \"조회\", \"data\": {} }";
 
@@ -45,15 +44,15 @@ class HttpRefundEligibilityAdapterTest {
 	}
 
 	@Test
-	@DisplayName("정산 서비스에 대회 ID와 대회 날짜로 묻고, 응답의 refundable 값을 돌려준다")
+	@DisplayName("정산 서비스에 대회 날짜로 묻고, 응답의 refundable 값을 돌려준다")
 	void refundable() {
 		server.expect(requestTo(URL)).andExpect(method(HttpMethod.GET))
 			.andRespond(withSuccess(response(true), MediaType.APPLICATION_JSON));
 		server.expect(requestTo(URL))
 			.andRespond(withSuccess(response(false), MediaType.APPLICATION_JSON));
 
-		assertThat(adapter.isRefundable(RACE_ID, RACE_DATE)).isTrue();
-		assertThat(adapter.isRefundable(RACE_ID, RACE_DATE)).isFalse();
+		assertThat(adapter.isRefundable(RACE_DATE)).isTrue();
+		assertThat(adapter.isRefundable(RACE_DATE)).isFalse();
 		server.verify();
 	}
 
@@ -63,10 +62,10 @@ class HttpRefundEligibilityAdapterTest {
 		server.expect(requestTo(URL)).andRespond(withServerError());
 		server.expect(requestTo(URL)).andRespond(withException(new SocketTimeoutException("read timed out")));
 
-		assertThatThrownBy(() -> adapter.isRefundable(RACE_ID, RACE_DATE))
+		assertThatThrownBy(() -> adapter.isRefundable(RACE_DATE))
 			.isInstanceOf(ExternalServiceUnavailableException.class)
 			.hasMessage(HttpRefundEligibilityAdapter.UNAVAILABLE_MESSAGE);
-		assertThatThrownBy(() -> adapter.isRefundable(RACE_ID, RACE_DATE))
+		assertThatThrownBy(() -> adapter.isRefundable(RACE_DATE))
 			.isInstanceOf(ExternalServiceUnavailableException.class);
 	}
 
@@ -76,9 +75,9 @@ class HttpRefundEligibilityAdapterTest {
 		server.expect(requestTo(URL)).andRespond(withSuccess(NULL_DATA, MediaType.APPLICATION_JSON));
 		server.expect(requestTo(URL)).andRespond(withSuccess(EMPTY_DATA, MediaType.APPLICATION_JSON));
 
-		assertThatThrownBy(() -> adapter.isRefundable(RACE_ID, RACE_DATE))
+		assertThatThrownBy(() -> adapter.isRefundable(RACE_DATE))
 			.isInstanceOf(ExternalServiceUnavailableException.class);
-		assertThatThrownBy(() -> adapter.isRefundable(RACE_ID, RACE_DATE))
+		assertThatThrownBy(() -> adapter.isRefundable(RACE_DATE))
 			.isInstanceOf(ExternalServiceUnavailableException.class);
 	}
 
@@ -91,7 +90,7 @@ class HttpRefundEligibilityAdapterTest {
 				InternalHttpClients.create("http://localhost:" + silentServer.getLocalPort(), Duration.ofMillis(300)));
 			long startedAt = System.nanoTime();
 
-			assertThatThrownBy(() -> slowAdapter.isRefundable(RACE_ID, RACE_DATE))
+			assertThatThrownBy(() -> slowAdapter.isRefundable(RACE_DATE))
 				.isInstanceOf(ExternalServiceUnavailableException.class);
 			assertThat(Duration.ofNanos(System.nanoTime() - startedAt)).isLessThan(Duration.ofSeconds(2));
 		}
@@ -102,7 +101,7 @@ class HttpRefundEligibilityAdapterTest {
 	void clientError() {
 		server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.NOT_FOUND));
 
-		assertThatThrownBy(() -> adapter.isRefundable(RACE_ID, RACE_DATE))
+		assertThatThrownBy(() -> adapter.isRefundable(RACE_DATE))
 			.isInstanceOf(ExternalServiceUnavailableException.class);
 	}
 
