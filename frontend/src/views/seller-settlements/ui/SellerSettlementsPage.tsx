@@ -1,9 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { keepPreviousData } from '@tanstack/react-query'
+import { useState, type ReactNode } from 'react'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
-import { cn } from '@/shared/lib'
+import {
+  detailPeriods,
+  formatMonthDay,
+  formatWeekday,
+  HOLD_REASON,
+  HOLD_STATUS,
+  PAYOUT_STATUS,
+  recentPayoutMonths,
+  RECORD_TYPE,
+  type DetailPeriod,
+} from '@/entities/payout'
+import { ApiError, payoutApi, payoutModel, unwrapData } from '@/shared/api'
+import { cn, formatNumber, formatWon } from '@/shared/lib'
 import {
   Alert,
   Badge,
@@ -11,96 +24,34 @@ import {
   DataTable,
   EmptyState,
   FOCUS_RING,
+  Pagination,
   Segmented,
   Select,
+  Skeleton,
   StatTile,
   TextField,
-  type BadgeTone,
 } from '@/shared/ui'
 
 export type SettlementTab = 'monthly' | 'orders' | 'holds' | 'clawbacks'
 
-type Monthly = {
-  id: string
-  race: string
-  kind: string
-  sales: string
-  refund: string
-  fee: string
-  payout: string
-  paidAt: string
-  status: string
-  tone: BadgeTone
+/** 건별 정산 한 페이지 크기 (백엔드 한도 1~100) */
+const ITEM_PAGE_SIZE = 20
+
+function errorText(error: unknown) {
+  return (error instanceof ApiError && error.serverMessage) || '잠시 뒤 다시 시도해 주세요.'
 }
-
-type Hold = {
-  id: string
-  settlementId: string
-  amount: string
-  reason: string
-  status: string
-  tone: BadgeTone
-  heldAt: string
-}
-
-// TODO(api): 판매자 정산 API로 바꾼다. 지금은 시안 예시 값.
-const MONTHLY: Monthly[] = [
-  {
-    id: 'ST-20261120-0A3F',
-    race: '쿠키RUN',
-    kind: '1차 정산',
-    sales: '₩5,200,000',
-    refund: '₩400,000',
-    fee: '₩0',
-    payout: '₩1,920,000',
-    paidAt: '11/20',
-    status: '지급 예정',
-    tone: 'neutral',
-  },
-  {
-    id: 'ST-20261020-09B2',
-    race: '한강 나이트런',
-    kind: '최종 정산',
-    sales: '₩2,100,000',
-    refund: '₩100,000',
-    fee: '₩110,000',
-    payout: '₩1,090,000',
-    paidAt: '10/20',
-    status: '지급 완료',
-    tone: 'success',
-  },
-]
-
-const HOLDS: Hold[] = [
-  {
-    id: 'HD-20261027-01A2',
-    settlementId: 'ST-20261020-1C07',
-    amount: '₩1,200,000',
-    reason: '정산 계좌 미등록',
-    status: '지급보류',
-    tone: 'warning',
-    heldAt: '10/27',
-  },
-  {
-    id: 'HD-20260918-0B71',
-    settlementId: 'ST-20260921-07C5',
-    amount: '₩300,000',
-    reason: '대회 취소 처리',
-    status: '해제 · 10/2',
-    tone: 'neutral',
-    heldAt: '9/18',
-  },
-]
-
-const PERIODS = [
-  { value: '0915', label: '9/15 ~ 10/14' },
-  { value: '1015', label: '10/15 ~ 11/14' },
-]
 
 // 피그마 V2 · S04 정산(월별 정산) · S10 정산 내역 · 지급보류
 export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?: SettlementTab }) {
   const [tab, setTab] = useState<SettlementTab>(initialTab)
   const isHolds = tab === 'holds'
+  // 화면을 연 날 기준. 기간 목록이 렌더마다 바뀌지 않게 한 번만 잡는다
+  const [today] = useState(() => new Date())
+  const [periods] = useState(() => detailPeriods(today))
+  const [periodValue, setPeriodValue] = useState(periods[0].value)
+  const period = periods.find((p) => p.value === periodValue) ?? periods[0]
+
+  const summary = payoutApi.useSummary({ query: { select: unwrapData } })
 
   return (
     <ConsolePage
@@ -114,9 +65,30 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
       actions={<Button variant="secondary">엑셀로 내려받기</Button>}
     >
       <div className="flex gap-6">
-        <StatTile label="다음 정산일" value="11/20" unit="(금)" />
-        <StatTile tone="accent" label="정산 예정액" value="1,920,000" unit="원" />
-        <StatTile label="지급보류" value="1" unit="건" />
+        {summary.data ? (
+          <>
+            <StatTile
+              label="다음 정산일"
+              value={formatMonthDay(summary.data.nextPayDate)}
+              unit={`(${formatWeekday(summary.data.nextPayDate)})`}
+            />
+            <StatTile
+              tone="accent"
+              label="정산 예정액"
+              value={formatNumber(summary.data.scheduledPayoutAmount)}
+              unit="원"
+            />
+            <StatTile label="지급보류" value={formatNumber(summary.data.heldCount)} unit="건" />
+          </>
+        ) : summary.isError ? (
+          <Alert
+            tone="danger"
+            title="정산 요약을 불러오지 못했어요"
+            description={errorText(summary.error)}
+          />
+        ) : (
+          <Skeleton className="h-24 flex-1" />
+        )}
       </div>
 
       <Segmented
@@ -127,117 +99,281 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
         items={[
           { value: 'monthly', label: '월별 정산' },
           { value: 'orders', label: '건별 정산' },
-          { value: 'holds', label: '지급보류 내역', count: 1 },
+          { value: 'holds', label: '지급보류 내역', count: summary.data?.heldCount },
           { value: 'clawbacks', label: '회수 내역' },
         ]}
       />
 
-      {tab === 'monthly' && (
-        <ConsoleCard
-          title="대회별 월 정산"
-          aside={
-            <button
-              type="button"
-              className={cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)}
-            >
-              정산 ID로 찾기
-            </button>
-          }
-        >
-          <DataTable
-            label="대회별 월 정산"
-            rows={MONTHLY}
-            rowKey={(r) => r.id}
-            columns={[
-              { key: 'id', header: '정산 ID', width: 'w-42.5', render: (r) => r.id },
-              { key: 'race', header: '대회', render: (r) => r.race },
-              { key: 'kind', header: '구분', render: (r) => r.kind },
-              { key: 'sales', header: '판매액', align: 'right', render: (r) => r.sales },
-              { key: 'refund', header: '환불액', align: 'right', render: (r) => r.refund },
-              { key: 'fee', header: '수수료', align: 'right', render: (r) => r.fee },
-              { key: 'payout', header: '지급액', align: 'right', render: (r) => r.payout },
-              { key: 'paidAt', header: '지급일', align: 'right', render: (r) => r.paidAt },
-              {
-                key: 'status',
-                header: '상태',
-                render: (r) => <Badge tone={r.tone}>{r.status}</Badge>,
-              },
-            ]}
-          />
-          <p className="text-caption text-text-tertiary">
-            환불 기한이 지나면 1차 정산(판매액의 40%, 수수료 없음), 대회가 끝나면 최종 정산.
-            수수료는 (판매액 − 환불액)의 5.5%(부가세 포함), 최종 정산에서만 떼요.
-          </p>
-        </ConsoleCard>
-      )}
+      {tab === 'monthly' && <MonthlyPayouts today={today} />}
 
-      {isHolds && (
-        <ConsoleCard title="지급보류 내역">
+      {(tab === 'orders' || isHolds) && (
+        <ConsoleCard title={isHolds ? '지급보류 내역' : '건별 정산'}>
           <div className="flex items-start gap-4">
             <Select
               label="조회 기간"
               helper="건별 정산·지급보류는 한 번에 최대 1개월까지"
-              items={PERIODS}
-              defaultValue="0915"
+              items={periods}
+              value={periodValue}
+              onValueChange={(next) => next && setPeriodValue(next)}
               className="flex-1"
             />
+            {/* TODO(api): ID로 찾기 API가 아직 없다 */}
             <TextField
               label="ID로 찾기"
               helper="지급보류 ID·정산 ID·주문번호로 찾으면 기간과 관계없이 찾아요"
               className="flex-1"
             />
           </div>
+          {isHolds ? <HoldList period={period} /> : <PayoutItemList period={period} />}
+        </ConsoleCard>
+      )}
+
+      {/* 회수 내역은 API · 시안이 없어 빈 화면만 둔다 */}
+      {tab === 'clawbacks' && (
+        <ConsoleCard>
+          <EmptyState title="회수 내역이 없어요" description="조회 기간을 바꿔 다시 찾아보세요." />
+        </ConsoleCard>
+      )}
+    </ConsolePage>
+  )
+}
+
+function MonthlyPayouts({ today }: { today: Date }) {
+  const [params] = useState(() => recentPayoutMonths(today))
+  const payouts = payoutApi.usePayouts(params, { query: { select: unwrapData } })
+
+  return (
+    <ConsoleCard
+      title="대회별 월 정산"
+      aside={
+        // TODO(api): 정산 ID로 찾기 API가 아직 없다
+        <button type="button" className={cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)}>
+          정산 ID로 찾기
+        </button>
+      }
+    >
+      <QueryRows query={payouts} label="대회별 월 정산" emptyTitle="최근 12개월 정산 내역이 없어요">
+        {(rows) => (
+          <DataTable
+            label="대회별 월 정산"
+            rows={rows}
+            rowKey={(r) => String(r.id)}
+            columns={[
+              { key: 'id', header: '정산 ID', width: 'w-42.5', render: (r) => r.payoutCode },
+              { key: 'race', header: '대회', render: (r) => r.raceName },
+              { key: 'month', header: '정산 월', render: (r) => r.payoutMonth },
+              {
+                key: 'sales',
+                header: '판매액',
+                align: 'right',
+                render: (r) => formatWon(r.salesAmount),
+              },
+              {
+                key: 'refund',
+                header: '환불액',
+                align: 'right',
+                render: (r) => formatWon(r.refundAmount),
+              },
+              {
+                key: 'fee',
+                header: '수수료',
+                align: 'right',
+                render: (r) => formatWon(r.feeAmount),
+              },
+              {
+                key: 'payout',
+                header: '지급액',
+                align: 'right',
+                render: (r) => formatWon(r.payoutAmount),
+              },
+              {
+                key: 'paidAt',
+                header: '지급일',
+                align: 'right',
+                render: (r) => formatMonthDay(r.paidAt ?? r.scheduledPayDate),
+              },
+              {
+                key: 'status',
+                header: '상태',
+                render: (r) => (
+                  <Badge tone={PAYOUT_STATUS[r.status].tone}>{PAYOUT_STATUS[r.status].label}</Badge>
+                ),
+              },
+            ]}
+          />
+        )}
+      </QueryRows>
+      <p className="text-caption text-text-tertiary">
+        환불 기한이 지나면 1차 정산(판매액의 40%, 수수료 없음), 대회가 끝나면 최종 정산. 수수료는
+        (판매액 − 환불액)의 5.5%(부가세 포함), 최종 정산에서만 떼요.
+      </p>
+    </ConsoleCard>
+  )
+}
+
+function PayoutItemList({ period }: { period: DetailPeriod }) {
+  // 기간이 바뀌면 첫 페이지로 돌아간다
+  const [pageState, setPageState] = useState({ key: period.value, page: 0 })
+  const page = pageState.key === period.value ? pageState.page : 0
+  const items = payoutApi.useItems(
+    { from: period.from, to: period.to, page, size: ITEM_PAGE_SIZE },
+    { query: { select: unwrapData, placeholderData: keepPreviousData } },
+  )
+
+  return (
+    <QueryRows
+      query={{ ...items, data: items.data?.content }}
+      label="건별 정산"
+      emptyTitle="이 기간에 건별 정산이 없어요"
+    >
+      {(rows) => (
+        <>
+          <DataTable
+            label="건별 정산"
+            rows={rows}
+            rowKey={(r) => String(r.id)}
+            columns={[
+              {
+                key: 'targetDate',
+                header: '정산 대상일',
+                width: 'w-27.5',
+                render: (r) => formatMonthDay(r.targetDate),
+              },
+              {
+                key: 'payoutCode',
+                header: '정산 ID',
+                width: 'w-42.5',
+                render: (r) => r.payoutCode,
+              },
+              { key: 'race', header: '대회', render: (r) => r.raceName },
+              {
+                key: 'type',
+                header: '구분',
+                width: 'w-20',
+                render: (r) => RECORD_TYPE[r.recordType],
+              },
+              { key: 'amount', header: '금액', align: 'right', render: (r) => formatWon(r.amount) },
+              {
+                key: 'fee',
+                header: '수수료',
+                align: 'right',
+                render: (r) => formatWon(r.feeAmount),
+              },
+              {
+                key: 'status',
+                header: '상태',
+                width: 'w-30',
+                render: (r) => (
+                  <Badge tone={PAYOUT_STATUS[r.payoutStatus].tone}>
+                    {PAYOUT_STATUS[r.payoutStatus].label}
+                  </Badge>
+                ),
+              },
+            ]}
+          />
+          {(items.data?.totalPages ?? 0) > 1 && (
+            <Pagination
+              className="self-center"
+              page={page + 1}
+              totalPages={items.data?.totalPages ?? 1}
+              onPageChange={(next) => setPageState({ key: period.value, page: next - 1 })}
+            />
+          )}
+        </>
+      )}
+    </QueryRows>
+  )
+}
+
+function HoldList({ period }: { period: DetailPeriod }) {
+  const holds = payoutApi.useHolds(
+    { from: period.from, to: period.to },
+    { query: { select: unwrapData, placeholderData: keepPreviousData } },
+  )
+
+  return (
+    <>
+      <QueryRows query={holds} label="지급보류 내역" emptyTitle="이 기간에 지급보류가 없어요">
+        {(rows) => (
           <DataTable
             label="지급보류 내역"
-            rows={HOLDS}
-            rowKey={(r) => r.id}
+            rows={rows}
+            rowKey={(r) => String(r.id)}
             columns={[
-              { key: 'id', header: '지급보류 ID', width: 'w-47.5', render: (r) => r.id },
+              { key: 'id', header: '지급보류 ID', width: 'w-47.5', render: (r) => r.holdCode },
               {
                 key: 'settlementId',
                 header: '정산 ID',
                 width: 'w-47.5',
-                render: (r) => r.settlementId,
+                render: (r) => r.payoutCode,
               },
               {
                 key: 'amount',
                 header: '금액',
                 align: 'right',
                 width: 'w-35',
-                render: (r) => r.amount,
+                render: (r) => formatWon(r.payoutAmount),
               },
-              { key: 'reason', header: '사유', render: (r) => r.reason },
+              { key: 'reason', header: '사유', render: (r) => HOLD_REASON[r.reasonType] },
               {
                 key: 'status',
                 header: '상태',
                 width: 'w-30',
-                render: (r) => <Badge tone={r.tone}>{r.status}</Badge>,
+                render: (r) => <Badge tone={HOLD_STATUS[r.status].tone}>{holdStatusText(r)}</Badge>,
               },
               {
                 key: 'heldAt',
                 header: '보류일',
                 align: 'right',
                 width: 'w-32.5',
-                render: (r) => r.heldAt,
+                render: (r) => formatMonthDay(r.heldAt),
               },
             ]}
           />
-          <Alert
-            title="보류 사유는 두 가지예요"
-            description="정산 계좌 미등록 · 대회 취소 처리. 보류된 금액은 지급 완료로 바뀌지 않고, 풀리면 해제 뒤 돌아오는 20일 묶음에 넣어 지급해요."
-          />
-        </ConsoleCard>
-      )}
-
-      {/* 건별 정산 · 회수 내역은 시안이 없어 빈 화면만 둔다 */}
-      {(tab === 'orders' || tab === 'clawbacks') && (
-        <ConsoleCard>
-          <EmptyState
-            title={tab === 'orders' ? '이 기간에 건별 정산이 없어요' : '회수 내역이 없어요'}
-            description="조회 기간을 바꿔 다시 찾아보세요."
-          />
-        </ConsoleCard>
-      )}
-    </ConsolePage>
+        )}
+      </QueryRows>
+      <Alert
+        title="보류 사유는 두 가지예요"
+        description="정산 계좌 미등록 · 대회 취소 처리. 보류된 금액은 지급 완료로 바뀌지 않고, 풀리면 해제 뒤 돌아오는 20일 묶음에 넣어 지급해요."
+      />
+    </>
   )
+}
+
+/** '지급보류' 또는 '해제 · 10/2' */
+function holdStatusText(hold: payoutModel.SellerPayoutHoldDto) {
+  const { label } = HOLD_STATUS[hold.status]
+  return hold.status === 'RELEASED' && hold.releasedAt
+    ? `${label} · ${formatMonthDay(hold.releasedAt)}`
+    : label
+}
+
+/** 불러오는 중 · 오류 · 빈 목록을 같은 모양으로 보여 주고, 행이 있으면 children을 그린다 */
+function QueryRows<Row>({
+  query,
+  label,
+  emptyTitle,
+  children,
+}: {
+  query: { data?: Row[]; isPending: boolean; isError: boolean; error: unknown }
+  label: string
+  emptyTitle: string
+  children: (rows: Row[]) => ReactNode
+}) {
+  if (query.isError) {
+    return (
+      <Alert
+        tone="danger"
+        title={`${label}을 불러오지 못했어요`}
+        description={errorText(query.error)}
+      />
+    )
+  }
+  if (query.isPending || !query.data) {
+    return <Skeleton className="h-40 w-full" />
+  }
+  if (query.data.length === 0) {
+    return <EmptyState title={emptyTitle} description="조회 기간을 바꿔 다시 찾아보세요." />
+  }
+  return children(query.data)
 }
