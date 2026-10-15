@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -117,7 +118,8 @@ class KitDeliveryTest {
 			.andExpect(jsonPath("$.data.items[0].kitTrackingNumber").isEmpty())
 			.andExpect(jsonPath("$.data.items[0].kitShippedAt").isEmpty());
 
-		LocalDateTime shippedAt = LocalDateTime.now();
+		// DB는 마이크로초까지만 저장한다. 리눅스(CI)는 지금 시각을 나노초까지 줘 저장한 값과 비교하면 어긋난다
+		LocalDateTime shippedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
 		OrderItemDto shipped = kitDeliveryUseCase.ship(SELLER_ID, itemId, CARRIER, TRACKING_NUMBER, shippedAt);
 
 		assertThat(shipped.getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.SHIPPING);
