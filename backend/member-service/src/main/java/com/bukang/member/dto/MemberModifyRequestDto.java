@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -19,6 +20,7 @@ import lombok.Getter;
 public class MemberModifyRequestDto {
 	@Schema(description = "실명", example = "김러너")
 	@NotBlank(message = "이름을 작성해주세요.")
+	@Size(max = 255, message = "이름은 255자 이하로 작성해주세요.") // DB 칸 길이와 같다 (BE-018)
 	private final String name;
 
 	// 칸 수는 한글 2칸, 영문·숫자 1칸으로 센다 (BE-013)

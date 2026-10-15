@@ -181,6 +181,18 @@ class ApiV1MemberModifyTest {
 	}
 
 	@Test
+	@DisplayName("이름이 255자를 넘으면 400이다")
+	void modifyFailsWithTooLongName() throws Exception {
+		modify(memberId, "가".repeat(255), NICKNAME, PHONE, BIRTH_DATE)
+			.andExpect(status().isOk());
+
+		modify(memberId, "가".repeat(256), NICKNAME, PHONE, BIRTH_DATE)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("이름은 255자 이하로 작성해주세요."));
+	}
+
+	@Test
 	@DisplayName("이름이 비어 있으면 400이다")
 	void modifyFailsWithBlankName() throws Exception {
 		modify(memberId, " ", NICKNAME, PHONE, BIRTH_DATE)
