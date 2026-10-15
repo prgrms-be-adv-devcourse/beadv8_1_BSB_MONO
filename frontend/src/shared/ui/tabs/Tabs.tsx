@@ -47,7 +47,7 @@ export function Tab({ value, children, count, disabled }: TabProps) {
       value={value}
       disabled={disabled}
       className={cn(
-        'group flex h-10 min-w-0 items-center justify-center gap-1 rounded-[8px] px-4 text-label-l text-text-tertiary',
+        'group flex h-10 min-w-0 items-center justify-center gap-1 rounded-sm px-4 text-label-l text-text-tertiary',
         'data-active:bg-bg-surface data-active:font-bold data-active:text-text-primary data-active:shadow-sm',
         'data-disabled:text-text-disabled',
         FOCUS_RING,
