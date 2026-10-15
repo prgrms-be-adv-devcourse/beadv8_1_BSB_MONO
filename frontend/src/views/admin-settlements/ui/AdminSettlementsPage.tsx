@@ -3,10 +3,17 @@
 import { useState } from 'react'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
+import { usePlaceHold, useReleaseHold } from '@/features/payout-hold'
+import { HOLD_REASON_ITEMS } from '@/entities/payout'
+import type { payoutModel } from '@/shared/api'
 import { cn } from '@/shared/lib'
-import { Button, DataTable, Dialog, FOCUS_RING, Select, StatTile } from '@/shared/ui'
+import { Button, DataTable, Dialog, FOCUS_RING, KeyValue, Select, StatTile } from '@/shared/ui'
 
 type Settlement = {
+  /** 보류 걸기 API에 넘기는 정산 내역 번호 */
+  payoutId: number
+  /** 보류 중이면 해제 API에 넘기는 지급보류 번호 */
+  holdId?: number
   id: string
   seller: string
   kind: string
@@ -17,9 +24,11 @@ type Settlement = {
 }
 type RefundRequest = { at: string; member: string; amount: string }
 
-// TODO(api): 관리자 정산 · 환급 API로 바꾼다. 시안 예시 값.
+// TODO(api): 관리자 정산 목록 · 환급 API가 아직 없어(PRO-156 선행 작업) 목록은 시안 예시 값이다.
+// 지급보류 걸기 · 풀기만 API에 연결했다. payoutId · holdId도 예시 값이라 실제 정산과 맞지 않을 수 있다.
 const SETTLEMENTS: Settlement[] = [
   {
+    payoutId: 1,
     id: 'ST-20261120-0A3F',
     seller: '데브시스터즈러닝',
     kind: '1차 정산',
@@ -29,6 +38,8 @@ const SETTLEMENTS: Settlement[] = [
     action: '지급 완료로 바꾸기',
   },
   {
+    payoutId: 2,
+    holdId: 1,
     id: 'ST-20261120-1C07',
     seller: '춘천러닝클럽',
     kind: '1차 정산',
@@ -38,6 +49,7 @@ const SETTLEMENTS: Settlement[] = [
     action: '보류 해제',
   },
   {
+    payoutId: 3,
     id: 'ST-20261120-2D91',
     seller: '나이트런컴퍼니',
     kind: '최종 정산',
@@ -53,17 +65,17 @@ const REFUNDS: RefundRequest[] = [
   { at: '10/4', member: '새벽토끼', amount: '₩15,000' },
 ]
 
-const HOLD_REASONS = [
-  { value: 'race-canceled', label: '대회 취소 처리' },
-  { value: 'no-account', label: '정산 계좌 미등록' },
-]
-
 // 표 안의 처리 글자 버튼
 const ACTION = cn('rounded-sm text-body-m text-text-primary hover:underline', FOCUS_RING)
 
 // 피그마 V2 · A02 정산 · 환급 처리 (+ A02-1 전체 지급 완료 확인)
 export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: boolean }) {
   const [allOpen, setAllOpen] = useState(confirmOpen)
+  const [selectedId, setSelectedId] = useState(SETTLEMENTS[0].id)
+  const target = SETTLEMENTS.find((r) => r.id === selectedId) ?? SETTLEMENTS[0]
+  const [reasonType, setReasonType] = useState<payoutModel.PayoutHoldReason>('RACE_CANCELED')
+  const placeHold = usePlaceHold()
+  const release = useReleaseHold()
 
   return (
     <ConsolePage
@@ -81,6 +93,8 @@ export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: bo
           label="판매자별 정산"
           rows={SETTLEMENTS}
           rowKey={(r) => r.id}
+          selected={selectedId}
+          onRowClick={(r) => setSelectedId(r.id)}
           columns={[
             { key: 'id', header: '정산 ID', width: 'w-40', render: (r) => r.id },
             { key: 'seller', header: '판매자', width: 'w-36.5', render: (r) => r.seller },
@@ -97,12 +111,27 @@ export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: bo
             {
               key: 'action',
               header: '처리',
-              // TODO(api): 지급 완료 · 보류 해제
-              render: (r) => (
-                <button type="button" className={ACTION}>
-                  {r.action}
-                </button>
-              ),
+              // TODO(api): 지급 완료로 바꾸기 API가 아직 없다
+              render: (r) => {
+                const { holdId } = r
+                return (
+                  <button
+                    type="button"
+                    className={ACTION}
+                    disabled={holdId !== undefined && release.isPending}
+                    onClick={
+                      holdId !== undefined
+                        ? (e) => {
+                            e.stopPropagation()
+                            release.mutate({ holdId })
+                          }
+                        : undefined
+                    }
+                  >
+                    {r.action}
+                  </button>
+                )
+              },
             },
           ]}
         />
@@ -110,18 +139,25 @@ export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: bo
 
       <div className="flex flex-wrap items-stretch gap-6">
         <ConsoleCard title="지급보류 걸기" className="min-w-130 flex-1 items-start">
+          <KeyValue label="대상 정산" value={`${target.id} · ${target.seller}`} />
           <Select
             label="보류 사유"
             helper="사유는 판매자 화면에도 보여요"
-            items={HOLD_REASONS}
-            defaultValue="race-canceled"
+            items={HOLD_REASON_ITEMS}
+            value={reasonType}
+            onValueChange={(next) => next && setReasonType(next)}
             className="w-full"
           />
           <p className="text-caption text-text-tertiary">
             보류가 풀리면 다음 20일 묶음에 넣어 지급해요.
           </p>
-          {/* TODO(api): 지급보류 걸기 */}
-          <Button variant="danger">지급보류 걸기</Button>
+          <Button
+            variant="danger"
+            disabled={target.holdId !== undefined || placeHold.isPending}
+            onClick={() => placeHold.mutate({ payoutId: target.payoutId, data: { reasonType } })}
+          >
+            지급보류 걸기
+          </Button>
         </ConsoleCard>
 
         <ConsoleCard title={`예치금 환급 요청 ${REFUNDS.length}건`} className="min-w-130 flex-1">
