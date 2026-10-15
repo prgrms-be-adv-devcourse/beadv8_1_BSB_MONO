@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { server } from '@/shared/mocks/node'
 
@@ -11,7 +11,7 @@ import {
   setAccessToken,
 } from './access-token'
 import { ApiError } from './api-error'
-import { restoreSession } from './auth-session'
+import { reissueAccessToken, restoreSession } from './auth-session'
 import { customFetch } from './fetcher'
 
 const PROTECTED_URL = 'http://localhost/api/v1/order/orders'
@@ -207,5 +207,106 @@ describe('restoreSession (새로고침 복구)', () => {
     await restoreSession()
 
     expect(getAuthStatus()).toBe('anonymous')
+  })
+})
+
+/**
+ * 탭 사이에서 공유되는 navigator.locks를 흉내 낸다. 같은 이름의 잠금은 앞의 것이 끝나야 다음 것이 실행된다.
+ * hold()는 다른 탭이 잠금을 잡고 있는 상황을 만들고, 돌려준 함수를 부르면 푼다.
+ */
+function fakeLocks() {
+  const requested: string[] = []
+  let held = 0
+  let tail: Promise<unknown> = Promise.resolve()
+  const run = <T>(callback: () => Promise<T>): Promise<T> => {
+    const result = tail.then(async () => {
+      held += 1
+      try {
+        return await callback()
+      } finally {
+        held -= 1
+      }
+    })
+    tail = result.catch(() => undefined)
+    return result
+  }
+  const locks = {
+    request: (name: string, callback: () => Promise<unknown>) => {
+      requested.push(name)
+      return run(callback)
+    },
+  }
+  Object.defineProperty(navigator, 'locks', { value: locks, configurable: true })
+  return {
+    requested,
+    isHeld: () => held > 0,
+    hold: () => {
+      const { promise: released, resolve: release } = Promise.withResolvers<void>()
+      void run(() => released)
+      return release
+    },
+  }
+}
+
+describe('탭 사이 재발급 잠금 (Web Locks)', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'locks')
+  })
+
+  it('navigator.locks가 있으면 재발급을 잠금 안에서 보낸다', async () => {
+    const locks = fakeLocks()
+    const heldDuringReissue: boolean[] = []
+    server.use(
+      http.post('*/api/v1/auth/reissue', () => {
+        heldDuringReissue.push(locks.isHeld())
+        return HttpResponse.json({
+          status: 200,
+          message: '토큰 재발급 성공',
+          data: { accessToken: 'new-token' },
+        })
+      }),
+    )
+
+    await expect(reissueAccessToken()).resolves.toBe('new-token')
+
+    expect(locks.requested).toEqual(['auth:reissue'])
+    expect(heldDuringReissue).toEqual([true])
+  })
+
+  it('다른 탭이 잠금을 잡고 있으면 풀릴 때까지 기다렸다가 보낸다', async () => {
+    const locks = fakeLocks()
+    const reissue = reissueApi({ token: 'new-token' })
+    const releaseOtherTab = locks.hold()
+
+    const result = reissueAccessToken()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(reissue.count).toBe(0)
+
+    releaseOtherTab()
+    await expect(result).resolves.toBe('new-token')
+    expect(reissue.count).toBe(1)
+  })
+
+  it('잠금을 기다리는 사이 로그아웃하면 재발급 결과로 토큰을 되살리지 않는다', async () => {
+    const locks = fakeLocks()
+    reissueApi({ token: 'new-token' })
+    setAccessToken('expired-token')
+    const releaseOtherTab = locks.hold()
+
+    const result = reissueAccessToken()
+    clearAccessToken()
+    releaseOtherTab()
+
+    await expect(result).resolves.toBeNull()
+    expect(getAccessToken()).toBeNull()
+    expect(getAuthStatus()).toBe('anonymous')
+  })
+
+  it('navigator.locks가 없으면 잠금 없이 지금처럼 보낸다', async () => {
+    expect('locks' in navigator).toBe(false)
+    const reissue = reissueApi({ token: 'new-token' })
+
+    await expect(reissueAccessToken()).resolves.toBe('new-token')
+    expect(reissue.count).toBe(1)
   })
 })
