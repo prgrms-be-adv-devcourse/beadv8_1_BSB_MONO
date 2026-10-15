@@ -71,3 +71,5 @@ order:
     # 대기열 입장 확인 (PRO-191). 대기열 내부 API(PRO-182)가 나오기 전이라 fake만 있다(http는 아직 없어 켜면 앱이 뜨지 않는다)
     queue:
       mode: fake
+      # 가짜 대기열의 입장 시간(분). 만료를 빨리 확인하려면 줄인다 (정책은 10분). 더미 페이지: http://localhost:8084/dev/queue-dummy
+      fake-admission-minutes: 10
