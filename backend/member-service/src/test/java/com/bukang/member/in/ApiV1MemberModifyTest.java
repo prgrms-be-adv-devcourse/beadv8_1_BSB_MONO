@@ -34,8 +34,6 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-import com.bukang.common.global.config.GlobalConfig;
-import com.bukang.common.global.eventpublisher.EventPublisher;
 import com.bukang.common.shared.member.event.MemberModifiedEvent;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.domain.Member;
@@ -71,20 +69,10 @@ class ApiV1MemberModifyTest {
 	@Autowired
 	private ApplicationEvents applicationEvents;
 
-	// 엔티티는 GlobalConfig의 정적 EventPublisher로 발행하는데, 정적 필드는 마지막에 만들어진 컨텍스트를 가리킨다.
-	// 같은 설정의 ApiV1AuthJoinTest가 먼저 만든 컨텍스트를 캐시에서 다시 쓰면, 그사이 다른 테스트가 만든 컨텍스트로
-	// 이벤트가 가 위의 기록에 잡히지 않는다. 그래서 테스트마다 이 컨텍스트의 EventPublisher로 다시 맞춘다
-	@Autowired
-	private GlobalConfig globalConfig;
-
-	@Autowired
-	private EventPublisher eventPublisher;
-
 	private int memberId;
 
 	@BeforeEach
 	void setUp() {
-		globalConfig.setEventPublisher(eventPublisher);
 		memberId = joinDirectly("runner1@crewrun.com", NICKNAME, PHONE);
 		// 가입할 때 부른 중복 검사·저장은 세지 않도록 지운다
 		clearInvocations(memberRepository);
