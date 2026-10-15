@@ -4,7 +4,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.order.domain.Cart;
 import com.bukang.order.domain.CartItem;
@@ -32,6 +34,7 @@ public class CartUseCase {
 	private final CartRepository cartRepository;
 	private final CartItemRepository cartItemRepository;
 	private final RaceCoursePort raceCoursePort;
+	private final TransactionTemplate transactionTemplate;
 
 	public CartAddResult addItem(int memberId, int raceCourseId, LocalDateTime now) {
 		RaceCourseInfo course = raceCoursePort.findCourse(raceCourseId)
@@ -41,22 +44,50 @@ public class CartUseCase {
 		if (!course.isBeforeClose(now)) {
 			throw new ApplicationPeriodException("접수가 마감된 종목은 담을 수 없습니다.");
 		}
+		createCartIfAbsent(memberId);
 		try {
-			Cart cart = cartRepository.findByMemberId(memberId)
-				.orElseGet(() -> cartRepository.save(Cart.of(memberId)));
-			boolean added = cart.findItem(raceCourseId).isEmpty();
-			CartItem item = cart.addItem(raceCourseId);
-			// 새 항목의 ID를 받고, 유니크 제약 위반을 여기서 잡으려고 바로 반영한다
-			cartRepository.flush();
-			return new CartAddResult(item.toDto(), added);
+			return transactionTemplate.execute(status -> addLocked(memberId, raceCourseId));
+		} catch (PessimisticLockingFailureException exception) {
+			// 잠금 대기 시간 초과·데드락도 겹친 요청이라 다시 시도하라고 알린다
+			throw new CartConflictException("장바구니에 담는 요청이 겹쳤습니다. 다시 시도해주세요.");
 		} catch (DataIntegrityViolationException exception) {
-			// 같은 회원의 첫 담기, 같은 종목 담기가 동시에 들어오면 늦은 쪽이 유니크 제약에 걸린다.
-			// 한 트랜잭션 안에서는 다시 읽어 이어 갈 수 없으므로 다시 시도하라고 알린다
+			// 잠근 뒤라 같은 종목이 동시에 들어와도 늦은 쪽은 담긴 항목을 본다. 그래도 걸리면 다시 시도하라고 알린다
 			if (isCartConflict(exception)) {
 				throw new CartConflictException("장바구니에 담는 요청이 겹쳤습니다. 다시 시도해주세요.");
 			}
 			throw exception;
 		}
+	}
+
+	/**
+	 * 장바구니가 없으면 따로 커밋해 먼저 만든다. 동시에 만들면 늦은 쪽은 uk_cart_member에 걸리는데, 이미 생긴 것이니 그대로 이어 간다
+	 * 담기 트랜잭션에서 없는 장바구니를 FOR UPDATE로 읽으면 MySQL이 gap lock을 잡아 동시 첫 담기끼리 데드락이 나므로 나눴다
+	 */
+	private void createCartIfAbsent(int memberId) {
+		try {
+			transactionTemplate.executeWithoutResult(status -> {
+				if (!cartRepository.existsByMemberId(memberId)) {
+					cartRepository.saveAndFlush(Cart.of(memberId));
+				}
+			});
+		} catch (DataIntegrityViolationException exception) {
+			if (!isCartConflict(exception)) {
+				throw exception;
+			}
+		}
+	}
+
+	/**
+	 * 장바구니 행을 잠근 뒤 담는다 (PRO-192). 같은 회원의 담기는 한 요청씩 처리돼 다른 종목을 동시에 담아도 한 종목만 남는다
+	 * 이 트랜잭션의 첫 읽기가 잠금이어야 한다. 담긴 항목은 잠근 뒤에 처음 읽어(MySQL REPEATABLE READ 스냅샷) 먼저 끝난 담기를 본다
+	 */
+	private CartAddResult addLocked(int memberId, int raceCourseId) {
+		Cart cart = cartRepository.findByMemberIdForUpdate(memberId).orElseThrow();
+		boolean added = cart.findItem(raceCourseId).isEmpty();
+		CartItem item = cart.addItem(raceCourseId);
+		// 새 항목의 ID를 받고, 유니크 제약 위반을 여기서 잡으려고 바로 반영한다
+		cartRepository.flush();
+		return new CartAddResult(item.toDto(), added);
 	}
 
 	public Cart removeItem(int memberId, int cartItemId) {

@@ -57,7 +57,7 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
           </Link>
         </div>
 
-        <div className="flex flex-col gap-3 rounded-lg bg-bg-brand-subtle px-5 py-4">
+        <div className="flex flex-col gap-3 rounded-lg bg-bg-brand-subtle p-5">
           <div className="flex items-center justify-between gap-2">
             <Link
               href="/me/deposit"

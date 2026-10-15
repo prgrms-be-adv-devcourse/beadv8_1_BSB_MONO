@@ -46,6 +46,8 @@ import com.bukang.order.domain.ShippingAddress;
 import com.bukang.order.out.OrderItemRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.support.StubQueueAdmissionPort;
+import com.bukang.order.support.StubQueueAdmissionPortConfig;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -55,7 +57,7 @@ import com.jayway.jsonpath.JsonPath;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class})
+@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class, StubQueueAdmissionPortConfig.class})
 class ApiV1OrderTest {
 	private static final String BASE_URL = "/api/v1/order/orders";
 	private static final int MEMBER_ID = 1;
@@ -84,6 +86,9 @@ class ApiV1OrderTest {
 	private StubSeatHoldPort seatHoldPort;
 
 	@Autowired
+	private StubQueueAdmissionPort queueAdmissionPort;
+
+	@Autowired
 	private TransactionTemplate transactionTemplate;
 
 	@Autowired
@@ -100,10 +105,11 @@ class ApiV1OrderTest {
 		participationRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
+		queueAdmissionPort.clear();
 	}
 
 	@Test
-	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 10분 뒤다")
+	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 대기열 입장 끝 시각(10분 뒤)이다")
 	void create() throws Exception {
 		int participationId = applyAndGetId(MEMBER_ID);
 		// DB(H2·MySQL)는 마이크로초까지만 저장한다. Linux의 now()는 나노초까지 나오므로 비교 기준도 맞춰 자른다
@@ -129,9 +135,70 @@ class ApiV1OrderTest {
 
 		Order order = orderRepository.findAll().getFirst();
 		assertThat(order.getPaymentDueAt())
-			.isBetween(before.plusMinutes(StubSeatHoldPort.PAYMENT_MINUTES),
-				after.plusMinutes(StubSeatHoldPort.PAYMENT_MINUTES))
+			.isBetween(before.plusMinutes(StubQueueAdmissionPort.ADMISSION_MINUTES),
+				after.plusMinutes(StubQueueAdmissionPort.ADMISSION_MINUTES))
 			.isEqualTo(participation.getPaymentDueAt());
+	}
+
+	@Test
+	@DisplayName("대기열에 입장 중이면 입장 끝 시각이 자리 확보 기한이자 결제 기한이 된다")
+	void createUsesAdmissionEndsAt() throws Exception {
+		LocalDateTime endsAt = LocalDateTime.now().plusMinutes(4).withNano(0);
+		queueAdmissionPort.admitUntil(COURSE_ID, endsAt);
+		int participationId = applyAndGetId(MEMBER_ID);
+
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
+
+		assertThat(orderRepository.findAll().getFirst().getPaymentDueAt()).isEqualTo(endsAt);
+		assertThat(participationRepository.findById(participationId).orElseThrow().getPaymentDueAt())
+			.isEqualTo(endsAt);
+	}
+
+	@Test
+	@DisplayName("대기열이 정책(입장 뒤 10분)보다 먼 끝 시각을 주면 결제 기한을 지금부터 10분으로 자른다")
+	void createCapsAdmissionEndsAt() throws Exception {
+		queueAdmissionPort.admitUntil(COURSE_ID, LocalDateTime.now().plusHours(1));
+		int participationId = applyAndGetId(MEMBER_ID);
+
+		LocalDateTime before = LocalDateTime.now();
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
+		LocalDateTime after = LocalDateTime.now();
+
+		assertThat(orderRepository.findAll().getFirst().getPaymentDueAt())
+			.isBetween(before.plusMinutes(10), after.plusMinutes(10));
+	}
+
+	@Test
+	@DisplayName("대기열에 입장 중이 아니거나 입장 시간이 끝났으면 403이고, 자리를 확보하지 않는다")
+	void createNotAdmitted() throws Exception {
+		queueAdmissionPort.notAdmitted(COURSE_ID);
+		int participationId = applyAndGetId(MEMBER_ID);
+
+		create(MEMBER_ID, participationId, newKey())
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("ORDER_QUEUE_NOT_ADMITTED"))
+			.andExpect(jsonPath("$.message").value("대기열에서 입장한 뒤 결제할 수 있습니다."));
+		queueAdmissionPort.clear();
+		queueAdmissionPort.admitUntil(COURSE_ID, LocalDateTime.now().minusSeconds(1));
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isForbidden());
+
+		assertThat(seatHoldPort.holdCalls()).isZero();
+		assertThat(orderRepository.count()).isZero();
+		assertThat(participationRepository.findById(participationId).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.PENDING);
+	}
+
+	@Test
+	@DisplayName("같은 키로 다시 보내면 입장 시간이 끝났어도 처음 주문을 돌려준다")
+	void createRetryAfterAdmissionEnded() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		String key = newKey();
+		int orderId = createAndGetId(MEMBER_ID, participationId, key);
+		queueAdmissionPort.notAdmitted(COURSE_ID);
+
+		create(MEMBER_ID, participationId, key)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.id").value(orderId));
 	}
 
 	@Test

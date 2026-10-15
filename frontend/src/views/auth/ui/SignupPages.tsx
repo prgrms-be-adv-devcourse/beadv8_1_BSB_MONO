@@ -154,7 +154,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           <p className="text-body-m text-text-secondary">
             대회 신청과 거래를 위해 꼭 필요한 약관이에요.
           </p>
-          <div className="rounded-[12px] bg-bg-subtle p-4">
+          <div className="rounded-md bg-bg-subtle p-4">
             <Checkbox
               checked={allChecked}
               onCheckedChange={setAllTerms}
