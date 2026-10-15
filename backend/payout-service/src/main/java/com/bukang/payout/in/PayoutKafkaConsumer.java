@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.race.event.RaceCancelEvent;
-import com.bukang.payout.app.RaceCancelUseCase;
+import com.bukang.payout.app.PayoutRaceCancelUseCase;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +38,7 @@ public class PayoutKafkaConsumer {
 	private static final String RETRY_TOPIC_SUFFIX = ".payout.retry";
 	private static final String DLT_TOPIC_SUFFIX = ".payout.dlt";
 
-	private final RaceCancelUseCase raceCancelUseCase;
+	private final PayoutRaceCancelUseCase payoutRaceCancelUseCase;
 	private final JsonConverter jsonConverter;
 
 	// 판매자가 대회를 취소했다 (상품 서비스가 발행, key는 대회 ID). 지급 전 정산 내역은 닫고, 지급한 돈은 회수를 만든다
@@ -55,7 +55,7 @@ public class PayoutKafkaConsumer {
 	)
 	public void handleRaceCancel(String payload) {
 		RaceCancelEvent event = jsonConverter.fromJson(payload, RaceCancelEvent.class);
-		raceCancelUseCase.cancelRace(event.raceId(), LocalDateTime.now());
+		payoutRaceCancelUseCase.cancelRace(event.raceId(), LocalDateTime.now());
 	}
 
 	// 끝까지 실패한 메시지. 닫히지 않은 정산 내역이 지급될 수 있으므로 운영자가 확인해 직접 보류를 걸고 다시 보내야 한다

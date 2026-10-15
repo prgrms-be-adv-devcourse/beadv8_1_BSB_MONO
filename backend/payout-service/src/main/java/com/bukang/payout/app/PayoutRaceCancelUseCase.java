@@ -28,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class RaceCancelUseCase {
+public class PayoutRaceCancelUseCase {
 	private static final String CANCEL_REASON = "대회 취소";
 
 	private final PayoutRepository payoutRepository;

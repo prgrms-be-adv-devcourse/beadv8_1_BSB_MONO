@@ -31,7 +31,7 @@ import jakarta.persistence.EntityManager;
 
 @DataJpaTest
 @ActiveProfiles("test")
-class RaceCancelUseCaseTest {
+class PayoutRaceCancelUseCaseTest {
 	private static final int SELLER_ID = 1;
 	private static final int RACE_ID = 10;
 	private static final int OTHER_RACE_ID = 20;
@@ -51,8 +51,8 @@ class RaceCancelUseCaseTest {
 	@Autowired
 	private EntityManager entityManager;
 
-	private RaceCancelUseCase useCase() {
-		return new RaceCancelUseCase(payoutRepository, payoutRecoveryRepository);
+	private PayoutRaceCancelUseCase useCase() {
+		return new PayoutRaceCancelUseCase(payoutRepository, payoutRecoveryRepository);
 	}
 
 	private PayoutHoldUseCase holdUseCase() {
@@ -81,9 +81,9 @@ class RaceCancelUseCaseTest {
 	void cancelsCalculatedPayout() {
 		Payout payout = savePayout(RACE_ID, YearMonth.of(2026, 9), 50_000);
 
-		RaceCancelUseCase.CancelResult result = useCase().cancelRace(RACE_ID, CANCELED_AT);
+		PayoutRaceCancelUseCase.CancelResult result = useCase().cancelRace(RACE_ID, CANCELED_AT);
 
-		assertThat(result).isEqualTo(new RaceCancelUseCase.CancelResult(1, 1, false));
+		assertThat(result).isEqualTo(new PayoutRaceCancelUseCase.CancelResult(1, 1, false));
 		Payout reloaded = reload(payout);
 		assertThat(reloaded.getStatus()).isEqualTo(PayoutStatus.CANCELED);
 		// 금액 칸은 만들 때 그대로 둔다
@@ -124,9 +124,9 @@ class RaceCancelUseCaseTest {
 		otherPaid.pay(CANCELED_AT.minusDays(5));
 		Payout otherRace = savePayout(OTHER_RACE_ID, YearMonth.of(2026, 9), 50_000);
 
-		RaceCancelUseCase.CancelResult result = useCase().cancelRace(RACE_ID, CANCELED_AT);
+		PayoutRaceCancelUseCase.CancelResult result = useCase().cancelRace(RACE_ID, CANCELED_AT);
 
-		assertThat(result).isEqualTo(new RaceCancelUseCase.CancelResult(2, 0, true));
+		assertThat(result).isEqualTo(new PayoutRaceCancelUseCase.CancelResult(2, 0, true));
 		assertThat(reload(paid).getStatus()).isEqualTo(PayoutStatus.PAID);
 		assertThat(reload(otherRace).getStatus()).isEqualTo(PayoutStatus.CALCULATED);
 		List<PayoutRecovery> recoveries = payoutRecoveryRepository.findAll();
@@ -147,7 +147,7 @@ class RaceCancelUseCaseTest {
 		Payout zero = savePayout(RACE_ID, YearMonth.of(2026, 9), 0);
 		zero.pay(CANCELED_AT.minusDays(1));
 
-		RaceCancelUseCase.CancelResult result = useCase().cancelRace(RACE_ID, CANCELED_AT);
+		PayoutRaceCancelUseCase.CancelResult result = useCase().cancelRace(RACE_ID, CANCELED_AT);
 
 		assertThat(result.recoveryCreated()).isFalse();
 		assertThat(payoutRecoveryRepository.count()).isZero();
@@ -163,9 +163,9 @@ class RaceCancelUseCaseTest {
 		entityManager.flush();
 		entityManager.clear();
 
-		RaceCancelUseCase.CancelResult again = useCase().cancelRace(RACE_ID, CANCELED_AT.plusMinutes(1));
+		PayoutRaceCancelUseCase.CancelResult again = useCase().cancelRace(RACE_ID, CANCELED_AT.plusMinutes(1));
 
-		assertThat(again).isEqualTo(new RaceCancelUseCase.CancelResult(2, 0, false));
+		assertThat(again).isEqualTo(new PayoutRaceCancelUseCase.CancelResult(2, 0, false));
 		assertThat(reload(calculated).getStatusHistories()).hasSize(2);
 		assertThat(payoutRecoveryRepository.count()).isEqualTo(1);
 	}
@@ -173,8 +173,8 @@ class RaceCancelUseCaseTest {
 	@Test
 	@DisplayName("정산 내역이 없는 대회는 아무것도 하지 않는다 (세미는 정산 대상일 전에 취소돼 보통 이 경우다)")
 	void noPayouts() {
-		RaceCancelUseCase.CancelResult result = useCase().cancelRace(RACE_ID, CANCELED_AT);
+		PayoutRaceCancelUseCase.CancelResult result = useCase().cancelRace(RACE_ID, CANCELED_AT);
 
-		assertThat(result).isEqualTo(new RaceCancelUseCase.CancelResult(0, 0, false));
+		assertThat(result).isEqualTo(new PayoutRaceCancelUseCase.CancelResult(0, 0, false));
 	}
 }
