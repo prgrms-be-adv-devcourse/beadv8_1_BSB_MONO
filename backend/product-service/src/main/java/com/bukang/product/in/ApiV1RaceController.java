@@ -23,7 +23,6 @@ import com.bukang.common.global.rsdata.RsData;
 import com.bukang.product.app.ProductFacade;
 import com.bukang.product.domain.CourseSurface;
 import com.bukang.product.domain.CourseType;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.dto.RaceDetailDto;
 import com.bukang.product.dto.RacePageDto;
 import com.bukang.product.dto.RaceSaveDto;
@@ -48,13 +47,14 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 
 // 게이트웨이가 경로 앞부분을 자르지 않으므로(StripPrefix 금지, PRO-17) 서비스 이름(/product)부터 쓴다
-@Tag(name = "Race", description = "대회 등록, 수정, 판매 시작, 취소, 목록·상세·내 대회 조회 API")
+@Tag(name = "Race", description = "대회 등록, 수정, 취소, 목록·상세·내 대회 조회 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/product/races")
 public class ApiV1RaceController {
-	// 응답 메시지에 보여 주는 일시 형식 (예: 2026-10-13 10:00)
-	private static final DateTimeFormatter MESSAGE_DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+	// 응답 메시지에 보여 주는 날짜·일시 형식 (예: 10월 20일 / 10월 20일 09:00)
+	private static final DateTimeFormatter MESSAGE_DATE = DateTimeFormatter.ofPattern("M월 d일");
+	private static final DateTimeFormatter MESSAGE_DATE_TIME = DateTimeFormatter.ofPattern("M월 d일 HH:mm");
 	private static final int MAX_PAGE_SIZE = 100;
 
 	private final ProductFacade productFacade;
@@ -63,19 +63,24 @@ public class ApiV1RaceController {
 	// 에러 응답은 GlobalExceptionHandler, ProductExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	@PostMapping
 	@Operation(summary = "대회 등록",
-		description = "승인된 판매자가 대회와 종목을 작성 중(DRAFT)으로 등록한다. 판매 시작 일시는 크루 예매 시작·개인 예매 오픈 중 "
-			+ "이른 시각으로 채운다. 이미지는 종목마다 받고(대표 이미지 1장 필수), 등록이 커밋된 뒤 file-service에 연결을 요청한다. "
+		description = "승인된 판매자가 대회와 종목을 판매 예정(SCHEDULED)으로 등록하고, 등록하면 바로 공개된다. "
+			+ "판매 시작일(saleOpenDate)은 크루 예매 시작·개인 예매 오픈 중 이른 날짜로 채우고, 오늘로부터 이틀 뒤부터 정할 수 있다. "
+			+ "판매 시작일 0시에 상태 배치(5분마다)가 판매 중으로 바꾸고, 이때부터 판매 시작 뒤 수정 규칙이 걸린다. "
+			+ "판매 상태는 판매자 화면용이고, 구매자는 크루 예매 시작·개인 예매 오픈 시각부터 예매할 수 있다. "
+			+ "이미지는 종목마다 받고(대표 이미지 1장 필수), 등록이 커밋된 뒤 file-service에 연결을 요청한다. "
 			+ "파일이 없거나 본인이 올린 파일이 아니어서 연결에 실패하면 응답에는 나오지 않고 file-service 로그에 남는다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "등록 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.REGISTER_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·티셔츠 사이즈 오류, 이미지 용도·개수 오류, "
-				+ "같은 파일 중복 또는 회원 ID 형식 오류",
+			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·키트 금액·티셔츠 사이즈 오류, "
+				+ "판매 시작일이 이틀 뒤보다 빠름, 이미지 용도·개수 오류, 같은 파일 중복 또는 회원 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = RaceApiExamples.REGISTER_INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = RaceApiExamples.INVALID_BODY),
 				@ExampleObject(name = "날짜 순서 오류", value = RaceApiExamples.INVALID_SCHEDULE),
+				@ExampleObject(name = "판매 시작일이 이틀 뒤보다 빠름", value = RaceApiExamples.SALE_OPEN_TOO_SOON),
+				@ExampleObject(name = "키트 금액이 참가비보다 큼", value = RaceApiExamples.KIT_PRICE_OVER_PRICE),
 				@ExampleObject(name = "키트 없는 종목의 티셔츠 사이즈", value = RaceApiExamples.TSHIRT_SIZE_WITHOUT_KIT),
 				@ExampleObject(name = "대표 이미지 없음", value = RaceApiExamples.THUMBNAIL_REQUIRED),
 				@ExampleObject(name = "같은 파일 중복", value = RaceApiExamples.DUPLICATE_FILE),
@@ -94,31 +99,47 @@ public class ApiV1RaceController {
 		@Valid @RequestBody RaceSaveRequestDto request
 	) {
 		RaceSaveDto race = productFacade.registerRace(memberId, request);
-		String message = "대회가 작성 중으로 저장되었습니다. 판매 시작을 눌러야 %s부터 판매됩니다."
-			.formatted(race.getSaleOpenAt().format(MESSAGE_DATE_TIME));
 		return ResponseEntity.created(URI.create("/api/v1/product/races/" + race.getRaceId()))
-			.body(RsData.of(HttpStatus.CREATED, message, race));
+			.body(RsData.of(HttpStatus.CREATED, registerMessage(race, request), race));
+	}
+
+	// 판매 중 표시는 판매 시작일 0시에, 예매는 크루 예매 시작·개인 예매 오픈 시각에 열린다는 것을 함께 알린다
+	//   예: "대회를 등록했습니다. 10월 20일 0시부터 판매 중으로 표시되고, 개인 예매는 10월 20일 09:00에 열립니다."
+	private static String registerMessage(RaceSaveDto race, RaceSaveRequestDto request) {
+		String openTimes = "개인 예매는 %s".formatted(request.getIndividualOpenAt().format(MESSAGE_DATE_TIME));
+		if (request.getCrewSaleStartAt() != null) {
+			openTimes = "크루 예매는 %s, ".formatted(request.getCrewSaleStartAt().format(MESSAGE_DATE_TIME)) + openTimes;
+		}
+		return "대회를 등록했습니다. %s 0시부터 판매 중으로 표시되고, %s에 열립니다."
+			.formatted(race.getSaleOpenDate().format(MESSAGE_DATE), openTimes);
 	}
 
 	@PutMapping("/{raceId}")
 	@Operation(summary = "대회 수정",
 		description = "본인이 등록한 대회를 등록과 같은 모양의 요청으로 통째로 바꾼다. 종목은 courseId가 있으면 수정하고 없으면 추가하며, "
 			+ "요청에 없는 기존 종목은 뺀다. 이미지 목록도 통째로 바뀌어, 수정이 커밋된 뒤 file-service에 다시 연결을 요청한다. "
-			+ "판매가 시작된 뒤에는 참가비를 올리거나 환불 기준일을 앞당길 수 없고, 정원을 줄이거나 티셔츠 사이즈를 바꾸거나 "
+			+ "취소된 대회와 판매가 끝난 대회(대회일 다음 날 0시부터)는 수정할 수 없다. "
+			+ "판매 시작 전에 판매 시작일이 바뀌면 등록과 같이 오늘로부터 이틀 뒤부터 정할 수 있다. "
+			+ "판매가 시작된 뒤(판매 시작일 0시부터)에는 판매 시작일을 정하는 일정(크루 예매가 있으면 크루 예매 시작, "
+			+ "없으면 개인 예매 오픈)을 바꿀 수 없다. "
+			+ "판매가 시작된 뒤에는 참가비·키트 금액을 바꾸거나 환불 기준일을 앞당길 수 없고, 정원을 줄이거나 티셔츠 사이즈를 바꾸거나 "
 			+ "종목을 뺄 수 없다(정원은 늘리기만). 종목의 참가 조건(거리·종목 구분·노면·제한 시간·나이 제한·키트 포함 여부)도 바꿀 수 없다. "
-			+ "판매 시작을 누른 뒤에는 이미 지난 판매 일정(크루 예매 시작·마감, 개인 예매 오픈, 접수 마감)을 바꾸거나 "
+			+ "이미 지난 판매 일정(크루 예매 시작·마감, 개인 예매 오픈, 접수 마감)을 바꾸거나 "
 			+ "일정을 지난 시각으로 옮길 수 없다(아직 오지 않은 일정은 앞당기거나 늦출 수 있다). "
 			+ "판매가 시작된 뒤 대회 일시나 장소를 바꾸면 일정·장소 변경 안내 일시를 기록한다(이날부터 7일 동안 전액 환불).")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "수정 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.UPDATE_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·티셔츠 사이즈 오류, 이미지 용도·개수 오류, "
-				+ "같은 파일 중복, 이 대회의 종목이 아닌 종목 ID 또는 대회 ID·회원 ID 형식 오류",
+			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·키트 금액·티셔츠 사이즈 오류, "
+				+ "판매 시작 전 바뀐 판매 시작일이 이틀 뒤보다 빠름, 이미지 용도·개수 오류, 같은 파일 중복, "
+				+ "이 대회의 종목이 아닌 종목 ID 또는 대회 ID·회원 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = RaceApiExamples.REGISTER_INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = RaceApiExamples.INVALID_BODY),
 				@ExampleObject(name = "날짜 순서 오류", value = RaceApiExamples.INVALID_SCHEDULE),
+				@ExampleObject(name = "판매 시작일이 이틀 뒤보다 빠름", value = RaceApiExamples.SALE_OPEN_TOO_SOON),
+				@ExampleObject(name = "키트 금액이 참가비보다 큼", value = RaceApiExamples.KIT_PRICE_OVER_PRICE),
 				@ExampleObject(name = "키트 없는 종목의 티셔츠 사이즈", value = RaceApiExamples.TSHIRT_SIZE_WITHOUT_KIT),
 				@ExampleObject(name = "대표 이미지 없음", value = RaceApiExamples.THUMBNAIL_REQUIRED),
 				@ExampleObject(name = "같은 파일 중복", value = RaceApiExamples.DUPLICATE_FILE),
@@ -137,11 +158,15 @@ public class ApiV1RaceController {
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND))),
 		@ApiResponse(responseCode = "409",
-			description = "판매 시작 뒤 참가비 인상·환불 기준일 앞당김, 지난 판매 일정 변경·지난 시각으로 이동, "
-				+ "판매 시작 뒤 정원 줄이기·참가 조건 변경·티셔츠 사이즈 변경, 종목 빼기 또는 취소된 대회",
+			description = "판매 시작 뒤 판매 시작일을 정하는 일정 변경·참가비·키트 금액 변경·환불 기준일 앞당김, "
+				+ "지난 판매 일정 변경·지난 시각으로 이동, 판매 시작 뒤 정원 줄이기·참가 조건 변경·티셔츠 사이즈 변경, "
+				+ "종목 빼기, 취소된 대회 또는 판매가 끝난 대회",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "취소된 대회", value = RaceApiExamples.UPDATE_CANCELED),
-				@ExampleObject(name = "참가비 인상", value = RaceApiExamples.PRICE_RAISED),
+				@ExampleObject(name = "판매가 끝난 대회", value = RaceApiExamples.UPDATE_CLOSED),
+				@ExampleObject(name = "판매 시작일을 정하는 일정 변경", value = RaceApiExamples.SALE_OPEN_SCHEDULE_CHANGED),
+				@ExampleObject(name = "참가비 변경", value = RaceApiExamples.PRICE_CHANGED),
+				@ExampleObject(name = "키트 금액 변경", value = RaceApiExamples.KIT_PRICE_CHANGED),
 				@ExampleObject(name = "환불 기준일 앞당김", value = RaceApiExamples.REFUND_DEADLINE_ADVANCED),
 				@ExampleObject(name = "지난 판매 일정 변경", value = RaceApiExamples.SCHEDULE_PASSED),
 				@ExampleObject(name = "판매 일정을 지난 시각으로", value = RaceApiExamples.SCHEDULE_TO_PAST),
@@ -162,53 +187,12 @@ public class ApiV1RaceController {
 			.body(RsData.of(HttpStatus.OK, "대회를 수정했습니다.", productFacade.updateRace(memberId, raceId, request)));
 	}
 
-	@PostMapping("/{raceId}/sale")
-	@Operation(summary = "대회 판매 시작",
-		description = "본인이 등록한 작성 중 대회의 판매를 시작한다. 판매 예정이 되어 판매 시작 일시부터 판매되고, "
-			+ "판매 시작 일시가 이미 지났으면 바로 판매 중이 된다. 대회 검수는 없다.")
-	@ApiResponses({
-		@ApiResponse(responseCode = "200", description = "판매 시작 성공",
-			content = @Content(examples = {
-				@ExampleObject(name = "판매 예정", value = RaceApiExamples.SALE_SCHEDULED),
-				@ExampleObject(name = "판매 시작 일시가 지나 바로 판매 중", value = RaceApiExamples.SALE_STARTED)
-			})),
-		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
-		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.LOGIN_REQUIRED))),
-		@ApiResponse(responseCode = "403", description = "승인된 판매자가 아님 또는 다른 판매자의 대회",
-			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
-				@ExampleObject(name = "승인된 판매자가 아님", value = RaceApiExamples.SELLER_NOT_APPROVED),
-				@ExampleObject(name = "다른 판매자의 대회", value = RaceApiExamples.NOT_OWNER)
-			})),
-		@ApiResponse(responseCode = "404", description = "없는 대회",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND))),
-		@ApiResponse(responseCode = "409", description = "작성 중이 아닌 대회",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.NOT_DRAFT)))
-	})
-	public ResponseEntity<RsData<RaceSaveDto>> startSale(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId,
-		@Parameter(description = "대회 ID", example = "1")
-		@PathVariable int raceId
-	) {
-		RaceSaveDto race = productFacade.startRaceSale(memberId, raceId);
-		String message = race.getSaleStatus() == RaceSaleStatus.ON_SALE
-			? "판매를 시작했습니다."
-			: "%s에 판매가 시작됩니다.".formatted(race.getSaleOpenAt().format(MESSAGE_DATE_TIME));
-		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, message, race));
-	}
-
 	@PostMapping("/{raceId}/cancel")
 	@Operation(summary = "대회 취소",
-		description = "본인이 등록한 대회를 취소한다. 판매가 끝나기 전(대회일 다음 날 0시 전)이면 작성 중·판매 예정·판매 중·판매 중지 "
+		description = "본인이 등록한 대회를 취소한다. 판매가 끝나기 전(대회일 다음 날 0시 전)이면 판매 예정·판매 중·판매 중지 "
 			+ "어느 상태든 취소할 수 있고, 되돌릴 수 없다. 결제 대기 자리는 모두 해제되고 공개 목록에서 빠진다. "
-			+ "판매를 시작했던 대회면 주문 서비스에 취소 메시지(Kafka order.race.cancel)를 보내 참가권을 일괄 환불하게 한다. "
-			+ "취소된 대회는 수정·판매 시작·자리 확보를 할 수 없고, 상세는 등록한 판매자만 볼 수 있다.")
+			+ "주문 서비스에 취소 메시지(Kafka order.race.cancel)를 보내 참가권을 일괄 환불하게 한다. "
+			+ "취소된 대회는 수정·자리 확보를 할 수 없고, 상세는 등록한 판매자만 볼 수 있다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "취소 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.CANCEL_SUCCESS))),
@@ -245,7 +229,7 @@ public class ApiV1RaceController {
 
 	@GetMapping
 	@Operation(summary = "공개 대회 목록",
-		description = "판매를 시작했고(판매 예정·판매 중) 아직 접수 마감 전인 대회를 찾는다. 로그인하지 않아도 된다. "
+		description = "판매 예정·판매 중이고 아직 접수 마감 전인 대회를 찾는다. 로그인하지 않아도 된다. "
 			+ "검색어는 대회명·장소·종목명·지역·소개에서 찾고, 단어는 하나만 맞아도 나온다(예: '충남 트레일'). "
 			+ "오타는 단어 길이에 따라 허용한다(1~2글자 단어는 허용 안 함, 3~5글자는 1글자, 6글자 이상은 2글자). "
 			+ "정확도순은 대회명에서 맞으면 3배, 장소에서 맞으면 2배 점수를 준다. "
@@ -253,7 +237,9 @@ public class ApiV1RaceController {
 			+ "종목 조건(종목 구분·노면·거리·참가비)은 종목 하나라도 맞으면 그 대회가 나온다. "
 			+ "종목이 여러 개인 대회도 한 줄로 나온다. 가격 낮은순과 최저가(minPrice)는 조건에 맞은 종목 중 가장 싼 종목 기준이다"
 			+ "(조건이 없으면 대회에서 가장 싼 종목). 최신 등록순은 대회 등록 일시 기준이다. "
-			+ "목록 카드는 대회 정보로 만든 색 포스터를 쓰므로 이미지는 주지 않는다.")
+			+ "목록 카드는 대회 정보로 만든 색 포스터를 쓰므로 이미지는 주지 않는다. "
+			+ "판매 상태(saleStatus)와 판매 시작일(saleOpenDate)은 판매자 화면용이다. "
+			+ "구매자 화면은 크루 예매 기간·개인 예매 오픈·접수 마감 일시로 오픈 예정·예매 중·마감을 보여 준다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.SEARCH_SUCCESS))),
@@ -339,7 +325,7 @@ public class ApiV1RaceController {
 
 	@GetMapping("/mine")
 	@Operation(summary = "판매자 내 대회 목록",
-		description = "승인된 판매자가 등록한 대회를 최근 등록 순으로 모두 돌려준다(작성 중 포함). "
+		description = "승인된 판매자가 등록한 대회를 최근 등록 순으로 모두 돌려준다(취소된 대회 포함). "
 			+ "종목마다 정원·결제 대기·판매 수를 함께 준다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
@@ -365,20 +351,22 @@ public class ApiV1RaceController {
 	@GetMapping("/{raceId}")
 	@Operation(summary = "대회 상세",
 		description = "대회와 종목(남은 자리·티셔츠 사이즈 포함), 판매자 정보를 돌려준다. 로그인하지 않아도 된다. "
-			+ "작성 중이거나 취소된 대회는 등록한 판매자만 볼 수 있고, 다른 사람에게는 없는 대회(404)로 보인다. "
-			+ "종목 이미지는 file-service에서 종목마다 받는다(GET /api/v1/file/files?refType=RaceCourse&refId=종목 ID).")
+			+ "취소된 대회는 등록한 판매자만 볼 수 있고, 다른 사람에게는 없는 대회(404)로 보인다. "
+			+ "종목 이미지는 file-service에서 종목마다 받는다(GET /api/v1/file/files?refType=RaceCourse&refId=종목 ID). "
+			+ "판매 상태(saleStatus)와 판매 시작일(saleOpenDate)은 판매자 화면용이고, "
+			+ "구매자 화면의 예매 버튼은 크루 예매 기간·개인 예매 오픈·접수 마감 일시로 켠다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.DETAIL_SUCCESS))),
 		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
-		@ApiResponse(responseCode = "404", description = "없는 대회 또는 다른 판매자의 작성 중·취소된 대회",
+		@ApiResponse(responseCode = "404", description = "없는 대회 또는 다른 판매자의 취소된 대회",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<RaceDetailDto>> findRace(
-		@Parameter(description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 작성 중·취소된 대회는 등록한 판매자만 본다)",
+		@Parameter(description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 취소된 대회는 등록한 판매자만 본다)",
 			example = "9001")
 		@RequestHeader(name = "X-Member-Id", required = false) Integer memberId,
 		@Parameter(description = "대회 ID", example = "1")

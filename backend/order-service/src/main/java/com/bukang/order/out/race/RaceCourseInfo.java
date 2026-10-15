@@ -23,6 +23,8 @@ import java.time.Period;
  *                           있으면 신청 때 배송 주소를 받는다 (정책 2장 1-3, 3장 1-2)
  * @param refundDeadline     환불 기한 (날짜). 이날 23:59:59까지 취소하면 전액 환불한다 (정책 5장, ERD v4 race.refund_deadline)
  * @param scheduleChangedAt  일정 변경 안내 일시. 판매 시작 뒤 대회 일시가 바뀌면 상품 서비스가 기록한다. 바뀐 적 없으면 null
+ * @param canceled           판매자가 취소한 대회인지 (B race.sale_status = CANCELED). 신청·담기·[결제하기]는 막고,
+ *                           결제한 참가권은 환불 기한과 상관없이 전액 환불한다 (정책 5장 1-2 "대회 취소·일정 변경일 때만 환불")
  *                           (ERD v4 race.schedule_changed_at)
  */
 public record RaceCourseInfo(
@@ -38,8 +40,17 @@ public record RaceCourseInfo(
 	int price,
 	boolean kitIncluded,
 	LocalDate refundDeadline,
-	LocalDateTime scheduleChangedAt
+	LocalDateTime scheduleChangedAt,
+	boolean canceled
 ) {
+	// 취소되지 않은 대회 (가짜 어댑터·테스트처럼 취소 여부를 따로 정하지 않을 때)
+	public RaceCourseInfo(int raceCourseId, int raceId, LocalDateTime raceDate, LocalDateTime applicationOpenAt,
+		LocalDateTime applicationCloseAt, int minAge, Integer maxAge, int sellerId, String courseName, int price,
+		boolean kitIncluded, LocalDate refundDeadline, LocalDateTime scheduleChangedAt) {
+		this(raceCourseId, raceId, raceDate, applicationOpenAt, applicationCloseAt, minAge, maxAge, sellerId,
+			courseName, price, kitIncluded, refundDeadline, scheduleChangedAt, false);
+	}
+
 	// 일정이 바뀐 뒤 전액 환불해 주는 날 수 (정책 5장 4-4 "알린 날부터 7일 동안", ERD v4 race.schedule_changed_at)
 	public static final int SCHEDULE_CHANGE_REFUND_DAYS = 7;
 
@@ -48,7 +59,7 @@ public record RaceCourseInfo(
 	 * 환불 기한 날짜까지(그날 23:59:59 포함, 10/12 결정)이거나, 일정이 바뀐 뒤 7일 안이면 기한과 상관없이 된다
 	 */
 	public boolean isRefundableOn(LocalDate today) {
-		return !today.isAfter(refundDeadline) || isWithinScheduleChangeRefund(today);
+		return canceled || !today.isAfter(refundDeadline) || isWithinScheduleChangeRefund(today);
 	}
 
 	/**
@@ -70,12 +81,12 @@ public record RaceCourseInfo(
 
 	// 접수 기간 안인지 (오픈 시각 이상, 마감 시각 전)
 	public boolean isAccepting(LocalDateTime now) {
-		return !now.isBefore(applicationOpenAt) && now.isBefore(applicationCloseAt);
+		return !canceled && !now.isBefore(applicationOpenAt) && now.isBefore(applicationCloseAt);
 	}
 
 	// 접수 마감 전인지 (참가자 정보 수정 가능 여부)
 	public boolean isBeforeClose(LocalDateTime now) {
-		return now.isBefore(applicationCloseAt);
+		return !canceled && now.isBefore(applicationCloseAt);
 	}
 
 	// 대회 당일 만 나이가 종목의 나이 제한 안인지

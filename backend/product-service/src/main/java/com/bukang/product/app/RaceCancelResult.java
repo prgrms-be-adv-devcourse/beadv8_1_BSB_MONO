@@ -8,7 +8,7 @@ import com.bukang.common.shared.race.event.RaceCancelEvent;
 public record RaceCancelResult(
 	// API 응답과 다시 색인할 종목 문서 (판매 상태가 대회 취소로 바뀌어 공개 목록에서 빠진다)
 	RaceSaveResult saved,
-	// 주문 서비스에 보낼 취소 메시지. 작성 중이던 대회면 산 사람이 없어 null
+	// 주문 서비스에 보낼 취소 메시지
 	RaceCancelEvent cancelEvent,
 	// 해제한 결제 대기 자리 수
 	int releasedHolds

@@ -37,15 +37,15 @@ public class WalletLedger extends BaseIdAndTime {
 	@ManyToOne(fetch = LAZY, optional = false)
 	private Wallet wallet;
 
-	private long amount; // 변동 금액 (+/−)
-	private long balanceAfter;
+	private int amount; // 변동 금액 (+/−)
+	private int balanceAfter;
 
 	public WalletLedger(
 		Wallet wallet,
 		CashMember holder,
 		LedgerType ledgerType,
-		long amount,
-		long balanceAfter,
+		int amount,
+		int balanceAfter,
 		LedgerRefType refTypeCode,
 		int refId
 	) {

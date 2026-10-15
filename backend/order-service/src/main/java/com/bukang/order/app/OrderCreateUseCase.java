@@ -30,6 +30,9 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class OrderCreateUseCase {
+	// 결제 기한: [결제하기]로 자리를 잡은 때부터 10분 (정책 4장 2-4). 상품 서비스에 이 시각까지 자리를 잡아 달라고 보낸다
+	static final long PAYMENT_MINUTES = 10;
+
 	// Order·OrderItem의 @UniqueConstraint 이름과 같아야 한다
 	private static final List<String> ORDER_CONSTRAINTS = List.of("uk_order_idempotency",
 		"uk_order_item_participation");
@@ -62,11 +65,13 @@ public class OrderCreateUseCase {
 		participation.checkPayable();
 		RaceCourseInfo course = raceCoursePort.findCourse(participation.getRaceCourseId())
 			.orElseThrow(() -> new RaceCourseNotFoundException("존재하지 않는 종목입니다."));
+		ParticipationApplyUseCase.checkNotCanceled(course);
 		if (!course.isAccepting(now)) {
 			throw new ApplicationPeriodException("접수 기간이 아닙니다.");
 		}
 
-		SeatHoldResult hold = seatHoldPort.hold(course.raceCourseId(), participation.getId(), memberId);
+		SeatHoldResult hold = seatHoldPort.hold(course.raceCourseId(), participation.getId(),
+			now.plusMinutes(PAYMENT_MINUTES));
 		if (!hold.held()) {
 			participation.markHoldFailed();
 			return OrderCreateResult.soldOut();

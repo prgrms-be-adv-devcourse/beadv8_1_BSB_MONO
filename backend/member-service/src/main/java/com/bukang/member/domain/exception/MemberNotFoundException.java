@@ -6,6 +6,6 @@ import com.bukang.common.global.exception.BusinessException;
 
 public class MemberNotFoundException extends BusinessException {
 	public MemberNotFoundException(String message) {
-		super(HttpStatus.NOT_FOUND, message);
+		super(HttpStatus.NOT_FOUND, "MEMBER_NOT_FOUND", message);
 	}
 }

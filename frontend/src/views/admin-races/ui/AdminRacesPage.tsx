@@ -148,8 +148,7 @@ export function AdminRacesPage() {
           </div>
           <p className="text-body-s text-text-secondary">정산 일정</p>
           <div className="flex flex-col gap-3 rounded-md bg-bg-subtle p-4">
-            <KeyValue label="1차 정산" value="11/20 (금) · 판매액의 40%" />
-            <KeyValue label="최종 정산" value="12/21 (월) · 대회 종료 뒤" />
+            <KeyValue label="정산" value="11/20 (금) · 대회 종료 뒤 한 번에" />
           </div>
         </ConsoleCard>
       </div>

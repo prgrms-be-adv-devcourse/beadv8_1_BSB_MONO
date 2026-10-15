@@ -32,7 +32,7 @@ import {
   TextField,
 } from '@/shared/ui'
 
-export type SettlementTab = 'monthly' | 'orders' | 'holds' | 'clawbacks'
+export type SettlementTab = 'monthly' | 'orders' | 'holds'
 
 /** 건별 정산 한 페이지 크기 (백엔드 한도 1~100) */
 const ITEM_PAGE_SIZE = 20
@@ -99,8 +99,7 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
         items={[
           { value: 'monthly', label: '월별 정산' },
           { value: 'orders', label: '건별 정산' },
-          { value: 'holds', label: '지급보류 내역', count: summary.data?.heldCount },
-          { value: 'clawbacks', label: '회수 내역' },
+          { value: 'holds', label: '지급보류', count: summary.data?.heldCount },
         ]}
       />
 
@@ -125,13 +124,6 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
             />
           </div>
           {isHolds ? <HoldList period={period} /> : <PayoutItemList period={period} />}
-        </ConsoleCard>
-      )}
-
-      {/* 회수 내역은 API · 시안이 없어 빈 화면만 둔다 */}
-      {tab === 'clawbacks' && (
-        <ConsoleCard>
-          <EmptyState title="회수 내역이 없어요" description="조회 기간을 바꿔 다시 찾아보세요." />
         </ConsoleCard>
       )}
     </ConsolePage>
@@ -204,8 +196,7 @@ function MonthlyPayouts({ today }: { today: Date }) {
         )}
       </QueryRows>
       <p className="text-caption text-text-tertiary">
-        환불 기한이 지나면 1차 정산(판매액의 40%, 수수료 없음), 대회가 끝나면 최종 정산. 수수료는
-        (판매액 − 환불액)의 5.5%(부가세 포함), 최종 정산에서만 떼요.
+        대회가 끝나면 한 번에 정산해요. 수수료는 (판매액 − 환불액)의 5.5%(부가세 포함)예요.
       </p>
     </ConsoleCard>
   )

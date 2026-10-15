@@ -1,5 +1,6 @@
 'use client'
 
+import { isBefore, startOfToday } from 'date-fns'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -9,6 +10,7 @@ import {
   Alert,
   Button,
   DataTable,
+  DateTimeField,
   FOCUS_RING,
   ImageCropDialog,
   ImageListDialog,
@@ -26,6 +28,10 @@ const localUpload: UploadImage = async (file, onProgress) => {
   onProgress(1)
   return URL.createObjectURL(file)
 }
+
+// 지난 날은 대회 일시·접수 기간·환불 기한으로 고를 수 없다
+const today = startOfToday()
+const isPast = (date: Date) => isBefore(date, today)
 
 const COURSES = [
   {
@@ -110,15 +116,17 @@ export function SellerRaceNewPage() {
             defaultValue="2026 용감한 쿠키RUN in 서울"
             className="flex-1"
           />
-          <TextField label="대회 일시" defaultValue="2026-11-01 (일) 08:00" className="flex-1" />
+          <DateTimeField
+            mode="single"
+            label="대회 일시"
+            defaultValue={new Date(2026, 10, 1, 8, 0)}
+            isDateDisabled={isPast}
+            startMonth={today}
+            className="flex-1"
+          />
         </div>
         <div className="flex gap-4">
           <TextField label="장소" defaultValue="서울숲 일대" className="flex-1" />
-          <TextField
-            label="접수 기간"
-            defaultValue="10/14 10:00 ~ 10/31 18:00"
-            className="flex-1"
-          />
           <TextField
             label="참가 가능 나이"
             defaultValue="종목마다 최소 · 최대 나이를 정해요"
@@ -126,6 +134,19 @@ export function SellerRaceNewPage() {
             readOnly
             className="flex-1"
           />
+        </div>
+        {/* 시간 칸이 2개라 한 줄을 따로 쓴다. 너비는 위 칸과 맞춰 절반 */}
+        <div className="flex gap-4">
+          <DateTimeField
+            mode="range"
+            label="접수 기간"
+            defaultValue={{ from: new Date(2026, 9, 14, 10, 0), to: new Date(2026, 9, 31, 18, 0) }}
+            helper="시작일 → 마감일 순서로 눌러요"
+            isDateDisabled={isPast}
+            startMonth={today}
+            className="flex-1"
+          />
+          <div className="flex-1" />
         </div>
       </ConsoleCard>
 
@@ -187,9 +208,12 @@ export function SellerRaceNewPage() {
       </ConsoleCard>
 
       <ConsoleCard title="취소 · 환불 정책">
-        <TextField
+        <DateTimeField
+          mode="single"
           label="환불 기한"
-          defaultValue="2026-10-31 (토) 23:59"
+          defaultValue={new Date(2026, 9, 31, 23, 59)}
+          isDateDisabled={isPast}
+          startMonth={today}
           helper="이 날짜까지 취소하면 전액 환불, 그 뒤 개인 사정 환불은 안 돼요. 결제 전에 구매자에게 보여 줘요."
         />
       </ConsoleCard>

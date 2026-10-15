@@ -1,0 +1,77 @@
+package com.bukang.cash.in;
+
+/**
+ * InternalV1CashController의 Swagger 응답 예시 (실제 응답 메시지와 같게 유지한다)
+ */
+final class CashInternalApiExamples {
+	static final String PAY_SUCCESS_PAID = """
+		{
+			"status": 200,
+			"message": "결제했습니다.",
+			"data": {
+				"outcome": "PAID",
+				"shortage": 0
+			}
+		}
+		""";
+
+	static final String PAY_SUCCESS_INSUFFICIENT = """
+		{
+			"status": 200,
+			"message": "예치금이 부족합니다.",
+			"data": {
+				"outcome": "INSUFFICIENT_BALANCE",
+				"shortage": 5000
+			}
+		}
+		""";
+
+	static final String CANCEL_SUCCESS = """
+		{
+			"status": 200,
+			"message": "결제를 취소했습니다.",
+			"data": null
+		}
+		""";
+
+	static final String REFUND_SUCCESS = """
+		{
+			"status": 200,
+			"message": "환불했습니다.",
+			"data": {
+				"amount": 10000
+			}
+		}
+		""";
+
+	static final String INVALID_MEMBER_ID = """
+		{ "status": 400, "message": "회원 ID를 작성해주세요.", "data": null }
+		""";
+
+	static final String INVALID_BODY = """
+		{ "status": 400, "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String WALLET_NOT_FOUND = """
+		{ "status": 404, "message": "존재하지 않는 지갑입니다.", "data": null }
+		""";
+
+	static final String PAYMENT_ALREADY_FINALIZED = """
+		{ "status": 409, "message": "이미 취소·환불된 결제입니다.", "data": null }
+		""";
+
+	static final String PAYMENT_MEMBER_MISMATCH = """
+		{ "status": 409, "message": "결제한 회원과 요청한 회원이 다릅니다.", "data": null }
+		""";
+
+	static final String REFUND_NOT_FOUND = """
+		{ "status": 409, "message": "환불할 결제가 없습니다.", "data": null }
+		""";
+
+	static final String REFUND_NOT_COMPLETED = """
+		{ "status": 409, "message": "결제가 완료되지 않아 환불할 수 없습니다.", "data": null }
+		""";
+
+	private CashInternalApiExamples() {
+	}
+}
