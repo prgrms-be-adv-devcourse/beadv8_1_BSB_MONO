@@ -1,8 +1,10 @@
 package com.bukang.queue.out;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.core.io.ClassPathResource;
@@ -22,8 +24,9 @@ import lombok.extern.slf4j.Slf4j;
  * 대회·종목마다 줄 두 개를 둔다: waiting(ZSet, score는 등록 시각)과 active(ZSet, score는 활성 시간 끝 시각).
  * 스케줄러가 승격할 대기열은 queue:waiting(Set)에 {raceId}:{raceCourseId}로 모은다.
  * 확인하고 넣는 일은 src/main/resources/redis/의 Lua 스크립트가 Redis 안에서 한 번에 한다.
- * 순번 조회는 읽기만 하므로 Lua 없이 명령을 하나씩 보낸다.
- * Redis에 연결하지 못하면 대기열 없이 통과시키지 않고 503으로 막는다. 승격(스케줄러)은 그 대기열만 건너뛴다.
+ * 순번 조회와 입장 확인은 읽기만 하므로 Lua 없이 명령을 하나씩 보낸다.
+ * Redis에 연결하지 못하면 대기열 없이 통과시키지 않고 503으로 막는다. 승격(스케줄러)은 그 대기열만 건너뛰고,
+ * 입장 확인(주문 서비스용)은 입장 중이 아니라고 답한다.
  */
 @Slf4j
 @Repository
@@ -107,6 +110,26 @@ public class QueueRedisRepository {
 	}
 
 	/**
+	 * 회원이 대회·종목에 입장(active) 중이면 active 끝 시각을 돌려준다. 주문 서비스의 입장 확인(내부 API)이 쓴다.
+	 * 끝 시각이 지났으면 스케줄러가 지우기 전이라도 입장 중으로 보지 않는다 (순번 조회와 같은 기준).
+	 * 줄(waiting)에서 기다리는 회원은 active에 없으므로 빈 값이다.
+	 */
+	public Optional<LocalDateTime> findActiveUntil(int raceId, int raceCourseId, int memberId, LocalDateTime now) {
+		Double activeUntil;
+		try {
+			activeUntil = redisTemplate.opsForZSet().score(activeKey(raceId, raceCourseId), String.valueOf(memberId));
+		} catch (DataAccessException exception) {
+			log.error("대기열 입장 여부를 Redis에서 읽지 못했습니다. raceId={}, raceCourseId={}, memberId={}",
+				raceId, raceCourseId, memberId, exception);
+			throw new QueueUnavailableException();
+		}
+		if (activeUntil == null || activeUntil <= epochMillis(now)) {
+			return Optional.empty();
+		}
+		return Optional.of(toLocalDateTime(activeUntil.longValue()));
+	}
+
+	/**
 	 * 스케줄러가 승격할 대기열 목록(queue:waiting)을 읽는다. 값은 {raceId}:{raceCourseId}이다.
 	 */
 	public Set<String> findQueueIds() {
@@ -150,6 +173,11 @@ public class QueueRedisRepository {
 	// 등록 시각·active 끝 시각을 score로 쓰는 epoch ms로 바꾼다
 	private static long epochMillis(LocalDateTime time) {
 		return time.atZone(ZONE).toInstant().toEpochMilli();
+	}
+
+	// score(epoch ms)를 LocalDateTime으로 되돌린다 (epochMillis의 반대)
+	private static LocalDateTime toLocalDateTime(long epochMillis) {
+		return LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis), ZONE);
 	}
 
 	private static <T> RedisScript<T> script(String fileName, Class<T> resultType) {

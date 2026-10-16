@@ -2,6 +2,7 @@ package com.bukang.queue.in;
 
 /**
  * ApiV1QueueController의 Swagger 응답 예시 (실제 응답 메시지와 같게 유지한다)
+ * 요청 값 오류·회원 ID 헤더 누락 예시는 InternalV1QueueController도 함께 쓴다
  */
 final class QueueApiExamples {
 	static final String REGISTER_SUCCESS = """
