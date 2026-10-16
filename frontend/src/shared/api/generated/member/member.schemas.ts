@@ -107,6 +107,54 @@ export interface MemberJoinRequestDto {
   gender?: MemberJoinRequestDtoGender;
 }
 
+/**
+ * 판매자 종류 (BUSINESS: 사업자, INDIVIDUAL: 비사업자)
+ */
+export type SellerApplyRequestDtoSellerType = typeof SellerApplyRequestDtoSellerType[keyof typeof SellerApplyRequestDtoSellerType];
+
+
+export const SellerApplyRequestDtoSellerType = {
+  BUSINESS: 'BUSINESS',
+  INDIVIDUAL: 'INDIVIDUAL',
+} as const;
+
+/**
+ * 판매자 등록 신청 요청
+ */
+export interface SellerApplyRequestDto {
+  /** 판매자 종류 (BUSINESS: 사업자, INDIVIDUAL: 비사업자) */
+  sellerType: SellerApplyRequestDtoSellerType;
+  /**
+     * 상호 (사업자만, 100자 이하)
+     * @minLength 0
+     * @maxLength 100
+     */
+  businessName?: string;
+  /**
+     * 사업자등록번호 (사업자만, 숫자 10자리, 하이픈 생략 가능)
+     * @pattern ^\d{3}-?\d{2}-?\d{5}$
+     */
+  businessNumber?: string;
+  /**
+     * 대표자 (비사업자는 본인 성명, 50자 이하)
+     * @minLength 0
+     * @maxLength 50
+     */
+  representativeName: string;
+}
+
+/**
+ * 판매자 신청 반려 요청
+ */
+export interface SellerRejectRequestDto {
+  /**
+     * 반려 사유 (500자 이하, 신청자에게 보여 준다)
+     * @minLength 0
+     * @maxLength 500
+     */
+  reason: string;
+}
+
 export interface MemberDto {
   id?: number;
   createDate?: string;
@@ -136,6 +184,40 @@ export interface TokenReissueResponseDto {
   accessToken?: string;
 }
 
+export type SellerDtoSellerType = typeof SellerDtoSellerType[keyof typeof SellerDtoSellerType];
+
+
+export const SellerDtoSellerType = {
+  BUSINESS: 'BUSINESS',
+  INDIVIDUAL: 'INDIVIDUAL',
+} as const;
+
+export type SellerDtoStatus = typeof SellerDtoStatus[keyof typeof SellerDtoStatus];
+
+
+export const SellerDtoStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+
+export interface SellerDto {
+  id: number;
+  memberId: number;
+  sellerType: SellerDtoSellerType;
+  /** @nullable */
+  businessName?: string | null;
+  /** @nullable */
+  businessNumber?: string | null;
+  representativeName: string;
+  status: SellerDtoStatus;
+  requestedAt: string;
+  /** @nullable */
+  reviewedAt?: string | null;
+  /** @nullable */
+  rejectReason?: string | null;
+}
+
 export interface RsDataMemberDto {
   status?: number;
   message?: string;
@@ -153,4 +235,32 @@ export interface RsDataMemberLoginResponseDto {
   message?: string;
   data?: MemberLoginResponseDto;
 }
+
+export interface RsDataSellerDto {
+  status?: number;
+  message?: string;
+  data?: SellerDto;
+}
+
+export interface RsDataListSellerDto {
+  status?: number;
+  message?: string;
+  data?: SellerDto[];
+}
+
+export type FindAllParams = {
+/**
+ * 신청 상태 (비우면 전체)
+ */
+status?: FindAllStatus;
+};
+
+export type FindAllStatus = typeof FindAllStatus[keyof typeof FindAllStatus];
+
+
+export const FindAllStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
 
