@@ -19,6 +19,7 @@ const charges = new Map<string, 'COMPLETED' | 'FAILED'>()
 export function resetMockWalletForTesting() {
   balance = MOCK_INITIAL_BALANCE
   charges.clear()
+  withdrawals.clear()
 }
 
 /** 주문 결제 목이 쓴다. 모자라면 차감하지 않고 모자란 금액을 돌려준다. */
@@ -35,7 +36,38 @@ export function withdrawAllFromMockWallet(): number {
   return amount
 }
 
+/** 환급 결과(idempotencyKey = 멱등키). 같은 키로 다시 오면 처음 결과를 돌려준다 */
+const withdrawals = new Map<string, number>()
+
 export const walletHandlers = [
+  /**
+   * 예치금 전액 환급 목. 진짜 서버처럼 신청하면 바로 완료되고, 잔액이 0원이면 400(code 없음)이다.
+   */
+  http.post('*/api/v1/cash/withdrawals', async ({ request }) => {
+    const body = (await request.json()) as { idempotencyKey?: string }
+    const key = body.idempotencyKey ?? ''
+    const done = withdrawals.get(key)
+    if (done !== undefined) {
+      return HttpResponse.json({
+        status: 200,
+        message: '환급 신청이 완료되었습니다.',
+        data: { withdrawnAmount: done, balance },
+      })
+    }
+    if (balance <= 0) {
+      return HttpResponse.json(
+        { status: 400, message: '환급할 잔액이 없습니다.', data: null },
+        { status: 400 },
+      )
+    }
+    const amount = withdrawAllFromMockWallet()
+    withdrawals.set(key, amount)
+    return HttpResponse.json({
+      status: 200,
+      message: '환급 신청이 완료되었습니다.',
+      data: { withdrawnAmount: amount, balance },
+    })
+  }),
   http.get('*/api/v1/cash/wallets/:holderId/balance', ({ params }) =>
     HttpResponse.json({
       status: 200,
