@@ -90,6 +90,47 @@ describe('결제 화면', () => {
     expect(timer()).toHaveTextContent(/10:00|09:5\d/)
   })
 
+  it('대기열에 입장 중이면 결제 기한 대신 대기열에서 받은 남은 시간을 센다', async () => {
+    server.use(
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: true, admissionEndsAt: DUE_AT, remainingSeconds: 300 },
+      }),
+    )
+    renderCheckout()
+
+    await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K · 이달림')
+    await vi.waitFor(() => expect(timer()).toHaveTextContent(/05:00|04:5\d/))
+  })
+
+  it('입장 끝이 결제 기한보다 늦으면 결제 기한 기준으로 남은 시간을 센다', async () => {
+    server.use(
+      orderMock.getFindById1MockHandler(orderResponse({ paymentDueAt: '2026-10-14T10:05:00' })),
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: true, admissionEndsAt: DUE_AT, remainingSeconds: 600 },
+      }),
+    )
+    renderCheckout()
+
+    await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K · 이달림')
+    await vi.waitFor(() => expect(timer()).toHaveTextContent(/05:00|04:5\d/))
+  })
+
+  it('결제 기한이 이미 지났으면 입장 확인이 새 시간을 줘도 시간 초과 화면을 보여 준다', async () => {
+    server.use(
+      orderMock.getFindById1MockHandler(orderResponse({ paymentDueAt: '2026-10-14T09:55:00' })),
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: true, admissionEndsAt: DUE_AT, remainingSeconds: 600 },
+      }),
+    )
+    renderCheckout()
+
+    expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+  })
+
   it('잔액이 충분하면 예치금으로 결제하고 결제 완료 화면으로 간다', async () => {
     let paid = false
     server.use(
@@ -151,6 +192,10 @@ describe('결제 화면', () => {
     await user.click(pay)
 
     expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.getByText(/입장 시간이 끝나 잡아 둔 자리가 풀렸어요\./)).toBeInTheDocument()
+    expect(screen.getByText(/충전한 예치금은 그대로 남아 있어요\./)).toBeInTheDocument()
+    // 주문의 대회 상세(M02)로 돌아간다
+    expect(screen.getByRole('link', { name: '대회 다시 보기' })).toHaveAttribute('href', '/races/1')
   })
 
   it('결제 때 남은 자리가 없다고 하면(409) 자리 마감 화면을 보여 준다', async () => {
@@ -204,5 +249,19 @@ describe('결제 화면', () => {
     renderCheckout('timeout')
 
     expect(screen.getByText('결제 시간이 지났어요')).toBeInTheDocument()
+    // 대회를 모르는 미리보기는 대회 목록으로 간다
+    expect(screen.getByRole('link', { name: '대회 다시 보기' })).toHaveAttribute('href', '/races')
+  })
+
+  it('대기열 입장 시간이 끝나 넘어오면(?result=timeout&raceId=) 그 대회 상세로 돌아간다', () => {
+    const client = new QueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <CheckoutPage state="timeout" raceId={1} />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '대회 다시 보기' })).toHaveAttribute('href', '/races/1')
   })
 })

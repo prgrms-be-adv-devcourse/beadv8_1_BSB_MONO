@@ -32,6 +32,14 @@
         }
       }
     },
+    "checkEmailAvailability": {
+      "200": {
+        "wrapper": "RsDataEmailAvailabilityResponseDto",
+        "data": {
+          "$ref": "#/components/schemas/EmailAvailabilityResponseDto"
+        }
+      }
+    },
     "apply": {
       "201": {
         "wrapper": "RsDataSellerDto",
@@ -131,6 +139,17 @@
         "accessToken": {
           "type": "string",
           "description": "새 Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다"
+        }
+      }
+    },
+    "EmailAvailabilityResponseDto": {
+      "type": "object",
+      "description": "이메일 사용 가능 여부 응답",
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": "사용 가능하면 true, 이미 가입된 이메일이면 false",
+          "example": true
         }
       }
     },

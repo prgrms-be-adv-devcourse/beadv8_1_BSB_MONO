@@ -75,6 +75,15 @@ final class AuthApiExamples {
 		{ "status": 400, "code": "MEMBER_UNDER_AGE", "message": "만 14세 미만은 가입할 수 없습니다.", "data": null }
 		""";
 
+	static final String JOIN_REQUIRED_TERMS_NOT_AGREED = """
+		{
+			"status": 400,
+			"code": "MEMBER_REQUIRED_TERMS_NOT_AGREED",
+			"message": "필수 약관에 동의해야 가입할 수 있습니다.",
+			"data": null
+		}
+		""";
+
 	static final String DUPLICATE_EMAIL = """
 		{ "status": 409, "code": "MEMBER_DUPLICATE_EMAIL", "message": "이미 사용 중인 이메일입니다.", "data": null }
 		""";
