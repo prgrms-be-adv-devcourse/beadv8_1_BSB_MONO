@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -263,6 +264,75 @@ class GatewayAuthenticationTest {
 		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("경로에 ..·. 칸, 인코딩된 .·/·\\·%, ;가 있으면 토큰 검사 전에 400으로 거절하고 서비스로 넘기지 않는다")
+	@ValueSource(strings = {
+		"/api/v1/file/files/../../../../internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/%2e%2e/%2e%2e/%2e%2e/%2e%2e/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/%2E%2E/%2E%2E/%2E%2E/%2E%2E/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/.%2e/.%2e/.%2e/.%2e/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/..%2f..%2f..%2f..%2finternal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/..%2F..%2F..%2F..%2Finternal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/./x",
+		"/api/v1/file/files/..;/..;/..;/..;/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/x;y",
+		"/api/v1/file/files/..%5c..%5c..%5c..%5cinternal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/..%5C..%5C..%5C..%5Cinternal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/%252e%252e/%252e%252e/%252e%252e/%252e%252e/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/%252E%252E/x"
+	})
+	void rejectsTraversalPathWithoutToken(String path) throws Exception {
+		HttpRequest.Builder builder = request(path);
+		// HttpClient가 경로를 정리하거나 다시 인코딩하지 않고 그대로 보내는지 먼저 확인한다
+		assertThat(builder.build().uri().getRawPath()).isEqualTo(path);
+
+		HttpResponse<String> response = send(builder);
+
+		assertBadRequestPath(response);
+	}
+
+	@Test
+	@DisplayName("유효한 토큰이 있어도 경로에 .. 칸이 있으면 400으로 거절한다")
+	void rejectsTraversalPathWithValidToken() throws Exception {
+		String path = "/api/v1/order/orders/../../member/members";
+		HttpRequest.Builder builder = request(path)
+			.header("Authorization", "Bearer " + jwtProvider.issueAccessToken(42L));
+		assertThat(builder.build().uri().getRawPath()).isEqualTo(path);
+
+		HttpResponse<String> response = send(builder);
+
+		assertBadRequestPath(response);
+	}
+
+	@Test
+	@DisplayName("CORS 사전 요청(OPTIONS)도 경로에 .. 칸이 있으면 400으로 거절한다")
+	void rejectsTraversalPathForPreflight() throws Exception {
+		String path = "/api/v1/file/files/../../../../internal/v1/file/refs/RACE/1/files";
+		HttpResponse<String> response = send(request(path)
+			.method("OPTIONS", HttpRequest.BodyPublishers.noBody()));
+
+		assertBadRequestPath(response);
+	}
+
+	// HttpClient(URI)는 역슬래시를 보낼 수 없으므로 소켓으로 요청 줄을 직접 써서 보낸다
+	// 지금은 Netty가 필터보다 먼저 빈 본문 400으로 막으므로 본문은 보지 않고, 서비스로 넘어가지 않는지만 본다
+	@Test
+	@DisplayName("경로에 역슬래시가 있으면 400으로 거절한다")
+	void rejectsBackslashPath() throws Exception {
+		String path = "/api/v1/file/files/..\\..\\..\\..\\internal/v1/file/refs/RACE/1/files";
+		String response;
+		try (Socket socket = new Socket("localhost", gatewayPort)) {
+			OutputStream out = socket.getOutputStream();
+			out.write(("GET " + path + " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+				.getBytes(StandardCharsets.UTF_8));
+			out.flush();
+			response = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+		}
+
+		assertThat(response).startsWith("HTTP/1.1 400");
+		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
+	}
+
 	// 게이트웨이는 Refresh Token을 발급하지 않으므로, 발급 규칙(jti·familyId 등)에 기대지 않고 type만 REFRESH인 토큰을 직접 서명한다
 	private String refreshToken(long memberId) {
 		Instant now = Instant.now();
@@ -281,6 +351,14 @@ class GatewayAuthenticationTest {
 			contentType -> assertThat(contentType).startsWith("application/json"));
 		assertThat(response.body())
 			.isEqualTo("{\"status\":401,\"code\":\"" + code + "\",\"message\":\"" + message + "\",\"data\":null}");
+		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
+	}
+
+	private void assertBadRequestPath(HttpResponse<String> response) {
+		assertThat(response.statusCode()).isEqualTo(400);
+		assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
+			contentType -> assertThat(contentType).startsWith("application/json"));
+		assertThat(response.body()).isEqualTo("{\"status\":400,\"message\":\"잘못된 요청 경로입니다.\",\"data\":null}");
 		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
 	}
 
