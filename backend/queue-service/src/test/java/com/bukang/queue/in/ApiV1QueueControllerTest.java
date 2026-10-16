@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.common.shared.race.domain.RaceSaleStatus;
+import com.bukang.queue.app.QueueFacade;
 import com.bukang.queue.domain.QueueRace;
 import com.bukang.queue.domain.QueueRaceCourse;
 import com.bukang.queue.dto.QueueRegisterRequestDto;
@@ -26,7 +27,7 @@ import com.bukang.queue.support.QueueIntegrationTest;
  * 대기열 등록 API(POST /api/v1/queue)와 순번 조회 API(GET /api/v1/queue/races/{raceId}/racecourses/{raceCourseId})를
  * 실제 Redis 컨테이너와 H2 복제본으로 확인한다.
  * 등록 시각은 Facade가 실제 지금으로 만들므로, 복제본의 접수 일정도 실제 지금을 기준으로 잡는다.
- * 승격 스케줄러가 아직 없어, active 회원은 active ZSet에 끝 시각을 직접 넣어 만든다.
+ * active 회원은 대부분 active ZSet에 끝 시각을 직접 넣어 만든다. 승격과 이어서 확인할 때만 스케줄러가 부르는 QueueFacade.promote()를 쓴다.
  */
 class ApiV1QueueControllerTest extends QueueIntegrationTest {
 	private static final int RACE_ID = 1;
@@ -44,6 +45,8 @@ class ApiV1QueueControllerTest extends QueueIntegrationTest {
 
 	@Autowired
 	private MockMvc mockMvc;
+	@Autowired
+	private QueueFacade queueFacade;
 
 	@Test
 	@DisplayName("register: 처음 등록한 회원은 1번이고, 그 종목의 waiting과 스케줄러가 돌 대기열 목록(queue:waiting)에 들어간다")
@@ -279,7 +282,7 @@ class ApiV1QueueControllerTest extends QueueIntegrationTest {
 		getStatus(OTHER_MEMBER_ID)
 			.andExpect(jsonPath("$.data.myRank").value(2));
 
-		// 승격 스케줄러가 아직 없어 직접 옮긴다: waiting에서 빼고 active에 끝 시각(10분 뒤)을 넣는다
+		// 승격은 앞에서부터 20명을 함께 옮기므로, 앞 회원 7만 승격된 상황을 직접 만든다: waiting에서 빼고 active에 끝 시각(10분 뒤)을 넣는다
 		redisTemplate.opsForZSet().remove(WAITING_KEY, "7");
 		redisTemplate.opsForZSet().add(ACTIVE_KEY, "7", epochMillis(now.plusMinutes(10)));
 
@@ -301,6 +304,20 @@ class ApiV1QueueControllerTest extends QueueIntegrationTest {
 			.andExpect(jsonPath("$.data.myRank").value(0))
 			.andExpect(jsonPath("$.data.ahead").value(0))
 			.andExpect(jsonPath("$.data.total").value(0))
+			.andExpect(jsonPath("$.data.canEnter").value(true));
+	}
+
+	@Test
+	@DisplayName("getStatus: 줄을 선 회원이 승격되면(스케줄러가 부르는 QueueFacade.promote) 입장할 수 있다(canEnter)")
+	void canEnterAfterPromotion() throws Exception {
+		// 순번 조회는 실제 지금으로 끝 시각을 비교하므로, 승격도 실제 지금으로 하는 Facade를 부른다
+		saveOpenRaceAndCourse();
+		register(MEMBER_ID);
+
+		queueFacade.promote();
+
+		getStatus(MEMBER_ID)
+			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.canEnter").value(true));
 	}
 
