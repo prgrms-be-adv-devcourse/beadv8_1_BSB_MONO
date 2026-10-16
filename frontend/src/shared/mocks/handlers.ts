@@ -17,6 +17,7 @@ import {
   getCheckoutResponseMock,
   getCreateMockHandler,
   getCreateResponseMock,
+  getFindAdmissionMockHandler,
   getFindById1MockHandler,
   getFindById1ResponseMock,
   getFindCartMockHandler,
@@ -111,10 +112,61 @@ const myOrdersHandler = getFindMineMockHandler(() => {
   }
   return { ...example, data: { ...example.data, orders: [paid, ...(example.data?.orders ?? [])] } }
 })
-/** 지금부터 minutes분 뒤의 한국 시간 (백엔드처럼 시간대 없는 2026-10-12T10:10:00 모양) */
-function kstMinutesFromNow(minutes: number): string {
-  return new Date(Date.now() + (9 * 60 + minutes) * 60 * 1000).toISOString().slice(0, 19)
+/** 그 시각(ms)의 한국 시간 (백엔드처럼 시간대 없는 2026-10-12T10:10:00 모양) */
+function toKstDateTime(ms: number): string {
+  return new Date(ms + 9 * 60 * 60 * 1000).toISOString().slice(0, 19)
 }
+
+/** 지금부터 minutes분 뒤의 한국 시간 */
+function kstMinutesFromNow(minutes: number): string {
+  return toKstDateTime(Date.now() + minutes * 60 * 1000)
+}
+
+/** 대기열 목: 입장하기 전에 기다리는 중이라고 답하는 횟수, 입장 시간(정책 4장 2-4의 10분) */
+const MOCK_QUEUE_WAITING_ANSWERS = 2
+const MOCK_ADMISSION_MS = 10 * 60 * 1000
+
+/** (대회, 종목)마다 입장 여부를 물은 횟수와 입장 끝 시각 */
+const mockQueue = new Map<string, { asked: number; endsAt?: number }>()
+
+/** 테스트 사이에 대기열 순서가 넘어가지 않게 처음(아무도 줄 서지 않음)으로 돌린다. */
+export function resetMockQueueForTesting() {
+  mockQueue.clear()
+}
+
+/**
+ * 대기열 입장 상태 목. 차례 기다리기(M05-Q1)를 볼 수 있게 처음 두 번은 기다리는 중으로 답하고,
+ * 세 번째에 입장해 10분 뒤 끝난다. 그동안은 같은 끝 시각을 돌려준다. 끝난 뒤 다시 물으면 처음부터 다시 줄을 선다.
+ */
+const queueAdmissionHandler = getFindAdmissionMockHandler(({ request }) => {
+  const url = new URL(request.url)
+  const key = `${url.searchParams.get('raceId')}:${url.searchParams.get('raceCourseId')}`
+  const now = Date.now()
+  const saved = mockQueue.get(key)
+  const expired = saved?.endsAt !== undefined && saved.endsAt <= now
+  const current = saved && !expired ? saved : { asked: 0 }
+  mockQueue.set(key, current)
+  if (current.endsAt === undefined) {
+    if (current.asked < MOCK_QUEUE_WAITING_ANSWERS) {
+      current.asked += 1
+      return {
+        status: 200,
+        message: '대기열에 입장 중이 아닙니다.',
+        data: { admitted: false, admissionEndsAt: null, remainingSeconds: 0 },
+      }
+    }
+    current.endsAt = now + MOCK_ADMISSION_MS
+  }
+  return {
+    status: 200,
+    message: '대기열에 입장 중입니다.',
+    data: {
+      admitted: true,
+      admissionEndsAt: toKstDateTime(current.endsAt),
+      remainingSeconds: Math.ceil((current.endsAt - now) / 1000),
+    },
+  }
+})
 
 /**
  * 명세 예시는 주문 생성 · 장바구니 주문 · 결제 · 조회가 모두 주문 1이다. 그런데 결제 화면은 주문 1이 결제 대기여야 하고,
@@ -135,6 +187,7 @@ export function resetMockOrderForTesting() {
  * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
  */
 const orderHandlers = [
+  queueAdmissionHandler,
   getCreateMockHandler(() => {
     mockOrderAwaitingPayment = true
     const example = getCreateResponseMock()
