@@ -138,6 +138,38 @@
           "$ref": "#/components/schemas/QueueAdmissionDto"
         }
       }
+    },
+    "findKits": {
+      "200": {
+        "wrapper": "RsDataSellerKitPageDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerKitPageDto"
+        }
+      }
+    },
+    "summarize": {
+      "200": {
+        "wrapper": "RsDataSellerKitSummaryDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerKitSummaryDto"
+        }
+      }
+    },
+    "ship": {
+      "200": {
+        "wrapper": "RsDataOrderItemDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderItemDto"
+        }
+      }
+    },
+    "completeDelivery": {
+      "200": {
+        "wrapper": "RsDataOrderItemDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderItemDto"
+        }
+      }
     }
   },
   "schemas": {
@@ -330,6 +362,44 @@
             "PAID",
             "CANCELED"
           ]
+        },
+        "kitDeliveryStatus": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "PREPARING",
+            "SHIPPING",
+            "DELIVERED",
+            null
+          ]
+        },
+        "kitCarrier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kitTrackingNumber": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kitShippedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "kitDeliveredAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
         }
       },
       "description": "주문 상품"
@@ -596,6 +666,134 @@
           "format": "date-time"
         },
         "remainingSeconds": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "SellerKitDto": {
+      "type": "object",
+      "description": "판매자 키트 배송 목록의 한 줄",
+      "properties": {
+        "orderItemId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "orderNo": {
+          "type": "string"
+        },
+        "orderItemStatus": {
+          "type": "string",
+          "enum": [
+            "ORDERED",
+            "PAID",
+            "CANCELED"
+          ]
+        },
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "courseName": {
+          "type": "string"
+        },
+        "participantName": {
+          "type": "string"
+        },
+        "tshirtSize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shippingAddress": {
+          "$ref": "#/components/schemas/ShippingAddressDto"
+        },
+        "kitDeliveryStatus": {
+          "type": "string",
+          "enum": [
+            "PREPARING",
+            "SHIPPING",
+            "DELIVERED"
+          ]
+        },
+        "kitCarrier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kitTrackingNumber": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kitShippedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "kitDeliveredAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "SellerKitPageDto": {
+      "type": "object",
+      "description": "판매자 키트 주문 목록 한 페이지",
+      "properties": {
+        "kits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SellerKitDto"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalElements": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "totalPages": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "SellerKitSummaryDto": {
+      "type": "object",
+      "description": "키트 배송 건수",
+      "properties": {
+        "preparing": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "shipping": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "delivered": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "beforeRefundDeadline": {
           "type": "integer",
           "format": "int64"
         }

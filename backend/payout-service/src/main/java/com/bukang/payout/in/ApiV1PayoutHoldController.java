@@ -66,10 +66,11 @@ public class ApiV1PayoutHoldController {
 		@ApiResponse(responseCode = "404", description = "없는 정산 내역",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = PayoutApiExamples.PAYOUT_NOT_FOUND))),
-		@ApiResponse(responseCode = "409", description = "이미 보류 중, 이미 지급 완료 또는 다른 요청과 동시 수정",
+		@ApiResponse(responseCode = "409", description = "이미 보류 중, 이미 지급 완료, 대회 취소로 닫힘 또는 다른 요청과 동시 수정",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "이미 보류 중", value = PayoutApiExamples.ALREADY_HELD),
 				@ExampleObject(name = "이미 지급 완료", value = PayoutApiExamples.ALREADY_PAID),
+				@ExampleObject(name = "대회 취소로 닫힘", value = PayoutApiExamples.HOLD_CANCELED_PAYOUT),
 				@ExampleObject(name = "동시 수정", value = PayoutApiExamples.CONCURRENT_UPDATE)
 			}))
 	})
@@ -103,9 +104,10 @@ public class ApiV1PayoutHoldController {
 		@ApiResponse(responseCode = "404", description = "없는 지급보류",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = PayoutApiExamples.HOLD_NOT_FOUND))),
-		@ApiResponse(responseCode = "409", description = "이미 해제됨 또는 다른 요청과 동시 수정",
+		@ApiResponse(responseCode = "409", description = "이미 해제됨, 대회 취소로 닫힌 정산 내역 또는 다른 요청과 동시 수정",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "이미 해제됨", value = PayoutApiExamples.ALREADY_RELEASED),
+				@ExampleObject(name = "대회 취소로 닫힘", value = PayoutApiExamples.RELEASE_CANCELED_PAYOUT),
 				@ExampleObject(name = "동시 수정", value = PayoutApiExamples.CONCURRENT_UPDATE)
 			}))
 	})

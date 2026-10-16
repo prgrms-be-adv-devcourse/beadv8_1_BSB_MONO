@@ -6,6 +6,12 @@ x-app-healthcheck: &app-healthcheck
   retries: 12
   start_period: 30s
 
+# 표를 만드는 방법 (cash·payout·file·order·product). 이 다섯 서비스는 아직 Flyway가 없어서,
+# application-prod.yaml의 validate 그대로면 빈 DB에서 "missing table"로 뜨지 않는다. 그래서 compose 실행에서만 update로 덮어
+# dev와 같은 방식(Hibernate가 없는 표·칼럼을 만듦)으로 표를 만든다. 서비스에 Flyway가 생기면 그 서비스의 줄을 지운다
+# member-service는 Flyway가 표를 만들고 validate로 확인하므로 넣지 않는다. 표만 확인하려면 .env에 JPA_DDL_AUTO=validate
+x-jpa-ddl-auto: &jpa-ddl-auto ${JPA_DDL_AUTO:-update}
+
 services:
 
   # Spring 앱 (운영 프로파일로 실행, backend/Dockerfile에 MODULE 인자를 넘겨 서비스별로 빌드)
@@ -34,16 +40,24 @@ services:
         condition: service_started
 
   # 프론트엔드(Next.js). 화면 요청은 nginx가 넘겨 주고, 서버 컴포넌트는 BACKEND_URL(게이트웨이)로 API를 직접 부른다
+  # args는 빌드할 때 이미지에 고정되므로, 바꾸면 --build로 다시 빌드한다. 값은 backend/.env에서 읽는다 (.env.example 참고)
   web:
     build:
       context: ../frontend
       args:
         API_MOCKING: "off"
+        IMAGE_REMOTE_HOSTS: ${IMAGE_REMOTE_HOSTS:-}
+        NEXT_PUBLIC_IMAGE_CDN_URL: ${NEXT_PUBLIC_IMAGE_CDN_URL:-}
+        # 공유 카드(og:image)의 절대 주소. 서버(EC2)에서는 접속 주소(도메인)로 바꾼다
+        # layout.tsx의 metadata가 모듈을 불러올 때 한 번 계산돼, 빌드 때 만든 정적 페이지에는 빌드 시점 값이 남으므로 빌드에도 넘긴다
+        SITE_URL: ${SITE_URL:-http://localhost}
     image: bukang-web:latest
     container_name: bukang-web
     profiles: [ app ]
     environment:
       BACKEND_URL: http://bukang-gateway:8000
+      # 실행 중에 새로 그리는 페이지도 같은 값을 쓰게 한다 (위 build.args와 같은 값)
+      SITE_URL: ${SITE_URL:-http://localhost}
     depends_on:
       gateway:
         condition: service_healthy
@@ -126,6 +140,7 @@ services:
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
       test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8081" ]
@@ -148,11 +163,14 @@ services:
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
       test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8082" ]
     depends_on:
       bukang-db:
+        condition: service_healthy
+      bukang-kafka:
         condition: service_healthy
 
   file-service:
@@ -168,6 +186,7 @@ services:
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
       # 기본은 compose의 S3Mock. .env에서 S3_ENDPOINT·S3_PUBLIC_ENDPOINT를 빈 값으로 두면 실제 AWS S3를 쓴다
       # 앱은 컨테이너 주소(bukang-s3mock)로 접속하고, presigned URL은 브라우저가 쓰는 주소(localhost)로 서명한다
       S3_BUCKET: ${S3_BUCKET:-bukang-file}
@@ -201,6 +220,7 @@ services:
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
       test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8084" ]
@@ -223,6 +243,7 @@ services:
         required: false
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
       test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8085" ]

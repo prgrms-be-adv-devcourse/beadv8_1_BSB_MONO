@@ -45,6 +45,7 @@ import {
   issueMockRefreshCookie,
   MOCK_REFRESH_COOKIE_NAME,
 } from './mock-session'
+import { resetMockKitsForTesting, sellerKitHandlers } from './seller-kits'
 import { payFromMockWallet, walletHandlers } from './wallet'
 
 /** 경로 변수(:raceId) 수. 적은 것부터 둬야 /races/suggestions가 /races/:raceId에 먼저 걸리지 않는다. */
@@ -204,6 +205,9 @@ const MOCK_ADMISSION_MS = 10 * 60 * 1000
 /** (대회, 종목)마다 입장 여부를 물은 횟수와 입장 끝 시각 */
 const mockQueue = new Map<string, { asked: number; endsAt?: number }>()
 
+/** 테스트 사이에 키트 발송 · 배송 완료 상태가 넘어가지 않게 처음으로 돌린다. */
+export { resetMockKitsForTesting }
+
 /** 테스트 사이에 대기열 순서가 넘어가지 않게 처음(아무도 줄 서지 않음)으로 돌린다. */
 export function resetMockQueueForTesting() {
   mockQueue.clear()
@@ -358,5 +362,6 @@ export const handlers = [
   ...raceHandlers,
   ...orderHandlers,
   ...walletHandlers,
+  ...sellerKitHandlers,
   ...generatedHandlers,
 ]
