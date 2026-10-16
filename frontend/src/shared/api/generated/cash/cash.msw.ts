@@ -14,12 +14,42 @@ import type {
 } from 'msw';
 
 import type {
+  RsDataCashChargeDto,
+  RsDataCashWithdrawalDto,
   RsDataWalletBalanceDto
 } from './cash.schemas';
 
 
+export const getRequestWithdrawalResponseMock = (): RsDataCashWithdrawalDto => ({"status":200,"message":"환급 신청이 완료되었습니다.","data":{"withdrawnAmount":50000,"balance":0}})
+
+export const getConfirmWalletChargeResponseMock = (): RsDataCashChargeDto => ({"status":200,"message":"충전했습니다.","data":{"outcome":"COMPLETED","balance":60000}})
+
 export const getGetBalanceResponseMock = (): RsDataWalletBalanceDto => ({"status":200,"message":"잔액 조회 성공","data":{"holderId":3,"balance":50000}})
 
+
+export const getRequestWithdrawalMockHandler = (overrideResponse?: RsDataCashWithdrawalDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataCashWithdrawalDto> | RsDataCashWithdrawalDto), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/cash/withdrawals', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getRequestWithdrawalResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getConfirmWalletChargeMockHandler = (overrideResponse?: RsDataCashChargeDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataCashChargeDto> | RsDataCashChargeDto), options?: RequestHandlerOptions) => {
+  return http.post('*/api/v1/cash/charges/confirm', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getConfirmWalletChargeResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
 
 export const getGetBalanceMockHandler = (overrideResponse?: RsDataWalletBalanceDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataWalletBalanceDto> | RsDataWalletBalanceDto), options?: RequestHandlerOptions) => {
   return http.get('*/api/v1/cash/wallets/:holderId/balance', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
@@ -33,5 +63,7 @@ export const getGetBalanceMockHandler = (overrideResponse?: RsDataWalletBalanceD
   }, options)
 }
 export const getBukangCashAPIMock = () => [
+  getRequestWithdrawalMockHandler(),
+  getConfirmWalletChargeMockHandler(),
   getGetBalanceMockHandler()
 ]

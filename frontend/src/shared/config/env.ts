@@ -26,6 +26,15 @@ const serverSchema = z.object({
 const clientSchema = z.object({
   /** 설정하면 next/image가 서버 최적화 대신 이 CDN 주소로 이미지를 요청한다. */
   NEXT_PUBLIC_IMAGE_CDN_URL: optional(z.url()),
+  /**
+   * 토스페이먼츠 결제창(API 개별 연동) 클라이언트 키. 테스트 키(test_ck_)만 받는다 — 운영 키를 실수로 넣으면 빌드가 멈춘다.
+   * 백엔드 cash-service의 TOSS_SECRET_KEY(test_sk_)와 같은 상점의 짝이어야 승인된다. 비우면 충전 버튼이 실패 화면으로 간다.
+   */
+  NEXT_PUBLIC_TOSS_CLIENT_KEY: optional(
+    z.string().startsWith('test_ck_', '토스 클라이언트 키는 테스트 키(test_ck_)만 씁니다.'),
+  ),
+  /** next.config가 API_MOCKING 값을 그대로 넣는다. 브라우저가 가짜 응답 모드인지 알아야 토스 결제창을 건너뛸 수 있다. */
+  NEXT_PUBLIC_API_MOCKING: z.enum(['on', 'off']).default('off'),
 })
 
 export type ServerEnv = z.infer<typeof serverSchema>
@@ -44,4 +53,6 @@ export function getServerEnv(): ServerEnv {
 // NEXT_PUBLIC_* 값은 빌드 때 문자열로 치환되므로 하나씩 직접 참조해야 한다.
 export const clientEnv = clientSchema.parse({
   NEXT_PUBLIC_IMAGE_CDN_URL: process.env.NEXT_PUBLIC_IMAGE_CDN_URL,
+  NEXT_PUBLIC_TOSS_CLIENT_KEY: process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY,
+  NEXT_PUBLIC_API_MOCKING: process.env.NEXT_PUBLIC_API_MOCKING,
 })
