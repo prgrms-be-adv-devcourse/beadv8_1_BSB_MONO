@@ -58,6 +58,7 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `
    | `CRYPTO_HMAC_KEY` | `openssl rand -base64 32`로 생성 (아래 [민감정보 암호화](#민감정보-암호화) 참고) |
    | `CRYPTO_PASSWORD` | `openssl rand -base64 32`로 생성 |
    | `CRYPTO_SALT` | `openssl rand -hex 8`로 생성 |
+   | `CASH_CRYPTO_PASSWORD` / `CASH_CRYPTO_SALT` | cash-service 계좌번호 암호화 키. 위 `CRYPTO_*`와 다른 값으로 각각 `openssl rand -base64 32`, `openssl rand -hex 8` |
    | `MYSQL_USER` / `MYSQL_PASS` / `MYSQL_DB` | `compose.yml`의 `bukang-db` 값과 동일 |
    | `JWT_SECRET` | 32자 이상의 임의 문자열 |
 
