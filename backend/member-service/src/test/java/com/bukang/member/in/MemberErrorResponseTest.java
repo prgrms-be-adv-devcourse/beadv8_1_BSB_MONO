@@ -45,7 +45,8 @@ class MemberErrorResponseTest {
 			"name": "김러너",
 			"nickname": "%s",
 			"phone": "%s",
-			"birthDate": "%s"
+			"birthDate": "%s",
+			"agreedTerms": ["SERVICE", "PRIVACY"]
 		}
 		""";
 
