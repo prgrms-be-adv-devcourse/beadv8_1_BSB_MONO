@@ -17,7 +17,8 @@ public class AdminVerifyUseCase {
 	private final MemberRepository memberRepository;
 
 	public Member verify(int memberId) {
-		Member member = memberRepository.findById(memberId)
+		// 탈퇴한 관리자는 남은 Access Token으로 불러도 없는 회원으로 본다 (PRO-217, BE-022 결정 6)
+		Member member = memberRepository.findActiveById(memberId)
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
 		if (!member.isAdmin()) {
 			throw new MemberNotAdminException("관리자만 이용할 수 있습니다.");
