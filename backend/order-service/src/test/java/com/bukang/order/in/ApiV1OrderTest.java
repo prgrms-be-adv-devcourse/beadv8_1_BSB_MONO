@@ -32,7 +32,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -47,6 +46,8 @@ import com.bukang.order.domain.ShippingAddress;
 import com.bukang.order.out.OrderItemRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.support.StubQueueAdmissionPort;
+import com.bukang.order.support.StubQueueAdmissionPortConfig;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -56,7 +57,7 @@ import com.jayway.jsonpath.JsonPath;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class})
+@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class, StubQueueAdmissionPortConfig.class})
 class ApiV1OrderTest {
 	private static final String BASE_URL = "/api/v1/order/orders";
 	private static final int MEMBER_ID = 1;
@@ -85,6 +86,9 @@ class ApiV1OrderTest {
 	private StubSeatHoldPort seatHoldPort;
 
 	@Autowired
+	private StubQueueAdmissionPort queueAdmissionPort;
+
+	@Autowired
 	private TransactionTemplate transactionTemplate;
 
 	@Autowired
@@ -101,10 +105,11 @@ class ApiV1OrderTest {
 		participationRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
+		queueAdmissionPort.clear();
 	}
 
 	@Test
-	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 10분 뒤다")
+	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 대기열 입장 끝 시각(10분 뒤)이다")
 	void create() throws Exception {
 		int participationId = applyAndGetId(MEMBER_ID);
 		// DB(H2·MySQL)는 마이크로초까지만 저장한다. Linux의 now()는 나노초까지 나오므로 비교 기준도 맞춰 자른다
@@ -130,9 +135,70 @@ class ApiV1OrderTest {
 
 		Order order = orderRepository.findAll().getFirst();
 		assertThat(order.getPaymentDueAt())
-			.isBetween(before.plusMinutes(StubSeatHoldPort.PAYMENT_MINUTES),
-				after.plusMinutes(StubSeatHoldPort.PAYMENT_MINUTES))
+			.isBetween(before.plusMinutes(StubQueueAdmissionPort.ADMISSION_MINUTES),
+				after.plusMinutes(StubQueueAdmissionPort.ADMISSION_MINUTES))
 			.isEqualTo(participation.getPaymentDueAt());
+	}
+
+	@Test
+	@DisplayName("대기열에 입장 중이면 입장 끝 시각이 자리 확보 기한이자 결제 기한이 된다")
+	void createUsesAdmissionEndsAt() throws Exception {
+		LocalDateTime endsAt = LocalDateTime.now().plusMinutes(4).withNano(0);
+		queueAdmissionPort.admitUntil(COURSE_ID, endsAt);
+		int participationId = applyAndGetId(MEMBER_ID);
+
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
+
+		assertThat(orderRepository.findAll().getFirst().getPaymentDueAt()).isEqualTo(endsAt);
+		assertThat(participationRepository.findById(participationId).orElseThrow().getPaymentDueAt())
+			.isEqualTo(endsAt);
+	}
+
+	@Test
+	@DisplayName("대기열이 정책(입장 뒤 10분)보다 먼 끝 시각을 주면 결제 기한을 지금부터 10분으로 자른다")
+	void createCapsAdmissionEndsAt() throws Exception {
+		queueAdmissionPort.admitUntil(COURSE_ID, LocalDateTime.now().plusHours(1));
+		int participationId = applyAndGetId(MEMBER_ID);
+
+		LocalDateTime before = LocalDateTime.now();
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
+		LocalDateTime after = LocalDateTime.now();
+
+		assertThat(orderRepository.findAll().getFirst().getPaymentDueAt())
+			.isBetween(before.plusMinutes(10), after.plusMinutes(10));
+	}
+
+	@Test
+	@DisplayName("대기열에 입장 중이 아니거나 입장 시간이 끝났으면 403이고, 자리를 확보하지 않는다")
+	void createNotAdmitted() throws Exception {
+		queueAdmissionPort.notAdmitted(COURSE_ID);
+		int participationId = applyAndGetId(MEMBER_ID);
+
+		create(MEMBER_ID, participationId, newKey())
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("ORDER_QUEUE_NOT_ADMITTED"))
+			.andExpect(jsonPath("$.message").value("대기열에서 입장한 뒤 결제할 수 있습니다."));
+		queueAdmissionPort.clear();
+		queueAdmissionPort.admitUntil(COURSE_ID, LocalDateTime.now().minusSeconds(1));
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isForbidden());
+
+		assertThat(seatHoldPort.holdCalls()).isZero();
+		assertThat(orderRepository.count()).isZero();
+		assertThat(participationRepository.findById(participationId).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.PENDING);
+	}
+
+	@Test
+	@DisplayName("같은 키로 다시 보내면 입장 시간이 끝났어도 처음 주문을 돌려준다")
+	void createRetryAfterAdmissionEnded() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		String key = newKey();
+		int orderId = createAndGetId(MEMBER_ID, participationId, key);
+		queueAdmissionPort.notAdmitted(COURSE_ID);
+
+		create(MEMBER_ID, participationId, key)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.id").value(orderId));
 	}
 
 	@Test
@@ -197,7 +263,8 @@ class ApiV1OrderTest {
 							"zipcode": "48094", "address": "부산 해운대구 해운대로 00" } }
 					"""))
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요."));
+			.andExpect(jsonPath("$.message").value("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_CHANGE_RETRY"));
 
 		assertThat(orderRepository.findAll().getFirst().getShippingAddress().getZipcode()).isEqualTo("04700");
 		assertThat(participationRepository.findById(participationId).orElseThrow()
@@ -254,7 +321,8 @@ class ApiV1OrderTest {
 
 		create(MEMBER_ID, otherRace, key)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요."));
+			.andExpect(jsonPath("$.message").value("이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_IDEMPOTENCY_KEY_REUSED"));
 
 		assertThat(participationRepository.findById(otherRace).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.PENDING);
@@ -268,7 +336,8 @@ class ApiV1OrderTest {
 
 		create(MEMBER_ID, participationId, newKey())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제를 시작할 수 없는 신청입니다(현재 상태: 결제 대기)."));
+			.andExpect(jsonPath("$.message").value("결제를 시작할 수 없는 신청입니다(현재 상태: 결제 대기)."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_PAYABLE"));
 
 		assertThat(orderRepository.count()).isEqualTo(1);
 		assertThat(seatHoldPort.holdCalls()).isEqualTo(1);
@@ -284,6 +353,7 @@ class ApiV1OrderTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.status").value(409))
 			.andExpect(jsonPath("$.message").value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_SOLD_OUT"))
 			.andExpect(jsonPath("$.data").isEmpty());
 
 		Participation participation = participationRepository.findById(participationId).orElseThrow();
@@ -304,8 +374,8 @@ class ApiV1OrderTest {
 
 		create(MEMBER_ID, participationId, key)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message")
-				.value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_SOLD_OUT"));
 		assertThat(seatHoldPort.holdCalls()).isEqualTo(1);
 	}
 
@@ -341,7 +411,8 @@ class ApiV1OrderTest {
 
 		create(MEMBER_ID, participationId, newKey())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("접수 기간이 아닙니다."));
+			.andExpect(jsonPath("$.message").value("접수 기간이 아닙니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_APPLICATION_CLOSED"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 		assertThat(participationRepository.findById(participationId).orElseThrow().getStatus())
@@ -355,10 +426,12 @@ class ApiV1OrderTest {
 
 		create(OTHER_MEMBER_ID, participationId, newKey())
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 참가 신청만 결제할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_FORBIDDEN"));
 		create(MEMBER_ID, 999999, newKey())
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 참가 신청입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_FOUND"));
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 	}
@@ -373,10 +446,12 @@ class ApiV1OrderTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(createBody(participationId)))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		create(MEMBER_ID, participationId, "k".repeat(65))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("Idempotency-Key는 1~64자로 보내주세요."));
+			.andExpect(jsonPath("$.message").value("Idempotency-Key는 1~64자로 보내주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -388,7 +463,8 @@ class ApiV1OrderTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{}"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."));
+			.andExpect(jsonPath("$.message").value("결제할 참가 신청을 선택해주세요."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -445,84 +521,12 @@ class ApiV1OrderTest {
 	}
 
 	@Test
-	@DisplayName("결제 기한을 늘리면 주문·참가 신청의 기한이 함께 2분 늘고, 두 번째 요청은 409다")
-	void extendDeadline() throws Exception {
-		int participationId = applyAndGetId(MEMBER_ID);
-		int orderId = createAndGetId(MEMBER_ID, participationId, newKey());
-		LocalDateTime due = orderRepository.findById(orderId).orElseThrow().getPaymentDueAt();
-		LocalDateTime extendedDue = due.plusMinutes(StubSeatHoldPort.EXTEND_MINUTES);
-
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.message").value("결제 기한을 2분 늘렸습니다."))
-			.andExpect(jsonPath("$.data.status").value("CREATED"));
-
-		Order order = orderRepository.findById(orderId).orElseThrow();
-		assertThat(order.getPaymentDueAt()).isEqualTo(extendedDue);
-		assertThat(order.getDeadlineExtendedAt()).isNotNull();
-		assertThat(participationRepository.findById(participationId).orElseThrow().getPaymentDueAt())
-			.isEqualTo(extendedDue);
-
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제 기한은 한 번만 늘릴 수 있습니다."));
-		assertThat(seatHoldPort.extendCalls()).isEqualTo(1);
-
-		// 늘린 기한 전에는 정리되지 않는다
-		orderExpiryUseCase.expireOverdue(due);
-		assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.CREATED);
-	}
-
-	@Test
-	@DisplayName("기한이 지났거나 이미 만료된 주문은 늘리지 않고 상품 서비스도 부르지 않는다")
-	void extendDeadlineAfterDue() throws Exception {
-		int orderId = createAndGetId(MEMBER_ID, applyAndGetId(MEMBER_ID), newKey());
-		Order order = orderRepository.findById(orderId).orElseThrow();
-		ReflectionTestUtils.setField(order, "paymentDueAt", LocalDateTime.now().minusSeconds(1));
-		orderRepository.save(order);
-
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제 기한이 지났습니다."));
-
-		orderExpiryUseCase.expireOverdue(LocalDateTime.now());
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제 대기 중인 주문만 결제 기한을 늘릴 수 있습니다(현재 상태: 기한 만료)."));
-		assertThat(seatHoldPort.extendCalls()).isZero();
-	}
-
-	@Test
-	@DisplayName("참가 신청이 결제 대기가 아니면 상품 서비스에 연장을 요청하지 않고 409다")
-	void extendDeadlineWhenParticipationNotApplied() throws Exception {
-		int participationId = applyAndGetId(MEMBER_ID);
-		int orderId = createAndGetId(MEMBER_ID, participationId, newKey());
-		Participation participation = participationRepository.findById(participationId).orElseThrow();
-		ReflectionTestUtils.setField(participation, "status", ParticipationStatus.RELEASED);
-		participationRepository.save(participation);
-
-		extend(MEMBER_ID, orderId)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message")
-				.value("결제 대기 중인 신청만 결제 기한을 늘릴 수 있습니다(현재 상태: 미결제 해제)."));
-		assertThat(seatHoldPort.extendCalls()).isZero();
-	}
-
-	@Test
-	@DisplayName("다른 회원의 주문은 403, 없는 주문은 404다")
-	void extendDeadlineNotOwnerOrMissing() throws Exception {
+	@DisplayName("결제 기한 늘리기 API는 없다 (10/14 연장 없음으로 정함)")
+	void deadlineExtensionRemoved() throws Exception {
 		int orderId = createAndGetId(MEMBER_ID, applyAndGetId(MEMBER_ID), newKey());
 
-		extend(OTHER_MEMBER_ID, orderId)
-			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 주문만 결제 기한을 늘릴 수 있습니다."));
-		extend(MEMBER_ID, 999999)
-			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."));
-	}
-
-	private ResultActions extend(int memberId, int orderId) throws Exception {
-		return mockMvc.perform(post(BASE_URL + "/" + orderId + "/deadline-extension").header("X-Member-Id", memberId));
+		mockMvc.perform(post(BASE_URL + "/" + orderId + "/deadline-extension").header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isNotFound());
 	}
 
 	private Integer createStatusAfter(CountDownLatch start, int memberId, int participationId) throws Exception {

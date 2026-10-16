@@ -147,6 +147,20 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
+	@DisplayName("판매자가 대회를 취소했으면 환불 기한이 지났어도 결제한 참가권을 취소하면 전액 환불된다")
+	void cancelCanceledRaceAfterRefundDeadline() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		raceCoursePort.put(StubRaceCoursePort.canceled(
+			StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, LocalDate.now().minusDays(10))));
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.canceledAmount").value(TICKET_PRICE));
+
+		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
+	}
+
+	@Test
 	@DisplayName("환불 기한이 지났어도 대회 일정이 바뀐 날(알린 날)부터 7일째 날까지는 취소하면 전액 환불된다")
 	void cancelWithinScheduleChangeRefund() throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);
@@ -201,7 +215,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYOUT_STARTED"));
 
 		assertNothingCanceled(paid);
 	}
@@ -217,7 +232,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYOUT_STARTED"));
 
 		assertNothingCanceled(paid);
 	}
@@ -254,7 +270,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 취소한 상품입니다."));
+			.andExpect(jsonPath("$.message").value("이미 취소한 상품입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_ITEM_NOT_CANCELABLE"));
 
 		assertThat(walletPort.refundCalls()).hasSize(1);
 		assertThat(seatHoldPort.restoredParticipations()).hasSize(1);
@@ -268,7 +285,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."));
+			.andExpect(jsonPath("$.message").value("정산이 시작된 참가권이라 취소할 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PAYOUT_STARTED"));
 
 		assertNothingCanceled(paid);
 	}
@@ -281,7 +299,8 @@ class ApiV1OrderCancelTest {
 
 		cancel(MEMBER_ID, orderId, orderItemId)
 			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("결제한 상품만 취소할 수 있습니다(현재 상태: 결제 대기)."));
+			.andExpect(jsonPath("$.message").value("결제한 상품만 취소할 수 있습니다(현재 상태: 결제 대기)."))
+			.andExpect(jsonPath("$.code").value("ORDER_ITEM_NOT_CANCELABLE"));
 	}
 
 	@Test
@@ -333,13 +352,16 @@ class ApiV1OrderCancelTest {
 
 		cancel(OTHER_MEMBER_ID, paid.orderId(), paid.orderItemId())
 			.andExpect(status().isForbidden())
-			.andExpect(jsonPath("$.message").value("본인의 주문만 취소할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("본인의 주문만 취소할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"));
 		cancel(MEMBER_ID, 999999, paid.orderItemId())
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 주문입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
 		cancel(MEMBER_ID, paid.orderId(), 999999)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("주문에 없는 상품입니다."));
+			.andExpect(jsonPath("$.message").value("주문에 없는 상품입니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_ITEM_NOT_FOUND"));
 		assertNothingCanceled(paid);
 	}
 

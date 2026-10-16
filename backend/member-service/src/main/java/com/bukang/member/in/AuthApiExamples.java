@@ -13,7 +13,10 @@ final class AuthApiExamples {
 				"createDate": "2026-10-05T21:25:35",
 				"modifyDate": "2026-10-05T21:25:35",
 				"nickname": "러너1",
-				"email": "runner1@crewrun.com"
+				"email": "runner1@crewrun.com",
+				"phone": "010-1234-5678",
+				"name": "김러너",
+				"birthDate": "1995-04-12"
 			}
 		}
 		""";
@@ -30,7 +33,9 @@ final class AuthApiExamples {
 					"modifyDate": "2026-10-05T21:25:35",
 					"nickname": "러너1",
 					"email": "runner1@crewrun.com",
-					"phone": "010-1234-5678"
+					"phone": "010-1234-5678",
+					"name": "김러너",
+					"birthDate": "1995-04-12"
 				}
 			}
 		}
@@ -55,43 +60,71 @@ final class AuthApiExamples {
 		""";
 
 	static final String JOIN_INVALID_INPUT = """
-		{ "status": 400, "message": "비밀번호는 10자 이상 작성해야합니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "비밀번호는 10자 이상 작성해야합니다.", "data": null }
 		""";
 
 	static final String LOGIN_INVALID_INPUT = """
-		{ "status": 400, "message": "이메일을 입력해주세요.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "이메일을 입력해주세요.", "data": null }
 		""";
 
 	static final String INVALID_BODY = """
-		{ "status": 400, "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String JOIN_UNDER_AGE = """
+		{ "status": 400, "code": "MEMBER_UNDER_AGE", "message": "만 14세 미만은 가입할 수 없습니다.", "data": null }
+		""";
+
+	static final String JOIN_REQUIRED_TERMS_NOT_AGREED = """
+		{
+			"status": 400,
+			"code": "MEMBER_REQUIRED_TERMS_NOT_AGREED",
+			"message": "필수 약관에 동의해야 가입할 수 있습니다.",
+			"data": null
+		}
 		""";
 
 	static final String DUPLICATE_EMAIL = """
-		{ "status": 409, "message": "이미 사용 중인 이메일입니다.", "data": null }
+		{ "status": 409, "code": "MEMBER_DUPLICATE_EMAIL", "message": "이미 사용 중인 이메일입니다.", "data": null }
 		""";
 
 	static final String DUPLICATE_NICKNAME = """
-		{ "status": 409, "message": "이미 사용 중인 닉네임입니다.", "data": null }
+		{ "status": 409, "code": "MEMBER_DUPLICATE_NICKNAME", "message": "이미 사용 중인 닉네임입니다.", "data": null }
 		""";
 
 	static final String DUPLICATE_PHONE = """
-		{ "status": 409, "message": "이미 사용 중인 전화번호입니다.", "data": null }
+		{ "status": 409, "code": "MEMBER_DUPLICATE_PHONE", "message": "이미 사용 중인 전화번호입니다.", "data": null }
 		""";
 
 	static final String LOGIN_FAILED = """
-		{ "status": 401, "message": "이메일 또는 비밀번호가 올바르지 않습니다.", "data": null }
+		{ "status": 401, "code": "MEMBER_LOGIN_FAILED", "message": "이메일 또는 비밀번호가 올바르지 않습니다.", "data": null }
 		""";
 
 	static final String REISSUE_MISSING_TOKEN = """
-		{ "status": 401, "message": "Refresh Token이 없습니다. 다시 로그인해주세요.", "data": null }
+		{
+			"status": 401,
+			"code": "MEMBER_INVALID_REFRESH_TOKEN",
+			"message": "Refresh Token이 없습니다. 다시 로그인해주세요.",
+			"data": null
+		}
 		""";
 
 	static final String REISSUE_EXPIRED_TOKEN = """
-		{ "status": 401, "message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.", "data": null }
+		{
+			"status": 401,
+			"code": "MEMBER_INVALID_REFRESH_TOKEN",
+			"message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.",
+			"data": null
+		}
 		""";
 
 	static final String REISSUE_INVALID_TOKEN = """
-		{ "status": 401, "message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.", "data": null }
+		{
+			"status": 401,
+			"code": "MEMBER_INVALID_REFRESH_TOKEN",
+			"message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.",
+			"data": null
+		}
 		""";
 
 	private AuthApiExamples() {

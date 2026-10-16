@@ -41,6 +41,9 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        # 브로커 연결 대기 3초 (Kafka가 죽어 있으면 커밋 뒤 보내기가 가입 응답을 기본 60초 붙잡는다, BE-011)
+        "[max.block.ms]": 3000
 
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -80,3 +83,11 @@ member:
       reuse-grace: 5s
       # 로그인부터 회전을 이어 갈 수 있는 최대 기간. 계속 써도 이 기간이 지나면 다시 로그인한다
       max-lifetime: 30d
+  # 회원 탈퇴 전에 남은 예치금·참가권을 묻는 내부 API (BE-022). 로컬 개발은 bootRun으로 띄운 서비스 포트로 부른다
+  clients:
+    # 연결·응답 시간 제한. 넘으면 탈퇴하지 않고 503으로 다시 시도하게 한다
+    timeout: 2s
+    cash:
+      base-url: http://localhost:8081
+    order:
+      base-url: http://localhost:8084

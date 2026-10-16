@@ -1,13 +1,22 @@
 'use client'
 
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
-import { RACE_LIST, type RaceListItem } from '@/entities/race'
-import { cn } from '@/shared/lib'
+import {
+  DEFAULT_RACE_SORT,
+  raceListQueryOptions,
+  RacePoster,
+  RaceSort,
+  raceSuggestionsQueryOptions,
+  toRaceListItem,
+  type RaceListItem,
+} from '@/entities/race'
+import { cn, formatNumber } from '@/shared/lib'
 import {
   Badge,
   BottomSheet,
@@ -22,29 +31,59 @@ import {
   useToast,
 } from '@/shared/ui'
 
+import { useDebouncedValue } from '../model/use-debounced-value'
+
 export type RaceListState = 'loading' | 'empty' | 'menu' | 'sort'
 
 const SORTS = [
-  { value: 'deadline', label: '마감 임박순' },
-  { value: 'raceDate', label: '대회일 빠른순' },
-  { value: 'latest', label: '최신 등록순' },
-  { value: 'price', label: '가격 낮은순' },
-] as const
-type RaceSort = (typeof SORTS)[number]['value']
+  { value: RaceSort.DEADLINE, label: '마감 임박순' },
+  { value: RaceSort.RACE_DATE, label: '대회일 빠른순' },
+  { value: RaceSort.LATEST, label: '최신 등록순' },
+  { value: RaceSort.PRICE, label: '가격 낮은순' },
+]
 
 // 피그마 V2 · M18 대회 찾기 (+ 로딩, 결과 없음, 더보기 메뉴, M18-1 정렬 열림)
-// TODO(api): 검색 · 필터 · 정렬을 대회 목록 API에 붙인다
+// 검색어 · 정렬은 화면 상태로 들고 있다. URL(?q=&sort=)에 담는 것은 PRO-105.
+// TODO: 종목 · 지역 · 날짜 필터 칩은 아직 API 조건에 붙이지 않았다.
 export function RaceListPage({ state }: { state?: RaceListState }) {
   const toast = useToast()
   const empty = state === 'empty'
-  const loading = state === 'loading'
   const [query, setQuery] = useState(empty ? '제주 트레일' : '')
-  const [menuRace, setMenuRace] = useState<RaceListItem | null>(
-    state === 'menu' ? RACE_LIST[0] : null,
+  const [focused, setFocused] = useState(false)
+  const [sort, setSort] = useState<RaceSort>(DEFAULT_RACE_SORT)
+  const keyword = useDebouncedValue(query)
+
+  const list = useInfiniteQuery({
+    ...raceListQueryOptions({ keyword, sort }),
+    placeholderData: keepPreviousData,
+  })
+  const suggestions = useQuery(raceSuggestionsQueryOptions(keyword))
+
+  const loading = state === 'loading' || list.isPending
+  const races = empty
+    ? []
+    : (list.data?.pages.flatMap((p) => p.races ?? []) ?? []).map((race) => toRaceListItem(race))
+  const total = empty ? 0 : (list.data?.pages[0]?.totalElements ?? 0)
+  // 'preview': ?preview=menu로 첫 대회의 더보기 메뉴를 열어 둔다
+  const [menuRace, setMenuRace] = useState<RaceListItem | 'preview' | null>(
+    state === 'menu' ? 'preview' : null,
   )
-  // TODO(api): 정렬 값을 목록 API에 넘긴다. 지금 목업은 정렬 키가 없어 순서를 바꾸지 않는다.
-  const [sort, setSort] = useState<RaceSort>('deadline')
-  const races = empty ? [] : RACE_LIST
+  const menuTarget = menuRace === 'preview' ? (races[0] ?? null) : menuRace
+  const suggestionItems = [
+    ...(suggestions.data?.races ?? []).map((r) => ({
+      key: `race-${r.raceId}`,
+      raceId: r.raceId,
+      option: undefined,
+      label: r.title ?? '',
+    })),
+    ...(suggestions.data?.courses ?? []).map((c) => ({
+      key: `course-${c.raceCourseId}`,
+      raceId: c.raceId,
+      option: c.raceCourseId,
+      label: c.label ?? '',
+    })),
+  ]
+  const showSuggestions = focused && query.trim() !== '' && suggestionItems.length > 0
 
   function copyLink(race: RaceListItem) {
     void navigator.clipboard?.writeText(`${window.location.origin}/races/${race.id}`)
@@ -57,16 +96,44 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
       <AppHeader />
       <main className="flex flex-1 flex-col gap-4 px-4 pt-8 pb-8">
         <h1 className="text-heading-xl">대회 찾기</h1>
-        <label className="flex items-center gap-2 rounded-md bg-bg-surface p-4 inset-ring inset-ring-border-default focus-within:inset-ring-2 focus-within:inset-ring-border-focus">
-          <Icon name="Search" className="size-5" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="대회 이름이나 지역으로 찾기"
-            aria-label="대회 찾기"
-            className="min-w-0 flex-1 bg-transparent text-body-m outline-none placeholder:text-text-tertiary"
-          />
-        </label>
+        <div className="relative">
+          <label className="flex items-center gap-2 rounded-md bg-bg-surface p-4 inset-ring inset-ring-border-default focus-within:inset-ring-2 focus-within:inset-ring-border-focus">
+            <Icon name="Search" className="size-5" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              placeholder="대회 이름이나 지역으로 찾기"
+              aria-label="대회 찾기"
+              className="min-w-0 flex-1 bg-transparent text-body-m outline-none placeholder:text-text-tertiary"
+            />
+          </label>
+          {showSuggestions && (
+            <ul
+              aria-label="연관검색어"
+              // 누르는 동안 입력창이 포커스를 잃어 목록이 먼저 닫히지 않게 한다
+              onMouseDown={(e) => e.preventDefault()}
+              className="absolute inset-x-0 top-full z-10 mt-1 flex flex-col rounded-md bg-bg-surface py-2 shadow-sm inset-ring inset-ring-border-default"
+            >
+              {suggestionItems.map((item) => (
+                <li key={item.key}>
+                  <Link
+                    href={
+                      item.option === undefined
+                        ? `/races/${item.raceId}`
+                        : `/races/${item.raceId}?option=${item.option}`
+                    }
+                    className={cn('flex items-center gap-2 px-4 py-2 text-body-m', FOCUS_RING)}
+                  >
+                    <Icon name="Search" className="size-4 text-text-tertiary" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           <Chip>종목</Chip>
           <Chip>지역</Chip>
@@ -76,7 +143,7 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
           {loading ? (
             <Skeleton className="w-12" />
           ) : (
-            <p className="text-label-m text-text-secondary">대회 {empty ? 0 : 24}개</p>
+            <p className="text-label-m text-text-secondary">대회 {formatNumber(total)}개</p>
           )}
           <SortSelect
             items={[...SORTS]}
@@ -88,7 +155,21 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
         </div>
 
         {loading && <ListSkeleton />}
-        {!loading && races.length === 0 && (
+        {!loading && list.isError && !empty && (
+          <div className="flex flex-1 items-center justify-center">
+            <EmptyState
+              icon="Search"
+              title="대회를 불러오지 못했어요"
+              description="잠시 뒤 다시 시도해 주세요."
+              action={
+                <Button variant="secondary" onClick={() => void list.refetch()}>
+                  다시 시도
+                </Button>
+              }
+            />
+          </div>
+        )}
+        {!loading && !list.isError && races.length === 0 && (
           <div className="flex flex-1 items-center justify-center">
             <EmptyState
               icon="Search"
@@ -113,13 +194,22 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
                     FOCUS_RING,
                   )}
                 >
-                  <Image
-                    src={race.image}
-                    alt=""
-                    width={80}
-                    height={80}
-                    className="size-20 shrink-0 rounded-md object-cover"
-                  />
+                  {race.image ? (
+                    <Image
+                      src={race.image}
+                      alt=""
+                      width={80}
+                      height={80}
+                      className="size-20 shrink-0 rounded-md object-cover"
+                    />
+                  ) : (
+                    <RacePoster
+                      seed={race.id}
+                      title=""
+                      label={race.posterLabel}
+                      className="size-20 shrink-0 rounded-md"
+                    />
+                  )}
                   <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
                     <Badge tone={race.badge.tone}>{race.badge.label}</Badge>
                     <p className="text-heading-s">{race.title}</p>
@@ -142,12 +232,21 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
             ))}
           </ul>
         )}
+        {!loading && !empty && list.hasNextPage && (
+          <Button
+            variant="secondary"
+            onClick={() => void list.fetchNextPage()}
+            disabled={list.isFetchingNextPage}
+          >
+            {list.isFetchingNextPage ? '불러오는 중' : '더 보기'}
+          </Button>
+        )}
       </main>
       <BottomNav />
       <BottomSheet
-        open={menuRace !== null}
+        open={menuTarget !== null}
         onOpenChange={(open) => !open && setMenuRace(null)}
-        title={menuRace?.title ?? ''}
+        title={menuTarget?.title ?? ''}
         footer={
           <Button variant="secondary" size="l" onClick={() => setMenuRace(null)}>
             닫기
@@ -158,7 +257,7 @@ export function RaceListPage({ state }: { state?: RaceListState }) {
           <SheetAction
             icon="Copy"
             label="링크 복사"
-            onClick={() => menuRace && copyLink(menuRace)}
+            onClick={() => menuTarget && copyLink(menuTarget)}
           />
           {/* TODO: 기기 공유 창(navigator.share) */}
           <SheetAction icon="Share" label="공유하기" onClick={() => setMenuRace(null)} />

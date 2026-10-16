@@ -35,10 +35,23 @@ public class CashSupport {
 		return findWalletByHolderId(cashWalletProperties.systemMemberId());
 	}
 
+	// 회원 탈퇴 확인용 잔액 (BE-022). 지갑이 없으면 남은 예치금도 없으므로 404 대신 0원으로 본다
+	public int findBalanceOrZero(int holderId) {
+		return walletRepository.findById(holderId)
+			.map(Wallet::getBalance)
+			.orElse(0);
+	}
+
+	// 잠그지 않고 있는지만 본다 (환원처럼 "지갑이 없으면 애초에 결제된 적도 없다"를 판단할 때 쓴다)
+	public boolean hasWallet(int holderId) {
+		return walletRepository.existsById(holderId);
+	}
+
 	//주문 존재 확인
 	public Optional<Payment> findByOrderId(int orderId) {
 		return paymentRepository.findByOrderId(orderId);
 	}
+
 	// 고객 지갑·보관 지갑을 ID가 작은 쪽부터 비관적 락으로 잠근다 (교착 상태 방지, PRO-78)
 	// 지갑 ID가 회원 ID와 항상 같을 때만 올바르다. 지갑 ID가 자동 증가(BaseIdAndTime)라면
 	// 다른 회원의 지갑을 잠글 수 있으므로, 회원 ID로 잠그는 findByMemberIdForUpdate를 써야 한다.

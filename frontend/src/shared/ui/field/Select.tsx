@@ -26,6 +26,10 @@ export type SelectProps<Value extends string> = {
   onValueChange?: (value: Value | null) => void
   name?: string
   disabled?: boolean
+  /** label 없이 쓸 때 화면 읽기 프로그램에 읽어 줄 이름 */
+  'aria-label'?: string
+  /** 메뉴 너비를 트리거와 다르게 할 때 (좁은 시간 칸 등) */
+  popupClassName?: string
   className?: string
 }
 
@@ -45,6 +49,8 @@ export function Select<Value extends string>({
   onValueChange,
   name,
   disabled,
+  'aria-label': ariaLabel,
+  popupClassName,
   className,
 }: SelectProps<Value>) {
   const description = error ?? helper
@@ -63,6 +69,7 @@ export function Select<Value extends string>({
         onValueChange={(next) => onValueChange?.(next as Value | null)}
       >
         <BaseSelect.Trigger
+          aria-label={ariaLabel}
           className={cn(
             FIELD_BOX,
             'group/trigger flex items-center gap-2 data-popup-open:inset-ring-2 data-popup-open:inset-ring-border-focus',
@@ -79,7 +86,7 @@ export function Select<Value extends string>({
             />
           </BaseSelect.Icon>
         </BaseSelect.Trigger>
-        <SelectPopup items={items} />
+        <SelectPopup items={items} align="start" className={popupClassName} />
       </BaseSelect.Root>
       {description && <Field.Description className={FIELD_HELPER}>{description}</Field.Description>}
     </Field.Root>

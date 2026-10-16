@@ -3,8 +3,11 @@ import type { ReactNode } from 'react'
 
 import { cn } from '@/shared/lib'
 
+import { RacePoster } from './RacePoster'
+
 export type RaceTicketCardProps = {
-  image: string
+  /** 없으면 색 포스터 */
+  image?: string
   title: string
   /** 일시 · 장소 */
   meta: string
@@ -25,19 +28,18 @@ export function RaceTicketCard({
   className,
 }: RaceTicketCardProps) {
   return (
-    <div
-      className={cn(
-        'flex items-center gap-4 rounded-[12px] bg-bg-subtle py-3 pr-4 pl-3',
-        className,
+    <div className={cn('flex items-center gap-4 rounded-lg bg-bg-subtle p-5', className)}>
+      {image ? (
+        <Image
+          src={image}
+          alt=""
+          width={72}
+          height={72}
+          className="size-18 shrink-0 rounded-md object-cover"
+        />
+      ) : (
+        <RacePoster seed={title} title="" label="" className="size-18 shrink-0 rounded-md" />
       )}
-    >
-      <Image
-        src={image}
-        alt=""
-        width={72}
-        height={72}
-        className="size-18 shrink-0 rounded-md object-cover"
-      />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="truncate text-heading-s">{title}</p>
         <p className="truncate text-body-m text-text-secondary">{meta}</p>

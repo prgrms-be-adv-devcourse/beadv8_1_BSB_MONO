@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { cn } from '@/shared/lib'
 import { FOCUS_RING, Icon } from '@/shared/ui'
 
-import type { RaceSummary } from '../model/fixtures'
+import type { RaceSummary } from '../model/types'
+import { RacePoster } from './RacePoster'
 
 export type RaceCardProps = { race: RaceSummary; className?: string }
 
@@ -15,13 +16,22 @@ export function RaceCard({ race, className }: RaceCardProps) {
       href={race.option ? `/races/${race.id}?option=${race.option}` : `/races/${race.id}`}
       className={cn('flex flex-col gap-2 rounded-md', FOCUS_RING, className)}
     >
-      <Image
-        src={race.image}
-        alt=""
-        width={216}
-        height={216}
-        className="aspect-square w-full rounded-[12px] object-cover"
-      />
+      {race.image ? (
+        <Image
+          src={race.image}
+          alt=""
+          width={216}
+          height={216}
+          className="aspect-square w-full rounded-md object-cover"
+        />
+      ) : (
+        <RacePoster
+          seed={race.id}
+          title={race.title}
+          label={race.posterLabel}
+          className="aspect-square w-full rounded-md"
+        />
+      )}
       <p className="text-heading-s break-keep whitespace-pre-line">{race.title}</p>
       <div className="flex flex-col gap-1 text-body-s text-text-secondary">
         <RaceMeta icon="Calendar">{race.schedule}</RaceMeta>

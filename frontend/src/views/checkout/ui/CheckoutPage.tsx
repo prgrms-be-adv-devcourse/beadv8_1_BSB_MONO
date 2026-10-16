@@ -1,10 +1,16 @@
 'use client'
 
+import { useMutation, useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { SAMPLE_PARTICIPANT, useBookingFlow } from '@/features/booking'
+import { useQueueAdmission } from '@/features/queue-admission'
+import { parseKstDateTime, RACE_DETAIL, raceDetailQueryOptions } from '@/entities/race'
+import { orderApi, unwrapData, type orderModel } from '@/shared/api'
+import { formatNumber } from '@/shared/lib'
 import {
   Alert,
   BottomCta,
@@ -15,20 +21,30 @@ import {
   KeyValue,
   Radio,
   RadioGroup,
+  Skeleton,
   Stepper,
+  TimerBar,
   type IconName,
 } from '@/shared/ui'
 
+import { useDepositBalance } from '../api/deposit-balance'
+import { splitPayment } from '../lib/deposit'
+import { toPayFailure, type PayFailure } from '../lib/pay-error'
+import { useHoldCountdown } from '../model/use-hold-countdown'
+
 export type CheckoutState = 'default' | 'offline' | 'timeout' | 'soldout' | 'failed'
+
+type ResultView = 'timeout' | 'soldout' | 'failed'
 
 // 결제가 끝나지 못한 결과 화면 (M07-1 시간 초과 · M07-2 자리 마감 · M07-3 실패)
 const RESULT: Record<
-  'timeout' | 'soldout' | 'failed',
+  ResultView,
   {
     icon: IconName
     title: string
     description: ReactNode
     action: string
+    /** 대회를 모를 때(미리보기) 가는 곳. 시간 초과는 대회를 알면 그 대회 상세(M02)로 간다 */
     href: '/races' | '/checkout'
   }
 > = {
@@ -37,7 +53,7 @@ const RESULT: Record<
     title: '결제 시간이 지났어요',
     description: (
       <>
-        10분이 지나 잡아 둔 자리가 풀렸어요.
+        입장 시간이 끝나 잡아 둔 자리가 풀렸어요.
         <br />
         충전한 예치금은 그대로 남아 있어요.
       </>
@@ -73,55 +89,266 @@ const RESULT: Record<
   },
 }
 
-// 자리를 잡아 두는 시간 (정책 3장: 10분)
-const HOLD_SECONDS = 10 * 60
+// ?preview=offline 시안에서 보여 주는 예치금 잔액과 남은 시간 (5분 10초)
+const OFFLINE_PREVIEW_BALANCE = 40_000
+const OFFLINE_PREVIEW_SECONDS = 310
+
+/** 충전창(예치금 충전 화면). 결제 기한은 늘리지 않는다(PRO-168) — 충전하고 남은 시간 안에 돌아와 결제한다. */
+const CHARGE_HREF = '/me/deposit/charge'
+
+const won = (amount: number) => `₩${formatNumber(amount)}`
 
 // 피그마 V2 · M07 결제 · 부족분 충전 (+ 연결 끊김, M07-1~3 결과)
-// TODO(api): 주문 생성·예치금 계산·토스페이먼츠 충전을 붙인다. 금액은 시안 예시 값.
-export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
-  const router = useRouter()
-  // 필수 동의는 사용자가 직접 체크한다. 연결 끊김은 이미 동의하고 결제를 누른 뒤라 체크된 채로 둔다.
-  const [agreed, setAgreed] = useState(state === 'offline')
-  const remaining = useCountdown(state === 'offline' ? 310 : 522)
-
+// 결제 화면은 주문(/checkout?orderId=)으로 그린다. 남은 시간은 대기열 입장 끝 시각(= 결제 기한)까지 센다.
+// 대기열 화면에서 받은 입장 상태를 이어 쓰고, 입장 상태를 모르면 주문의 결제 기한(paymentDueAt)까지 센다.
+// ?preview=offline|timeout|soldout|failed 시안은 API를 부르지 않고 시안 예시 값을 보여 준다.
+// ?result=timeout&raceId= 는 입장 시간이 끝나 신청 · 대기열 화면에서 넘어온 시간 초과 화면(M07-1)이다.
+// TODO(api): 토스페이먼츠 충전을 붙인다. 지금은 충전창으로 보내기만 한다.
+export function CheckoutPage({
+  state = 'default',
+  orderId,
+  raceId,
+}: {
+  state?: CheckoutState
+  /** state가 default일 때 결제할 주문 */
+  orderId?: number
+  /** state가 timeout일 때 "대회 다시 보기"가 갈 대회 */
+  raceId?: number
+}) {
   if (state === 'timeout' || state === 'soldout' || state === 'failed') {
-    const result = RESULT[state]
-    return (
-      <>
-        <AppHeader type="sub" title="결제" close backHref="/" />
-        <main className="flex flex-1 items-center justify-center px-4 py-6">
-          <EmptyState icon={result.icon} title={result.title} description={result.description} />
-        </main>
-        <BottomCta
-          className="sticky bottom-0 z-10"
-          primary={
-            <Link href={result.href} className={buttonClassName({ size: 'l' })}>
+    return <CheckoutResult view={state} raceId={state === 'timeout' ? raceId : undefined} />
+  }
+  if (state === 'offline') return <OfflinePreview />
+  // 주문 없이 들어오는 경우는 page.tsx에서 notFound()로 막는다
+  if (orderId === undefined) return <CheckoutResult view="failed" />
+  return <OrderCheckout orderId={orderId} />
+}
+
+function CheckoutResult({
+  view,
+  raceId,
+  onRetry,
+}: {
+  view: ResultView
+  /** 시간 초과 화면의 "대회 다시 보기"가 갈 대회. 모르면 대회 목록으로 간다 */
+  raceId?: number
+  onRetry?: () => void
+}) {
+  const result = RESULT[view]
+  const href =
+    view === 'timeout' && raceId !== undefined ? (`/races/${raceId}` as const) : result.href
+  return (
+    <>
+      <AppHeader type="sub" title="결제" close backHref="/" />
+      <main className="flex flex-1 items-center justify-center px-4 py-6">
+        <EmptyState icon={result.icon} title={result.title} description={result.description} />
+      </main>
+      <BottomCta
+        className="sticky bottom-0 z-10"
+        primary={
+          onRetry ? (
+            <Button size="l" onClick={onRetry}>
+              {result.action}
+            </Button>
+          ) : (
+            <Link href={href} className={buttonClassName({ size: 'l' })}>
               {result.action}
             </Link>
-          }
-        />
-      </>
+          )
+        }
+      />
+    </>
+  )
+}
+
+/** 연결 끊김 시안 (M07 오프라인). 결제를 누른 뒤라 동의는 체크된 채로 둔다. */
+function OfflinePreview() {
+  const [expiresAt] = useState(() => Date.now() + OFFLINE_PREVIEW_SECONDS * 1000)
+  const remaining = useHoldCountdown(expiresAt)
+  const [agreed, setAgreed] = useState(true)
+  const race = RACE_DETAIL
+  const option = race.options[0]
+  if (remaining === 0) return <CheckoutResult view="timeout" />
+  return (
+    <CheckoutForm
+      offline
+      remaining={remaining}
+      summary={`${race.title} · ${option.name} · ${SAMPLE_PARTICIPANT.name}`}
+      amount={option.price}
+      balance={OFFLINE_PREVIEW_BALANCE}
+      refund={race.refund}
+      agreed={agreed}
+      onAgreedChange={setAgreed}
+      action={
+        <Button size="l" disabled={!agreed}>
+          다시 시도하기
+        </Button>
+      }
+    />
+  )
+}
+
+function OrderCheckout({ orderId }: { orderId: number }) {
+  const router = useRouter()
+  const completeHref = `/checkout/complete?orderId=${orderId}` as const
+  const order = orderApi.useFindById1(orderId, { query: { select: unwrapData } })
+  const raceId = order.data?.raceId
+  const race = useQuery({
+    ...raceDetailQueryOptions(String(raceId)),
+    enabled: raceId !== undefined,
+  })
+  const deposit = useDepositBalance()
+  const applications = useBookingFlow((s) => s.applications)
+  // 필수 동의는 결제 화면에 들어올 때마다 사용자가 직접 체크한다.
+  const [agreed, setAgreed] = useState(false)
+  const [failure, setFailure] = useState<PayFailure | null>(null)
+
+  // 남은 시간은 대기열 입장 끝 시각과 주문의 결제 기한 중 이른 쪽까지 센다.
+  // 결제 API는 입장을 다시 확인하지 않고 결제 기한만 보므로, 기한이 지난 주문을 새로고침해 입장 확인이 새 시간을 잡아도 기한을 넘기지 않는다.
+  // 입장 상태를 묻는 중이거나 입장 중이 아니면(모름) 주문의 결제 기한만 쓴다.
+  const admission = useQueueAdmission(raceId, order.data?.items?.[0]?.raceCourseId, 'follow')
+  const dueAt = order.data?.paymentDueAt
+  const dueDeadline = dueAt ? parseKstDateTime(dueAt).getTime() : null
+  const admissionDeadline = admission.isFetching ? null : admission.deadline
+  const remaining = useHoldCountdown(
+    admissionDeadline !== null && dueDeadline !== null
+      ? Math.min(admissionDeadline, dueDeadline)
+      : (admissionDeadline ?? dueDeadline),
+  )
+
+  const pay = useMutation({
+    mutationFn: async () => unwrapData(await orderApi.pay(orderId)),
+    onSuccess: () => router.push(completeHref),
+    onError: (error) => {
+      const next = toPayFailure(error)
+      setFailure(next)
+      if (next.kind === 'insufficient') void deposit.refetch()
+    },
+  })
+
+  const status = order.data?.status
+  // 이미 결제한 주문이면 완료 화면으로 보낸다 (뒤로 가기 · 새로고침).
+  useEffect(() => {
+    if (status === 'PAID') router.replace(completeHref)
+  }, [status, completeHref, router])
+
+  if (order.isError) return <CheckoutResult view="failed" onRetry={() => void order.refetch()} />
+  if (!order.data || status === 'PAID') return <CheckoutSkeleton />
+  if (status === 'EXPIRED' || remaining === 0 || failure?.kind === 'timeout') {
+    return <CheckoutResult view="timeout" raceId={raceId} />
+  }
+  if (failure?.kind === 'soldout') return <CheckoutResult view="soldout" />
+  if (failure?.kind === 'failed' || status !== 'CREATED') {
+    return (
+      <CheckoutResult
+        view="failed"
+        onRetry={() => {
+          setFailure(null)
+          void order.refetch()
+        }}
+      />
     )
   }
 
-  const offline = state === 'offline'
+  const amount = order.data.totalAmount ?? 0
+  const balance = deposit.balance
+  const payment = balance === undefined ? undefined : splitPayment(amount, balance)
+  const busy = pay.isPending
 
+  return (
+    <CheckoutForm
+      remaining={remaining}
+      summary={orderSummary(order.data, race.data ?? undefined, applications)}
+      amount={amount}
+      balance={balance}
+      refund={race.data?.refund}
+      agreed={agreed}
+      onAgreedChange={setAgreed}
+      alert={
+        failure?.kind === 'insufficient' && failure.message ? (
+          <Alert tone="danger" title={failure.message} />
+        ) : undefined
+      }
+      action={
+        payment && payment.charge > 0 ? (
+          <Button size="l" disabled={!agreed || busy} onClick={() => router.push(CHARGE_HREF)}>
+            {`${won(payment.charge)} 충전하고 결제`}
+          </Button>
+        ) : (
+          <Button size="l" disabled={!agreed || busy} onClick={() => pay.mutate()}>
+            {`${won(amount)} 결제`}
+          </Button>
+        )
+      }
+    />
+  )
+}
+
+/** 대회 · 종목 · 참가자. 대회 상세를 아직 못 받았으면 주문 상품 이름을 쓴다. */
+function orderSummary(
+  order: orderModel.OrderDto,
+  race: { title: string; options: { id: string; name: string }[] } | undefined,
+  applications: Record<string, { participationId: number; participantName: string }>,
+) {
+  const item = order.items?.[0]
+  const option = race?.options.find((o) => o.id === String(item?.raceCourseId))
+  const name = race && option ? `${race.title} · ${option.name}` : (item?.itemName ?? '')
+  const participant =
+    Object.values(applications).find((a) => a.participationId === item?.participationId)
+      ?.participantName ?? order.shippingAddress?.recipientName
+  return participant ? `${name} · ${participant}` : name
+}
+
+function CheckoutSkeleton() {
   return (
     <>
       <AppHeader type="sub" title="결제" />
-      <div
-        role="timer"
-        className="sticky top-(--layout-header-height) z-[5] flex items-center justify-between bg-bg-brand-subtle px-4 py-3 text-text-brand"
-      >
-        <p className="text-body-s">
-          {offline
+      <main aria-busy className="flex flex-1 flex-col gap-4 px-4 py-6">
+        <Skeleton shape="rect" className="h-96" />
+      </main>
+    </>
+  )
+}
+
+function CheckoutForm({
+  offline = false,
+  remaining,
+  summary,
+  amount,
+  balance,
+  refund,
+  agreed,
+  onAgreedChange,
+  alert,
+  action,
+}: {
+  offline?: boolean
+  remaining: number
+  summary: string
+  amount: number
+  /** 예치금 잔액. 불러오지 못하면 undefined */
+  balance?: number
+  refund?: { label: string; value: string }[]
+  agreed: boolean
+  onAgreedChange: (agreed: boolean) => void
+  alert?: ReactNode
+  action: ReactNode
+}) {
+  const payment = balance === undefined ? undefined : splitPayment(amount, balance)
+  return (
+    <>
+      <AppHeader type="sub" title="결제" />
+      {/* 대기열 내 차례(M05-Q2)에서 이어지는 남은 시간 띠 */}
+      <TimerBar
+        message={
+          offline
             ? '연결이 끊긴 동안에도 시간은 흘러요'
-            : '자리를 잡아 뒀어요. 시간 안에 결제해 주세요'}
-        </p>
-        <p className="text-heading-s tabular-nums">{formatTimer(remaining)}</p>
-      </div>
+            : '자리를 잡아 뒀어요. 시간 안에 결제해 주세요'
+        }
+        remainingSeconds={remaining}
+      />
       <main className="flex flex-1 flex-col px-4 py-6">
-        <div className="flex flex-col gap-7 rounded-lg bg-bg-surface p-6 shadow-sm inset-ring inset-ring-border-default">
+        <div className="flex flex-col gap-7 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <Stepper steps={['종목 선택', '참가자 정보', '결제']} current={2} />
 
           {offline && (
@@ -133,16 +360,20 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
           )}
 
           <div className="flex flex-col gap-1">
-            <p className="text-body-s text-text-secondary">
-              2026 용감한 쿠키RUN in 서울 · 10K · 김러너
-            </p>
-            <p className="text-[32px] leading-11 font-bold tracking-[-0.015em]">₩45,000</p>
+            <p className="text-body-s text-text-secondary">{summary}</p>
+            <p className="text-[32px] leading-11 font-bold tracking-[-0.015em]">{won(amount)}</p>
           </div>
 
           <div className="flex flex-col gap-3 border-t border-border-default pt-4">
-            <KeyValue label="예치금에서" value="₩40,000" />
-            <KeyValue label="충전 (최소 1만 원)" value="+₩10,000" />
-            <KeyValue label="결제 뒤 남는 예치금" value="₩5,000" />
+            <KeyValue label="예치금에서" value={payment ? won(payment.fromDeposit) : '-'} />
+            <KeyValue
+              label="충전 (최소 1만 원)"
+              value={payment ? `+${won(payment.charge)}` : '-'}
+            />
+            <KeyValue
+              label="결제 뒤 남는 예치금"
+              value={payment ? won(payment.balanceAfter) : '-'}
+            />
             <p className="text-caption text-text-tertiary">
               1만 원보다 적게 모자라면 1만 원을 충전해요.
               <br />
@@ -158,43 +389,25 @@ export function CheckoutPage({ state = 'default' }: { state?: CheckoutState }) {
           </fieldset>
 
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2 rounded-[12px] px-4 pt-3 pb-4 inset-ring inset-ring-border-default">
-              <p className="text-body-s text-text-secondary">환불 규정</p>
-              <KeyValue label="환불 기한 10/31 (토) 23:59까지" value="전액 환불" />
-              <KeyValue label="환불 기한이 지난 뒤" value="개인 사정 환불 불가" />
-              <KeyValue label="대회 취소 · 일정 변경" value="전액 환불" />
-            </div>
+            {refund && (
+              <div className="flex flex-col gap-2 rounded-md px-4 pt-3 pb-4 inset-ring inset-ring-border-default">
+                <p className="text-body-s text-text-secondary">환불 규정</p>
+                {refund.map((row) => (
+                  <KeyValue key={row.label} label={row.label} value={row.value} />
+                ))}
+              </div>
+            )}
             <Checkbox
               checked={agreed}
-              onCheckedChange={setAgreed}
+              onCheckedChange={onAgreedChange}
               label="[필수] 환불 기한을 확인했어요"
             />
           </div>
+
+          {alert}
         </div>
       </main>
-      <BottomCta
-        className="sticky bottom-0 z-10"
-        primary={
-          <Button size="l" disabled={!agreed} onClick={() => router.push('/checkout/complete')}>
-            {offline ? '다시 시도하기' : '₩10,000 충전하고 결제'}
-          </Button>
-        }
-      />
+      <BottomCta className="sticky bottom-0 z-10" primary={action} />
     </>
   )
-}
-
-function useCountdown(initial: number) {
-  const [seconds, setSeconds] = useState(Math.min(initial, HOLD_SECONDS))
-  useEffect(() => {
-    const id = setInterval(() => setSeconds((s) => Math.max(0, s - 1)), 1000)
-    return () => clearInterval(id)
-  }, [])
-  return seconds
-}
-
-function formatTimer(seconds: number) {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }

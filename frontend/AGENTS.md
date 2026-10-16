@@ -25,7 +25,8 @@ pnpm typecheck      # next typegen + tsc
 pnpm test           # Vitest
 pnpm storybook      # 시안 컴포넌트 확인 (localhost:6006). 스토리는 컴포넌트 옆 *.stories.tsx
 pnpm build
-pnpm api:generate   # orval. OPENAPI_URL=<springdoc 주소> 필요
+pnpm api:generate   # orval. openapi/<서비스>.json → src/shared/api/generated/<서비스>/
+pnpm api:pull       # 로컬에서 띄운 서비스(8080~8085)의 /v3/api-docs를 openapi/에 받기
 ```
 
 작업을 끝냈다고 말하기 전에 `pnpm lint && pnpm typecheck && pnpm test`를 돌린다.
@@ -55,8 +56,22 @@ src/
 - 코드에서는 항상 상대 경로 `/api/...`로 부른다. 모든 호출은 `shared/api`의 `customFetch`를 지난다.
   - 브라우저: 로컬·Vercel은 next.config rewrites → `BACKEND_URL`(게이트웨이, 로컬 8000), AWS는 Nginx → 게이트웨이
   - 서버 컴포넌트: `BACKEND_URL`을 붙여 직접 호출. `API_MOCKING=on`이면 MSW 핸들러에서 바로 응답
-- API 타입·훅은 orval로 생성해 `shared/api/generated/`에 둔다. 생성 파일은 직접 고치지 않는다.
-- 생성된 MSW 목은 `shared/mocks/handlers.ts`에 등록한다. 테스트도 같은 핸들러를 쓴다.
+- API 타입·훅은 orval로 생성해 `shared/api/generated/<서비스>/`에 둔다. 생성 파일은 직접 고치지 않는다.
+  - 명세는 서비스별로 `openapi/<서비스>.json`에 커밋해 둔다 (member, cash, payout, file, order, product).
+  - 성공 응답 스키마가 명세에 없는 API는 `openapi/supplements/<서비스>.json`으로 보충한다. 백엔드가 스키마를 내면 지운다.
+  - 게이트웨이가 넣는 `X-Member-Id` 헤더는 요청 함수 인자에서 뺀다 (`orval.config.ts`).
+- 가져올 때는 `@/shared/api`의 서비스별 묶음을 쓴다: `productApi`(요청 함수·훅), `productModel`(타입), `productZod`.
+- 응답은 `RsData{status, message, data, code?}`로 감싸여 온다. `customFetch`는 본문을 그대로 돌려주고, data는 `unwrapData`로 꺼낸다(`select: unwrapData`).
+  2xx가 아니면 `ApiError`(`serverMessage`, `code`)를 던진다.
+- 인증: Access Token은 브라우저 메모리(`shared/api/access-token.ts`)에만 두고 `customFetch`가 `Authorization: Bearer`로 붙인다.
+  Refresh Token은 서버가 내려 주는 httpOnly 쿠키(`Path=/api/v1/auth`)라 프론트가 만지지 않는다.
+  - 401이면 재발급(`POST /api/v1/auth/reissue`)을 한 번만(single-flight) 보내고 원래 요청을 한 번 다시 보낸다. 재발급도 실패하면 로그아웃 상태.
+  - 새로고침하면 토큰이 사라지므로 `features/auth`의 `AuthSessionRestorer`(app Provider)가 앱 시작 때 재발급으로 되살린다.
+  - 서버 컴포넌트는 토큰을 붙일 수 없다. 로그인이 필요한 데이터는 클라이언트에서 불러온다.
+  - 로그인 상태는 `useAuthStatus()`(`pending`·`authenticated`·`anonymous`), 로그인·로그아웃은 `useLogin`·`useLogout`.
+- 주문 생성·장바구니 결제는 `{ idempotencyKey: createIdempotencyKey() }`를 요청 옵션으로 넘겨 `Idempotency-Key` 헤더를 붙인다.
+- 생성된 MSW 목(명세의 응답 예시)은 `shared/mocks/handlers.ts`에 등록한다. 테스트도 같은 핸들러를 쓴다.
+  - 인증 목은 로그인 상태를 쿠키로 흉내 낸다: 가짜 로그인이 `mockRefreshToken` 쿠키(`HttpOnly; SameSite=Lax; Path=/api/v1/auth`, Secure 없음. `shared/mocks/mock-session.ts`)를 심고, 로그아웃이 `Max-Age=0`으로 지운다. 재발급은 요청 쿠키가 있을 때만 성공, 없으면 401. 서버 메모리에 상태를 두지 않는다. Node의 MSW는 쿠키를 저장하지 않으므로 테스트에서 로그인된 채로 요청하려면 `Cookie: MOCK_LOGGED_IN_COOKIE`(`@/shared/testing`)를 직접 붙인다.
 - 서버 데이터는 TanStack Query(초기 데이터는 RSC). Zustand에 서버 데이터를 넣지 않는다.
 
 ## 상태·폼
@@ -75,9 +90,13 @@ src/
 - 최종: AWS. `Dockerfile`(standalone)로 이미지를 만들고 런타임에 `BACKEND_URL`을 백엔드 내부 주소로 준다.
 - 이미지: 기본은 Next 최적화 + `IMAGE_REMOTE_HOSTS`(S3). `NEXT_PUBLIC_IMAGE_CDN_URL`을 주면 `shared/lib/image/cdn-loader.ts`로 바뀐다.
 
+## 인증
+
+- `src/proxy.ts`는 로그인 여부를 검사하지 않는다. Refresh Token 쿠키가 `Path=/api/v1/auth`라 `/seller`·`/admin` 요청에 실리지 않기 때문이다. 로그인 전 진입은 `AuthSessionRestorer`가 재발급 실패 시 `/login`으로 보낸다.
+
 ## 미정 사항
 
-- 인증 방식 (소셜 로그인 예정). `src/proxy.ts`, `shared/api/fetcher.ts`의 `TODO(auth)` 참고.
+- 소셜 로그인은 아직 없다.
 
 ## 커밋
 

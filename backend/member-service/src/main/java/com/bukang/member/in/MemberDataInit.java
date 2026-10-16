@@ -1,6 +1,7 @@
 package com.bukang.member.in;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +12,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.member.app.MemberFacade;
+import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;
 
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 public class MemberDataInit {
 	private static final String BASE_PASSWORD = "12345678910";
 	private static final LocalDate BASE_BIRTH_DATE = LocalDate.of(1995, 1, 1);
+	// 필수 약관에만 동의한 것으로 가입한다 (약관 데이터는 TermsDataInit이 먼저 만든다)
 
 	private final MemberDataInit self;
 	private final MemberFacade memberFacade;
@@ -54,6 +57,10 @@ public class MemberDataInit {
 		join("사용자3", "사용자3", "user3@crewrun.com", "010-1111-2227");
 		// 정산 샘플 데이터(payout-service PayoutDataInit)의 판매자. 판매자 역할은 아직 없어 일반 회원으로 만든다
 		join("판매자1", "판매자1", "seller1@crewrun.com", "010-1111-2228");
+		// 판매자1의 판매자 신청·승인은 여기서 만들지 않는다. product·payout 시작 데이터가 판매자 ID 7로 따로 만들어 두는데,
+		// 여기서 신청하면 새 ID(빈 DB면 1)로 승인 이벤트가 나가 product에 회원 7의 승인 판매자가 두 행이 된다 (BE-020)
+		// 관리자 API(판매자 심사)를 쓸 수 있게 역할을 준다. 이미 관리자여도 다시 줘서 결과가 같다 (BE-020 결정 8)
+		memberFacade.grantAdmin("admin@crewrun.com");
 	}
 
 	private void join(String name, String nickname, String email, String phone) {
@@ -62,7 +69,8 @@ public class MemberDataInit {
 		}
 
 		memberFacade.join(new MemberJoinRequestDto(
-			email, BASE_PASSWORD, name, nickname, phone, BASE_BIRTH_DATE, null
+			email, BASE_PASSWORD, name, nickname, phone, BASE_BIRTH_DATE, null,
+			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		));
 		log.info("기본 회원 생성: {}", email);
 	}

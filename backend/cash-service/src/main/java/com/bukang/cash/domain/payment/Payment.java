@@ -41,7 +41,7 @@ public class Payment extends BaseIdAndTime {
 	@Column(length = 50) // status가 FAILED일 때만 채운다
 	private PaymentFailReason failReason;
 
-	private LocalDateTime completedAt;
+	private LocalDateTime completeDate;
 
 	public Payment(int orderId, Wallet wallet, int amount) {
 		this.orderId = orderId;
@@ -50,9 +50,9 @@ public class Payment extends BaseIdAndTime {
 		this.status = PaymentStatus.PENDING;
 	}
 
-	public void markCompleted(LocalDateTime completedAt) {
+	public void markCompleted(LocalDateTime completeDate) {
 		this.status = PaymentStatus.COMPLETED;
-		this.completedAt = completedAt;
+		this.completeDate = completeDate;
 		this.failReason = null;
 	}
 
@@ -62,6 +62,11 @@ public class Payment extends BaseIdAndTime {
 	}
 	public void markCanceled() {
 		this.status = PaymentStatus.CANCELED;
+		this.failReason = null;
+	}
+
+	public void markRefunded() {
+		this.status = PaymentStatus.REFUNDED;
 		this.failReason = null;
 	}
 

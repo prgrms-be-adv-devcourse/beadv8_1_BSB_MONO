@@ -3,6 +3,7 @@ package com.bukang.order.support;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -15,6 +16,8 @@ import com.bukang.order.out.race.RaceCoursePort;
 public class StubRaceCoursePort implements RaceCoursePort {
 	public static final int SELLER_ID = 7;
 	public static final int PRICE = 50_000;
+	// 키트가 있는 테스트 종목이 주는 티셔츠 사이즈
+	public static final List<String> TSHIRT_SIZES = List.of("S", "M", "L", "XL");
 
 	private final Map<Integer, RaceCourseInfo> courses = new HashMap<>();
 
@@ -48,7 +51,15 @@ public class StubRaceCoursePort implements RaceCoursePort {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(60), now.minusDays(1), now.plusDays(30),
 			minAge, maxAge, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, true, refundDeadline,
-			scheduleChangedAt);
+			scheduleChangedAt, false, TSHIRT_SIZES);
+	}
+
+	// 키트는 있지만 티셔츠는 없는 접수 중 종목 (사이즈를 받지 않는다)
+	public static RaceCourseInfo courseWithoutTshirt(int raceCourseId, int raceId) {
+		RaceCourseInfo course = openCourse(raceCourseId, raceId, 14, null);
+		return new RaceCourseInfo(course.raceCourseId(), course.raceId(), course.raceDate(), course.applicationOpenAt(),
+			course.applicationCloseAt(), course.minAge(), course.maxAge(), course.sellerId(), course.courseName(),
+			course.price(), course.kitIncluded(), course.refundDeadline(), course.scheduleChangedAt(), false);
 	}
 
 	// 키트가 없는 접수 중 종목 (배송 주소를 받지 않는다)
@@ -64,6 +75,14 @@ public class StubRaceCoursePort implements RaceCoursePort {
 		LocalDateTime now = LocalDateTime.now();
 		return new RaceCourseInfo(raceCourseId, raceId, now.plusDays(10), now.minusDays(30), now.minusDays(1),
 			14, null, SELLER_ID, "테스트 대회 종목 " + raceCourseId, PRICE, true, now.toLocalDate().plusDays(5),
-			null);
+			null, false, TSHIRT_SIZES);
+	}
+
+	// 같은 종목을 판매자가 취소한 대회로 바꾼다 (B saleStatus = CANCELED)
+	public static RaceCourseInfo canceled(RaceCourseInfo course) {
+		return new RaceCourseInfo(course.raceCourseId(), course.raceId(), course.raceDate(), course.applicationOpenAt(),
+			course.applicationCloseAt(), course.minAge(), course.maxAge(), course.sellerId(), course.courseName(),
+			course.price(), course.kitIncluded(), course.refundDeadline(), course.scheduleChangedAt(), true,
+			course.tshirtSizeOption());
 	}
 }

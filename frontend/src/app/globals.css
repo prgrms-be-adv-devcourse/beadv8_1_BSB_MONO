@@ -120,6 +120,8 @@
   --color-bg-hero: var(--color-navy-950);
   --color-bg-hero-raised: var(--color-navy-800);
   --color-bg-track-on-hero: var(--color-navy-700);
+  /* 확인 창·시트 뒤 어두운 막. 불투명도 45%로 칠한다 (bg-bg-overlay/45). Dark도 같은 값 */
+  --color-bg-overlay: var(--color-navy-950);
   /* 뱃지 바탕 (10/10 색 규칙: 상태는 바탕색으로 나누고 글자는 text-primary 하나로 통일) */
   --color-bg-badge-brand: var(--color-brand-100);
   --color-bg-badge-success: var(--color-green-100);
@@ -255,6 +257,20 @@
   --text-label-tag--line-height: 16px;
   --text-label-tag--letter-spacing: 0;
   --text-label-tag--font-weight: 700;
+}
+
+/* 움직임. 값 없는 ProgressBar(대기열)가 쓴다. */
+@theme {
+  --animate-progress-indeterminate: progress-indeterminate 1.4s ease-in-out infinite;
+
+  @keyframes progress-indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(340%);
+    }
+  }
 }
 
 /* 글꼴은 layout.tsx의 next/font가 만든 변수를 가리키므로 inline으로 둔다. */

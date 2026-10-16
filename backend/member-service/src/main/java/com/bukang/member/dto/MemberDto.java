@@ -1,5 +1,6 @@
 package com.bukang.member.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
@@ -14,4 +15,6 @@ public class MemberDto {
 	private final String nickname;
 	private final String email;
 	private final String phone;
+	private final String name;
+	private final LocalDate birthDate;
 }

@@ -25,6 +25,17 @@ springdoc:
   swagger-ui:
     enabled: false
 
+cash:
+  clients:
+    pg:
+      mode: http
+      secret-key: ${TOSS_SECRET_KEY}
+
+# 계좌번호·pgPaymentKey 암호화 키
+crypto:
+  password: ${CASH_CRYPTO_PASSWORD}
+  salt: ${CASH_CRYPTO_SALT}
+
 logging:
   level:
     com:

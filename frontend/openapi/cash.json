@@ -1,0 +1,95 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Bukang Cash API",
+    "description": "크루 중심 마라톤 대회 예매·커머스 플랫폼 캐시 API",
+    "version": "v1"
+  },
+  "tags": [
+    {
+      "name": "CashInternal",
+      "description": "주문 결제, 결제 취소(환원), 환불 API (서비스 간 내부 호출 전용)"
+    },
+    {
+      "name": "Cash",
+      "description": "예치금 지갑 잔액 조회 API"
+    }
+  ],
+  "paths": {
+    "/api/v1/cash/wallets/{holderId}/balance": {
+      "get": {
+        "tags": [
+          "Cash"
+        ],
+        "summary": "지갑 잔액 조회",
+        "description": "회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.",
+        "operationId": "getBalance",
+        "parameters": [
+          {
+            "name": "holderId",
+            "in": "path",
+            "description": "지갑 주인의 회원 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 3
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "잔액 조회 성공",
+                  "data": {
+                    "holderId": 3,
+                    "balance": 50000
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 지갑입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RsData": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      }
+    }
+  }
+}

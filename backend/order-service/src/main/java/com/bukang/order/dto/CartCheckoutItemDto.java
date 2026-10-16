@@ -1,5 +1,7 @@
 package com.bukang.order.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -22,6 +24,9 @@ public class CartCheckoutItemDto {
 
 	private final int participationId;
 	private final Outcome outcome;
+	// SOLD_OUT·FAILED일 때의 오류 코드 (단건 API와 같은 값, 예: ORDER_RACE_CANCELED). 성공이면 응답에서 빠진다
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	private final String code;
 	private final String message;
 	// CREATED·EXISTING일 때만 있다
 	private final OrderDto order;

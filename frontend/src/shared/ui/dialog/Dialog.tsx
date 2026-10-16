@@ -35,7 +35,7 @@ export function Dialog({
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
-        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-navy-950/50 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
+        <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-bg-overlay/45 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <AlertDialog.Popup className="fixed top-1/2 left-1/2 z-50 flex w-80 max-w-[calc(100vw-var(--layout-page-margin)*2)] -translate-1/2 flex-col gap-6 rounded-lg bg-bg-surface p-6 shadow-lg transition-opacity duration-150 outline-none data-ending-style:opacity-0 data-starting-style:opacity-0 tablet:w-120">
           <div className="flex flex-col gap-2">
             <AlertDialog.Title className="text-heading-m text-text-primary">

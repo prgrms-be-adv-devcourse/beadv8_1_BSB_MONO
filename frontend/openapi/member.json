@@ -1,0 +1,1626 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Bukang Member API",
+    "description": "크루 중심 마라톤 대회 예매·커머스 플랫폼 API",
+    "version": "v1"
+  },
+  "tags": [
+    {
+      "name": "Member",
+      "description": "이메일 중복 확인, 내 정보 조회, 내 정보 수정 API"
+    },
+    {
+      "name": "Auth",
+      "description": "회원가입, 로그인, 토큰 재발급, 로그아웃 API"
+    },
+    {
+      "name": "AdminSeller",
+      "description": "판매자 신청 목록, 승인, 반려 API (관리자 전용)"
+    },
+    {
+      "name": "Seller",
+      "description": "판매자 등록 신청, 내 신청 조회 API"
+    }
+  ],
+  "paths": {
+    "/api/v1/member/members/me": {
+      "get": {
+        "tags": [
+          "Member"
+        ],
+        "summary": "내 정보 조회",
+        "description": "게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.",
+        "operationId": "findMe",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "내 정보를 조회했습니다.",
+                  "data": {
+                    "id": 1,
+                    "createDate": "2026-10-05T21:25:35",
+                    "modifyDate": "2026-10-05T21:25:35",
+                    "nickname": "러너1",
+                    "email": "runner1@crewrun.com",
+                    "phone": "010-1234-5678",
+                    "name": "김러너",
+                    "birthDate": "1995-04-12"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 회원입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Member"
+        ],
+        "summary": "내 정보 수정",
+        "description": "X-Member-Id 헤더의 회원의 이름, 생년월일, 휴대폰 번호, 닉네임을 바꾼다. 다른 회원이 쓰는 닉네임·휴대폰 번호인지 검사하고(내 행은 제외, 휴대폰은 하이픈 유무 무관), 4칸이 모두 그대로면 저장하지 않는다.",
+        "operationId": "modifyMe",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberModifyRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "수정 성공 (바뀐 게 없어도 200)",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "내 정보를 수정했습니다.",
+                  "data": {
+                    "id": 1,
+                    "createDate": "2026-10-05T21:25:35",
+                    "modifyDate": "2026-10-15T10:12:08",
+                    "nickname": "러너2",
+                    "email": "runner1@crewrun.com",
+                    "phone": "010-9876-5432",
+                    "name": "김러너",
+                    "birthDate": "1995-04-12"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 검증 실패, 요청 본문 형식 오류 또는 만 14세 미만",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "휴대폰 번호 형식에 맞게 작성해주세요.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  },
+                  "만 14세 미만": {
+                    "description": "만 14세 미만",
+                    "value": {
+                      "status": 400,
+                      "code": "MEMBER_UNDER_AGE",
+                      "message": "만 14세 미만의 생년월일로는 수정할 수 없습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 회원입니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "다른 회원이 쓰는 닉네임 또는 휴대폰 번호",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "닉네임 중복": {
+                    "description": "닉네임 중복",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_DUPLICATE_NICKNAME",
+                      "message": "이미 사용 중인 닉네임입니다.",
+                      "data": null
+                    }
+                  },
+                  "휴대폰 번호 중복": {
+                    "description": "휴대폰 번호 중복",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_DUPLICATE_PHONE",
+                      "message": "이미 사용 중인 전화번호입니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Member"
+        ],
+        "summary": "회원 탈퇴",
+        "description": "남은 예치금과 끝나지 않은 참가권이 없을 때만 탈퇴한다. 기록은 남기고 개인정보는 비우며, 모든 기기의 재발급을 막는다. 다른 서비스 확인에 실패하면 탈퇴하지 않는다.",
+        "operationId": "withdrawMe",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "탈퇴 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "탈퇴했습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "회원이 없거나 이미 탈퇴함",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "code": "MEMBER_NOT_FOUND",
+                  "message": "존재하지 않는 회원입니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "남은 예치금 또는 끝나지 않은 참가권이 있음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "남은 예치금": {
+                    "description": "남은 예치금",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_WITHDRAW_CASH_LEFT",
+                      "message": "남은 예치금이 있어 탈퇴할 수 없습니다. 예치금을 모두 사용하거나 출금한 뒤 탈퇴해주세요.",
+                      "data": null
+                    }
+                  },
+                  "끝나지 않은 참가권": {
+                    "description": "끝나지 않은 참가권",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_WITHDRAW_TICKET_LEFT",
+                      "message": "끝나지 않은 참가권이 있어 탈퇴할 수 없습니다. 대회가 끝나거나 참가권을 취소한 뒤 탈퇴해주세요.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "다른 서비스 확인 실패 (탈퇴하지 않음)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 503,
+                  "code": "MEMBER_WITHDRAW_CHECK_FAILED",
+                  "message": "예치금을 확인하지 못했습니다. 잠시 뒤 다시 시도해주세요.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/reissue": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "토큰 재발급",
+        "description": "쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). 이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).",
+        "operationId": "reissue",
+        "parameters": [
+          {
+            "name": "refreshToken",
+            "in": "cookie",
+            "description": "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "재발급 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=...; Path=/api/v1/auth; Max-Age=1209600; Secure; HttpOnly; SameSite=Lax (Max-Age는 토큰 만료까지 남은 초. 로그인 30일 상한에 가까우면 14일보다 짧다)",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "토큰 재발급 성공",
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Refresh Token 쿠키 없음, 만료 또는 유효하지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "쿠키 없음": {
+                    "description": "쿠키 없음",
+                    "value": {
+                      "status": 401,
+                      "message": "Refresh Token이 없습니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  },
+                  "만료": {
+                    "description": "만료",
+                    "value": {
+                      "status": 401,
+                      "message": "Refresh Token이 만료되었습니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  },
+                  "유효하지 않음": {
+                    "description": "유효하지 않음",
+                    "value": {
+                      "status": 401,
+                      "message": "유효하지 않은 Refresh Token입니다. 다시 로그인해주세요.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "로그아웃",
+        "description": "Redis의 Refresh Token을 지우고 Refresh Token 쿠키를 만료시킨다. 쿠키가 없거나 이미 무효한 토큰이어도 성공으로 응답한다.",
+        "operationId": "logout",
+        "parameters": [
+          {
+            "name": "refreshToken",
+            "in": "cookie",
+            "description": "로그인 때 받은 Refresh Token (httpOnly 쿠키라 브라우저가 자동으로 보낸다)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "로그아웃 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=; Path=/api/v1/auth; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "로그아웃 성공",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "로그인",
+        "description": "이메일과 비밀번호로 로그인하고 Access Token은 응답 본문으로, Refresh Token은 httpOnly 쿠키로 내려준다. Refresh Token은 Redis에도 저장한다.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberLoginRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "로그인 성공",
+            "headers": {
+              "Set-Cookie": {
+                "description": "refreshToken=...; Path=/api/v1/auth; Max-Age=1209600; Secure; HttpOnly; SameSite=Lax",
+                "style": "simple",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "로그인 성공",
+                  "data": {
+                    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature",
+                    "member": {
+                      "id": 1,
+                      "createDate": "2026-10-05T21:25:35",
+                      "modifyDate": "2026-10-05T21:25:35",
+                      "nickname": "러너1",
+                      "email": "runner1@crewrun.com",
+                      "phone": "010-1234-5678",
+                      "name": "김러너",
+                      "birthDate": "1995-04-12"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 검증 실패 또는 요청 본문 형식 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "이메일을 입력해주세요.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "이메일 또는 비밀번호 불일치",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "code": "MEMBER_LOGIN_FAILED",
+                  "message": "이메일 또는 비밀번호가 올바르지 않습니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/join": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "회원가입",
+        "description": "필수 약관 동의를 확인하고 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다. 지금 버전의 약관마다 동의 여부를 기록한다.",
+        "operationId": "join",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberJoinRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "가입 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 201,
+                  "message": "Member Joined Successfully",
+                  "data": {
+                    "id": 1,
+                    "createDate": "2026-10-05T21:25:35",
+                    "modifyDate": "2026-10-05T21:25:35",
+                    "nickname": "러너1",
+                    "email": "runner1@crewrun.com",
+                    "phone": "010-1234-5678",
+                    "name": "김러너",
+                    "birthDate": "1995-04-12"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 검증 실패, 요청 본문 형식 오류(모르는 약관 종류 포함), 만 14세 미만 또는 필수 약관 미동의",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "비밀번호는 10자 이상 작성해야합니다.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  },
+                  "만 14세 미만": {
+                    "description": "만 14세 미만",
+                    "value": {
+                      "status": 400,
+                      "code": "MEMBER_UNDER_AGE",
+                      "message": "만 14세 미만은 가입할 수 없습니다.",
+                      "data": null
+                    }
+                  },
+                  "필수 약관 미동의": {
+                    "description": "필수 약관 미동의",
+                    "value": {
+                      "status": 400,
+                      "code": "MEMBER_REQUIRED_TERMS_NOT_AGREED",
+                      "message": "필수 약관에 동의해야 가입할 수 있습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이메일, 닉네임 또는 휴대폰 번호 중복",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "이메일 중복": {
+                    "description": "이메일 중복",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_DUPLICATE_EMAIL",
+                      "message": "이미 사용 중인 이메일입니다.",
+                      "data": null
+                    }
+                  },
+                  "닉네임 중복": {
+                    "description": "닉네임 중복",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_DUPLICATE_NICKNAME",
+                      "message": "이미 사용 중인 닉네임입니다.",
+                      "data": null
+                    }
+                  },
+                  "휴대폰 번호 중복": {
+                    "description": "휴대폰 번호 중복",
+                    "value": {
+                      "status": 409,
+                      "code": "MEMBER_DUPLICATE_PHONE",
+                      "message": "이미 사용 중인 전화번호입니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/member/members/email-availability": {
+      "get": {
+        "tags": [
+          "Member"
+        ],
+        "summary": "이메일 사용 가능 여부 확인",
+        "description": "이메일이 아직 가입되지 않았으면 available=true, 이미 가입됐으면 false를 돌려준다. 로그인 없이 부를 수 있다. 탈퇴한 회원의 이메일은 비워지므로 다시 쓸 수 있다.",
+        "operationId": "checkEmailAvailability",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "description": "확인할 이메일",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "email",
+              "maxLength": 255,
+              "minLength": 1
+            },
+            "example": "runner1@crewrun.com"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "확인 성공 (이미 쓰는 이메일이어도 200)",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "이메일 사용 가능 여부를 확인했습니다.",
+                  "data": {
+                    "available": true
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "이메일 누락, 형식 오류 또는 255자 초과",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 400,
+                  "code": "INVALID_REQUEST",
+                  "message": "이메일 형식에 맞게 작성해주세요.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/member/sellers": {
+      "post": {
+        "tags": [
+          "Seller"
+        ],
+        "summary": "판매자 등록 신청",
+        "description": "X-Member-Id 헤더의 회원이 판매자 등록을 신청한다. 사업자는 상호·사업자등록번호가 필수이고, 비사업자가 보낸 상호·사업자등록번호는 버린다. 대기·승인 상태 신청이 있으면 막고, 반려만 있으면 새로 신청한다.",
+        "operationId": "apply",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellerApplyRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "신청 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 201,
+                  "message": "판매자 등록을 신청했습니다.",
+                  "data": {
+                    "id": 1,
+                    "memberId": 1,
+                    "sellerType": "BUSINESS",
+                    "businessName": "크루런 스포츠",
+                    "businessNumber": "123-45-67890",
+                    "representativeName": "김러너",
+                    "status": "PENDING",
+                    "requestedAt": "2026-10-05T21:25:35",
+                    "reviewedAt": null,
+                    "rejectReason": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 검증 실패 또는 요청 본문 형식 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "사업자등록번호는 숫자 10자리로 작성해주세요.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "code": "MEMBER_NOT_FOUND",
+                  "message": "존재하지 않는 회원입니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "대기 또는 승인 상태 신청이 있음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 409,
+                  "code": "SELLER_ALREADY_APPLIED",
+                  "message": "이미 심사 중이거나 승인된 판매자 신청이 있습니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/member/admin/sellers/{id}/rejection": {
+      "post": {
+        "tags": [
+          "AdminSeller"
+        ],
+        "summary": "판매자 신청 반려",
+        "description": "관리자가 대기 중인 판매자 신청을 사유와 함께 반려한다. 사유는 신청자만 보고 이벤트에는 넣지 않는다.",
+        "operationId": "reject",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 3
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "판매자 신청 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SellerRejectRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "반려 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "판매자 신청을 반려했습니다.",
+                  "data": {
+                    "id": 1,
+                    "memberId": 1,
+                    "sellerType": "BUSINESS",
+                    "businessName": "크루런 스포츠",
+                    "businessNumber": "123-45-67890",
+                    "representativeName": "김러너",
+                    "status": "REJECTED",
+                    "requestedAt": "2026-10-05T21:25:35",
+                    "reviewedAt": "2026-10-06T10:12:08",
+                    "rejectReason": "사업자등록번호를 확인할 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 검증 실패 또는 요청 본문 형식 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "반려 사유를 작성해주세요.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "관리자가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 403,
+                  "code": "MEMBER_NOT_ADMIN",
+                  "message": "관리자만 이용할 수 있습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원 또는 판매자 신청이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "판매자 신청 없음": {
+                    "description": "판매자 신청 없음",
+                    "value": {
+                      "status": 404,
+                      "code": "SELLER_NOT_FOUND",
+                      "message": "존재하지 않는 판매자 신청입니다.",
+                      "data": null
+                    }
+                  },
+                  "회원 없음": {
+                    "description": "회원 없음",
+                    "value": {
+                      "status": 404,
+                      "code": "MEMBER_NOT_FOUND",
+                      "message": "존재하지 않는 회원입니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이미 승인 또는 반려한 신청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 409,
+                  "code": "SELLER_ALREADY_REVIEWED",
+                  "message": "이미 심사한 판매자 신청입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/member/admin/sellers/{id}/approval": {
+      "post": {
+        "tags": [
+          "AdminSeller"
+        ],
+        "summary": "판매자 신청 승인",
+        "description": "관리자가 대기 중인 판매자 신청을 승인한다. 커밋 뒤 판매자 변경 이벤트를 보낸다.",
+        "operationId": "approve",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 3
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "판매자 신청 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "승인 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "판매자 신청을 승인했습니다.",
+                  "data": {
+                    "id": 1,
+                    "memberId": 1,
+                    "sellerType": "BUSINESS",
+                    "businessName": "크루런 스포츠",
+                    "businessNumber": "123-45-67890",
+                    "representativeName": "김러너",
+                    "status": "APPROVED",
+                    "requestedAt": "2026-10-05T21:25:35",
+                    "reviewedAt": "2026-10-06T10:12:08",
+                    "rejectReason": null
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "관리자가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 403,
+                  "code": "MEMBER_NOT_ADMIN",
+                  "message": "관리자만 이용할 수 있습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원 또는 판매자 신청이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "판매자 신청 없음": {
+                    "description": "판매자 신청 없음",
+                    "value": {
+                      "status": 404,
+                      "code": "SELLER_NOT_FOUND",
+                      "message": "존재하지 않는 판매자 신청입니다.",
+                      "data": null
+                    }
+                  },
+                  "회원 없음": {
+                    "description": "회원 없음",
+                    "value": {
+                      "status": 404,
+                      "code": "MEMBER_NOT_FOUND",
+                      "message": "존재하지 않는 회원입니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이미 승인 또는 반려한 신청",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 409,
+                  "code": "SELLER_ALREADY_REVIEWED",
+                  "message": "이미 심사한 판매자 신청입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/member/sellers/me": {
+      "get": {
+        "tags": [
+          "Seller"
+        ],
+        "summary": "내 판매자 신청 조회",
+        "description": "X-Member-Id 헤더의 회원의 가장 최근 판매자 신청을 조회한다. 반려됐으면 반려 사유도 담는다.",
+        "operationId": "findMine",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "판매자 신청 내역을 조회했습니다.",
+                  "data": {
+                    "id": 1,
+                    "memberId": 1,
+                    "sellerType": "BUSINESS",
+                    "businessName": "크루런 스포츠",
+                    "businessNumber": "123-45-67890",
+                    "representativeName": "김러너",
+                    "status": "REJECTED",
+                    "requestedAt": "2026-10-05T21:25:35",
+                    "reviewedAt": "2026-10-06T10:12:08",
+                    "rejectReason": "사업자등록번호를 확인할 수 없습니다."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "판매자 신청 내역 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "code": "SELLER_NOT_FOUND",
+                  "message": "판매자 신청 내역이 없습니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/member/admin/sellers": {
+      "get": {
+        "tags": [
+          "AdminSeller"
+        ],
+        "summary": "판매자 신청 목록 조회",
+        "description": "관리자가 판매자 신청을 최근 신청부터 조회한다. status를 주면 그 상태만, 비우면 전체를 돌려준다.",
+        "operationId": "findAll",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 3
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "신청 상태 (비우면 전체)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "APPROVED",
+                "REJECTED"
+              ]
+            },
+            "example": "PENDING"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "판매자 신청 목록을 조회했습니다.",
+                  "data": [
+                    {
+                      "id": 1,
+                      "memberId": 1,
+                      "sellerType": "BUSINESS",
+                      "businessName": "크루런 스포츠",
+                      "businessNumber": "123-45-67890",
+                      "representativeName": "김러너",
+                      "status": "PENDING",
+                      "requestedAt": "2026-10-05T21:25:35",
+                      "reviewedAt": null,
+                      "rejectReason": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "관리자가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 403,
+                  "code": "MEMBER_NOT_ADMIN",
+                  "message": "관리자만 이용할 수 있습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "헤더의 회원이 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "code": "MEMBER_NOT_FOUND",
+                  "message": "존재하지 않는 회원입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MemberModifyRequestDto": {
+        "type": "object",
+        "description": "내 정보 수정 요청",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "실명",
+            "example": "김러너",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "nickname": {
+            "type": "string",
+            "description": "닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)",
+            "example": "러너1",
+            "minLength": 1,
+            "pattern": "^[가-힣A-Za-z0-9]+$"
+          },
+          "phone": {
+            "type": "string",
+            "description": "휴대폰 번호 (하이픈 생략 가능)",
+            "example": "010-1234-5678",
+            "minLength": 1,
+            "pattern": "^01[016789]-?\\d{3,4}-?\\d{4}$"
+          },
+          "birthDate": {
+            "type": "string",
+            "format": "date",
+            "description": "생년월일",
+            "example": "1995-04-12"
+          }
+        },
+        "required": [
+          "birthDate",
+          "name",
+          "nickname",
+          "phone"
+        ]
+      },
+      "RsData": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "MemberLoginRequestDto": {
+        "type": "object",
+        "description": "로그인 요청",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "이메일",
+            "example": "runner1@crewrun.com",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "description": "비밀번호",
+            "example": "password1234",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "MemberJoinRequestDto": {
+        "type": "object",
+        "description": "회원가입 요청",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "이메일 (로그인 ID)",
+            "example": "runner1@crewrun.com",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "description": "비밀번호 (10자 이상)",
+            "example": "password1234",
+            "maxLength": 2147483647,
+            "minLength": 10
+          },
+          "name": {
+            "type": "string",
+            "description": "실명",
+            "example": "김러너",
+            "minLength": 1
+          },
+          "nickname": {
+            "type": "string",
+            "description": "닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)",
+            "example": "러너1",
+            "minLength": 1,
+            "pattern": "^[가-힣A-Za-z0-9]+$"
+          },
+          "phone": {
+            "type": "string",
+            "description": "휴대폰 번호 (하이픈 생략 가능)",
+            "example": "010-1234-5678",
+            "minLength": 1,
+            "pattern": "^01[016789]-?\\d{3,4}-?\\d{4}$"
+          },
+          "birthDate": {
+            "type": "string",
+            "format": "date",
+            "description": "생년월일",
+            "example": "1995-04-12"
+          },
+          "gender": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "성별 (선택)",
+            "enum": [
+              "MALE",
+              "FEMALE"
+            ],
+            "example": "FEMALE"
+          },
+          "agreedTerms": {
+            "type": "array",
+            "description": "동의한 약관 종류 (SERVICE, PRIVACY는 필수). 동의하지 않은 선택 약관은 빼고 보낸다",
+            "example": [
+              "SERVICE",
+              "PRIVACY",
+              "MARKETING"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "SERVICE",
+                "PRIVACY",
+                "MARKETING"
+              ]
+            }
+          }
+        },
+        "required": [
+          "agreedTerms",
+          "birthDate",
+          "email",
+          "name",
+          "nickname",
+          "password",
+          "phone"
+        ]
+      },
+      "SellerApplyRequestDto": {
+        "type": "object",
+        "description": "판매자 등록 신청 요청",
+        "properties": {
+          "sellerType": {
+            "type": "string",
+            "description": "판매자 종류 (BUSINESS: 사업자, INDIVIDUAL: 비사업자)",
+            "enum": [
+              "BUSINESS",
+              "INDIVIDUAL"
+            ],
+            "example": "BUSINESS"
+          },
+          "businessName": {
+            "type": "string",
+            "description": "상호 (사업자만, 100자 이하)",
+            "example": "크루런 스포츠",
+            "maxLength": 100,
+            "minLength": 0
+          },
+          "businessNumber": {
+            "type": "string",
+            "description": "사업자등록번호 (사업자만, 숫자 10자리, 하이픈 생략 가능)",
+            "example": "123-45-67890",
+            "pattern": "^\\d{3}-?\\d{2}-?\\d{5}$"
+          },
+          "representativeName": {
+            "type": "string",
+            "description": "대표자 (비사업자는 본인 성명, 50자 이하)",
+            "example": "김러너",
+            "maxLength": 50,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "representativeName",
+          "sellerType"
+        ]
+      },
+      "SellerRejectRequestDto": {
+        "type": "object",
+        "description": "판매자 신청 반려 요청",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "반려 사유 (500자 이하, 신청자에게 보여 준다)",
+            "example": "사업자등록번호를 확인할 수 없습니다.",
+            "maxLength": 500,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      }
+    }
+  }
+}

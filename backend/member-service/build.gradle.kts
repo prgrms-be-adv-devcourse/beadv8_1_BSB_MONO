@@ -11,6 +11,9 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-h2console") // h2 콘솔
 	implementation("org.springframework.boot:spring-boot-starter-data-elasticsearch") // elastic search
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa") // dataJpa
+	// 표 변경은 Flyway SQL(db/migration)로만 한다 (BE-024). MySQL 지원은 별도 모듈
+	implementation("org.springframework.boot:spring-boot-starter-flyway")
+	implementation("org.flywaydb:flyway-mysql")
 	implementation("org.springframework.boot:spring-boot-starter-kafka") // kafka
 	implementation("org.apache.kafka:kafka-streams") // kafka topic join
 	implementation("org.springframework.boot:spring-boot-starter-security") // spring security
@@ -29,6 +32,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-security-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	testImplementation(testFixtures(project(":common"))) // GlobalConfigTestExecutionListener (테스트마다 EventPublisher 재설정)
 	testImplementation("org.springframework.boot:spring-boot-starter-data-redis-test") // @DataRedisTest 지원
 
 	runtimeOnly("com.h2database:h2")

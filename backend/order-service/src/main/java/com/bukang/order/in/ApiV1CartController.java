@@ -43,7 +43,7 @@ public class ApiV1CartController {
 	// 에러 응답은 GlobalExceptionHandler, OrderExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	@GetMapping
 	@Operation(summary = "내 장바구니 조회",
-		description = "회원별로 서버에 저장한 장바구니를 최근에 담은 항목부터 돌려준다. 담은 적이 없으면 빈 목록이다.")
+		description = "회원별로 서버에 저장한 장바구니를 돌려준다. 장바구니에는 한 종목만 담기므로 항목은 하나다. 담은 적이 없으면 빈 목록이다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = {
@@ -71,7 +71,8 @@ public class ApiV1CartController {
 	@PostMapping("/items")
 	@Operation(summary = "장바구니에 참가권 담기",
 		description = "종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. "
-			+ "담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다.")
+			+ "담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다. "
+			+ "장바구니에는 한 종목만 담는다. 다른 종목이 담겨 있으면 409(ORDER_CART_ONE_COURSE_ONLY)다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "새로 담음",
 			content = @Content(examples = @ExampleObject(value = CartApiExamples.ADD_SUCCESS))),
@@ -90,9 +91,10 @@ public class ApiV1CartController {
 		@ApiResponse(responseCode = "404", description = "없는 종목",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = CartApiExamples.COURSE_NOT_FOUND))),
-		@ApiResponse(responseCode = "409", description = "접수 마감된 종목 또는 동시에 담는 요청이 겹침",
+		@ApiResponse(responseCode = "409", description = "접수 마감된 종목, 다른 종목이 이미 담김, 동시에 담는 요청이 겹침",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "접수 마감", value = CartApiExamples.APPLICATION_CLOSED),
+				@ExampleObject(name = "다른 종목이 담김", value = CartApiExamples.ONE_COURSE_ONLY),
 				@ExampleObject(name = "요청 겹침", value = CartApiExamples.CONFLICT)
 			}))
 	})
@@ -143,22 +145,22 @@ public class ApiV1CartController {
 	// 항목별 결과(주문함·매진·실패)는 200의 data에 담는다. 요청 자체가 잘못되면 자리를 확보하기 전에 4xx로 끝난다
 	@PostMapping("/checkout")
 	@Operation(summary = "장바구니 결제",
-		description = "장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. "
-			+ "항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. "
-			+ "매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). "
+		description = "장바구니에 담은 참가권(한 종목)의 참가 신청으로 [결제하기]를 해 결제 대기 주문(CREATED)을 만든다. "
+			+ "장바구니에는 한 종목만 담으므로 참가 신청은 1건만 받는다(2건 이상이면 400). 주문한 종목은 장바구니에서 뺀다. "
+			+ "[결제하기]처럼 대기열에 입장 중인지 확인해, 입장 중이 아니면 실패(FAILED)로 돌려준다. "
+			+ "매진·실패하면 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). "
 			+ "결제는 주문마다 예치금 결제 API로 한다.")
 	@ApiResponses({
-		@ApiResponse(responseCode = "200", description = "항목별 처리 결과 (일부 또는 전부 매진·실패여도 200)",
+		@ApiResponse(responseCode = "200", description = "처리 결과 (매진·실패여도 200)",
 			content = @Content(examples = {
-				@ExampleObject(name = "일부 주문", value = CartApiExamples.CHECKOUT_SUCCESS),
+				@ExampleObject(name = "주문함", value = CartApiExamples.CHECKOUT_SUCCESS),
 				@ExampleObject(name = "주문 0건", value = CartApiExamples.CHECKOUT_NONE)
 			})),
 		@ApiResponse(responseCode = "400", description = "입력값·헤더 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "참가 신청 없음", value = CartApiExamples.CHECKOUT_EMPTY),
-				@ExampleObject(name = "10건 초과", value = CartApiExamples.CHECKOUT_TOO_MANY),
+				@ExampleObject(name = "2건 이상", value = CartApiExamples.CHECKOUT_TOO_MANY),
 				@ExampleObject(name = "참가 신청 ID 오류", value = CartApiExamples.CHECKOUT_INVALID_ID),
-				@ExampleObject(name = "같은 참가 신청 두 번", value = CartApiExamples.CHECKOUT_DUPLICATE),
 				@ExampleObject(name = "요청 본문 형식 오류", value = CartApiExamples.INVALID_BODY),
 				@ExampleObject(name = "Idempotency-Key 없음", value = CartApiExamples.MISSING_IDEMPOTENCY_KEY),
 				@ExampleObject(name = "Idempotency-Key 길이 오류", value = CartApiExamples.INVALID_IDEMPOTENCY_KEY),

@@ -1,0 +1,217 @@
+{
+  "responses": {
+    "login": {
+      "200": {
+        "wrapper": "RsDataMemberLoginResponseDto",
+        "data": {
+          "$ref": "#/components/schemas/MemberLoginResponseDto"
+        }
+      }
+    },
+    "reissue": {
+      "200": {
+        "wrapper": "RsDataTokenReissueResponseDto",
+        "data": {
+          "$ref": "#/components/schemas/TokenReissueResponseDto"
+        }
+      }
+    },
+    "findMe": {
+      "200": {
+        "wrapper": "RsDataMemberDto",
+        "data": {
+          "$ref": "#/components/schemas/MemberDto"
+        }
+      }
+    },
+    "modifyMe": {
+      "200": {
+        "wrapper": "RsDataMemberDto",
+        "data": {
+          "$ref": "#/components/schemas/MemberDto"
+        }
+      }
+    },
+    "checkEmailAvailability": {
+      "200": {
+        "wrapper": "RsDataEmailAvailabilityResponseDto",
+        "data": {
+          "$ref": "#/components/schemas/EmailAvailabilityResponseDto"
+        }
+      }
+    },
+    "apply": {
+      "201": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
+    },
+    "findMine": {
+      "200": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
+    },
+    "approve": {
+      "200": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
+    },
+    "reject": {
+      "200": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
+    },
+    "findAll": {
+      "200": {
+        "wrapper": "RsDataListSellerDto",
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SellerDto"
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "MemberDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "modifyDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nickname": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "birthDate": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "MemberLoginResponseDto": {
+      "type": "object",
+      "description": "로그인 응답",
+      "properties": {
+        "accessToken": {
+          "type": "string",
+          "description": "Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다"
+        },
+        "member": {
+          "$ref": "#/components/schemas/MemberDto",
+          "description": "로그인한 회원"
+        }
+      }
+    },
+    "TokenReissueResponseDto": {
+      "type": "object",
+      "description": "토큰 재발급 응답",
+      "properties": {
+        "accessToken": {
+          "type": "string",
+          "description": "새 Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다"
+        }
+      }
+    },
+    "EmailAvailabilityResponseDto": {
+      "type": "object",
+      "description": "이메일 사용 가능 여부 응답",
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": "사용 가능하면 true, 이미 가입된 이메일이면 false",
+          "example": true
+        }
+      }
+    },
+    "SellerDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memberId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sellerType": {
+          "type": "string",
+          "enum": [
+            "BUSINESS",
+            "INDIVIDUAL"
+          ]
+        },
+        "businessName": {
+          "type": "string",
+          "nullable": true
+        },
+        "businessNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "representativeName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "APPROVED",
+            "REJECTED"
+          ]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "rejectReason": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "memberId",
+        "sellerType",
+        "representativeName",
+        "status",
+        "requestedAt"
+      ]
+    }
+  }
+}

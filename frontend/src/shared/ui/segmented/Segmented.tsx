@@ -44,7 +44,7 @@ export function Segmented<T extends string>({
             aria-selected={selected}
             onClick={() => onChange(item.value)}
             className={cn(
-              'flex min-w-0 items-center justify-center gap-1 truncate rounded-[8px] text-label-l',
+              'flex min-w-0 items-center justify-center gap-1 truncate rounded-sm text-label-l',
               size === 'm' ? 'h-10' : 'h-12',
               layout === 'fill' ? 'flex-1 px-2' : 'px-4',
               selected

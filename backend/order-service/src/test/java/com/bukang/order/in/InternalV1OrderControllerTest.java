@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -46,6 +47,11 @@ class InternalV1OrderControllerTest {
 	// 11/15 대회 종목과 11/16 대회 종목
 	private static final int COURSE_1115 = 10;
 	private static final int COURSE_1116 = 11;
+	// 오늘 0시 대회 종목과 어제 23:59 대회 종목 (끝나지 않은 참가권 수 조회)
+	private static final int COURSE_TODAY = 12;
+	private static final int COURSE_YESTERDAY = 13;
+	private static final int COURSE_UNPAID = 14;
+	private static final int COURSE_OVERDUE = 15;
 	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 
 	@Autowired
@@ -150,19 +156,55 @@ class InternalV1OrderControllerTest {
 	void invalidPeriod() throws Exception {
 		mockMvc.perform(get(URL).param("to", "2026-11-15"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 값(from)이 없습니다."));
+			.andExpect(jsonPath("$.message").value("필수 요청 값(from)이 없습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		findSoldEntries("2026/11/15", "2026-11-15")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
+			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."))
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 		findSoldEntries("2026-11-16", "2026-11-15")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("조회 시작일이 종료일보다 늦습니다."));
+			.andExpect(jsonPath("$.message").value("조회 시작일이 종료일보다 늦습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_INVALID_SOLD_ENTRY_PERIOD"));
 		// 10/16 ~ 11/15는 31일, 10/15 ~ 11/15는 32일
 		findSoldEntries("2026-10-16", "2026-11-15")
 			.andExpect(status().isOk());
 		findSoldEntries("2026-10-15", "2026-11-15")
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("판매 내역은 한 번에 31일까지 조회할 수 있습니다."));
+			.andExpect(jsonPath("$.message").value("판매 내역은 한 번에 31일까지 조회할 수 있습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_INVALID_SOLD_ENTRY_PERIOD"));
+	}
+
+	@Test
+	@DisplayName("끝나지 않은 참가권은 내 결제 완료 참가권 중 대회가 오늘 이후(오늘 0시 포함)인 것만 센다")
+	void countActiveTickets() throws Exception {
+		LocalDate today = LocalDate.now();
+		// 지난 대회는 신청·결제가 막히므로, 앞날 종목으로 결제한 뒤 주문 상품의 대회 일시 사본만 바꾼다
+		raceCoursePort.put(courseOn(COURSE_TODAY, 102, LocalDateTime.of(2026, 11, 20, 8, 0)));
+		raceCoursePort.put(courseOn(COURSE_YESTERDAY, 103, LocalDateTime.of(2026, 11, 21, 8, 0)));
+		raceCoursePort.put(courseOn(COURSE_UNPAID, 104, LocalDateTime.of(2026, 11, 22, 8, 0)));
+		raceCoursePort.put(courseOn(COURSE_OVERDUE, 105, LocalDateTime.of(2026, 11, 23, 8, 0)));
+		paidOrderItem(1, COURSE_1115);
+		changeRaceDate(paidOrderItem(1, COURSE_TODAY), today.atStartOfDay());
+		// 결제 기한 안의 결제 대기 주문도 센다 (탈퇴 뒤 남은 Access Token으로 결제하는 것을 막기 위해)
+		createdOrder(1, COURSE_UNPAID);
+		// 지난 대회, 취소(환불)한 참가권, 결제 기한이 지난 결제 대기 주문, 다른 회원의 참가권은 세지 않는다
+		changeRaceDate(paidOrderItem(1, COURSE_YESTERDAY), today.minusDays(1).atTime(23, 59));
+		markCanceled(paidOrderItem(1, COURSE_1116));
+		makeOverdue(createdOrder(1, COURSE_OVERDUE));
+		paidOrderItem(2, COURSE_1115);
+
+		countActiveTickets(1)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("끝나지 않은 참가권 수를 조회했습니다."))
+			.andExpect(jsonPath("$.data.count").value(3));
+		countActiveTickets(3)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.count").value(0));
+	}
+
+	private ResultActions countActiveTickets(int memberId) throws Exception {
+		return mockMvc.perform(get("/internal/v1/order/members/{memberId}/active-tickets/count", memberId));
 	}
 
 	private ResultActions findSoldEntries(String from, String to) throws Exception {
@@ -174,6 +216,24 @@ class InternalV1OrderControllerTest {
 		return new RaceCourseInfo(raceCourseId, raceId, raceDate, now.minusDays(1), now.plusDays(30), 14, null,
 			StubRaceCoursePort.SELLER_ID, "테스트 대회 종목 " + raceCourseId, StubRaceCoursePort.PRICE,
 			true, raceDate.toLocalDate().minusDays(10), null);
+	}
+
+	private void changeRaceDate(int orderItemId, LocalDateTime raceDate) {
+		transactionTemplate.executeWithoutResult(status -> ReflectionTestUtils.setField(
+			findOrderItem(orderItemId), "raceDate", raceDate));
+	}
+
+	private OrderItem findOrderItem(int orderItemId) {
+		return orderRepository.findAll().stream()
+			.flatMap(order -> order.getItems().stream())
+			.filter(candidate -> candidate.getId() == orderItemId)
+			.findFirst()
+			.orElseThrow();
+	}
+
+	private void makeOverdue(int orderId) {
+		transactionTemplate.executeWithoutResult(status -> ReflectionTestUtils.setField(
+			orderRepository.findById(orderId).orElseThrow(), "paymentDueAt", LocalDateTime.now().minusMinutes(1)));
 	}
 
 	private void markCanceled(int orderItemId) {

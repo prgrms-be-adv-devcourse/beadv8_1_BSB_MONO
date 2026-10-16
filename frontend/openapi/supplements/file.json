@@ -1,0 +1,140 @@
+{
+  "responses": {
+    "findByRef": {
+      "200": {
+        "wrapper": "RsDataListFileDto",
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/FileDto"
+          }
+        }
+      }
+    },
+    "findById": {
+      "200": {
+        "wrapper": "RsDataFileDto",
+        "data": {
+          "$ref": "#/components/schemas/FileDto"
+        }
+      }
+    },
+    "createUploadUrl": {
+      "201": {
+        "wrapper": "RsDataFileUploadDto",
+        "data": {
+          "$ref": "#/components/schemas/FileUploadDto"
+        }
+      }
+    },
+    "completeUpload": {
+      "200": {
+        "wrapper": "RsDataFileDto",
+        "data": {
+          "$ref": "#/components/schemas/FileDto"
+        }
+      }
+    }
+  },
+  "schemas": {
+    "FileDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "modifyDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createUser": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "originFileName": {
+          "type": "string"
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "fileSize": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "UPLOADED",
+            "ACTIVE",
+            "DELETED"
+          ]
+        },
+        "refType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "fileType": {
+          "type": "string",
+          "enum": [
+            "THUMBNAIL",
+            "DETAIL",
+            "COURSE",
+            "KIT",
+            "INTRO_VIDEO",
+            "ROSTER"
+          ]
+        },
+        "sortNo": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "FileUploadDto": {
+      "type": "object",
+      "properties": {
+        "fileId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "uploadUrl": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

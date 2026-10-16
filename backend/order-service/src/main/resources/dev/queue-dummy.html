@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>대기열 더미 (개발용)</title>
+<style>
+	body { font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; color: #222; }
+	h1 { font-size: 20px; }
+	fieldset { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px; }
+	label { display: inline-block; margin-right: 12px; }
+	input { width: 90px; }
+	button { margin: 4px 4px 4px 0; padding: 6px 12px; }
+	#timer { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+	#timer.over { color: #c62828; }
+	.muted { color: #777; font-size: 13px; }
+	pre { background: #f6f6f6; padding: 12px; border-radius: 8px; white-space: pre-wrap; font-size: 12px; max-height: 360px; overflow: auto; }
+</style>
+</head>
+<body>
+<h1>대기열 더미 (개발용, PRO-191)</h1>
+<p class="muted">가짜 대기열로 입장 → 타이머 → 신청서 → [결제하기] → 결제를 해 본다. 입장 시간은 order.clients.queue.fake-admission-minutes로 줄일 수 있다.</p>
+
+<fieldset>
+	<legend>값</legend>
+	<label>회원 ID <input id="memberId" type="number" value="1"></label>
+	<label>대회 ID <input id="raceId" type="number" value="1"></label>
+	<label>종목 ID <input id="raceCourseId" type="number" value="1"></label>
+	<p class="muted">상품 서비스가 가짜(fake)면 대회 ID = 종목 ID로 둔다.</p>
+</fieldset>
+
+<fieldset>
+	<legend>1. 대기열</legend>
+	<button id="enter">입장하기 (다시 입장)</button>
+	<button id="check">남은 시간 조회</button>
+	<div id="timer">--:--</div>
+	<div id="endsAt" class="muted"></div>
+</fieldset>
+
+<fieldset>
+	<legend>2. 신청서 → [결제하기] → 결제</legend>
+	<button id="apply">신청서 작성</button>
+	<button id="order">결제하기 (자리 확보)</button>
+	<button id="pay">결제</button>
+	<div id="state" class="muted"></div>
+</fieldset>
+
+<pre id="log"></pre>
+
+<script>
+	const $ = (id) => document.getElementById(id);
+	const state = { participationId: null, orderId: null, remaining: 0, timer: null };
+
+	function log(title, body) {
+		$('log').textContent = '[' + new Date().toLocaleTimeString() + '] ' + title + '\n'
+			+ JSON.stringify(body, null, 2) + '\n\n' + $('log').textContent;
+	}
+
+	async function call(method, url, body, extraHeaders) {
+		const headers = { 'X-Member-Id': $('memberId').value, ...extraHeaders };
+		if (body) {
+			headers['Content-Type'] = 'application/json';
+		}
+		const response = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+		const json = await response.json().catch(() => ({}));
+		log(method + ' ' + url + ' → ' + response.status, json);
+		return json;
+	}
+
+	function showState() {
+		$('state').textContent = '참가 신청 ID: ' + (state.participationId ?? '-') + ' / 주문 ID: ' + (state.orderId ?? '-');
+	}
+
+	// 서버가 준 남은 초로 센다 (기기 시계와 상관없이)
+	function startTimer(admission) {
+		clearInterval(state.timer);
+		state.remaining = admission.admitted ? admission.remainingSeconds : 0;
+		$('endsAt').textContent = admission.admitted ? '입장 끝 시각(= 결제 기한): ' + admission.admissionEndsAt : '입장 중이 아님';
+		const render = () => {
+			const minutes = String(Math.floor(state.remaining / 60)).padStart(2, '0');
+			const seconds = String(state.remaining % 60).padStart(2, '0');
+			$('timer').textContent = minutes + ':' + seconds;
+			$('timer').className = state.remaining > 0 ? '' : 'over';
+		};
+		render();
+		state.timer = setInterval(() => {
+			state.remaining = Math.max(0, state.remaining - 1);
+			render();
+			if (state.remaining === 0) {
+				clearInterval(state.timer);
+			}
+		}, 1000);
+	}
+
+	$('enter').onclick = async () => {
+		const json = await call('POST', '/dev/queue-dummy/enter?raceCourseId=' + $('raceCourseId').value);
+		if (json.data) {
+			startTimer(json.data);
+		}
+	};
+
+	$('check').onclick = async () => {
+		const json = await call('GET', '/api/v1/order/queue/admission?raceId=' + $('raceId').value
+			+ '&raceCourseId=' + $('raceCourseId').value);
+		if (json.data) {
+			startTimer(json.data);
+		}
+	};
+
+	$('apply').onclick = async () => {
+		const json = await call('POST', '/api/v1/order/participations', {
+			raceCourseId: Number($('raceCourseId').value),
+			thirdPartyConsent: true,
+			participant: {
+				name: '김러너', birth: '1994-06-25', gender: 'MALE', phone: '010-1234-5678',
+				emergencyContactName: '김가족', emergencyContactPhone: '010-9876-5432', tshirtSize: 'L',
+				shippingAddress: { recipientName: '김러너', recipientPhone: '010-1234-5678', zipcode: '04700',
+					address: '서울 성동구 왕십리로 00', addressDetail: '101동 1001호' }
+			}
+		});
+		state.participationId = json.data?.id ?? state.participationId;
+		showState();
+	};
+
+	$('order').onclick = async () => {
+		const json = await call('POST', '/api/v1/order/orders', { participationId: state.participationId },
+			{ 'Idempotency-Key': crypto.randomUUID() });
+		state.orderId = json.data?.id ?? state.orderId;
+		showState();
+	};
+
+	$('pay').onclick = async () => {
+		await call('POST', '/api/v1/order/orders/' + state.orderId + '/payment');
+	};
+</script>
+</body>
+</html>

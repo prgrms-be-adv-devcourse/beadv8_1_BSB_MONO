@@ -76,6 +76,8 @@ class ApiV1PayoutHoldControllerTest {
 
 	private static final Snippet ERROR_RESPONSE = responseFields(
 		fieldWithPath("status").description("HTTP 상태 코드"),
+		fieldWithPath("code").description("오류 코드 (예: 입력값 오류는 INVALID_REQUEST). 코드가 없는 오류는 이 필드가 없다")
+			.type(JsonFieldType.STRING).optional(),
 		fieldWithPath("message").description("실패 이유"),
 		fieldWithPath("data").description("실패 응답에서는 항상 null").type(JsonFieldType.NULL)
 	);

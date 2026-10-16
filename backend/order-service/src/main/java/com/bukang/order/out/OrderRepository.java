@@ -18,7 +18,7 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 	// 같은 Idempotency-Key로 이미 만든 주문 (uk_order_idempotency와 같은 기준)
 	Optional<Order> findByBuyerIdAndIdempotencyKey(int buyerId, String idempotencyKey);
 
-	// 결제 기한 늘리기가 같은 주문에 동시에 들어오면 한 요청씩 처리한다 (한 번만 늘리기)
+	// 결제·취소·만료 정리가 같은 주문에 동시에 들어오면 한 요청씩 처리한다
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select o from Order o where o.id = :id")
 	Optional<Order> findByIdForUpdate(@Param("id") int id);
@@ -31,4 +31,15 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 		order by o.id
 		""")
 	List<Integer> findOverdueIds(@Param("now") LocalDateTime now, Pageable pageable);
+
+	// 취소된 대회의 환불 대상이 될 수 있는 주문 ID (PRO-135). afterId보다 큰 ID를 순서대로 읽어 끝까지 한 번씩 본다
+	// 결제 대기(CREATED)도 넣는다. 결제가 이 주문을 잠근 채 끝나 가는 중이면, 잠근 뒤에 결제 완료로 보고 환불하기 위해서다
+	@Query("""
+		select o.id from Order o
+		where o.raceId = :raceId and o.id > :afterId
+			and o.status in (com.bukang.order.domain.OrderStatus.CREATED, com.bukang.order.domain.OrderStatus.PAID,
+				com.bukang.order.domain.OrderStatus.PARTIAL_CANCELED)
+		order by o.id
+		""")
+	List<Integer> findRefundCandidateIds(@Param("raceId") int raceId, @Param("afterId") int afterId, Pageable pageable);
 }

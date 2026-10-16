@@ -4,13 +4,21 @@ import Link from 'next/link'
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
 import { OfflineBody } from '@/widgets/status-screens'
-import { CLOSING_SOON_RACES, OPEN_RACES, RACE_BANNERS, RaceCard } from '@/entities/race'
+import { RACE_BANNERS, RaceCard, type RaceSummary } from '@/entities/race'
 import { cn } from '@/shared/lib'
 import { buttonClassName, Carousel, CarouselSlide, FOCUS_RING, Skeleton } from '@/shared/ui'
 
+export type HomePageProps = {
+  state?: 'loading' | 'offline'
+  /** 곧 마감 (종목별 카드) */
+  closingSoon: RaceSummary[]
+  /** 지금 접수 중 (대회별 카드, 4개) */
+  openRaces: RaceSummary[]
+}
+
 // 피그마 V2 · M01 홈: ① 배너 → ② 곧 마감(가로 넘김) → ③ 지금 접수 중(2열, 4개만)
-// (+ 홈 로딩, 공통 연결 끊김)
-export function HomePage({ state }: { state?: 'loading' | 'offline' }) {
+// (+ 홈 로딩, 공통 연결 끊김). 배너는 API가 없어 시안 예시를 그대로 쓴다.
+export function HomePage({ state, closingSoon, openRaces }: HomePageProps) {
   if (state) {
     return (
       <>
@@ -47,20 +55,28 @@ export function HomePage({ state }: { state?: 'loading' | 'offline' }) {
 
         <section className="flex flex-col gap-4 pt-8 pb-2">
           <SectionHead title="곧 마감돼요" />
-          <div className="flex [scrollbar-width:none] gap-4 overflow-x-auto px-(--layout-page-margin)">
-            {CLOSING_SOON_RACES.map((race) => (
-              <RaceCard key={`${race.id}-${race.option}`} race={race} className="w-54 shrink-0" />
-            ))}
-          </div>
+          {closingSoon.length === 0 ? (
+            <EmptyRow>곧 마감되는 대회가 없어요</EmptyRow>
+          ) : (
+            <div className="flex [scrollbar-width:none] gap-4 overflow-x-auto px-(--layout-page-margin)">
+              {closingSoon.map((race) => (
+                <RaceCard key={`${race.id}-${race.option}`} race={race} className="w-54 shrink-0" />
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="flex flex-col gap-4 py-8">
           <SectionHead title="지금 접수 중인 대회" />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 px-(--layout-page-margin)">
-            {OPEN_RACES.map((race) => (
-              <RaceCard key={race.id} race={race} />
-            ))}
-          </div>
+          {openRaces.length === 0 ? (
+            <EmptyRow>지금 접수 중인 대회가 없어요</EmptyRow>
+          ) : (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-6 px-(--layout-page-margin)">
+              {openRaces.map((race) => (
+                <RaceCard key={race.id} race={race} />
+              ))}
+            </div>
+          )}
           <div className="px-(--layout-page-margin)">
             <Link
               href="/races"
@@ -73,6 +89,14 @@ export function HomePage({ state }: { state?: 'loading' | 'offline' }) {
       </main>
       <BottomNav />
     </>
+  )
+}
+
+function EmptyRow({ children }: { children: string }) {
+  return (
+    <p className="px-(--layout-page-margin) py-6 text-center text-body-s text-text-tertiary">
+      {children}
+    </p>
   )
 }
 
@@ -92,8 +116,8 @@ function HomeSkeleton() {
   return (
     <main role="status" aria-label="불러오는 중" className="flex flex-1 flex-col">
       <div className="flex gap-2.5 overflow-hidden pt-4 pb-2 pl-4">
-        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-[20px]" />
-        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-[20px]" />
+        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-lg" />
+        <Skeleton shape="rect" className="h-73.5 w-105 shrink-0 rounded-lg" />
       </div>
       {[2, 4].map((count) => (
         <div key={count} className="flex flex-col gap-4 px-4 pt-8 pb-2">
@@ -104,7 +128,7 @@ function HomeSkeleton() {
           <div className="grid grid-cols-2 gap-x-4 gap-y-6">
             {Array.from({ length: count }, (_, i) => (
               <div key={i} className="flex flex-col gap-2">
-                <Skeleton shape="rect" className="aspect-square w-full rounded-[12px]" />
+                <Skeleton shape="rect" className="aspect-square w-full rounded-md" />
                 <Skeleton className="w-11/12" />
                 <Skeleton className="w-2/3" />
                 <Skeleton className="w-1/2" />

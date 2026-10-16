@@ -1,0 +1,605 @@
+{
+  "responses": {
+    "apply": {
+      "201": {
+        "wrapper": "RsDataParticipationDto",
+        "data": {
+          "$ref": "#/components/schemas/ParticipationDto"
+        }
+      }
+    },
+    "changeParticipant": {
+      "200": {
+        "wrapper": "RsDataParticipationDto",
+        "data": {
+          "$ref": "#/components/schemas/ParticipationDto"
+        }
+      }
+    },
+    "findLatestParticipant": {
+      "200": {
+        "wrapper": "RsDataParticipantInfoDto",
+        "data": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/ParticipantInfoDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "create": {
+      "201": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      },
+      "200": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      }
+    },
+    "findById_1": {
+      "200": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      }
+    },
+    "pay": {
+      "200": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      }
+    },
+    "findCart": {
+      "200": {
+        "wrapper": "RsDataCartDto",
+        "data": {
+          "$ref": "#/components/schemas/CartDto"
+        }
+      }
+    },
+    "removeItem": {
+      "200": {
+        "wrapper": "RsDataCartDto",
+        "data": {
+          "$ref": "#/components/schemas/CartDto"
+        }
+      }
+    },
+    "addItem": {
+      "201": {
+        "wrapper": "RsDataCartItemDto",
+        "data": {
+          "$ref": "#/components/schemas/CartItemDto"
+        }
+      },
+      "200": {
+        "wrapper": "RsDataCartItemDto",
+        "data": {
+          "$ref": "#/components/schemas/CartItemDto"
+        }
+      }
+    },
+    "checkout": {
+      "200": {
+        "wrapper": "RsDataCartCheckoutDto",
+        "data": {
+          "$ref": "#/components/schemas/CartCheckoutDto"
+        }
+      }
+    },
+    "findMine": {
+      "200": {
+        "wrapper": "RsDataOrderPageDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderPageDto"
+        }
+      }
+    },
+    "cancelItem": {
+      "200": {
+        "wrapper": "RsDataOrderDto",
+        "data": {
+          "$ref": "#/components/schemas/OrderDto"
+        }
+      }
+    },
+    "findById": {
+      "200": {
+        "wrapper": "RsDataParticipationDto",
+        "data": {
+          "$ref": "#/components/schemas/ParticipationDto"
+        }
+      }
+    },
+    "cancelBeforePayment": {
+      "200": {
+        "wrapper": "RsDataParticipationDto",
+        "data": {
+          "$ref": "#/components/schemas/ParticipationDto"
+        }
+      }
+    },
+    "findAdmission": {
+      "200": {
+        "wrapper": "RsDataQueueAdmissionDto",
+        "data": {
+          "$ref": "#/components/schemas/QueueAdmissionDto"
+        }
+      }
+    }
+  },
+  "schemas": {
+    "ShippingAddressDto": {
+      "type": "object",
+      "properties": {
+        "recipientName": {
+          "type": "string"
+        },
+        "recipientPhone": {
+          "type": "string"
+        },
+        "zipcode": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "addressDetail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "description": "키트 배송지 응답"
+    },
+    "ParticipantInfoDto": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "birth": {
+          "type": "string",
+          "format": "date"
+        },
+        "gender": {
+          "type": "string",
+          "enum": [
+            "MALE",
+            "FEMALE"
+          ]
+        },
+        "phone": {
+          "type": "string"
+        },
+        "emergencyContactName": {
+          "type": "string"
+        },
+        "emergencyContactPhone": {
+          "type": "string"
+        },
+        "tshirtSize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shippingAddress": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/ShippingAddressDto"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/ShippingAddressDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "description": "참가자 정보 응답"
+    },
+    "ParticipationDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "modifyDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memberId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "participationType": {
+          "type": "string",
+          "enum": [
+            "INDIVIDUAL",
+            "CREW"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "APPLIED",
+            "CONFIRMED",
+            "RELEASED",
+            "FAILED",
+            "CANCELED"
+          ]
+        },
+        "participant": {
+          "$ref": "#/components/schemas/ParticipantInfoDto"
+        },
+        "thirdPartyConsent": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "consentedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "paymentDueAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "description": "참가 신청"
+    },
+    "OrderItemDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "participationId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sellerId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "itemName": {
+          "type": "string"
+        },
+        "unitPrice": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "quantity": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "amount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ORDERED",
+            "PAID",
+            "CANCELED"
+          ]
+        }
+      },
+      "description": "주문 상품"
+    },
+    "OrderDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "orderNo": {
+          "type": "string"
+        },
+        "buyerId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "raceId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CREATED",
+            "PAID",
+            "PARTIAL_CANCELED",
+            "CANCELED",
+            "EXPIRED"
+          ]
+        },
+        "totalAmount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "canceledAmount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "paymentDueAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "paidAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "shippingAddress": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/ShippingAddressDto"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/ShippingAddressDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/OrderItemDto"
+          }
+        }
+      },
+      "description": "주문 상세"
+    },
+    "CartItemDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "raceCourseId": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "장바구니 항목"
+    },
+    "CartDto": {
+      "type": "object",
+      "properties": {
+        "memberId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/CartItemDto"
+          }
+        }
+      },
+      "description": "장바구니"
+    },
+    "CartCheckoutItemDto": {
+      "type": "object",
+      "properties": {
+        "participationId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "CREATED",
+            "EXISTING",
+            "SOLD_OUT",
+            "FAILED"
+          ],
+          "description": "CREATED·EXISTING이면 order가 있다"
+        },
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "SOLD_OUT·FAILED일 때 오류 코드 (예: ORDER_SOLD_OUT)"
+        },
+        "message": {
+          "type": "string"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/OrderDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "description": "장바구니 결제 항목별 결과"
+    },
+    "CartCheckoutDto": {
+      "type": "object",
+      "properties": {
+        "orderedCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/CartCheckoutItemDto"
+          }
+        }
+      },
+      "description": "장바구니 결제 결과"
+    },
+    "OrderSummaryDto": {
+      "type": "object",
+      "description": "주문 목록의 한 줄",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "orderNo": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "CREATED",
+            "PAID",
+            "PARTIAL_CANCELED",
+            "CANCELED",
+            "EXPIRED"
+          ]
+        },
+        "totalAmount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "paymentDueAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "itemName": {
+          "type": "string"
+        },
+        "itemCount": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "OrderPageDto": {
+      "type": "object",
+      "description": "주문 목록 한 페이지",
+      "properties": {
+        "orders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/OrderSummaryDto"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalElements": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "totalPages": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "QueueAdmissionDto": {
+      "type": "object",
+      "required": [
+        "admitted",
+        "remainingSeconds"
+      ],
+      "properties": {
+        "admitted": {
+          "type": "boolean"
+        },
+        "admissionEndsAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "remainingSeconds": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    }
+  }
+}

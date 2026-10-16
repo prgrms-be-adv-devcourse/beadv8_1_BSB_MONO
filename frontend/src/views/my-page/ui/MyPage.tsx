@@ -6,23 +6,40 @@ import type { ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
-import { cn } from '@/shared/lib'
+import { useAuthStatus, useLogout } from '@/features/auth'
+import { useMyBalance } from '@/entities/wallet'
+import { memberApi, unwrapData } from '@/shared/api'
+import { cn, formatWon } from '@/shared/lib'
 import { buttonClassName, FOCUS_RING, Icon, KeyValue, Switch, type IconName } from '@/shared/ui'
 
+import { maskPhone, toDotDate } from '../model/member-format'
+
 // 피그마 V2 · M30 마이 · 설정 (+ M30-2 판매자 승인 후)
-// TODO(api): 회원 정보 · 알림 설정 · 판매자 상태를 불러온다
+// 회원 정보는 내 정보 조회(GET /api/v1/member/members/me)로 불러온다.
+// 예치금은 지갑 잔액 API(useMyBalance)로 불러온다.
+// TODO(api): 알림 설정 · 판매자 상태 · 참가 대회 수 API가 아직 없다. 지금은 시안 값을 보여 준다.
 export function MyPage({ seller = false }: { seller?: boolean }) {
+  const logout = useLogout()
+  const me = memberApi.useFindMe({
+    // 로그인 확인(재발급)이 끝난 뒤에만 부른다. 로그아웃으로 캐시를 지운 뒤 다시 부르지도 않는다.
+    query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated' },
+  })
+  const member = me.data
+  const { balance } = useMyBalance()
   return (
     <>
       <AppHeader />
       <main className="flex flex-1 flex-col gap-4 px-4 py-6">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-full bg-bg-brand-subtle text-label-m text-text-brand">
-            달
+          <span
+            aria-hidden
+            className="flex size-10 items-center justify-center rounded-full bg-bg-brand-subtle text-label-m text-text-brand"
+          >
+            {member?.nickname?.slice(0, 1)}
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <p className="text-heading-m">달리는곰</p>
-            <p className="text-body-s text-text-secondary">runner@example.com</p>
+            <p className="text-heading-m">{member?.nickname ?? EMPTY}</p>
+            <p className="text-body-s text-text-secondary">{member?.email ?? EMPTY}</p>
           </div>
           <Link href="/me/edit" className={buttonClassName({ variant: 'secondary', size: 's' })}>
             닉네임 수정
@@ -30,12 +47,21 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
         </div>
 
         <section className="flex flex-col gap-2 rounded-lg bg-bg-subtle p-4">
-          <KeyValue label="이름" value="김러너" />
-          <KeyValue label="휴대폰" value="010-****-5678" />
-          <KeyValue label="생년월일" value="1995.03.02" />
-          <p className="text-caption text-text-secondary">
-            가입할 때 직접 입력한 정보예요. 바뀌면 직접 고칠 수 있어요.
-          </p>
+          <KeyValue label="이름" value={member?.name ?? EMPTY} />
+          <KeyValue label="휴대폰" value={member?.phone ? maskPhone(member.phone) : EMPTY} />
+          <KeyValue
+            label="생년월일"
+            value={member?.birthDate ? toDotDate(member.birthDate) : EMPTY}
+          />
+          {me.isError ? (
+            <p role="alert" className="text-caption text-text-danger">
+              회원 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
+            </p>
+          ) : (
+            <p className="text-caption text-text-secondary">
+              가입할 때 직접 입력한 정보예요. 바뀌면 직접 고칠 수 있어요.
+            </p>
+          )}
           <Link
             href="/me/edit"
             className={buttonClassName({
@@ -50,7 +76,12 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
 
         <MenuCard>
           <MenuRow href="/tickets" icon="Calendar" label="내 참가 대회" value="2개" />
-          <MenuRow href="/me/deposit" icon="Package" label="예치금" value="₩5,000" />
+          <MenuRow
+            href="/me/deposit"
+            icon="Package"
+            label="예치금"
+            value={balance === undefined ? '-' : formatWon(balance)}
+          />
         </MenuCard>
 
         <h2 className="pt-2 text-label-strong">알림 설정</h2>
@@ -83,8 +114,12 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
 
         <section className="flex flex-col rounded-lg bg-bg-subtle px-4 pt-4 pb-2">
           <h2 className="pb-2 text-label-strong">계정 관리</h2>
-          {/* TODO(auth): 로그아웃 요청 */}
-          <MenuRow href="/login" icon="LogOut" label="로그아웃" />
+          <MenuRow
+            onClick={() => logout.mutate()}
+            disabled={logout.isPending}
+            icon="LogOut"
+            label="로그아웃"
+          />
           <MenuRow
             href="/me/withdraw"
             icon="Settings"
@@ -98,6 +133,9 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
   )
 }
 
+/** 아직 불러오지 못한 값 자리 */
+const EMPTY = '-'
+
 function MenuCard({ children }: { children: ReactNode }) {
   return (
     <section className="flex flex-col rounded-lg bg-bg-surface px-4 py-2 shadow-sm inset-ring inset-ring-border-default">
@@ -106,21 +144,17 @@ function MenuCard({ children }: { children: ReactNode }) {
   )
 }
 
-function MenuRow({
-  href,
-  icon,
-  label,
-  value,
-  description,
-}: {
-  href: Route
+type MenuRowProps = {
   icon: IconName
   label: string
   value?: string
   description?: string
-}) {
-  return (
-    <Link href={href} className={cn('flex items-center gap-3 rounded-md py-3', FOCUS_RING)}>
+} & ({ href: Route } | { onClick: () => void; disabled?: boolean })
+
+// 다른 화면으로 가는 줄은 링크, 그 자리에서 실행하는 줄(로그아웃)은 같은 모양의 버튼
+function MenuRow({ icon, label, value, description, ...action }: MenuRowProps) {
+  const content = (
+    <>
       <Icon name={icon} className="size-5" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-label-m">{label}</span>
@@ -128,7 +162,25 @@ function MenuRow({
       </span>
       {value && <span className="text-label-m">{value}</span>}
       <Icon name="ChevronRight" className="size-5" />
-    </Link>
+    </>
+  )
+  const className = cn('flex items-center gap-3 rounded-md py-3', FOCUS_RING)
+  if ('href' in action) {
+    return (
+      <Link href={action.href} className={className}>
+        {content}
+      </Link>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={action.onClick}
+      disabled={action.disabled}
+      className={cn(className, 'w-full text-left')}
+    >
+      {content}
+    </button>
   )
 }
 
