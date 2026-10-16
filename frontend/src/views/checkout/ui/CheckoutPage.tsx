@@ -253,8 +253,8 @@ function OrderCheckout({
   // auto: 충전하고 돌아와 저절로 다시 결제한 경우. 그때 또 모자라면(다른 탭에서 결제해 잔액이 줄었을 때 등)
   // 결제창을 저절로 다시 띄우지 않는다. 사용자가 두 번 충전하는 것처럼 보이고, 클릭 없이 띄운 결제창은 브라우저가 막을 수도 있다.
   // 잔액을 다시 불러 화면의 계산 · "충전하고 결제" 버튼으로 모자란 만큼을 보여 주고, 사용자가 눌러 충전한다.
-  const pay = useMutation({
-    mutationFn: async (_: { auto: boolean }) => unwrapData(await orderApi.pay(orderId)),
+  const pay = useMutation<orderModel.OrderDto, Error, { auto: boolean }>({
+    mutationFn: async () => unwrapData(await orderApi.pay(orderId)),
     onSuccess: () => router.push(completeHref),
     onError: (error, { auto }) => {
       const next = toPayFailure(error)
