@@ -205,4 +205,62 @@ describe('CartPage 대기열 입장 전 결제 창 (M06-Q)', () => {
 
     expect(push).toHaveBeenCalledWith('/races/1/queue?option=1')
   })
+
+  it('결제 결과가 대기열 입장 전(FAILED + ORDER_QUEUE_NOT_ADMITTED)이면 창을 띄우고, 줄 서기로 대기열에 간다', async () => {
+    server.use(cartWith([{ id: 1, raceCourseId: 1 }]))
+    captureCheckout(() =>
+      HttpResponse.json({
+        status: 200,
+        message: '',
+        data: {
+          orderedCount: 0,
+          results: [
+            {
+              participationId: 11,
+              outcome: 'FAILED',
+              code: 'ORDER_QUEUE_NOT_ADMITTED',
+              message: '서버 문구',
+              order: null,
+            },
+          ],
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    renderCart()
+
+    await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K')
+    await user.click(screen.getByRole('button', { name: '결제하기' }))
+
+    expect(
+      await screen.findByRole('alertdialog', { name: '아직 결제할 차례가 아니에요' }),
+    ).toBeInTheDocument()
+    // 서버 문구 · 실패 표시 대신 창으로 알린다
+    expect(screen.queryByText('서버 문구')).not.toBeInTheDocument()
+    expect(screen.queryByText('실패')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '줄 서기' }))
+    expect(push).toHaveBeenCalledWith('/races/1/queue?option=1')
+  })
+
+  it('결제가 대기열 입장 전이라 막히면(403 ORDER_QUEUE_NOT_ADMITTED) 서버 문구 없이 창을 띄운다', async () => {
+    server.use(cartWith([{ id: 1, raceCourseId: 1 }]))
+    captureCheckout(() =>
+      HttpResponse.json(
+        { status: 403, code: 'ORDER_QUEUE_NOT_ADMITTED', message: '서버 문구', data: null },
+        { status: 403 },
+      ),
+    )
+    const user = userEvent.setup()
+    renderCart()
+
+    await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K')
+    await user.click(screen.getByRole('button', { name: '결제하기' }))
+
+    expect(
+      await screen.findByRole('alertdialog', { name: '아직 결제할 차례가 아니에요' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('서버 문구')).not.toBeInTheDocument()
+    expect(screen.queryByText('결제를 시작하지 못했어요')).not.toBeInTheDocument()
+  })
 })

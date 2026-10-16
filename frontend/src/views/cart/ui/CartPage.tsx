@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { isQueueNotAdmitted, QUEUE_NOT_ADMITTED_CODE } from '@/features/queue-admission'
 import { ApiError, createIdempotencyKey, orderApi, unwrapData, type orderModel } from '@/shared/api'
 import { formatWon } from '@/shared/lib'
 import {
@@ -66,7 +67,7 @@ function EmptyCart() {
 
 function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boolean }) {
   const router = useRouter()
-  // 대기열 입장 전 결제 창(M06-Q). TODO(api): 결제가 403 ORDER_QUEUE_NOT_ADMITTED면 연다.
+  // 대기열 입장 전 결제 창(M06-Q). 결제가 대기열 입장 전(ORDER_QUEUE_NOT_ADMITTED)이라 막히면 연다.
   const [queueDialogOpen, setQueueDialogOpen] = useState(initialQueueDialogOpen)
   const queryClient = useQueryClient()
   const { lines, isError } = useCartLines()
@@ -100,7 +101,16 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
         router.push(`/checkout?orderId=${result.order.id}`)
         return
       }
+      // 대기열 입장 전이면 항목 실패(FAILED + code)로 온다. 줄의 실패 문구 대신 대기열 창을 띄운다.
+      if (result?.code === QUEUE_NOT_ADMITTED_CODE) {
+        setFailure(null)
+        setQueueDialogOpen(true)
+        return
+      }
       setFailure(result ?? null)
+    },
+    onError: (error) => {
+      if (isQueueNotAdmitted(error)) setQueueDialogOpen(true)
     },
   })
 
@@ -144,8 +154,10 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
       ? (`/races/${queued.race.id}/queue?option=${encodeURIComponent(queued.option.id)}` as const)
       : ('/races' as const)
 
+  // 대기열 입장 전(403)은 서버 문구 대신 대기열 창(M06-Q)으로 알린다.
+  const checkoutFailed = checkout.isError && !isQueueNotAdmitted(checkout.error)
   const checkoutError =
-    checkout.error instanceof ApiError ? checkout.error.serverMessage : undefined
+    checkoutFailed && checkout.error instanceof ApiError ? checkout.error.serverMessage : undefined
 
   return (
     <>
@@ -177,7 +189,7 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
             <span className="text-heading-s">{formatWon(total)}</span>
           </div>
         </div>
-        {(checkoutError || checkout.isError) && (
+        {checkoutFailed && (
           <Alert
             tone="danger"
             title={checkoutError ?? '결제를 시작하지 못했어요'}
