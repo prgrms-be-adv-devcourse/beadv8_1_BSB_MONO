@@ -280,6 +280,11 @@ describe('이메일 중복 확인 (PRO-201)', () => {
 
     expect(await screen.findByText(AUTH_ERRORS.emailCheckFailed)).toBeInTheDocument()
     expect(push).not.toHaveBeenCalled()
+
+    // 확인 실패는 버튼을 막지 않는다. 서버가 돌아오면 같은 이메일로 다시 시도할 수 있다.
+    server.resetHandlers()
+    await user.click(screen.getByRole('button', { name: '다음' }))
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/signup/profile'))
   })
 })
 

@@ -83,7 +83,9 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
   // 이메일 중복 확인. 칸을 벗어날 때 먼저 알려 주고, "다음"에서도 한 번 더 확인해 중복이면 못 넘어가게 한다.
   // quiet: 칸을 벗어날 때처럼 미리 알려 주는 확인. 형식이 맞는 이메일만 묻고, 서버에 닿지 못해도 오류를 띄우지 않는다.
   // "다음"에서는 확인 요청이 실패해도 칸 오류로 알리고 넘어가지 않는다.
+  const [emailCheckFailed, setEmailCheckFailed] = useState(false)
   const checkEmail = async (quiet = false): Promise<boolean> => {
+    setEmailCheckFailed(false)
     const email = getValues('email').trim()
     if (quiet && !signupAccountSchema.shape.email.safeParse(email).success) return false
     try {
@@ -93,7 +95,8 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
       }
       return available
     } catch {
-      if (!quiet) setError('email', { type: 'unavailable', message: AUTH_ERRORS.emailCheckFailed })
+      // setError는 폼을 "유효하지 않음"으로 만들어 버튼이 막히므로, 확인 실패는 따로 들고 있는다.
+      if (!quiet) setEmailCheckFailed(true)
       return false
     }
   }
@@ -121,7 +124,11 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           type="email"
           autoComplete="email"
           placeholder="이메일을 입력해 주세요"
-          error={errors.email?.message ?? (invalid ? AUTH_ERRORS.emailTaken : undefined)}
+          error={
+            errors.email?.message ??
+            (emailCheckFailed ? AUTH_ERRORS.emailCheckFailed : undefined) ??
+            (invalid ? AUTH_ERRORS.emailTaken : undefined)
+          }
           {...register('email', { onBlur: () => void checkEmail(true) })}
         />
         <TextField
@@ -147,7 +154,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button size="l" disabled={!isValid || !!errors.email || invalid} onClick={onNextClick}>
+          <Button size="l" disabled={!isValid || invalid} onClick={onNextClick}>
             다음
           </Button>
         }
