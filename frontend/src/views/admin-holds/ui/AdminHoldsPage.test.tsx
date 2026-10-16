@@ -21,39 +21,10 @@ function renderPage() {
 }
 
 describe('AdminHoldsPage', () => {
-  it('보류 해제를 누르면 선택한 지급보류의 해제 API를 부른다', async () => {
-    let url = ''
-    server.use(
-      http.post('*/api/v1/payout/holds/:holdId/release', ({ request }) => {
-        url = new URL(request.url).pathname
-        return HttpResponse.json(payoutMock.getReleaseResponseMock())
-      }),
-    )
-    const user = userEvent.setup()
+  it('예시 행의 보류 해제 버튼은 막혀 있다', () => {
     renderPage()
 
-    await user.click(screen.getByRole('button', { name: '보류 해제' }))
-
-    expect(await screen.findByText('지급보류를 풀었어요.')).toBeInTheDocument()
-    expect(url).toBe('/api/v1/payout/holds/2/release')
-  })
-
-  it('이미 해제된 보류면(409) 서버 문구를 보여 준다', async () => {
-    server.use(
-      http.post('*/api/v1/payout/holds/:holdId/release', () =>
-        HttpResponse.json(
-          { status: 409, message: '이미 해제된 지급보류입니다.', data: null },
-          { status: 409 },
-        ),
-      ),
-    )
-    const user = userEvent.setup()
-    renderPage()
-
-    await user.click(screen.getByRole('button', { name: '보류 해제' }))
-
-    // 오류 토스트는 화면 낭독기용 알림에도 같은 글자가 들어간다
-    expect((await screen.findAllByText('이미 해제된 지급보류입니다.')).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: '보류 해제' })).toBeDisabled()
   })
 
   it('정산 내역 번호와 사유로 보류를 건다', async () => {
