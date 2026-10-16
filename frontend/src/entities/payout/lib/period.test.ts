@@ -25,6 +25,41 @@ describe('detailPeriods', () => {
     expect(period).toMatchObject({ from: '2026-03-01', to: '2026-03-31' })
   })
 
+  // 백엔드: 끝 날 < 시작 날 + 1개월 (자바 plusMonths는 달 끝으로 잘림)
+  const plusOneMonth = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number)
+    const last = new Date(y, m + 1, 0).getDate()
+    return new Date(y, m, Math.min(d, last))
+  }
+  const withinBackendRule = (p: { from: string; to: string }) => {
+    const [y, m, d] = p.to.split('-').map(Number)
+    return new Date(y, m - 1, d) < plusOneMonth(p.from)
+  }
+
+  it.each([
+    ['4/30', new Date(2026, 3, 30), '2026-04-01'],
+    ['10/31', new Date(2026, 9, 31), '2026-10-01'],
+    ['2월 말', new Date(2026, 1, 28), '2026-02-01'],
+    ['윤년 2월 말', new Date(2028, 1, 29), '2028-02-01'],
+  ])('오늘이 %s이어도 모든 기간이 백엔드 규칙을 지킨다', (_name, today, firstFrom) => {
+    const periods = detailPeriods(today, 4)
+    expect(periods[0].from).toBe(firstFrom)
+    for (const period of periods) {
+      expect(withinBackendRule(period)).toBe(true)
+    }
+    // 기간끼리 빈틈 없이 이어진다
+    for (let i = 0; i < periods.length - 1; i++) {
+      const next = new Date(periods[i].from)
+      next.setDate(next.getDate() - 1)
+      expect(next.toISOString().slice(0, 10)).toBe(periods[i + 1].to)
+    }
+  })
+
+  it('10/31이면 두 번째 기간도 9/1 ~ 9/30', () => {
+    const periods = detailPeriods(new Date(2026, 9, 31), 2)
+    expect(periods[1]).toMatchObject({ from: '2026-09-01', to: '2026-09-30' })
+  })
+
   it('연도를 넘어간다', () => {
     const [period] = detailPeriods(new Date(2026, 0, 10), 1)
     expect(period).toMatchObject({ from: '2025-12-11', to: '2026-01-10' })

@@ -40,7 +40,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 	// 경로에 있으면 거절하는 문자열 (소문자로 바꾼 경로와 비교한다)
 	private static final List<String> FORBIDDEN_PATH_PARTS = List.of(";", "\\", "%2e", "%2f", "%5c", "%25");
 
-	// 401 응답의 code. 프론트가 오류 원인을 구분하는 값이라 이 한곳에서만 정의한다
+	// 400·401 응답의 code. 프론트가 오류 원인을 구분하는 값이라 이 한곳에서만 정의한다
+	private static final String CODE_INVALID_PATH = "AUTH_INVALID_PATH";
 	private static final String CODE_LOGIN_REQUIRED = "AUTH_LOGIN_REQUIRED";
 	private static final String CODE_TOKEN_EXPIRED = "AUTH_TOKEN_EXPIRED";
 	private static final String CODE_INVALID_TOKEN = "AUTH_INVALID_TOKEN";
@@ -54,7 +55,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 		// 공개 주소 판단은 정리되지 않은 경로로, 서비스는 ..을 정리한 경로로 처리해 둘이 어긋나므로 이런 경로는 아예 거절한다
 		// OPTIONS를 포함한 모든 요청에 공개 주소 판단보다 먼저 적용한다
 		if (isSuspiciousPath(exchange.getRequest().getURI().getRawPath())) {
-			return reject(exchange.getResponse(), HttpStatus.BAD_REQUEST, "잘못된 요청 경로입니다.");
+			return reject(exchange.getResponse(), HttpStatus.BAD_REQUEST, CODE_INVALID_PATH, "잘못된 요청 경로입니다.");
 		}
 
 		ServerHttpRequest request = exchange.getRequest().mutate()
@@ -70,7 +71,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 		}
 
 		if (token == null) {
-			return unauthorized(exchange.getResponse(), CODE_LOGIN_REQUIRED, "로그인이 필요합니다.");
+			return reject(exchange.getResponse(), HttpStatus.UNAUTHORIZED, CODE_LOGIN_REQUIRED, "로그인이 필요합니다.");
 		}
 
 		JwtClaims claims;
@@ -79,9 +80,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 		} catch (InvalidTokenException e) {
 			// 만료는 클라이언트가 재발급을 시도할 수 있도록 코드와 메시지를 구분한다
 			if (e.getReason() == InvalidTokenException.Reason.EXPIRED) {
-				return unauthorized(exchange.getResponse(), CODE_TOKEN_EXPIRED, "만료된 토큰입니다.");
+				return reject(exchange.getResponse(), HttpStatus.UNAUTHORIZED, CODE_TOKEN_EXPIRED, "만료된 토큰입니다.");
 			}
-			return unauthorized(exchange.getResponse(), CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.");
+			return reject(exchange.getResponse(), HttpStatus.UNAUTHORIZED, CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.");
 		}
 
 		ServerHttpRequest authenticated = request.mutate()
@@ -144,20 +145,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 		return token.isEmpty() ? null : token;
 	}
 
-	// 게이트웨이는 common(webmvc)에 의존하지 않으므로 RsData {status, message, data} 형식의 JSON을 직접 만든다
-	// message는 이 클래스의 고정 문구만 들어오므로 JSON 이스케이프가 필요 없다
-	private Mono<Void> reject(ServerHttpResponse response, HttpStatus status, String message) {
-		String body = "{\"status\":%d,\"message\":\"%s\",\"data\":null}".formatted(status.value(), message);
-		DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
-		response.setStatusCode(status);
-		response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-		return response.writeWith(Mono.just(buffer));
-	}
-
 	// 게이트웨이는 common(webmvc)에 의존하지 않으므로 RsData {status, code, message, data} 형식의 JSON을 직접 만든다
 	// code와 message는 이 클래스의 고정 상수·문구만 들어오므로 JSON 이스케이프가 필요 없다
-	private Mono<Void> unauthorized(ServerHttpResponse response, String code, String message) {
-		HttpStatus status = HttpStatus.UNAUTHORIZED;
+	private Mono<Void> reject(ServerHttpResponse response, HttpStatus status, String code, String message) {
 		String body = "{\"status\":%d,\"code\":\"%s\",\"message\":\"%s\",\"data\":null}"
 			.formatted(status.value(), code, message);
 		DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));

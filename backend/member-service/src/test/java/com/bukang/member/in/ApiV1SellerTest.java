@@ -29,10 +29,12 @@ import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.app.SellerFacade;
 import com.bukang.member.domain.Seller;
+import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.dto.SellerApplyRequestDto;
 import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.SellerRepository;
+import com.bukang.member.out.TermsAgreementRepository;
 
 // 판매자 등록 신청과 내 신청 조회 (BE-020). X-Member-Id 헤더는 테스트에서 직접 넣는다
 @SpringBootTest
@@ -53,6 +55,9 @@ class ApiV1SellerTest {
 	private MemberRepository memberRepository;
 	@Autowired
 	private SellerRepository sellerRepository;
+
+	@Autowired
+	private TermsAgreementRepository termsAgreementRepository;
 	@Autowired
 	private ApplicationEvents applicationEvents;
 
@@ -70,6 +75,8 @@ class ApiV1SellerTest {
 	void tearDown() {
 		// 판매자가 회원을 참조하므로 먼저 지운다
 		sellerRepository.deleteAll();
+		// 동의 기록도 회원을 참조하므로(FK) 먼저 지운다
+		termsAgreementRepository.deleteAll();
 		memberRepository.deleteAll();
 	}
 
@@ -240,7 +247,8 @@ class ApiV1SellerTest {
 
 	private int join(String email, String nickname, String phone) {
 		return memberFacade.join(new MemberJoinRequestDto(
-			email, "password1234", "김러너", nickname, phone, LocalDate.of(1995, 4, 12), null
+			email, "password1234", "김러너", nickname, phone, LocalDate.of(1995, 4, 12), null,
+			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		)).getId();
 	}
 

@@ -39,6 +39,7 @@ import com.bukang.member.app.MemberJoinUseCase;
 import com.bukang.member.app.MemberModifyUseCase;
 import com.bukang.member.app.SellerApplyUseCase;
 import com.bukang.member.app.SellerFacade;
+import com.bukang.member.domain.TermsType;
 import com.bukang.member.domain.exception.DuplicateEmailException;
 import com.bukang.member.domain.exception.DuplicateNicknameException;
 import com.bukang.member.dto.MemberDto;
@@ -70,6 +71,9 @@ class MemberKafkaPublisherTest {
 	private MemberModifyUseCase memberModifyUseCase;
 	@Autowired
 	private MemberRepository memberRepository;
+
+	@Autowired
+	private TermsAgreementRepository termsAgreementRepository;
 	@Autowired
 	private SellerFacade sellerFacade;
 	@Autowired
@@ -107,6 +111,8 @@ class MemberKafkaPublisherTest {
 		sellerConsumer.close();
 		// 판매자가 회원을 참조하므로 먼저 지운다
 		sellerRepository.deleteAll();
+		// 동의 기록도 회원을 참조하므로(FK) 먼저 지운다
+		termsAgreementRepository.deleteAll();
 		memberRepository.deleteAll();
 	}
 
@@ -133,7 +139,7 @@ class MemberKafkaPublisherTest {
 		transactionTemplate.executeWithoutResult(status -> {
 			memberJoinUseCase.join(
 				"rollback@crewrun.com", "password1234", "김롤백", "롤백러너", "010-2000-0002",
-				LocalDate.of(1995, 4, 12), null
+				LocalDate.of(1995, 4, 12), null, List.of(TermsType.SERVICE, TermsType.PRIVACY)
 			);
 			status.setRollbackOnly();
 		});
@@ -275,7 +281,8 @@ class MemberKafkaPublisherTest {
 
 	private MemberDto join(String email, String nickname, String phone) {
 		return memberFacade.join(new MemberJoinRequestDto(
-			email, "password1234", "김러너", nickname, phone, LocalDate.of(1995, 4, 12), null
+			email, "password1234", "김러너", nickname, phone, LocalDate.of(1995, 4, 12), null,
+			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		));
 	}
 

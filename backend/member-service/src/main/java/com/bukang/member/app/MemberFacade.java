@@ -39,7 +39,8 @@ public class MemberFacade {
 			memberJoinDto.getNickname(),
 			memberJoinDto.getPhone(),
 			memberJoinDto.getBirthDate(),
-			memberJoinDto.getGender()
+			memberJoinDto.getGender(),
+			memberJoinDto.getAgreedTerms()
 		).toDto();
 	}
 

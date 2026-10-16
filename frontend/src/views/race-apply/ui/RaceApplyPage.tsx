@@ -10,6 +10,11 @@ import { Controller, useForm } from 'react-hook-form'
 import { AppHeader } from '@/widgets/app-header'
 import { useBookingFlow, type BookingParticipant } from '@/features/booking'
 import {
+  admissionExpiredHref,
+  isQueueNotAdmitted,
+  useAdmissionTimer,
+} from '@/features/queue-admission'
+import {
   raceDetailQueryOptions,
   RaceTicketCard,
   type RaceDetail,
@@ -33,6 +38,7 @@ import {
   Skeleton,
   Stepper,
   TextField,
+  TimerBar,
 } from '@/shared/ui'
 
 import {
@@ -60,11 +66,35 @@ type ReplaceCart = {
 // 피그마 V2 · M05 참가 신청 · 참가자 정보 (+ M05-1 장바구니 바꾸기 확인)
 // 종목은 page.tsx에서 정원이 남은 종목 중에 골라 넘긴다 (상품 API의 대회 상세 courses).
 // 입력 칸은 이번에 입력해 둔 값(결제에서 돌아온 경우) → 지난 신청 값 → 회원 정보 순으로 채운다.
-export function RaceApplyPage({ race, option }: { race: RaceDetail; option: RaceOption }) {
+// 대기열에서 내 차례(M05-Q2)로 들어오면 남은 시간 띠가 결제(M07)까지 따라간다.
+// 남은 시간은 대기열 화면에서 받은 입장 끝 시각을 이어 쓰고, 0이 되면 입장 시간 만료 화면(M07-1)으로 간다.
+export function RaceApplyPage({
+  race,
+  option,
+  previewRemainingSeconds,
+}: {
+  race: RaceDetail
+  option: RaceOption
+  /** 시안 미리보기(?preview=admitted). 있으면 API를 부르지 않고 이 남은 초로 띠를 붙인다 */
+  previewRemainingSeconds?: number
+}) {
   const defaults = useParticipantDefaults(option)
+  const preview = previewRemainingSeconds !== undefined
+  const timer = useAdmissionTimer(
+    preview ? undefined : Number(race.id),
+    preview ? undefined : Number(option.id),
+    'follow',
+  )
+  const remaining = preview ? previewRemainingSeconds : timer.remaining
   return (
     <>
       <AppHeader type="sub" title="참가 신청" />
+      {remaining !== null && (
+        <TimerBar
+          message="내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요"
+          remainingSeconds={remaining}
+        />
+      )}
       {defaults ? (
         <ParticipantForm race={race} option={option} defaults={defaults} />
       ) : (
@@ -167,6 +197,10 @@ function ParticipantForm({
       else if (pending) setReplace(pending)
       else router.push('/cart')
     },
+    // 바로 결제가 대기열 입장 전(입장 시간이 끝남)이라 막히면 입장 시간 만료 화면(M07-1)으로 간다.
+    onError: (error) => {
+      if (isQueueNotAdmitted(error)) router.replace(admissionExpiredHref(Number(race.id)))
+    },
   })
 
   /** 바로 결제: 참가 신청으로 주문을 만들어 자리를 잡는다. */
@@ -245,7 +279,7 @@ function ParticipantForm({
 
   const submit = (next: NextStep) => handleSubmit((values) => save.mutate({ values, next }))
   // 409(이미 신청함 · 접수 기간 아님) · 400(나이 제한 밖 · 키트 배송 주소 없음)은 서버 문구를 그대로 보여 준다.
-  const failure = save.error ?? replaceCart.error
+  const failure = (isQueueNotAdmitted(save.error) ? null : save.error) ?? replaceCart.error
   const saveError = failure
     ? ((failure instanceof ApiError ? failure.serverMessage : undefined) ??
       PARTICIPANT_ERRORS.unavailable)

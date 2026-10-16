@@ -10,6 +10,7 @@ import { TextField } from './field/TextField'
 import { pageSlots } from './pagination/Pagination'
 import { ProgressBar } from './progress-bar/ProgressBar'
 import { QuantityStepper } from './quantity-stepper/QuantityStepper'
+import { formatTimer, TimerBar } from './timer-bar/TimerBar'
 
 describe('Button', () => {
   it('loading이면 클릭을 막는다', async () => {
@@ -85,6 +86,27 @@ describe('ProgressBar', () => {
     render(<ProgressBar value={140} />)
 
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
+  })
+
+  it('indeterminate면 값 없이 그린다', () => {
+    render(<ProgressBar indeterminate aria-label="기다리는 중" />)
+
+    expect(screen.getByRole('progressbar', { name: '기다리는 중' })).not.toHaveAttribute(
+      'aria-valuenow',
+    )
+  })
+})
+
+describe('TimerBar', () => {
+  it('남은 초를 mm:ss로 보여 준다', () => {
+    render(<TimerBar message="남은 시간" remainingSeconds={583} />)
+
+    expect(screen.getByRole('timer')).toHaveTextContent('남은 시간09:43')
+  })
+
+  it('0초 아래는 00:00으로 보여 준다', () => {
+    expect(formatTimer(-3)).toBe('00:00')
+    expect(formatTimer(600)).toBe('10:00')
   })
 })
 
