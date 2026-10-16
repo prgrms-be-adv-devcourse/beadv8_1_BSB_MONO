@@ -16,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.cash.domain.exception.WalletBalanceEmptyException;
 import com.bukang.cash.domain.exception.WalletNotFoundException;
+import com.bukang.cash.domain.exception.WithdrawalMemberMismatchException;
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.LedgerType;
@@ -124,13 +125,34 @@ class CashWithdrawalUseCaseTest {
 			.isInstanceOf(WalletNotFoundException.class);
 	}
 
+	@Test
+	@DisplayName("다른 회원의 idempotencyKey로 요청하면 거절한다")
+	void rejectsWhenIdempotencyKeyBelongsToAnotherMember() {
+		int otherMemberId = 4;
+		Wallet otherWallet = createWallet(otherMemberId, 0);
+		WalletWithdrawal otherWithdrawal = walletWithdrawalRepository.save(
+			new WalletWithdrawal(otherWallet, 10_000, "004", "110123456789", "홍길동", "withdrawal_1"));
+		ReflectionTestUtils.setField(otherWithdrawal, "status", WithdrawalStatus.COMPLETED);
+		walletWithdrawalRepository.saveAndFlush(otherWithdrawal);
+
+		createCustomerWallet(0);
+
+		assertThatThrownBy(() ->
+			cashFacade.requestWithdrawal(CUSTOMER_ID, "004", "110123456789", "홍길동", "withdrawal_1"))
+			.isInstanceOf(WithdrawalMemberMismatchException.class);
+	}
+
 	private void createCustomerWallet(int initialBalance) {
-		transactionTemplate.executeWithoutResult(status -> {
+		createWallet(CUSTOMER_ID, initialBalance);
+	}
+
+	private Wallet createWallet(int memberId, int initialBalance) {
+		return transactionTemplate.execute(status -> {
 			LocalDateTime now = LocalDateTime.of(2026, 10, 15, 10, 0);
-			CashMember member = cashMemberRepository.save(new CashMember(CUSTOMER_ID, now, now, "러너3"));
+			CashMember member = cashMemberRepository.save(new CashMember(memberId, now, now, "러너" + memberId));
 			Wallet wallet = new Wallet(member);
 			ReflectionTestUtils.setField(wallet, "balance", initialBalance);
-			walletRepository.save(wallet);
+			return walletRepository.save(wallet);
 		});
 	}
 
