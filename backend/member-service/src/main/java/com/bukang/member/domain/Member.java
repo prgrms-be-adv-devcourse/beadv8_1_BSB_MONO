@@ -10,6 +10,8 @@ import com.bukang.member.dto.MemberDto;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -33,6 +35,12 @@ public class Member extends SourceMember {
 	public static final int NICKNAME_MIN_WIDTH = 4;
 	public static final int NICKNAME_MAX_WIDTH = 16;
 
+	// 관리자 판별용 역할 (BE-020). 칸을 더해도 dev DB를 초기화하지 않도록(ddl-auto: update) DB 기본값을 'USER'로 둔다
+	// 이미 있는 행에는 칸을 더할 때 기본값이 채워진다
+	@Enumerated(EnumType.STRING)
+	@Column(name = "role", nullable = false, columnDefinition = "varchar(10) default 'USER'")
+	private MemberRole role = MemberRole.USER;
+
 	public Member(
 		String email,
 		String password,
@@ -44,6 +52,15 @@ public class Member extends SourceMember {
 		Gender gender
 	) {
 		super(email, password, name, nickname, phone, phoneHash, birthDate, gender);
+	}
+
+	public boolean isAdmin() {
+		return role == MemberRole.ADMIN;
+	}
+
+	// 관리자 역할을 준다. 관리자 지정 API는 없고, 개발용 기본 데이터(MemberDataInit)에서만 쓴다
+	public void grantAdmin() {
+		role = MemberRole.ADMIN;
 	}
 
 	// 만 나이 기준. 생일 당일부터 한 살 더한다
