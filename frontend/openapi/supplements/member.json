@@ -23,6 +23,14 @@
           "$ref": "#/components/schemas/MemberDto"
         }
       }
+    },
+    "modifyMe": {
+      "200": {
+        "wrapper": "RsDataMemberDto",
+        "data": {
+          "$ref": "#/components/schemas/MemberDto"
+        }
+      }
     }
   },
   "schemas": {
@@ -49,6 +57,13 @@
         },
         "phone": {
           "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "birthDate": {
+          "type": "string",
+          "format": "date"
         }
       }
     },

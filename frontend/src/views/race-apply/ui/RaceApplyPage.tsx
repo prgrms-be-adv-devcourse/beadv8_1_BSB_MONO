@@ -50,7 +50,7 @@ const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 /** 신청서를 저장한 뒤 어디로 갈지 */
 type NextStep = 'cart' | 'checkout'
 
-/** 장바구니에 다른 대회가 담겨 있을 때 바꿀지 묻는 확인 창(M05-1)의 내용 */
+/** 장바구니에 다른 종목이 담겨 있을 때 바꿀지 묻는 확인 창(M05-1)의 내용 */
 type ReplaceCart = {
   /** 빼야 할 장바구니 항목 */
   cartItemIds: number[]
@@ -163,13 +163,20 @@ function ParticipantForm({
       if (next === 'checkout') {
         return { orderId: await createOrder(participation.id ?? 0), replace: null }
       }
-      // 장바구니에는 대회 1개만 담을 수 있다. 다른 대회가 담겨 있으면 담기 전에 바꿀지 묻는다.
-      const others = await otherRaceItems()
-      if (others.length > 0) {
-        const label = await cartLabel(others[0])
-        return { orderId: null, replace: { cartItemIds: others.map((i) => i.id ?? 0), label } }
+      // 장바구니에는 한 종목만 담을 수 있다. 다른 종목(같은 대회의 다른 종목 포함)이 담겨 있으면
+      // 담기 전에 바꿀지 묻는다. 같은 종목이면 묻지 않는다(참가자 정보는 위에서 이미 고쳤다).
+      const pending = await replaceIfOtherCourse(false)
+      if (pending) return { orderId: null, replace: pending }
+      try {
+        await addToCart()
+      } catch (error) {
+        // 미리 확인한 뒤 다른 종목이 담긴 경우(다른 탭 · 동시 요청)도 같은 확인 창으로 묻는다.
+        if (error instanceof ApiError && error.code === 'ORDER_CART_ONE_COURSE_ONLY') {
+          const conflict = await replaceIfOtherCourse(true)
+          if (conflict) return { orderId: null, replace: conflict }
+        }
+        throw error
       }
-      await addToCart()
       return { orderId: null, replace: null }
     },
     onSuccess: ({ orderId, replace: pending }) => {
@@ -190,7 +197,7 @@ function ParticipantForm({
     return order.id ?? 0
   }
 
-  // 확인 창에서 바꾸기를 누르면 담아 둔 다른 대회를 빼고 이 대회를 담는다.
+  // 확인 창에서 바꾸기를 누르면 담아 둔 다른 종목을 빼고 이 종목을 담는다.
   const replaceCart = useMutation({
     mutationFn: async (cartItemIds: number[]) => {
       for (const id of cartItemIds) await orderApi.removeItem(id)
@@ -205,15 +212,29 @@ function ParticipantForm({
     await queryClient.invalidateQueries({ queryKey: orderApi.getFindCartQueryKey() })
   }
 
-  async function otherRaceItems() {
-    const cart = unwrapData(await queryClient.fetchQuery(orderApi.getFindCartQueryOptions()))
-    const thisRace = new Set(race.options.map((o) => o.id))
-    return (cart.items ?? []).filter((item) => !thisRace.has(String(item.raceCourseId)))
+  /**
+   * 장바구니에 이 종목과 다른 항목이 있으면 확인 창 내용을, 없으면 null을 돌려준다.
+   * fresh면 캐시를 쓰지 않고 장바구니를 새로 불러온다(서버가 409를 준 뒤).
+   */
+  async function replaceIfOtherCourse(fresh: boolean): Promise<ReplaceCart | null> {
+    const options = orderApi.getFindCartQueryOptions()
+    const cart = unwrapData(
+      await queryClient.fetchQuery(fresh ? { ...options, staleTime: 0 } : options),
+    )
+    const others = (cart.items ?? []).filter((item) => String(item.raceCourseId) !== option.id)
+    if (others.length === 0) return null
+    const label = await cartLabel(others[0])
+    return { cartItemIds: others.map((i) => i.id ?? 0), label }
   }
 
-  /** 담아 둔 항목의 대회 · 종목 이름. 이 기기에서 저장한 참가 신청이 있어야 대회를 알 수 있다. */
+  /**
+   * 담아 둔 항목의 대회 · 종목 이름. 같은 대회의 종목이면 이 대회에서 찾고,
+   * 다른 대회는 이 기기에서 저장한 참가 신청이 있어야 알 수 있다.
+   */
   async function cartLabel(item: { raceCourseId?: number }) {
     const courseId = String(item.raceCourseId)
+    const sameRace = race.options.find((o) => o.id === courseId)
+    if (sameRace) return `${race.title} · ${sameRace.name}`
     const application = applications[courseId]
     if (!application) return undefined
     try {
@@ -406,14 +427,14 @@ function ParticipantForm({
       <Dialog
         open={replace !== null}
         onOpenChange={(open) => !open && setReplace(null)}
-        title="장바구니의 대회를 바꿀까요?"
+        title="장바구니를 바꿀까요?"
         body={
           <>
-            장바구니에는 대회 1개만 담을 수 있어요.
+            장바구니에는 종목 1개만 담을 수 있어요.
             <br />
-            {replace?.label
-              ? `담아 둔 「${replace.label}」를 빼고 이 대회를 담아요.`
-              : '담아 둔 대회를 빼고 이 대회를 담아요.'}
+            {replace?.label ? `담아 둔 「${replace.label}」를 빼고` : '담아 둔 대회를 빼고'}
+            <br />
+            {`「${race.title} · ${option.name}」를 담아요.`}
           </>
         }
         confirmLabel="바꾸기"

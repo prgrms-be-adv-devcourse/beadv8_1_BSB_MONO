@@ -28,7 +28,7 @@ type CheckoutResult = orderModel.CartCheckoutItemDto
 /** 자리를 잡아 주문이 만들어진 결과 (새로 만듦 · 이미 만든 주문) */
 const isOrdered = (r: CheckoutResult) => r.outcome === 'CREATED' || r.outcome === 'EXISTING'
 
-// 피그마 V2 · M06 장바구니 (+ 비어 있음). 장바구니에는 대회 1개만 담긴다.
+// 피그마 V2 · M06 장바구니 (+ 비어 있음). 장바구니에는 한 종목(참가권 1장)만 담긴다.
 // ?preview=empty 시안은 API를 부르지 않고 빈 화면을 보여 준다.
 // ?preview=queue 시안은 대기열 입장 전 결제 창(M06-Q)을 연 채로 보여 준다.
 export function CartPage({
@@ -70,10 +70,10 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
   const [queueDialogOpen, setQueueDialogOpen] = useState(initialQueueDialogOpen)
   const queryClient = useQueryClient()
   const { lines, isError } = useCartLines()
-  // 장바구니 결제 결과 (참가 신청 ID → 항목별 결과)
-  const [results, setResults] = useState<Map<number, CheckoutResult> | null>(null)
-  // 같은 참가 신청 묶음으로 다시 누르면(두 번 클릭 · 실패 뒤 재시도) 같은 Idempotency-Key를 보낸다.
-  const [attempt, setAttempt] = useState<{ ids: string; key: string } | null>(null)
+  // 장바구니 결제에서 자리를 잡지 못한 결과 (매진 · 실패). 담은 참가권 줄에 보여 준다.
+  const [failure, setFailure] = useState<CheckoutResult | null>(null)
+  // 같은 참가 신청으로 다시 누르면(두 번 클릭 · 실패 뒤 재시도) 같은 Idempotency-Key를 보낸다.
+  const [attempt, setAttempt] = useState<{ participationId: number; key: string } | null>(null)
 
   const remove = useMutation({
     mutationFn: async (cartItemId: number) => unwrapData(await orderApi.removeItem(cartItemId)),
@@ -83,22 +83,24 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
         message: '',
         data: cart,
       })
-      setResults(null)
+      setFailure(null)
     },
   })
 
   const checkout = useMutation({
-    mutationFn: async ({ ids, key }: { ids: number[]; key: string }) =>
-      unwrapData(await orderApi.checkout({ participationIds: ids }, { idempotencyKey: key })),
+    // 장바구니에는 한 종목만 담기므로 참가 신청 1건만 보낸다 (2건 이상이면 400).
+    mutationFn: async ({ participationId, key }: { participationId: number; key: string }) =>
+      unwrapData(
+        await orderApi.checkout({ participationIds: [participationId] }, { idempotencyKey: key }),
+      ),
     onSuccess: (data) => {
-      const list = data.results ?? []
-      const order = list.find(isOrdered)?.order
-      // 모두 자리를 잡았으면 바로 결제 화면으로, 일부만 잡았으면 항목별 결과를 먼저 보여 준다.
-      if (order?.id !== undefined && list.every(isOrdered)) {
-        router.push(`/checkout?orderId=${order.id}`)
+      // 결과도 1건이다. 자리를 잡았으면 결제 화면으로, 매진 · 실패면 그 줄에 이유를 보여 준다.
+      const result = data.results?.[0]
+      if (result && isOrdered(result) && result.order?.id !== undefined) {
+        router.push(`/checkout?orderId=${result.order.id}`)
         return
       }
-      setResults(new Map(list.map((r) => [r.participationId ?? 0, r])))
+      setFailure(result ?? null)
     },
   })
 
@@ -123,16 +125,16 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
   }
   if (lines.length === 0) return <EmptyCart />
 
-  const payable = lines.filter((l) => l.application && l.option)
-  const total = payable.reduce((sum, l) => sum + (l.option?.price ?? 0), 0)
-  const orderedId = results ? [...results.values()].find(isOrdered)?.order?.id : undefined
+  // 결제할 참가권. 한 종목만 담기므로 결제할 수 있는 첫 줄 하나다.
+  const payable = lines.find((l) => l.application && l.option)
+  const total = payable?.option?.price ?? 0
 
   const startCheckout = () => {
-    const ids = payable.flatMap((l) => l.application?.participationId ?? [])
-    const idsKey = [...ids].sort((a, b) => a - b).join(',')
-    const key = attempt?.ids === idsKey ? attempt.key : createIdempotencyKey()
-    setAttempt({ ids: idsKey, key })
-    checkout.mutate({ ids, key })
+    const participationId = payable?.application?.participationId
+    if (participationId === undefined) return
+    const key = attempt?.participationId === participationId ? attempt.key : createIdempotencyKey()
+    setAttempt({ participationId, key })
+    checkout.mutate({ participationId, key })
   }
 
   // 장바구니에는 대회 1개만 담기므로 대회 · 종목을 아는 첫 줄의 대기열로 간다
@@ -158,14 +160,18 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
             <CartLineCard
               key={line.cartItemId}
               line={line}
-              result={line.application ? results?.get(line.application.participationId) : undefined}
+              result={
+                failure && failure.participationId === line.application?.participationId
+                  ? failure
+                  : undefined
+              }
               removing={remove.isPending && remove.variables === line.cartItemId}
               onRemove={() => remove.mutate(line.cartItemId)}
             />
           ))}
         </ul>
         <div className="flex flex-col gap-3 rounded-lg bg-bg-subtle p-5">
-          <KeyValue label={`참가권 ${payable.length}개`} value={formatWon(total)} />
+          <KeyValue label={`참가권 ${payable ? 1 : 0}개`} value={formatWon(total)} />
           <div className="flex items-center justify-between gap-2">
             <span className="text-label-strong text-text-secondary">합계</span>
             <span className="text-heading-s">{formatWon(total)}</span>
@@ -183,19 +189,9 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
         className="sticky bottom-0 z-10"
         price={{ label: '총 결제 금액', amount: formatWon(total) }}
         primary={
-          orderedId !== undefined ? (
-            <Button size="l" onClick={() => router.push(`/checkout?orderId=${orderedId}`)}>
-              자리 잡은 참가권 결제하기
-            </Button>
-          ) : (
-            <Button
-              size="l"
-              disabled={payable.length === 0 || checkout.isPending}
-              onClick={startCheckout}
-            >
-              결제하기
-            </Button>
-          )
+          <Button size="l" disabled={!payable || checkout.isPending} onClick={startCheckout}>
+            결제하기
+          </Button>
         }
       />
       <QueueRequiredDialog

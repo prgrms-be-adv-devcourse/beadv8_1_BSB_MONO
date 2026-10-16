@@ -27,6 +27,7 @@ import type {
 import type {
   MemberJoinRequestDto,
   MemberLoginRequestDto,
+  MemberModifyRequestDto,
   RsData,
   RsDataMemberDto,
   RsDataMemberLoginResponseDto,
@@ -54,6 +55,197 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getFindMeUrl = () => {
+
+
+
+
+  return `/api/v1/member/members/me`
+}
+
+/**
+ * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
+ * @summary 내 정보 조회
+ */
+export const findMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataMemberDto> => {
+
+  return customFetch<RsDataMemberDto>(getFindMeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindMeQueryKey = () => {
+    return [
+    `/api/v1/member/members/me`
+    ] as const;
+    }
+
+
+export const getFindMeQueryOptions = <TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findMe>>> = ({ signal }) => findMe({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type FindMeQueryResult = NonNullable<Awaited<ReturnType<typeof findMe>>>
+export type FindMeQueryError = RsData
+
+
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findMe>>,
+          TError,
+          Awaited<ReturnType<typeof findMe>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findMe>>,
+          TError,
+          Awaited<ReturnType<typeof findMe>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 내 정보 조회
+ */
+
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getFindMeQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getModifyMeUrl = () => {
+
+
+
+
+  return `/api/v1/member/members/me`
+}
+
+/**
+ * X-Member-Id 헤더의 회원의 이름, 생년월일, 휴대폰 번호, 닉네임을 바꾼다. 다른 회원이 쓰는 닉네임·휴대폰 번호인지 검사하고(내 행은 제외, 휴대폰은 하이픈 유무 무관), 4칸이 모두 그대로면 저장하지 않는다.
+ * @summary 내 정보 수정
+ */
+export const modifyMe = async (memberModifyRequestDto: MemberModifyRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataMemberDto> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RsDataMemberDto>(getModifyMeUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(memberModifyRequestDto)
+  }
+);}
+
+
+
+
+
+export const getModifyMeMutationKey = () => ['modifyMe'] as const;
+
+export const getModifyMeMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifyMe>>, TError,ModifyMeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof modifyMe>>, TError,ModifyMeMutationVariables, TContext> => {
+
+const mutationKey = getModifyMeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof modifyMe>>, ModifyMeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  modifyMe(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ModifyMeMutationResult = NonNullable<Awaited<ReturnType<typeof modifyMe>>>
+    export type ModifyMeMutationBody = MemberModifyRequestDto
+    export type ModifyMeMutationError = RsData
+    export type ModifyMeMutationVariables = {data: MemberModifyRequestDto}
+
+    /**
+ * @summary 내 정보 수정
+ */
+export const useModifyMe = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifyMe>>, TError,ModifyMeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof modifyMe>>,
+        TError,
+        ModifyMeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getModifyMeMutationOptions(options), queryClient);
+    }
 
 export const getReissueUrl = () => {
 
@@ -382,106 +574,4 @@ export const useJoin = <TError = RsData,
       > => {
       return useMutation(getJoinMutationOptions(options), queryClient);
     }
-
-export const getFindMeUrl = () => {
-
-
-
-
-  return `/api/v1/member/members/me`
-}
-
-/**
- * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
- * @summary 내 정보 조회
- */
-export const findMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataMemberDto> => {
-
-  return customFetch<RsDataMemberDto>(getFindMeUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getFindMeQueryKey = () => {
-    return [
-    `/api/v1/member/members/me`
-    ] as const;
-    }
-
-
-export const getFindMeQueryOptions = <TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getFindMeQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof findMe>>> = ({ signal }) => findMe({ signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type FindMeQueryResult = NonNullable<Awaited<ReturnType<typeof findMe>>>
-export type FindMeQueryError = RsData
-
-
-export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof findMe>>,
-          TError,
-          Awaited<ReturnType<typeof findMe>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customFetch>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof findMe>>,
-          TError,
-          Awaited<ReturnType<typeof findMe>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof customFetch>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary 내 정보 조회
- */
-
-export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getFindMeQueryOptions(options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
 

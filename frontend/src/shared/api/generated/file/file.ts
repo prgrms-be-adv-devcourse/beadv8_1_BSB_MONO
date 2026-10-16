@@ -29,6 +29,7 @@ import type {
   FindByRefParams,
   RsData,
   RsDataFileDto,
+  RsDataFileUploadDto,
   RsDataListFileDto
 } from './file.schemas';
 
@@ -175,7 +176,7 @@ export const getCreateUploadUrlUrl = () => {
  * 파일 용도(fileType)에 맞는 형식과 크기를 검사한 뒤 파일을 업로드 대기 상태로 만들고, S3에 직접 올릴 presigned PUT URL(10분)을 발급한다. 브라우저는 응답의 headers를 그대로 붙여 PUT 한다. 이미지(THUMBNAIL, DETAIL, COURSE, KIT)는 JPG·PNG·WebP 10MB, 동영상(INTRO_VIDEO)은 MP4·MOV 100MB, 엑셀(ROSTER)은 XLSX·XLS 5MB 이하만 받는다.
  * @summary 업로드 URL 발급
  */
-export const createUploadUrl = async (fileUploadRequestDto: FileUploadRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const createUploadUrl = async (fileUploadRequestDto: FileUploadRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataFileUploadDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -191,7 +192,7 @@ export const createUploadUrl = async (fileUploadRequestDto: FileUploadRequestDto
     }
     return headers;
   };
-return customFetch<unknown>(getCreateUploadUrlUrl(),
+return customFetch<RsDataFileUploadDto>(getCreateUploadUrlUrl(),
   {
     ...options,
     method: 'POST',
@@ -264,9 +265,9 @@ export const getCompleteUploadUrl = (fileId: number,) => {
  * S3에 올라간 파일의 크기와 앞부분(매직 바이트)이 발급 때 신고한 크기·형식과 같은지 확인해 업로드 완료로 바꾸고, 이미지를 볼 수 있는 presigned GET URL(30분)을 돌려준다. 다르면 올라간 파일을 지운다. 이미 확인한 파일은 같은 결과를 돌려준다.
  * @summary 업로드 완료 확인
  */
-export const completeUpload = async (fileId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const completeUpload = async (fileId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataFileDto> => {
 
-  return customFetch<unknown>(getCompleteUploadUrl(fileId),
+  return customFetch<RsDataFileDto>(getCompleteUploadUrl(fileId),
   {
     ...options,
     method: 'POST'

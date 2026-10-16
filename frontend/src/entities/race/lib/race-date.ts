@@ -31,3 +31,38 @@ export function formatDDay(value: string, now?: Date): string {
   if (days < 0) return '마감'
   return days === 0 ? 'D-DAY' : `D-${days}`
 }
+
+// 판매자 입력 칸은 "2026-11-01 08:00"처럼 쓰고, 백엔드에는 시간대 없는 한국 시간으로 보낸다.
+const DATE_TIME_INPUT = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/
+const DATE_INPUT = /^(\d{4})-(\d{2})-(\d{2})$/
+
+function isRealDate(year: string, month: string, day: string): boolean {
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  return (
+    date.getFullYear() === Number(year) &&
+    date.getMonth() === Number(month) - 1 &&
+    date.getDate() === Number(day)
+  )
+}
+
+/** 입력 "2026-11-01 08:00" → "2026-11-01T08:00:00". 형식이 틀리거나 없는 날이면 null */
+export function parseRaceDateTimeInput(text: string): string | null {
+  const match = DATE_TIME_INPUT.exec(text.trim())
+  if (!match) return null
+  const [, year, month, day, hour, minute] = match
+  if (!isRealDate(year, month, day) || Number(hour) > 23 || Number(minute) > 59) return null
+  return `${year}-${month}-${day}T${hour}:${minute}:00`
+}
+
+/** 입력 "2026-10-31" → "2026-10-31". 형식이 틀리거나 없는 날이면 null */
+export function parseRaceDateInput(text: string): string | null {
+  const match = DATE_INPUT.exec(text.trim())
+  if (!match) return null
+  const [, year, month, day] = match
+  return isRealDate(year, month, day) ? `${year}-${month}-${day}` : null
+}
+
+/** "2026-11-01T08:00:00" → 입력 칸 값 "2026-11-01 08:00" */
+export function toRaceDateTimeInput(value: string): string {
+  return `${value.slice(0, 10)} ${value.slice(11, 16)}`
+}
