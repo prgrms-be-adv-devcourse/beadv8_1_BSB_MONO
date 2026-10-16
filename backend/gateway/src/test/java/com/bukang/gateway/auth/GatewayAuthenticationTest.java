@@ -358,7 +358,8 @@ class GatewayAuthenticationTest {
 		assertThat(response.statusCode()).isEqualTo(400);
 		assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
 			contentType -> assertThat(contentType).startsWith("application/json"));
-		assertThat(response.body()).isEqualTo("{\"status\":400,\"message\":\"잘못된 요청 경로입니다.\",\"data\":null}");
+		assertThat(response.body())
+			.isEqualTo("{\"status\":400,\"code\":\"AUTH_INVALID_PATH\",\"message\":\"잘못된 요청 경로입니다.\",\"data\":null}");
 		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
 	}
 
