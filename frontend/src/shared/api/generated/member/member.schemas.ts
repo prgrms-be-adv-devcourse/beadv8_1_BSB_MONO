@@ -5,6 +5,32 @@
  * 크루 중심 마라톤 대회 예매·커머스 플랫폼 API
  * OpenAPI spec version: v1
  */
+/**
+ * 내 정보 수정 요청
+ */
+export interface MemberModifyRequestDto {
+  /**
+     * 실명
+     * @minLength 0
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * 닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)
+     * @minLength 1
+     * @pattern ^[가-힣A-Za-z0-9]+$
+     */
+  nickname: string;
+  /**
+     * 휴대폰 번호 (하이픈 생략 가능)
+     * @minLength 1
+     * @pattern ^01[016789]-?\d{3,4}-?\d{4}$
+     */
+  phone: string;
+  /** 생년월일 */
+  birthDate: string;
+}
+
 export interface RsData {
   status?: number;
   code?: string;
@@ -88,6 +114,8 @@ export interface MemberDto {
   nickname?: string;
   email?: string;
   phone?: string;
+  name?: string;
+  birthDate?: string;
 }
 
 /**
@@ -108,6 +136,12 @@ export interface TokenReissueResponseDto {
   accessToken?: string;
 }
 
+export interface RsDataMemberDto {
+  status?: number;
+  message?: string;
+  data?: MemberDto;
+}
+
 export interface RsDataTokenReissueResponseDto {
   status?: number;
   message?: string;
@@ -118,11 +152,5 @@ export interface RsDataMemberLoginResponseDto {
   status?: number;
   message?: string;
   data?: MemberLoginResponseDto;
-}
-
-export interface RsDataMemberDto {
-  status?: number;
-  message?: string;
-  data?: MemberDto;
 }
 

@@ -92,7 +92,7 @@ export function PasswordNewPage() {
           label="새 비밀번호"
           type="password"
           autoComplete="new-password"
-          helper="영문 · 숫자 포함 8자 이상"
+          helper="10자 이상"
           error={errors.password?.message}
           {...register('password', { onChange: revalidateConfirm })}
         />

@@ -107,7 +107,7 @@ describe('장바구니', () => {
     expect(await screen.findByText('장바구니가 비어 있어요')).toBeInTheDocument()
   })
 
-  it('결제하기를 누르면 참가 신청 ID로 주문을 만들고 결제 화면으로 간다', async () => {
+  it('결제하기를 누르면 담은 참가권의 참가 신청 1건으로 주문을 만들고 결제 화면으로 간다', async () => {
     server.use(cartWith([{ id: 1, raceCourseId: 1 }]))
     const calls = captureCheckout(() => checkoutResult('CREATED'))
     const user = userEvent.setup()
@@ -148,7 +148,7 @@ describe('장바구니', () => {
     expect(calls[1].key).toBe(calls[0].key)
   })
 
-  it('매진된 항목은 그 항목만 실패로 보여 준다', async () => {
+  it('매진이면 담은 참가권 줄에 실패 이유를 보여 준다', async () => {
     server.use(cartWith([{ id: 1, raceCourseId: 1 }]))
     captureCheckout(() => checkoutResult('SOLD_OUT'))
     const user = userEvent.setup()
