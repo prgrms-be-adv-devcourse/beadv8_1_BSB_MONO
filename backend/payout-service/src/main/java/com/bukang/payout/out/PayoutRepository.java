@@ -13,6 +13,9 @@ import com.bukang.payout.domain.PayoutStatus;
 public interface PayoutRepository extends JpaRepository<Payout, Integer> {
 	boolean existsBySellerIdAndRaceIdAndPayoutMonth(int sellerId, int raceId, String payoutMonth);
 
+	// 대회 취소 처리: 그 대회의 정산 내역 전부 (지급 전은 취소로 닫고, 지급 완료는 회수액에 더한다)
+	List<Payout> findByRaceId(int raceId);
+
 	// 지급 배치: 지급 예정일이 오늘이거나 지난 정산 내역 (지난 날을 놓쳐도 다음 실행에서 따라잡는다)
 	List<Payout> findByStatusAndScheduledPayDateLessThanEqual(PayoutStatus status, LocalDate date);
 

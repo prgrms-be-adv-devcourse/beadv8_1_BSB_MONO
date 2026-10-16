@@ -24,6 +24,7 @@ import com.bukang.payout.domain.PayoutItem;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutItemRepository;
 import com.bukang.payout.out.PayoutRepository;
+import com.bukang.payout.out.PayoutStatusHistoryRepository;
 import com.bukang.payout.out.RacePort;
 import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
@@ -59,10 +60,15 @@ class PayoutCreateUseCaseTransactionTest {
 	@Autowired
 	private PayoutGroupCreator payoutGroupCreator;
 
+	@Autowired
+	private PayoutStatusHistoryRepository payoutStatusHistoryRepository;
+
+	// deleteAllInBatch는 SQL을 바로 보내 cascade가 돌지 않으므로, 정산 내역을 가리키는 자식 테이블부터 지운다
 	@AfterEach
 	void cleanUp() {
 		payoutHoldRepository.deleteAllInBatch();
 		payoutItemRepository.deleteAllInBatch();
+		payoutStatusHistoryRepository.deleteAllInBatch();
 		payoutRepository.deleteAllInBatch();
 	}
 
