@@ -12,6 +12,9 @@ import { BottomCta, buttonClassName, formatTimer, Icon, ProgressBar } from '@/sh
 // 입장하면 남은 시간을 1초씩 줄여 간다. 0이 되면 입장 시간 만료 화면(M07-1)으로 간다.
 // 순번 · 예상 대기 시간은 API가 주지 않아 숫자를 그리지 않는다.
 // 상단 timer bar 띠는 이 화면에 없다(신청서 M05부터). 왼쪽 위 X는 대회 상세로 이동만 한다.
+// 96px 그림도 시안처럼 선을 2px로 둔다. 아이콘은 24 격자라 96px에서는 0.5가 2px이다.
+const BIG_ICON_STROKE = 0.5
+
 export function RaceQueuePage({
   raceId,
   optionId,
@@ -45,7 +48,12 @@ export function RaceQueuePage({
               <br />
               지금 신청할 수 있어요
             </h1>
-            <Icon name="CircleCheck" className="size-24 text-text-primary" aria-hidden />
+            <Icon
+              name="CircleCheck"
+              className="size-24 text-text-primary"
+              strokeWidth={BIG_ICON_STROKE}
+              aria-hidden
+            />
             <div role="timer" className="flex flex-col items-center gap-1 text-center">
               <p className="text-label-m text-text-secondary">남은 시간</p>
               <p className="font-display text-display-m text-text-primary tabular-nums">
@@ -74,7 +82,12 @@ export function RaceQueuePage({
             <br />
             잠시 기다리고 있어요
           </h1>
-          <Icon name="Users" className="size-24 text-text-primary" aria-hidden />
+          <Icon
+            name="Users"
+            className="size-24 text-text-primary"
+            strokeWidth={BIG_ICON_STROKE}
+            aria-hidden
+          />
           {/* 진행률이 아니라 기다리는 중이라는 표시라 값 없이 계속 움직인다 */}
           <ProgressBar indeterminate aria-label="대기 중" className="w-70" />
           <p className="text-center text-body-s text-text-secondary">
