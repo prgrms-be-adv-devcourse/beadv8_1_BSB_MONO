@@ -6,6 +6,7 @@ import static lombok.AccessLevel.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
@@ -49,25 +50,25 @@ public abstract class SourceMember extends BaseMember {
 	@Column(name = "updated_at", nullable = false)
 	private LocalDateTime modifyDate;
 
-	// 개인정보 칸은 지금은 NOT NULL. 탈퇴(PRO-71)를 만들 때 NULL 허용 + status CHECK로 함께 바꾼다
-	@Column(nullable = false) // 로그인 아이디. unique 제약은 Member의 uk_member_email
+	// 개인정보 칸은 탈퇴하면 비우므로(NULL) NULL을 허용한다. 활성 회원의 빈칸은 Member의 CHECK가 막는다 (BE-022)
+	@Column // 로그인 아이디. unique 제약은 Member의 uk_member_email
 	private String email;
 
 	@Column(name = "password_hash", nullable = false)
 	private String password;
 
-	@Column(nullable = false)
+	@Column
 	private String name;
 
 	@Convert(converter = EncryptedStringConverter.class) // DB 저장 시 AES 암호화, 조회 시 복호화
-	@Column(nullable = false, length = 255)
+	@Column(length = 255)
 	private String phone;
 
 	// 휴대폰 번호 조회, 중복 검사용 블라인드 인덱스. unique 제약은 Member의 uk_member_phone_hash
-	@Column(name = "phone_hash", nullable = false, length = 64)
+	@Column(name = "phone_hash", length = 64)
 	private String phoneHash;
 
-	@Column(name = "birth_date", nullable = false) // 만 14세 미만 가입 불가 확인용 (정책 1장 1-4)
+	@Column(name = "birth_date") // 만 14세 미만 가입 불가 확인용 (정책 1장 1-4)
 	private LocalDate birthDate;
 
 	// Hibernate는 enum을 MySQL ENUM 타입으로 만들므로, 값이 늘어도 ALTER가 필요 없게 VARCHAR로 고정한다
@@ -82,6 +83,17 @@ public abstract class SourceMember extends BaseMember {
 
 	@Column(name = "verified_at")
 	private LocalDateTime verifiedAt;
+
+	// 지금 상태 (판단용). DB 기본값을 'ACTIVE'로 둬 기존 행이 있는 표에 칸을 더해도 채워진다 (BE-022)
+	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
+	@ColumnDefault("'ACTIVE'")
+	@Column(nullable = false, length = 20)
+	private MemberStatus status = MemberStatus.ACTIVE;
+
+	// 탈퇴한 시각 (기록용). 상태와 같은 메서드(Member.withdraw)에서 함께 바꾼다
+	@Column(name = "withdrawn_at")
+	private LocalDateTime withdrawnAt;
 
 	public SourceMember(
 		String email,

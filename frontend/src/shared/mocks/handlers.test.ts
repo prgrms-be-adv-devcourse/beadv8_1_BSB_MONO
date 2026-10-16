@@ -76,3 +76,22 @@ describe('인증 목', () => {
     )
   })
 })
+
+// 가짜 응답 모드에서 차례 기다리기(M05-Q1) → 내 차례(M05-Q2)를 볼 수 있게 대기열 순서를 흉내 내는지 확인한다.
+describe('대기열 입장 목', () => {
+  const ask = async () =>
+    (
+      await customFetch<{ data: { admitted: boolean; remainingSeconds: number } }>(
+        'http://localhost/api/v1/order/queue/admission?raceId=1&raceCourseId=1',
+      )
+    ).data
+
+  it('두 번은 기다리는 중으로 답하고, 세 번째에 입장해 10분 남았다고 답한다', async () => {
+    expect((await ask()).admitted).toBe(false)
+    expect((await ask()).admitted).toBe(false)
+    const admitted = await ask()
+    expect(admitted.admitted).toBe(true)
+    expect(admitted.remainingSeconds).toBeGreaterThan(590)
+    expect(admitted.remainingSeconds).toBeLessThanOrEqual(600)
+  })
+})

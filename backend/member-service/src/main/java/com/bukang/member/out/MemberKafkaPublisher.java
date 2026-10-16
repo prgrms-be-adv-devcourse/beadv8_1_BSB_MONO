@@ -8,12 +8,14 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
+import com.bukang.common.shared.member.event.MemberModifiedEvent;
+import com.bukang.common.shared.seller.event.SellerChangedEvent;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 회원 엔티티가 발행한 스프링 이벤트를 커밋 뒤에 Kafka로 보낸다 (BE-011)
+ * 회원·판매자 엔티티가 발행한 스프링 이벤트를 커밋 뒤에 Kafka로 보낸다 (가입 BE-011, 수정 BE-015, 판매자 BE-020)
  * 트랜잭션 밖에서 발행된 이벤트는 받지 않는다 (fallbackExecution 끔)
  */
 @Slf4j
@@ -28,7 +30,19 @@ public class MemberKafkaPublisher {
 		send(KafkaTopics.MEMBER_MEMBER_JOINED, String.valueOf(event.id()), event);
 	}
 
-	// 가입은 이미 커밋됐으므로 보내지 못해도 예외를 던지지 않고 에러 로그만 남긴다
+	// 키를 가입 이벤트와 같은 회원 ID로 둬 같은 파티션에 넣는다 (같은 회원의 가입·수정 순서 유지)
+	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	public void handleMemberModified(MemberModifiedEvent event) {
+		send(KafkaTopics.MEMBER_MODIFIED, String.valueOf(event.id()), event);
+	}
+
+	// 키는 판매자 ID. 같은 판매자의 신청·심사 이벤트가 같은 파티션에 들어가 순서가 지켜진다
+	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	public void handleSellerChanged(SellerChangedEvent event) {
+		send(KafkaTopics.SELLER_CHANGED, String.valueOf(event.id()), event);
+	}
+
+	// 가입·수정·판매자 변경은 이미 커밋됐으므로 보내지 못해도 예외를 던지지 않고 에러 로그만 남긴다
 	private void send(String topic, String key, Object event) {
 		String payload = jsonConverter.toJson(event);
 		try {

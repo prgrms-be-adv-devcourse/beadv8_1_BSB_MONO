@@ -15,11 +15,16 @@ import type {
 
 import type {
   RsDataFileDto,
+  RsDataFileUploadDto,
   RsDataListFileDto
 } from './file.schemas';
 
 
 export const getFindByRefResponseMock = (): RsDataListFileDto => ({"status":200,"message":"파일 목록을 조회했습니다.","data":[{"id":1,"createDate":"2026-10-09T21:25:35","modifyDate":"2026-10-09T21:30:00","createUser":1,"originFileName":"race-thumbnail.png","contentType":"image/png","fileSize":204800,"status":"ACTIVE","refType":"Race","refId":1,"fileType":"THUMBNAIL","sortNo":0,"url":"https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."},{"id":2,"createDate":"2026-10-09T21:27:00","modifyDate":"2026-10-09T21:30:00","createUser":1,"originFileName":"race-intro.png","contentType":"image/png","fileSize":512000,"status":"ACTIVE","refType":"Race","refId":1,"fileType":"DETAIL","sortNo":0,"url":"https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/8c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."}]})
+
+export const getCreateUploadUrlResponseMock = (): RsDataFileUploadDto => ({"status":201,"message":"업로드 URL을 발급했습니다.","data":{"fileId":1,"uploadUrl":"https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20261009T122535Z&X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost&X-Amz-Expires=600&X-Amz-Credential=AKIA...%2F20261009%2Fap-northeast-2%2Fs3%2Faws4_request&X-Amz-Signature=...","method":"PUT","headers":{"content-length":"204800","content-type":"image/png"},"expiresAt":"2026-10-09T12:35:35Z"}})
+
+export const getCompleteUploadResponseMock = (): RsDataFileDto => ({"status":200,"message":"업로드를 확인했습니다.","data":{"id":1,"createDate":"2026-10-09T21:25:35","modifyDate":"2026-10-09T21:26:10","createUser":1,"originFileName":"race-thumbnail.png","contentType":"image/png","fileSize":204800,"status":"UPLOADED","refType":null,"refId":null,"fileType":"THUMBNAIL","sortNo":0,"url":"https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."}})
 
 export const getFindByIdResponseMock = (): RsDataFileDto => ({"status":200,"message":"파일을 조회했습니다.","data":{"id":1,"createDate":"2026-10-09T21:25:35","modifyDate":"2026-10-09T21:30:00","createUser":1,"originFileName":"race-thumbnail.png","contentType":"image/png","fileSize":204800,"status":"ACTIVE","refType":"Race","refId":1,"fileType":"THUMBNAIL","sortNo":0,"url":"https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."}})
 
@@ -36,21 +41,25 @@ export const getFindByRefMockHandler = (overrideResponse?: RsDataListFileDto | (
   }, options)
 }
 
-export const getCreateUploadUrlMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getCreateUploadUrlMockHandler = (overrideResponse?: RsDataFileUploadDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataFileUploadDto> | RsDataFileUploadDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/file/files', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
-      { status: 200
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCreateUploadUrlResponseMock(),
+      { status: 201
       })
   }, options)
 }
 
-export const getCompleteUploadMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getCompleteUploadMockHandler = (overrideResponse?: RsDataFileDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataFileDto> | RsDataFileDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/file/files/:fileId/complete', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCompleteUploadResponseMock(),
       { status: 200
       })
   }, options)

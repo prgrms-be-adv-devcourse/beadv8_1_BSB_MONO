@@ -12,6 +12,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -27,7 +28,11 @@ import lombok.NoArgsConstructor;
 @Entity
 @NoArgsConstructor(access = PROTECTED)
 @Getter
-@Table(name = "PAYOUT_PAYOUT_RECOVERY")
+// 대회 취소 회수는 대회당 1건이다. 같은 메시지를 두 곳이 동시에 처리해 확인을 함께 통과해도 DB가 두 번째 저장을 막는다
+// 그 처리는 예외로 롤백되고 재시도 때 이미 만든 회수를 보고 건너뛴다
+@Table(name = "PAYOUT_PAYOUT_RECOVERY", uniqueConstraints = {
+	@UniqueConstraint(name = "uk_payout_recovery_race_reason", columnNames = {"race_id", "reason_type"})
+})
 public class PayoutRecovery extends BaseIdAndTime {
 	@Column(nullable = false)
 	private int sellerId;

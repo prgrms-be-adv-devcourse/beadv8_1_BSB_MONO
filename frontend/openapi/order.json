@@ -1731,7 +1731,7 @@
           "Cart"
         ],
         "summary": "장바구니에 참가권 담기",
-        "description": "종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. 담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다.",
+        "description": "종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. 담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다. 장바구니에는 한 종목만 담는다. 다른 종목이 담겨 있으면 409(ORDER_CART_ONE_COURSE_ONLY)다.",
         "operationId": "addItem",
         "parameters": [
           {
@@ -1871,7 +1871,7 @@
             }
           },
           "409": {
-            "description": "접수 마감된 종목 또는 동시에 담는 요청이 겹침",
+            "description": "접수 마감된 종목, 다른 종목이 이미 담김, 동시에 담는 요청이 겹침",
             "content": {
               "application/json": {
                 "schema": {
@@ -1884,6 +1884,15 @@
                       "status": 409,
                       "code": "ORDER_APPLICATION_CLOSED",
                       "message": "접수가 마감된 종목은 담을 수 없습니다.",
+                      "data": null
+                    }
+                  },
+                  "다른 종목이 담김": {
+                    "description": "다른 종목이 담김",
+                    "value": {
+                      "status": 409,
+                      "code": "ORDER_CART_ONE_COURSE_ONLY",
+                      "message": "장바구니에는 한 종목만 담을 수 있습니다. 담긴 종목을 뺀 뒤 담아주세요.",
                       "data": null
                     }
                   },
@@ -1909,7 +1918,7 @@
           "Cart"
         ],
         "summary": "장바구니 결제",
-        "description": "장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. 항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. [결제하기]처럼 종목마다 대기열에 입장 중인지 확인해, 입장 중이 아닌 종목은 실패(FAILED)로 돌려준다. 매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.",
+        "description": "장바구니에 담은 참가권(한 종목)의 참가 신청으로 [결제하기]를 해 결제 대기 주문(CREATED)을 만든다. 장바구니에는 한 종목만 담으므로 참가 신청은 1건만 받는다(2건 이상이면 400). 주문한 종목은 장바구니에서 뺀다. [결제하기]처럼 대기열에 입장 중인지 확인해, 입장 중이 아니면 실패(FAILED)로 돌려준다. 매진·실패하면 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.",
         "operationId": "checkout",
         "parameters": [
           {
@@ -1949,15 +1958,15 @@
         },
         "responses": {
           "200": {
-            "description": "항목별 처리 결과 (일부 또는 전부 매진·실패여도 200)",
+            "description": "처리 결과 (매진·실패여도 200)",
             "content": {
               "application/json": {
                 "examples": {
-                  "일부 주문": {
-                    "description": "일부 주문",
+                  "주문함": {
+                    "description": "주문함",
                     "value": {
                       "status": 200,
-                      "message": "참가권 3건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
+                      "message": "참가권 1건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
                       "data": {
                         "orderedCount": 1,
                         "results": [
@@ -1997,20 +2006,6 @@
                                 }
                               ]
                             }
-                          },
-                          {
-                            "participationId": 12,
-                            "outcome": "SOLD_OUT",
-                            "code": "ORDER_SOLD_OUT",
-                            "message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
-                            "order": null
-                          },
-                          {
-                            "participationId": 13,
-                            "outcome": "FAILED",
-                            "code": "ORDER_APPLICATION_CLOSED",
-                            "message": "접수 기간이 아닙니다.",
-                            "order": null
                           }
                         ]
                       }
@@ -2056,12 +2051,12 @@
                       "data": null
                     }
                   },
-                  "10건 초과": {
-                    "description": "10건 초과",
+                  "2건 이상": {
+                    "description": "2건 이상",
                     "value": {
                       "status": 400,
                       "code": "INVALID_REQUEST",
-                      "message": "한 번에 10건까지 결제할 수 있습니다.",
+                      "message": "장바구니에는 한 종목만 담을 수 있어 참가 신청 1건만 결제할 수 있습니다.",
                       "data": null
                     }
                   },
@@ -2071,15 +2066,6 @@
                       "status": 400,
                       "code": "INVALID_REQUEST",
                       "message": "참가 신청 ID가 올바르지 않습니다.",
-                      "data": null
-                    }
-                  },
-                  "같은 참가 신청 두 번": {
-                    "description": "같은 참가 신청 두 번",
-                    "value": {
-                      "status": 400,
-                      "code": "ORDER_CART_CHECKOUT_INVALID",
-                      "message": "같은 참가 신청을 두 번 보낼 수 없습니다.",
                       "data": null
                     }
                   },
@@ -2983,6 +2969,637 @@
           }
         }
       }
+    },
+    "/api/v1/order/seller/kits": {
+      "get": {
+        "tags": [
+          "SellerKit"
+        ],
+        "summary": "내 대회 키트 주문 목록",
+        "description": "판매자 대회의 키트가 있는 참가권 중 결제했거나 이미 보낸 것을 최근 주문부터 돌려준다. 대회(raceId)·배송 상태(status)로 거를 수 있다. 보낸 뒤 취소된 참가권은 orderItemStatus가 CANCELED로 남는다.",
+        "operationId": "findKits",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "요청한 회원 ID (게이트웨이가 넣어 줄 예정)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 7
+          },
+          {
+            "name": "raceId",
+            "in": "query",
+            "description": "대회 ID (생략하면 모든 대회)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "배송 상태 (PREPARING 배송 준비 / SHIPPING 배송 중 / DELIVERED 배송 완료, 생략 가능)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PREPARING",
+                "SHIPPING",
+                "DELIVERED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호 (0부터)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0,
+              "default": 0
+            },
+            "example": 0
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "페이지 크기 (1~100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "example": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공 (없으면 빈 목록)",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "키트 주문 목록을 조회했습니다.",
+                  "data": {
+                    "kits": [
+                      {
+                        "orderItemId": 12,
+                        "orderNo": "OD-20261016-000C",
+                        "orderItemStatus": "PAID",
+                        "raceId": 1,
+                        "raceCourseId": 1,
+                        "courseName": "10K",
+                        "participantName": "김러너",
+                        "tshirtSize": "L",
+                        "shippingAddress": {
+                          "recipientName": "김러너",
+                          "recipientPhone": "010-1234-5678",
+                          "zipcode": "04700",
+                          "address": "서울 성동구 왕십리로 00",
+                          "addressDetail": "101동 1001호"
+                        },
+                        "kitDeliveryStatus": "PREPARING",
+                        "kitCarrier": null,
+                        "kitTrackingNumber": null,
+                        "kitShippedAt": null,
+                        "kitDeliveredAt": null
+                      }
+                    ],
+                    "page": 0,
+                    "size": 20,
+                    "totalElements": 1,
+                    "totalPages": 1
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 값 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 400,
+                  "code": "INVALID_REQUEST",
+                  "message": "요청 값의 형식이 올바르지 않습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "승인된 판매자가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 403,
+                  "code": "ORDER_SELLER_FORBIDDEN",
+                  "message": "승인된 판매자만 쓸 수 있습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "판매자 확인을 아직 쓸 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 503,
+                  "code": "ORDER_EXTERNAL_SERVICE_UNAVAILABLE",
+                  "message": "판매자 기능을 아직 쓸 수 없습니다. 잠시 뒤 다시 시도해주세요.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/order/seller/kits/summary": {
+      "get": {
+        "tags": [
+          "SellerKit"
+        ],
+        "summary": "키트 배송 건수",
+        "description": "배송 준비·배송 중·배송 완료 건수와, 배송 준비 중 아직 환불할 수 있어 보낼 수 없는(환불 기한 전) 건수를 돌려준다.",
+        "operationId": "summarize",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "요청한 회원 ID (게이트웨이가 넣어 줄 예정)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 7
+          },
+          {
+            "name": "raceId",
+            "in": "query",
+            "description": "대회 ID (생략하면 모든 대회)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "키트 배송 건수를 조회했습니다.",
+                  "data": {
+                    "preparing": 12,
+                    "shipping": 30,
+                    "delivered": 158,
+                    "beforeRefundDeadline": 41
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 값 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 400,
+                  "code": "INVALID_REQUEST",
+                  "message": "요청 값의 형식이 올바르지 않습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "승인된 판매자가 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 403,
+                  "code": "ORDER_SELLER_FORBIDDEN",
+                  "message": "승인된 판매자만 쓸 수 있습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "판매자 확인을 아직 쓸 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 503,
+                  "code": "ORDER_EXTERNAL_SERVICE_UNAVAILABLE",
+                  "message": "판매자 기능을 아직 쓸 수 없습니다. 잠시 뒤 다시 시도해주세요.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/order/seller/kits/{orderItemId}/shipment": {
+      "post": {
+        "tags": [
+          "SellerKit"
+        ],
+        "summary": "키트 발송 (배송 준비 → 배송 중)",
+        "description": "택배사와 송장 번호를 넣어 배송 중으로 바꾼다. 결제한 참가권의 키트만, 한 번만 보낸다. 아직 환불할 수 있는 동안은 409다.",
+        "operationId": "ship",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "요청한 회원 ID (게이트웨이가 넣어 줄 예정)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 7
+          },
+          {
+            "name": "orderItemId",
+            "in": "path",
+            "description": "주문 상품 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 12
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KitShipmentRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "발송 처리함",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "키트를 발송 처리했습니다.",
+                  "data": {
+                    "id": 12,
+                    "participationId": 30,
+                    "raceCourseId": 1,
+                    "sellerId": 7,
+                    "itemName": "10K",
+                    "unitPrice": 50000,
+                    "quantity": 1,
+                    "amount": 50000,
+                    "status": "PAID",
+                    "kitDeliveryStatus": "SHIPPING",
+                    "kitCarrier": "CJ대한통운",
+                    "kitTrackingNumber": "684912345678",
+                    "kitShippedAt": "2026-12-11T10:00:00",
+                    "kitDeliveredAt": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "택배사·송장 번호·회원 ID 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 400,
+                  "code": "INVALID_REQUEST",
+                  "message": "송장 번호를 입력해주세요.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "판매자가 아니거나 다른 판매자의 참가권",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 403,
+                  "code": "ORDER_FORBIDDEN",
+                  "message": "본인 대회의 참가권만 배송 처리할 수 있습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없는 주문 상품",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "code": "ORDER_ITEM_NOT_FOUND",
+                  "message": "주문에 없는 상품입니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "환불 기한 전, 이미 발송함, 결제 전·취소, 키트 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 409,
+                  "code": "ORDER_KIT_NOT_SHIPPABLE",
+                  "message": "이미 발송한 키트입니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "판매자 확인을 아직 쓸 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 503,
+                  "code": "ORDER_EXTERNAL_SERVICE_UNAVAILABLE",
+                  "message": "판매자 기능을 아직 쓸 수 없습니다. 잠시 뒤 다시 시도해주세요.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/order/seller/kits/{orderItemId}/delivery": {
+      "post": {
+        "tags": [
+          "SellerKit"
+        ],
+        "summary": "키트 배송 완료 (배송 중 → 배송 완료)",
+        "description": "보낸 키트를 배송 완료로 바꾼다. 한 번만 바꾼다.",
+        "operationId": "completeDelivery",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "요청한 회원 ID (게이트웨이가 넣어 줄 예정)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 7
+          },
+          {
+            "name": "orderItemId",
+            "in": "path",
+            "description": "주문 상품 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 12
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "배송 완료로 바꿈",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "키트를 배송 완료로 바꿨습니다.",
+                  "data": {
+                    "id": 12,
+                    "participationId": 30,
+                    "raceCourseId": 1,
+                    "sellerId": 7,
+                    "itemName": "10K",
+                    "unitPrice": 50000,
+                    "quantity": 1,
+                    "amount": 50000,
+                    "status": "PAID",
+                    "kitDeliveryStatus": "DELIVERED",
+                    "kitCarrier": "CJ대한통운",
+                    "kitTrackingNumber": "684912345678",
+                    "kitShippedAt": "2026-12-11T10:00:00",
+                    "kitDeliveredAt": "2026-12-13T15:00:00"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "요청 값 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 400,
+                  "code": "INVALID_REQUEST",
+                  "message": "요청 값의 형식이 올바르지 않습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "판매자가 아니거나 다른 판매자의 참가권",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 403,
+                  "code": "ORDER_FORBIDDEN",
+                  "message": "본인 대회의 참가권만 배송 처리할 수 있습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없는 주문 상품",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "code": "ORDER_ITEM_NOT_FOUND",
+                  "message": "주문에 없는 상품입니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "아직 발송 전이거나 이미 배송 완료",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 409,
+                  "code": "ORDER_KIT_NOT_SHIPPABLE",
+                  "message": "아직 발송하지 않은 키트입니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "판매자 확인을 아직 쓸 수 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 503,
+                  "code": "ORDER_EXTERNAL_SERVICE_UNAVAILABLE",
+                  "message": "판매자 기능을 아직 쓸 수 없습니다. 잠시 뒤 다시 시도해주세요.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3179,23 +3796,47 @@
       },
       "CartCheckoutRequestDto": {
         "type": "object",
-        "description": "장바구니 결제 요청. 장바구니의 참가권마다 미리 작성한 참가 신청 ID를 보낸다",
+        "description": "장바구니 결제 요청. 장바구니에 담은 참가권(한 종목)의 참가 신청 ID를 보낸다",
         "properties": {
           "participationIds": {
             "type": "array",
-            "description": "결제할 참가 신청 ID 목록 (최대 10개, 겹치지 않게)",
+            "description": "결제할 참가 신청 ID 목록 (1개)",
             "items": {
               "type": "integer",
               "format": "int32",
               "example": 1,
               "minimum": 0
             },
-            "maxItems": 10,
+            "maxItems": 1,
             "minItems": 0
           }
         },
         "required": [
           "participationIds"
+        ]
+      },
+      "KitShipmentRequestDto": {
+        "type": "object",
+        "description": "키트 발송 요청. 택배사와 송장 번호를 넣으면 배송 중이 된다",
+        "properties": {
+          "carrier": {
+            "type": "string",
+            "description": "택배사 (30자 이하)",
+            "example": "CJ대한통운",
+            "maxLength": 30,
+            "minLength": 1
+          },
+          "trackingNumber": {
+            "type": "string",
+            "description": "송장 번호 (50자 이하)",
+            "example": "684912345678",
+            "maxLength": 50,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "carrier",
+          "trackingNumber"
         ]
       }
     }

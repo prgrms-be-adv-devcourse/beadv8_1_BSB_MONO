@@ -1,5 +1,14 @@
 import { z } from 'zod'
 
+import {
+  BIRTH_UNDER_14_MESSAGE,
+  isJoinableAge,
+  isNicknameWidthValid,
+  NICKNAME_PATTERN,
+  parseBirth,
+} from '@/entities/member'
+import { memberZod } from '@/shared/api'
+
 // 인증 화면 입력 검사. 백엔드 API가 생기면 orval이 만든 zod 스키마로 바꾼다.
 // 오류 문구는 피그마 시안(M03-E 로그인 실패, M04-1E 가입 입력 오류)과 helper 문구를 따른다.
 
@@ -7,17 +16,24 @@ export const AUTH_ERRORS = {
   emailRequired: '이메일을 입력해 주세요.',
   emailFormat: '이메일 형식이 맞지 않아요.',
   passwordRequired: '비밀번호를 입력해 주세요.',
-  passwordRule: '영문 · 숫자 포함 8자 이상으로 정해 주세요.',
+  passwordRule: '비밀번호는 10자 이상으로 정해 주세요.',
   passwordMismatch: '비밀번호가 서로 달라요.',
   loginFailed: '이메일 또는 비밀번호가 맞지 않아요.',
   // 시안에 없는 문구. 서버에 닿지 못했거나 서버 문구가 없을 때
   loginUnavailable: '지금은 로그인할 수 없어요. 잠시 후 다시 시도해 주세요.',
   emailTaken: '이미 가입된 이메일이에요. 로그인하거나 비밀번호를 재설정해 주세요.',
+  // 시안에 없는 문구. 가입 요청이 서버에 닿지 못했거나 서버 문구가 없을 때
+  joinUnavailable: '지금은 가입할 수 없어요. 잠시 후 다시 시도해 주세요.',
+  // 시안에 없는 문구. 이메일 중복 확인 요청이 실패했을 때
+  emailCheckFailed: '이메일을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
+  // 시안에 없는 문구. 가입 요청에서 필수 약관이 빠졌다는 서버 응답
+  joinTermsRequired: '필수 약관에 동의해 주세요.',
   nameRequired: '이름을 입력해 주세요.',
   birthFormat: '생년월일을 1995.03.02처럼 입력해 주세요.',
-  birthUnder14: '만 14세 미만은 가입할 수 없어요',
+  birthUnder14: BIRTH_UNDER_14_MESSAGE,
   phoneFormat: '휴대폰 번호를 010-1234-5678처럼 입력해 주세요.',
-  nicknameLength: '닉네임은 2~10자로 정해 주세요.',
+  nicknameChars: '닉네임은 한글 · 영문 · 숫자만 쓸 수 있어요.',
+  nicknameLength: '닉네임은 한글 2~8자, 영문 4~16자로 정해 주세요.',
 } as const
 
 const email = z
@@ -26,34 +42,11 @@ const email = z
   .min(1, AUTH_ERRORS.emailRequired)
   .pipe(z.email(AUTH_ERRORS.emailFormat))
 
-// 영문 · 숫자 포함 8자 이상
+// 10자 이상, 공백만은 안 됨. 백엔드 가입 요청 DTO(@NotBlank, @Size(min = 10))와 같다.
 const newPassword = z
   .string()
-  .min(8, AUTH_ERRORS.passwordRule)
-  .regex(/[A-Za-z]/, AUTH_ERRORS.passwordRule)
-  .regex(/\d/, AUTH_ERRORS.passwordRule)
-
-const BIRTH_PATTERN = /^(\d{4})\.(\d{2})\.(\d{2})$/
-
-/** "1995.03.02"를 Date로 바꾼다. 형식이 틀리거나 없는 날짜면 null. */
-export function parseBirth(value: string): Date | null {
-  const match = BIRTH_PATTERN.exec(value)
-  if (!match) return null
-  const [year, month, day] = match.slice(1).map(Number)
-  const date = new Date(year, month - 1, day)
-  const valid =
-    date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
-  return valid ? date : null
-}
-
-/** 오늘 기준 만 나이 */
-export function ageOn(birth: Date, today: Date): number {
-  const age = today.getFullYear() - birth.getFullYear()
-  const beforeBirthday =
-    today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())
-  return beforeBirthday ? age - 1 : age
-}
+  .min(memberZod.joinBodyPasswordMin, AUTH_ERRORS.passwordRule)
+  .refine((value) => value.trim().length > 0, AUTH_ERRORS.passwordRule)
 
 const birth = z
   .string()
@@ -61,6 +54,13 @@ const birth = z
   .refine((value) => parseBirth(value) !== null, AUTH_ERRORS.birthFormat)
 
 const name = z.string().trim().min(1, AUTH_ERRORS.nameRequired)
+
+// 백엔드 가입 요청 DTO의 닉네임 검사(@Pattern, @NicknameWidth)와 같다.
+const nickname = z
+  .string()
+  .trim()
+  .regex(NICKNAME_PATTERN, AUTH_ERRORS.nicknameChars)
+  .refine(isNicknameWidthValid, AUTH_ERRORS.nicknameLength)
 
 const phone = z
   .string()
@@ -88,14 +88,10 @@ export const signupProfileSchema = z.object({
   name,
   birth: birth.refine((value) => {
     const date = parseBirth(value)
-    return date === null || ageOn(date, new Date()) >= 14
+    return date === null || isJoinableAge(date)
   }, AUTH_ERRORS.birthUnder14),
   phone,
-  nickname: z
-    .string()
-    .trim()
-    .min(2, AUTH_ERRORS.nicknameLength)
-    .max(10, AUTH_ERRORS.nicknameLength),
+  nickname,
 })
 export type SignupProfileValues = z.infer<typeof signupProfileSchema>
 

@@ -11,6 +11,12 @@ import { CheckoutPage, type CheckoutState } from './CheckoutPage'
 
 const push = vi.fn()
 const replace = vi.fn()
+// 토스 결제창은 페이지를 떠나므로 테스트에서는 띄우지 않고 무엇으로 불렀는지만 본다
+const requestCharge = vi.fn()
+vi.mock('@/features/deposit-charge', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/deposit-charge')>()),
+  requestCharge: (...args: unknown[]) => requestCharge(...args),
+}))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, back: vi.fn(), replace }),
   usePathname: () => '/checkout',
@@ -42,10 +48,16 @@ const balanceHandler = (balance: number) =>
     HttpResponse.json({ status: 200, message: '잔액 조회 성공', data: { holderId: 1, balance } }),
   )
 
-const conflict = (message: string) =>
-  HttpResponse.json({ status: 409, message, data: null }, { status: 409 })
+const conflict = (code: string, data: unknown = null) =>
+  HttpResponse.json({ status: 409, code, message: '아무 문구', data }, { status: 409 })
 
-function renderCheckout(state?: CheckoutState) {
+const payHandler = (respond: () => Response) =>
+  http.post('*/api/v1/order/orders/:orderId/payment', respond)
+
+function renderCheckout(
+  state?: CheckoutState,
+  props: { charged?: boolean; chargeFailed?: boolean } = {},
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
@@ -56,7 +68,7 @@ function renderCheckout(state?: CheckoutState) {
           },
         }}
       >
-        <CheckoutPage state={state} orderId={state ? undefined : 1} />
+        <CheckoutPage state={state} orderId={state ? undefined : 1} {...props} />
       </BookingFlowProvider>
     </QueryClientProvider>,
   )
@@ -73,6 +85,8 @@ describe('결제 화면', () => {
     vi.setSystemTime(NOW)
     push.mockClear()
     replace.mockClear()
+    requestCharge.mockReset()
+    requestCharge.mockResolvedValue('redirecting')
     server.use(orderMock.getFindById1MockHandler(orderResponse()), balanceHandler(100_000))
   })
   afterEach(() => {
@@ -88,6 +102,47 @@ describe('결제 화면', () => {
     // 예치금 10만 원에서 45,000원을 내고 55,000원이 남는다
     expect(screen.getByText('₩55,000')).toBeInTheDocument()
     expect(timer()).toHaveTextContent(/10:00|09:5\d/)
+  })
+
+  it('대기열에 입장 중이면 결제 기한 대신 대기열에서 받은 남은 시간을 센다', async () => {
+    server.use(
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: true, admissionEndsAt: DUE_AT, remainingSeconds: 300 },
+      }),
+    )
+    renderCheckout()
+
+    await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K · 이달림')
+    await vi.waitFor(() => expect(timer()).toHaveTextContent(/05:00|04:5\d/))
+  })
+
+  it('입장 끝이 결제 기한보다 늦으면 결제 기한 기준으로 남은 시간을 센다', async () => {
+    server.use(
+      orderMock.getFindById1MockHandler(orderResponse({ paymentDueAt: '2026-10-14T10:05:00' })),
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: true, admissionEndsAt: DUE_AT, remainingSeconds: 600 },
+      }),
+    )
+    renderCheckout()
+
+    await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K · 이달림')
+    await vi.waitFor(() => expect(timer()).toHaveTextContent(/05:00|04:5\d/))
+  })
+
+  it('결제 기한이 이미 지났으면 입장 확인이 새 시간을 줘도 시간 초과 화면을 보여 준다', async () => {
+    server.use(
+      orderMock.getFindById1MockHandler(orderResponse({ paymentDueAt: '2026-10-14T09:55:00' })),
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: true, admissionEndsAt: DUE_AT, remainingSeconds: 600 },
+      }),
+    )
+    renderCheckout()
+
+    expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
   })
 
   it('잔액이 충분하면 예치금으로 결제하고 결제 완료 화면으로 간다', async () => {
@@ -109,8 +164,15 @@ describe('결제 화면', () => {
     expect(paid).toBe(true)
   })
 
-  it('잔액이 모자라면 충전 안내를 보이고, 충전하러 가기는 결제 기한을 늘리지 않고 충전창으로 간다', async () => {
+  it('잔액이 모자라 보이면 충전하고 결제 버튼을 보여 주고, 누르면 결제 API부터 부른다', async () => {
     server.use(balanceHandler(40_000))
+    let paid = 0
+    server.use(
+      payHandler(() => {
+        paid += 1
+        return conflict('ORDER_INSUFFICIENT_BALANCE', { shortage: 5000 })
+      }),
+    )
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderCheckout()
 
@@ -120,12 +182,16 @@ describe('결제 화면', () => {
     await agree(user)
     await user.click(button)
 
-    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/me/deposit/charge'))
+    // 서버가 5,000원 모자라다고 하면 최소 1만 원을 이 주문으로 돌아오게 충전한다
+    await vi.waitFor(() =>
+      expect(requestCharge).toHaveBeenCalledWith({ amount: 10_000, returnOrderId: 1 }),
+    )
+    expect(paid).toBe(1)
+    expect(push).not.toHaveBeenCalled()
   })
 
-  it('결제 때 예치금이 모자라다고 하면(409) 서버 문구로 충전 안내를 보여 준다', async () => {
-    const message = '예치금이 12,000원 부족합니다. 충전한 뒤 결제 기한 안에 다시 결제해주세요.'
-    server.use(http.post('*/api/v1/order/orders/:orderId/payment', () => conflict(message)))
+  it('결제 때 예치금이 모자라다고 하면(409 ORDER_INSUFFICIENT_BALANCE) 서버가 알려 준 부족 금액만큼 충전한다', async () => {
+    server.use(payHandler(() => conflict('ORDER_INSUFFICIENT_BALANCE', { shortage: 12_000 })))
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderCheckout()
 
@@ -133,16 +199,110 @@ describe('결제 화면', () => {
     await agree(user)
     await user.click(pay)
 
-    expect(await screen.findByText(message)).toBeInTheDocument()
+    await vi.waitFor(() =>
+      expect(requestCharge).toHaveBeenCalledWith({ amount: 12_000, returnOrderId: 1 }),
+    )
+    // 서버 문구는 보여 주지 않는다
+    expect(screen.queryByText('아무 문구')).not.toBeInTheDocument()
+  })
+
+  it('토스 결제창을 닫으면 결제 화면에 그대로 남아 다시 누를 수 있다', async () => {
+    requestCharge.mockResolvedValue('canceled')
+    server.use(payHandler(() => conflict('ORDER_INSUFFICIENT_BALANCE', { shortage: 12_000 })))
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderCheckout()
+
+    const pay = await screen.findByRole('button', { name: '₩45,000 결제' })
+    await agree(user)
+    await user.click(pay)
+
+    await vi.waitFor(() => expect(requestCharge).toHaveBeenCalled())
+    await vi.waitFor(() => expect(pay).toBeEnabled())
+    expect(screen.queryByText('결제하지 못했어요')).not.toBeInTheDocument()
+  })
+
+  it('토스 결제창을 띄우지 못하면 결제 실패 화면(M07-3)을 보여 준다', async () => {
+    requestCharge.mockRejectedValue(new Error('no client key'))
+    server.use(payHandler(() => conflict('ORDER_INSUFFICIENT_BALANCE', { shortage: 12_000 })))
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderCheckout()
+
+    const pay = await screen.findByRole('button', { name: '₩45,000 결제' })
+    await agree(user)
+    await user.click(pay)
+
+    expect(await screen.findByText('결제하지 못했어요')).toBeInTheDocument()
+  })
+
+  it('충전하고 돌아오면(charged) 동의를 다시 받지 않고 같은 주문으로 다시 결제해 완료 화면으로 간다', async () => {
+    const paidOrders: string[] = []
+    server.use(
+      http.post('*/api/v1/order/orders/:orderId/payment', ({ params }) => {
+        paidOrders.push(String(params.orderId))
+        return HttpResponse.json(orderMock.getPayResponseMock())
+      }),
+    )
+    renderCheckout(undefined, { charged: true })
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout/complete?orderId=1'))
+    expect(paidOrders).toEqual(['1'])
+    expect(requestCharge).not.toHaveBeenCalled()
+  })
+
+  it('충전하고 돌아와 다시 결제했는데 또 모자라면 결제창을 저절로 띄우지 않고 버튼으로 다시 충전하게 한다', async () => {
+    server.use(
+      balanceHandler(40_000),
+      payHandler(() => conflict('ORDER_INSUFFICIENT_BALANCE', { shortage: 5000 })),
+    )
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderCheckout(undefined, { charged: true })
+
+    const button = await screen.findByRole('button', { name: '₩10,000 충전하고 결제' })
+    await vi.waitFor(() => expect(button).toBeEnabled())
+    expect(requestCharge).not.toHaveBeenCalled()
+
+    await user.click(button)
+    await vi.waitFor(() =>
+      expect(requestCharge).toHaveBeenCalledWith({ amount: 10_000, returnOrderId: 1 }),
+    )
+  })
+
+  it('충전하고 돌아왔는데 결제 기한이 지났으면 다시 결제하지 않고 시간 초과 화면(M07-1)을 보여 준다', async () => {
+    let paid = false
+    server.use(
+      orderMock.getFindById1MockHandler(orderResponse({ paymentDueAt: '2026-10-14T09:59:00' })),
+      payHandler(() => {
+        paid = true
+        return HttpResponse.json(orderMock.getPayResponseMock())
+      }),
+    )
+    renderCheckout(undefined, { charged: true })
+
+    expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.getByText(/충전한 예치금은 그대로 남아 있어요\./)).toBeInTheDocument()
+    expect(paid).toBe(false)
+  })
+
+  it('충전하고 다시 결제했는데 서버가 기한이 지났다고 하면 시간 초과 화면(M07-1)을 보여 준다', async () => {
+    server.use(payHandler(() => conflict('ORDER_PAYMENT_DEADLINE_PASSED')))
+    renderCheckout(undefined, { charged: true })
+
+    expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
     expect(push).not.toHaveBeenCalled()
   })
 
-  it('결제 때 기한이 지났다고 하면(409) 시간 초과 화면을 보여 준다', async () => {
-    server.use(
-      http.post('*/api/v1/order/orders/:orderId/payment', () =>
-        conflict('결제 기한이 지났습니다.'),
-      ),
-    )
+  it('충전이 안 돼 돌아오면(chargeFailed) 결제 실패 화면을 보여 주고, 다시 결제하기로 결제 화면에 돌아간다', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderCheckout(undefined, { chargeFailed: true })
+
+    expect(await screen.findByText('결제하지 못했어요')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '다시 결제하기' }))
+
+    expect(await screen.findByRole('button', { name: '₩45,000 결제' })).toBeInTheDocument()
+  })
+
+  it('결제 때 기한이 지났다고 하면(409 ORDER_PAYMENT_DEADLINE_PASSED) 시간 초과 화면을 보여 준다', async () => {
+    server.use(payHandler(() => conflict('ORDER_PAYMENT_DEADLINE_PASSED')))
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderCheckout()
 
@@ -151,14 +311,14 @@ describe('결제 화면', () => {
     await user.click(pay)
 
     expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.getByText(/입장 시간이 끝나 잡아 둔 자리가 풀렸어요\./)).toBeInTheDocument()
+    expect(screen.getByText(/충전한 예치금은 그대로 남아 있어요\./)).toBeInTheDocument()
+    // 주문의 대회 상세(M02)로 돌아간다
+    expect(screen.getByRole('link', { name: '대회 다시 보기' })).toHaveAttribute('href', '/races/1')
   })
 
-  it('결제 때 남은 자리가 없다고 하면(409) 자리 마감 화면을 보여 준다', async () => {
-    server.use(
-      http.post('*/api/v1/order/orders/:orderId/payment', () =>
-        conflict('남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.'),
-      ),
-    )
+  it('결제 때 남은 자리가 없다고 하면(409 ORDER_SOLD_OUT) 자리 마감 화면을 보여 준다', async () => {
+    server.use(payHandler(() => conflict('ORDER_SOLD_OUT')))
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     renderCheckout()
 
@@ -204,5 +364,19 @@ describe('결제 화면', () => {
     renderCheckout('timeout')
 
     expect(screen.getByText('결제 시간이 지났어요')).toBeInTheDocument()
+    // 대회를 모르는 미리보기는 대회 목록으로 간다
+    expect(screen.getByRole('link', { name: '대회 다시 보기' })).toHaveAttribute('href', '/races')
+  })
+
+  it('대기열 입장 시간이 끝나 넘어오면(?result=timeout&raceId=) 그 대회 상세로 돌아간다', () => {
+    const client = new QueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <CheckoutPage state="timeout" raceId={1} />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '대회 다시 보기' })).toHaveAttribute('href', '/races/1')
   })
 })

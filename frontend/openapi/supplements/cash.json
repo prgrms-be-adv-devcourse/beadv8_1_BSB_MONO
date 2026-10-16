@@ -7,6 +7,22 @@
           "$ref": "#/components/schemas/WalletBalanceDto"
         }
       }
+    },
+    "confirmWalletCharge": {
+      "200": {
+        "wrapper": "RsDataCashChargeDto",
+        "data": {
+          "$ref": "#/components/schemas/CashChargeDto"
+        }
+      }
+    },
+    "requestWithdrawal": {
+      "200": {
+        "wrapper": "RsDataCashWithdrawalDto",
+        "data": {
+          "$ref": "#/components/schemas/CashWithdrawalDto"
+        }
+      }
     }
   },
   "schemas": {
@@ -21,6 +37,45 @@
         "balance": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "CashChargeDto": {
+      "type": "object",
+      "description": "충전 승인 확정 결과. PG 승인이 거절돼도 200이고 outcome이 FAILED",
+      "required": [
+        "outcome",
+        "balance"
+      ],
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "COMPLETED",
+            "FAILED"
+          ]
+        },
+        "balance": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "CashWithdrawalDto": {
+      "type": "object",
+      "description": "예치금 전액 환급 결과",
+      "required": [
+        "withdrawnAmount",
+        "balance"
+      ],
+      "properties": {
+        "withdrawnAmount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "balance": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     }

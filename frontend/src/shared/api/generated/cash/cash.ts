@@ -6,22 +6,30 @@
  * OpenAPI spec version: v1
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
   DataTag,
   DefinedInitialDataOptions,
   DefinedUseQueryResult,
+  MutationFunction,
   QueryClient,
   QueryFunction,
   QueryKey,
   UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
+  CashChargeConfirmRequestDto,
+  CashWithdrawalRequestDto,
   RsData,
+  RsDataCashChargeDto,
+  RsDataCashWithdrawalDto,
   RsDataWalletBalanceDto
 } from './cash.schemas';
 
@@ -46,6 +54,184 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getRequestWithdrawalUrl = () => {
+
+
+
+
+  return `/api/v1/cash/withdrawals`
+}
+
+/**
+ * 회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. idempotencyKey를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
+ * @summary 예치금 전액 환급 신청
+ */
+export const requestWithdrawal = async (cashWithdrawalRequestDto: CashWithdrawalRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCashWithdrawalDto> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RsDataCashWithdrawalDto>(getRequestWithdrawalUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(cashWithdrawalRequestDto)
+  }
+);}
+
+
+
+
+
+export const getRequestWithdrawalMutationKey = () => ['requestWithdrawal'] as const;
+
+export const getRequestWithdrawalMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestWithdrawal>>, TError,RequestWithdrawalMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestWithdrawal>>, TError,RequestWithdrawalMutationVariables, TContext> => {
+
+const mutationKey = getRequestWithdrawalMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestWithdrawal>>, RequestWithdrawalMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestWithdrawal(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestWithdrawalMutationResult = NonNullable<Awaited<ReturnType<typeof requestWithdrawal>>>
+    export type RequestWithdrawalMutationBody = CashWithdrawalRequestDto
+    export type RequestWithdrawalMutationError = RsData
+    export type RequestWithdrawalMutationVariables = {data: CashWithdrawalRequestDto}
+
+    /**
+ * @summary 예치금 전액 환급 신청
+ */
+export const useRequestWithdrawal = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestWithdrawal>>, TError,RequestWithdrawalMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof requestWithdrawal>>,
+        TError,
+        RequestWithdrawalMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestWithdrawalMutationOptions(options), queryClient);
+    }
+
+export const getConfirmWalletChargeUrl = () => {
+
+
+
+
+  return `/api/v1/cash/charges/confirm`
+}
+
+/**
+ * 프론트가 Toss 결제위젯 콜백으로 받은 paymentKey·orderId·amount로 PG 승인을 확정하고, 성공하면 예치금 지갑에 반영한다. orderId를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
+ * @summary 충전 승인 확정
+ */
+export const confirmWalletCharge = async (cashChargeConfirmRequestDto: CashChargeConfirmRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCashChargeDto> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RsDataCashChargeDto>(getConfirmWalletChargeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(cashChargeConfirmRequestDto)
+  }
+);}
+
+
+
+
+
+export const getConfirmWalletChargeMutationKey = () => ['confirmWalletCharge'] as const;
+
+export const getConfirmWalletChargeMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmWalletCharge>>, TError,ConfirmWalletChargeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmWalletCharge>>, TError,ConfirmWalletChargeMutationVariables, TContext> => {
+
+const mutationKey = getConfirmWalletChargeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmWalletCharge>>, ConfirmWalletChargeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  confirmWalletCharge(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmWalletChargeMutationResult = NonNullable<Awaited<ReturnType<typeof confirmWalletCharge>>>
+    export type ConfirmWalletChargeMutationBody = CashChargeConfirmRequestDto
+    export type ConfirmWalletChargeMutationError = RsData
+    export type ConfirmWalletChargeMutationVariables = {data: CashChargeConfirmRequestDto}
+
+    /**
+ * @summary 충전 승인 확정
+ */
+export const useConfirmWalletCharge = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmWalletCharge>>, TError,ConfirmWalletChargeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof confirmWalletCharge>>,
+        TError,
+        ConfirmWalletChargeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getConfirmWalletChargeMutationOptions(options), queryClient);
+    }
 
 export const getGetBalanceUrl = (holderId: number,) => {
 

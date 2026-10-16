@@ -37,6 +37,161 @@ export interface RsData {
   data?: unknown;
 }
 
+export interface PayoutSummaryDto {
+  nextPayDate: string;
+  scheduledPayoutAmount: number;
+  heldCount: number;
+}
+
+/**
+ * 정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)
+ */
+export type PayoutStatus = typeof PayoutStatus[keyof typeof PayoutStatus];
+
+
+export const PayoutStatus = {
+  CALCULATED: 'CALCULATED',
+  HELD: 'HELD',
+  PAID: 'PAID',
+} as const;
+
+export interface PayoutDto {
+  id: number;
+  payoutCode: string;
+  raceId: number;
+  raceName: string;
+  payoutMonth: string;
+  salesAmount: number;
+  refundAmount: number;
+  feeAmount: number;
+  payoutAmount: number;
+  status: PayoutStatus;
+  settledAt: string;
+  scheduledPayDate: string;
+  /** @nullable */
+  paidAt?: string | null;
+}
+
+/**
+ * 구분 (SALE: 판매, REFUND: 환불)
+ */
+export type PayoutRecordType = typeof PayoutRecordType[keyof typeof PayoutRecordType];
+
+
+export const PayoutRecordType = {
+  SALE: 'SALE',
+  REFUND: 'REFUND',
+} as const;
+
+export interface PayoutItemDto {
+  id: number;
+  orderItemId: number;
+  recordType: PayoutRecordType;
+  amount: number;
+  feeRate: number;
+  feeAmount: number;
+  targetDate: string;
+  payoutId: number;
+  payoutCode: string;
+  raceId: number;
+  raceName: string;
+  payoutStatus: PayoutStatus;
+  scheduledPayDate: string;
+}
+
+export interface PayoutItemPageDto {
+  content: PayoutItemDto[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+/**
+ * 보류 사유 (ACCOUNT_NOT_REGISTERED: 정산 계좌 미등록, RACE_CANCELED: 대회 취소 처리)
+ */
+export type PayoutHoldReason = typeof PayoutHoldReason[keyof typeof PayoutHoldReason];
+
+
+export const PayoutHoldReason = {
+  ACCOUNT_NOT_REGISTERED: 'ACCOUNT_NOT_REGISTERED',
+  RACE_CANCELED: 'RACE_CANCELED',
+} as const;
+
+/**
+ * 지급보류 상태 (HELD: 지급보류, RELEASED: 해제)
+ */
+export type PayoutHoldStatus = typeof PayoutHoldStatus[keyof typeof PayoutHoldStatus];
+
+
+export const PayoutHoldStatus = {
+  HELD: 'HELD',
+  RELEASED: 'RELEASED',
+} as const;
+
+export interface SellerPayoutHoldDto {
+  id: number;
+  holdCode: string;
+  payoutId: number;
+  payoutCode: string;
+  raceId: number;
+  raceName: string;
+  payoutAmount: number;
+  reasonType: PayoutHoldReason;
+  /** @nullable */
+  reason?: string | null;
+  status: PayoutHoldStatus;
+  heldAt: string;
+  /** @nullable */
+  releasedAt?: string | null;
+}
+
+export interface PayoutHoldDto {
+  id: number;
+  holdCode: string;
+  payoutId: number;
+  reasonType: PayoutHoldReason;
+  /** @nullable */
+  reason?: string | null;
+  status: PayoutHoldStatus;
+  heldBy: number;
+  heldAt: string;
+  /** @nullable */
+  releasedBy?: number | null;
+  /** @nullable */
+  releasedAt?: string | null;
+}
+
+export interface RsDataPayoutHoldDto {
+  status?: number;
+  message?: string;
+  data?: PayoutHoldDto;
+}
+
+export interface RsDataPayoutSummaryDto {
+  status?: number;
+  message?: string;
+  data?: PayoutSummaryDto;
+}
+
+export interface RsDataListPayoutDto {
+  status?: number;
+  message?: string;
+  data?: PayoutDto[];
+}
+
+export interface RsDataPayoutItemPageDto {
+  status?: number;
+  message?: string;
+  data?: PayoutItemPageDto;
+}
+
+export interface RsDataListSellerPayoutHoldDto {
+  status?: number;
+  message?: string;
+  data?: SellerPayoutHoldDto[];
+}
+
 export type PayoutsParams = {
 /**
  * 조회 시작 정산 월 (yyyy-MM)

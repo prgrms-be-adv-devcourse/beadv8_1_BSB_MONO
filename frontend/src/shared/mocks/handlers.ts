@@ -17,21 +17,36 @@ import {
   getCheckoutResponseMock,
   getCreateMockHandler,
   getCreateResponseMock,
+  getFindAdmissionMockHandler,
   getFindById1MockHandler,
   getFindById1ResponseMock,
+  getFindCartMockHandler,
+  getFindCartResponseMock,
   getFindMineMockHandler,
   getFindMineResponseMock,
-  getPayMockHandler,
   getPayResponseMock,
+  getRemoveItemMockHandler,
+  getRemoveItemResponseMock,
 } from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
-import { getBukangProductAPIMock } from '@/shared/api/generated/product/product.msw'
+import {
+  getBukangProductAPIMock,
+  getFindMineMockHandler as getFindMyRacesMockHandler,
+  getFindRaceMockHandler,
+  getFindRaceResponseMock,
+  getSearchMockHandler,
+  getSearchResponseMock,
+  getSuggestMockHandler,
+} from '@/shared/api/generated/product/product.msw'
 
+import { fileUploadHandlers } from './file-upload'
 import {
   clearMockRefreshCookie,
   issueMockRefreshCookie,
   MOCK_REFRESH_COOKIE_NAME,
 } from './mock-session'
+import { resetMockKitsForTesting, sellerKitHandlers } from './seller-kits'
+import { payFromMockWallet, walletHandlers } from './wallet'
 
 /** 경로 변수(:raceId) 수. 적은 것부터 둬야 /races/suggestions가 /races/:raceId에 먼저 걸리지 않는다. */
 function pathParamCount(handler: RequestHandler): number {
@@ -89,6 +104,73 @@ const authHandlers = [
 ]
 
 /**
+ * 탈퇴 목. 성공(200)이 기본이다. 실패(예치금·참가권이 남음, 확인 실패)는 테스트에서 server.use로 바꿔 끼운다.
+ * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ */
+const withdrawHandlers = [
+  http.delete('*/api/v1/member/members/me', () =>
+    HttpResponse.json({ status: 200, message: '탈퇴했습니다.', data: null }),
+  ),
+]
+
+/**
+ * 가입 목. 서버처럼 필수 약관(SERVICE, PRIVACY)이 빠지면 400 MEMBER_REQUIRED_TERMS_NOT_AGREED로 답한다.
+ * 이메일 중복 확인은 이메일에 "taken"이 들어 있으면 이미 가입된 것으로 본다 (그 밖에는 사용 가능).
+ * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ */
+const signupHandlers = [
+  http.post('*/api/v1/auth/join', async ({ request }) => {
+    const body = (await request.json()) as { agreedTerms?: unknown }
+    const agreed = Array.isArray(body.agreedTerms) ? body.agreedTerms : null
+    if (!agreed) {
+      return HttpResponse.json(
+        {
+          status: 400,
+          code: 'INVALID_REQUEST',
+          message: '동의한 약관 목록을 작성해주세요.',
+          data: null,
+        },
+        { status: 400 },
+      )
+    }
+    if (!agreed.includes('SERVICE') || !agreed.includes('PRIVACY')) {
+      return HttpResponse.json(
+        {
+          status: 400,
+          code: 'MEMBER_REQUIRED_TERMS_NOT_AGREED',
+          message: '필수 약관에 동의해야 가입할 수 있습니다.',
+          data: null,
+        },
+        { status: 400 },
+      )
+    }
+    return HttpResponse.json(
+      { status: 201, message: 'Member Joined Successfully', data: null },
+      { status: 201 },
+    )
+  }),
+  http.get('*/api/v1/member/members/email-availability', ({ request }) => {
+    const email = new URL(request.url).searchParams.get('email') ?? ''
+    if (!email.includes('@')) {
+      return HttpResponse.json(
+        {
+          status: 400,
+          code: 'INVALID_REQUEST',
+          message: '이메일 형식에 맞게 작성해주세요.',
+          data: null,
+        },
+        { status: 400 },
+      )
+    }
+    return HttpResponse.json({
+      status: 200,
+      message: '이메일 사용 가능 여부를 확인했습니다.',
+      data: { available: !email.includes('taken') },
+    })
+  }),
+]
+
+/**
  * 내 참가권 목. 생성된 주문 목록 예시는 결제 대기 · 기한 만료 주문뿐이라 참가권이 하나도 안 보인다.
  * 결제한 주문(주문 상세 예시와 같은 1번)을 맨 앞에 더한다. 생성된 핸들러보다 앞에 둔다.
  */
@@ -106,10 +188,64 @@ const myOrdersHandler = getFindMineMockHandler(() => {
   }
   return { ...example, data: { ...example.data, orders: [paid, ...(example.data?.orders ?? [])] } }
 })
-/** 지금부터 minutes분 뒤의 한국 시간 (백엔드처럼 시간대 없는 2026-10-12T10:10:00 모양) */
-function kstMinutesFromNow(minutes: number): string {
-  return new Date(Date.now() + (9 * 60 + minutes) * 60 * 1000).toISOString().slice(0, 19)
+/** 그 시각(ms)의 한국 시간 (백엔드처럼 시간대 없는 2026-10-12T10:10:00 모양) */
+function toKstDateTime(ms: number): string {
+  return new Date(ms + 9 * 60 * 60 * 1000).toISOString().slice(0, 19)
 }
+
+/** 지금부터 minutes분 뒤의 한국 시간 */
+function kstMinutesFromNow(minutes: number): string {
+  return toKstDateTime(Date.now() + minutes * 60 * 1000)
+}
+
+/** 대기열 목: 입장하기 전에 기다리는 중이라고 답하는 횟수, 입장 시간(정책 4장 2-4의 10분) */
+const MOCK_QUEUE_WAITING_ANSWERS = 2
+const MOCK_ADMISSION_MS = 10 * 60 * 1000
+
+/** (대회, 종목)마다 입장 여부를 물은 횟수와 입장 끝 시각 */
+const mockQueue = new Map<string, { asked: number; endsAt?: number }>()
+
+/** 테스트 사이에 키트 발송 · 배송 완료 상태가 넘어가지 않게 처음으로 돌린다. */
+export { resetMockKitsForTesting }
+
+/** 테스트 사이에 대기열 순서가 넘어가지 않게 처음(아무도 줄 서지 않음)으로 돌린다. */
+export function resetMockQueueForTesting() {
+  mockQueue.clear()
+}
+
+/**
+ * 대기열 입장 상태 목. 차례 기다리기(M05-Q1)를 볼 수 있게 처음 두 번은 기다리는 중으로 답하고,
+ * 세 번째에 입장해 10분 뒤 끝난다. 그동안은 같은 끝 시각을 돌려준다. 끝난 뒤 다시 물으면 처음부터 다시 줄을 선다.
+ */
+const queueAdmissionHandler = getFindAdmissionMockHandler(({ request }) => {
+  const url = new URL(request.url)
+  const key = `${url.searchParams.get('raceId')}:${url.searchParams.get('raceCourseId')}`
+  const now = Date.now()
+  const saved = mockQueue.get(key)
+  const expired = saved?.endsAt !== undefined && saved.endsAt <= now
+  const current = saved && !expired ? saved : { asked: 0 }
+  mockQueue.set(key, current)
+  if (current.endsAt === undefined) {
+    if (current.asked < MOCK_QUEUE_WAITING_ANSWERS) {
+      current.asked += 1
+      return {
+        status: 200,
+        message: '대기열에 입장 중이 아닙니다.',
+        data: { admitted: false, admissionEndsAt: null, remainingSeconds: 0 },
+      }
+    }
+    current.endsAt = now + MOCK_ADMISSION_MS
+  }
+  return {
+    status: 200,
+    message: '대기열에 입장 중입니다.',
+    data: {
+      admitted: true,
+      admissionEndsAt: toKstDateTime(current.endsAt),
+      remainingSeconds: Math.ceil((current.endsAt - now) / 1000),
+    },
+  }
+})
 
 /**
  * 명세 예시는 주문 생성 · 장바구니 주문 · 결제 · 조회가 모두 주문 1이다. 그런데 결제 화면은 주문 1이 결제 대기여야 하고,
@@ -129,7 +265,33 @@ export function resetMockOrderForTesting() {
  * 가짜 응답 모드에서 결제 화면을 볼 수 있게 주문 생성 · 결제 대기 주문 조회는 결제 대기 · 기한 10분 뒤로 돌려준다.
  * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
  */
+/**
+ * 명세 예시의 대회는 개인 예매 오픈이 2026-10-20이라, 그 전에는 가짜 응답 모드에서 신청 · 대기열 흐름을 볼 수 없다.
+ * 오픈이 아직 안 왔으면 어제 연 것으로 돌려준다(접수 마감 · 대회 날은 예시 그대로). 생성된 핸들러보다 앞에 둔다.
+ */
+function openedForMock<T extends { individualOpenAt?: string | null }>(race: T): T {
+  const openAt = race.individualOpenAt
+  if (!openAt || new Date(`${openAt}+09:00`).getTime() <= Date.now()) return race
+  return { ...race, individualOpenAt: kstMinutesFromNow(-24 * 60) }
+}
+
+const raceHandlers = [
+  // /races/:raceId가 /races/suggestions · /races/mine을 가로채지 않게 고정 경로를 먼저 둔다
+  getSuggestMockHandler(),
+  getFindMyRacesMockHandler(),
+  getFindRaceMockHandler(() => {
+    const example = getFindRaceResponseMock()
+    return { ...example, data: example.data && openedForMock(example.data) }
+  }),
+  getSearchMockHandler(() => {
+    const example = getSearchResponseMock()
+    const races = example.data?.races?.map(openedForMock)
+    return { ...example, data: example.data && { ...example.data, races } }
+  }),
+]
+
 const orderHandlers = [
+  queueAdmissionHandler,
   getCreateMockHandler(() => {
     mockOrderAwaitingPayment = true
     const example = getCreateResponseMock()
@@ -139,9 +301,33 @@ const orderHandlers = [
     mockOrderAwaitingPayment = true
     return getCheckoutResponseMock()
   }),
-  getPayMockHandler(() => {
+  // 장바구니에는 한 종목만 담긴다. 명세 예시는 두 항목이라, 대회 1의 10K(종목 1) 하나만 남겨 돌려준다.
+  getFindCartMockHandler(() => {
+    const example = getFindCartResponseMock()
+    const items = (example.data?.items ?? []).filter((item) => item.raceCourseId === 1)
+    return { ...example, data: { ...example.data, items } }
+  }),
+  getRemoveItemMockHandler(() => {
+    const example = getRemoveItemResponseMock()
+    return { ...example, data: { ...example.data, items: [] } }
+  }),
+  // 진짜 서버처럼 예치금(wallet.ts)에서 주문 금액을 뺀다. 모자라면 409 ORDER_INSUFFICIENT_BALANCE + 부족 금액
+  http.post('*/api/v1/order/orders/:orderId/payment', () => {
+    const paid = getPayResponseMock()
+    const { shortage } = payFromMockWallet(paid.data?.totalAmount ?? 0)
+    if (shortage > 0) {
+      return HttpResponse.json(
+        {
+          status: 409,
+          code: 'ORDER_INSUFFICIENT_BALANCE',
+          message: `예치금이 ${shortage.toLocaleString('ko-KR')}원 부족합니다. 충전한 뒤 결제 기한 안에 다시 결제해주세요.`,
+          data: { shortage },
+        },
+        { status: 409 },
+      )
+    }
     mockOrderAwaitingPayment = false
-    return getPayResponseMock()
+    return HttpResponse.json(paid)
   }),
   getFindById1MockHandler(() => {
     if (!mockOrderAwaitingPayment) return getFindById1ResponseMock()
@@ -169,7 +355,13 @@ export const handlers = [
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
   ...authHandlers,
+  ...withdrawHandlers,
+  ...signupHandlers,
+  ...fileUploadHandlers,
   myOrdersHandler,
+  ...raceHandlers,
   ...orderHandlers,
+  ...walletHandlers,
+  ...sellerKitHandlers,
   ...generatedHandlers,
 ]

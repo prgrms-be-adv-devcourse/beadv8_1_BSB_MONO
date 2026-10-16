@@ -3,6 +3,7 @@
 #   docker run -p 3000:3000 -e BACKEND_URL=http://bukang-gateway:8000 running-web
 #
 # 빌드 시점 값(next.config에 고정): API_MOCKING, IMAGE_REMOTE_HOSTS, NEXT_PUBLIC_*
+# 빌드·실행 둘 다: SITE_URL (정적 페이지는 빌드 값, 실행 중에 그리는 페이지는 실행 값을 쓴다)
 # 실행 시점 값: BACKEND_URL (서버 컴포넌트가 백엔드를 직접 부를 때 쓰는 내부 주소, 게이트웨이)
 
 ARG NODE_VERSION=24
@@ -19,9 +20,12 @@ FROM base AS builder
 ARG API_MOCKING=off
 ARG IMAGE_REMOTE_HOSTS=
 ARG NEXT_PUBLIC_IMAGE_CDN_URL=
+# 정적 페이지의 metadataBase(og:image 절대 주소)가 빌드 때 이 값으로 고정된다
+ARG SITE_URL=
 ENV API_MOCKING=${API_MOCKING} \
     IMAGE_REMOTE_HOSTS=${IMAGE_REMOTE_HOSTS} \
     NEXT_PUBLIC_IMAGE_CDN_URL=${NEXT_PUBLIC_IMAGE_CDN_URL} \
+    SITE_URL=${SITE_URL} \
     NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

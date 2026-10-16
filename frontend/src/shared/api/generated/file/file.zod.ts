@@ -56,7 +56,17 @@ export const CreateUploadUrlBody = zod.object({
   "fileSize": zod.int().min(createUploadUrlBodyFileSizeMin).describe('파일 크기 (바이트). 이미지 10MB, 동영상 100MB, 엑셀 5MB 이하')
 }).describe('업로드 URL 발급 요청')
 
-export const CreateUploadUrlResponse = zod.void()
+export const CreateUploadUrlResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "fileId": zod.int().optional(),
+  "uploadUrl": zod.string().optional(),
+  "method": zod.string().optional(),
+  "headers": zod.record(zod.string(), zod.string()).optional(),
+  "expiresAt": zod.iso.datetime({"offset":true}).optional()
+}).optional()
+})
 
 
 /**
@@ -67,7 +77,25 @@ export const CompleteUploadParams = zod.object({
   "fileId": zod.int().describe('업로드 URL 발급 때 받은 파일 ID')
 })
 
-export const CompleteUploadResponse = zod.unknown()
+export const CompleteUploadResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "createUser": zod.int().optional(),
+  "originFileName": zod.string().optional(),
+  "contentType": zod.string().optional(),
+  "fileSize": zod.int().optional(),
+  "status": zod.enum(['PENDING', 'UPLOADED', 'ACTIVE', 'DELETED']).optional(),
+  "refType": zod.string().nullish(),
+  "refId": zod.int().nullish(),
+  "fileType": zod.enum(['THUMBNAIL', 'DETAIL', 'COURSE', 'KIT', 'INTRO_VIDEO', 'ROSTER']).optional(),
+  "sortNo": zod.int().optional(),
+  "url": zod.string().nullish()
+}).optional()
+})
 
 
 /**

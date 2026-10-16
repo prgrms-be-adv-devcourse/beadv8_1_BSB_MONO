@@ -23,6 +23,65 @@
           "$ref": "#/components/schemas/MemberDto"
         }
       }
+    },
+    "modifyMe": {
+      "200": {
+        "wrapper": "RsDataMemberDto",
+        "data": {
+          "$ref": "#/components/schemas/MemberDto"
+        }
+      }
+    },
+    "checkEmailAvailability": {
+      "200": {
+        "wrapper": "RsDataEmailAvailabilityResponseDto",
+        "data": {
+          "$ref": "#/components/schemas/EmailAvailabilityResponseDto"
+        }
+      }
+    },
+    "apply": {
+      "201": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
+    },
+    "findMine": {
+      "200": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
+    },
+    "approve": {
+      "200": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
+    },
+    "reject": {
+      "200": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
+    },
+    "findAll": {
+      "200": {
+        "wrapper": "RsDataListSellerDto",
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/SellerDto"
+          }
+        }
+      }
     }
   },
   "schemas": {
@@ -49,6 +108,13 @@
         },
         "phone": {
           "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "birthDate": {
+          "type": "string",
+          "format": "date"
         }
       }
     },
@@ -75,6 +141,77 @@
           "description": "새 Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다"
         }
       }
+    },
+    "EmailAvailabilityResponseDto": {
+      "type": "object",
+      "description": "이메일 사용 가능 여부 응답",
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": "사용 가능하면 true, 이미 가입된 이메일이면 false",
+          "example": true
+        }
+      }
+    },
+    "SellerDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "memberId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "sellerType": {
+          "type": "string",
+          "enum": [
+            "BUSINESS",
+            "INDIVIDUAL"
+          ]
+        },
+        "businessName": {
+          "type": "string",
+          "nullable": true
+        },
+        "businessNumber": {
+          "type": "string",
+          "nullable": true
+        },
+        "representativeName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "APPROVED",
+            "REJECTED"
+          ]
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true
+        },
+        "rejectReason": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "required": [
+        "id",
+        "memberId",
+        "sellerType",
+        "representativeName",
+        "status",
+        "requestedAt"
+      ]
     }
   }
 }

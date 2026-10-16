@@ -1,0 +1,313 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { http, HttpResponse } from 'msw'
+import type { ReactElement } from 'react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { memberApi, setAccessToken, type memberModel } from '@/shared/api'
+import { memberMock, server } from '@/shared/testing'
+
+import { SELLER_API_ERRORS } from '../model/seller-apply-api'
+import {
+  EMPTY_SELLER_APPLY_FORM,
+  SELLER_APPLY_ERRORS,
+  sellerApplyFormSchema,
+} from '../model/seller-apply-form'
+import { SellerApplyPage, SellerApplyResultPage } from './SellerApplyPages'
+
+const push = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, back: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/seller-apply',
+}))
+
+beforeEach(() => push.mockClear())
+
+const SELLER: memberModel.SellerDto = {
+  id: 1,
+  memberId: 1,
+  sellerType: 'BUSINESS',
+  businessName: '크루런 스포츠',
+  businessNumber: '123-45-67890',
+  representativeName: '김러너',
+  status: 'PENDING',
+  requestedAt: '2026-10-05T21:25:35',
+  reviewedAt: undefined,
+  rejectReason: undefined,
+}
+
+const sellerResponse = (seller: Partial<memberModel.SellerDto>, status = 200) => ({
+  status,
+  message: '성공',
+  data: { ...SELLER, ...seller },
+})
+
+const errorResponse = (status: number, code: string, message: string) =>
+  HttpResponse.json({ status, code, message, data: null }, { status })
+
+function renderWithClient(ui: ReactElement) {
+  setAccessToken('access-token')
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return {
+    client,
+    ...render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>),
+  }
+}
+
+async function fillBusinessForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText('사업자등록번호'), '123-45-67890')
+  await user.type(screen.getByLabelText('상호'), '크루런 스포츠')
+  await user.type(screen.getByLabelText('대표자'), '김러너')
+  await user.click(screen.getByRole('checkbox', { name: /판매자 이용약관/ }))
+}
+
+describe('SellerApplyPage 신청 폼 검사', () => {
+  it('약관에 동의하기 전에는 신청하기가 꺼져 있다', () => {
+    renderWithClient(<SellerApplyPage />)
+    expect(screen.getByRole('button', { name: '신청하기' })).toBeDisabled()
+  })
+
+  it('사업자 필수 칸을 비우면 오류를 보여 주고 이동하지 않는다', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<SellerApplyPage />)
+    await user.click(screen.getByRole('checkbox', { name: /판매자 이용약관/ }))
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+    expect(await screen.findByText('사업자등록번호를 입력해 주세요.')).toBeInTheDocument()
+    expect(screen.getByText('상호를 입력해 주세요.')).toBeInTheDocument()
+    expect(screen.getByText('대표자를 입력해 주세요.')).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('사업자등록번호 형식이 틀리면 막는다', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<SellerApplyPage />)
+    await user.type(screen.getByLabelText('사업자등록번호'), '1234567890')
+    await user.type(screen.getByLabelText('상호'), '(주)러닝')
+    await user.type(screen.getByLabelText('대표자'), '김주최')
+    await user.click(screen.getByRole('checkbox', { name: /판매자 이용약관/ }))
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+    expect(
+      await screen.findByText('사업자등록번호를 123-45-67890처럼 입력해 주세요.'),
+    ).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('상호가 100자를 넘으면 막는다', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<SellerApplyPage />)
+    await user.type(screen.getByLabelText('사업자등록번호'), '123-45-67890')
+    await user.click(screen.getByLabelText('상호'))
+    await user.paste('가'.repeat(101))
+    await user.type(screen.getByLabelText('대표자'), '김주최')
+    await user.click(screen.getByRole('checkbox', { name: /판매자 이용약관/ }))
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+    expect(await screen.findByText('상호는 100자 이하로 입력해 주세요.')).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('사업자가 아니면 성명 · 연락처만 검사한다', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<SellerApplyPage />)
+    await user.click(screen.getByRole('radio', { name: '사업자가 아니에요' }))
+    await user.click(screen.getByRole('checkbox', { name: /판매자 이용약관/ }))
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+    expect(await screen.findByText('성명을 입력해 주세요.')).toBeInTheDocument()
+    expect(screen.getByText('연락처를 입력해 주세요.')).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+})
+
+describe('SellerApplyPage 신청 보내기', () => {
+  it('사업자는 4칸을 보내고 결과 화면으로 간다 (정산 계좌는 비워도 된다)', async () => {
+    let body: unknown
+    server.use(
+      http.post('*/api/v1/member/sellers', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json(sellerResponse({}, 201), { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    const { client } = renderWithClient(<SellerApplyPage />)
+    await fillBusinessForm(user)
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/seller-apply/result'))
+    expect(body).toEqual({
+      sellerType: 'BUSINESS',
+      businessName: '크루런 스포츠',
+      businessNumber: '123-45-67890',
+      representativeName: '김러너',
+    })
+    // 결과 화면이 다시 부르지 않고 쓰도록 응답을 내 신청 캐시에 넣는다
+    expect(client.getQueryData(memberApi.getFindMineQueryKey())).toMatchObject({
+      data: { status: 'PENDING' },
+    })
+  })
+
+  it('사업자가 아니면 성명을 대표자 칸으로 보내고 상호·사업자등록번호는 보내지 않는다', async () => {
+    let body: unknown
+    server.use(
+      http.post('*/api/v1/member/sellers', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json(sellerResponse({ sellerType: 'INDIVIDUAL' }, 201), { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithClient(<SellerApplyPage />)
+    await user.click(screen.getByRole('radio', { name: '사업자가 아니에요' }))
+    await user.type(screen.getByLabelText('성명'), '이춘천')
+    await user.type(screen.getByLabelText('연락처'), '010-1111-2222')
+    await user.click(screen.getByRole('checkbox', { name: /판매자 이용약관/ }))
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/seller-apply/result'))
+    expect(body).toEqual({ sellerType: 'INDIVIDUAL', representativeName: '이춘천' })
+  })
+
+  it('409 SELLER_ALREADY_APPLIED는 이미 신청했다고 안내하고 이동하지 않는다', async () => {
+    server.use(
+      http.post('*/api/v1/member/sellers', () =>
+        errorResponse(409, 'SELLER_ALREADY_APPLIED', '서버 문구'),
+      ),
+    )
+    const user = userEvent.setup()
+    renderWithClient(<SellerApplyPage />)
+    await fillBusinessForm(user)
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+
+    expect(await screen.findByText(SELLER_API_ERRORS.alreadyApplied)).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('400 같은 그 밖의 오류는 서버 문구를 그대로 보여 준다', async () => {
+    server.use(
+      http.post('*/api/v1/member/sellers', () =>
+        errorResponse(400, 'INVALID_REQUEST', '사업자등록번호는 숫자 10자리로 작성해주세요.'),
+      ),
+    )
+    const user = userEvent.setup()
+    renderWithClient(<SellerApplyPage />)
+    await fillBusinessForm(user)
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+
+    expect(
+      await screen.findByText('사업자등록번호는 숫자 10자리로 작성해주세요.'),
+    ).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('서버 문구가 없는 오류는 일반 문구를 보여 준다', async () => {
+    server.use(http.post('*/api/v1/member/sellers', () => new HttpResponse(null, { status: 502 })))
+    const user = userEvent.setup()
+    renderWithClient(<SellerApplyPage />)
+    await fillBusinessForm(user)
+    await user.click(screen.getByRole('button', { name: '신청하기' }))
+
+    expect(await screen.findByText(SELLER_API_ERRORS.unavailable)).toBeInTheDocument()
+  })
+})
+
+describe('SellerApplyResultPage 상태별 카드', () => {
+  it.each([
+    ['PENDING', '심사 중', '관리자가 신청 내용을 확인하고 있어요'],
+    ['REJECTED', '반려', '신청이 반려됐어요'],
+    ['APPROVED', '승인', '판매자로 승인됐어요'],
+  ] as const)('%s 상태는 카드 하나만 보여 준다', async (status, badge, title) => {
+    server.use(
+      memberMock.getFindMineMockHandler(
+        sellerResponse({
+          status,
+          rejectReason: status === 'REJECTED' ? '사업자등록번호를 확인할 수 없습니다.' : undefined,
+        }),
+      ),
+    )
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(await screen.findByText(title)).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1)
+    expect(screen.getByText(badge)).toBeInTheDocument()
+  })
+
+  it('반려 카드는 서버가 준 반려 사유를 그대로 보여 준다', async () => {
+    server.use(
+      memberMock.getFindMineMockHandler(
+        sellerResponse({
+          status: 'REJECTED',
+          rejectReason: '사업자등록번호를 확인할 수 없습니다.',
+        }),
+      ),
+    )
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(
+      await screen.findByText('사유: 사업자등록번호를 확인할 수 없습니다.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '고쳐서 다시 신청하기' })).toHaveAttribute(
+      'href',
+      '/seller-apply',
+    )
+  })
+
+  it('심사 중 배지는 Neutral 톤이다', async () => {
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'PENDING' })))
+    renderWithClient(<SellerApplyResultPage />)
+    expect((await screen.findByText('심사 중')).className).toContain('bg-bg-subtle')
+  })
+
+  it('404 SELLER_NOT_FOUND는 오류가 아니라 신청하러 가도록 안내한다', async () => {
+    server.use(
+      http.get('*/api/v1/member/sellers/me', () =>
+        errorResponse(404, 'SELLER_NOT_FOUND', '판매자 신청 내역이 없습니다.'),
+      ),
+    )
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(await screen.findByText('아직 판매자 신청을 하지 않았어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '판매자 신청하러 가기' })).toHaveAttribute(
+      'href',
+      '/seller-apply',
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('그 밖의 오류는 불러오지 못했다고 알린다', async () => {
+    server.use(
+      http.get('*/api/v1/member/sellers/me', () => new HttpResponse(null, { status: 500 })),
+    )
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(await screen.findByText(SELLER_API_ERRORS.loadFailed)).toBeInTheDocument()
+  })
+})
+
+describe('정산 계좌 묶음 검사', () => {
+  const base = {
+    ...EMPTY_SELLER_APPLY_FORM,
+    businessNumber: '123-45-67890',
+    businessName: '(주)러닝',
+    representative: '김주최',
+    agreed: true,
+  }
+  const messages = (values: typeof base) => {
+    const result = sellerApplyFormSchema.safeParse(values)
+    return result.success ? [] : result.error.issues.map((i) => i.message)
+  }
+
+  it('계좌번호만 넣으면 은행 · 예금주 오류가 난다', () => {
+    expect(messages({ ...base, accountNumber: '1234567890' })).toEqual([
+      SELLER_APPLY_ERRORS.bankRequired,
+      SELLER_APPLY_ERRORS.accountHolderRequired,
+    ])
+  })
+
+  it('셋 다 비우면 통과한다', () => {
+    expect(messages(base)).toEqual([])
+  })
+
+  it('셋 다 넣으면 통과한다', () => {
+    expect(
+      messages({ ...base, bank: '국민은행', accountHolder: '김주최', accountNumber: '1234567890' }),
+    ).toEqual([])
+  })
+})

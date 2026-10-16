@@ -13,11 +13,98 @@ export interface RsData {
 }
 
 /**
+ * 예치금 전액 환급 신청
+ */
+export interface CashWithdrawalRequestDto {
+  /**
+     * 은행 코드
+     * @minLength 0
+     * @maxLength 10
+     */
+  bankCode: string;
+  /**
+     * 계좌번호
+     * @minLength 0
+     * @maxLength 255
+     */
+  accountNumber: string;
+  /**
+     * 예금주명
+     * @minLength 0
+     * @maxLength 50
+     */
+  accountHolder: string;
+  /**
+     * 환급 신청 고유 ID (멱등키)
+     * @minLength 0
+     * @maxLength 64
+     */
+  idempotencyKey: string;
+}
+
+/**
+ * 충전 승인 확정 요청
+ */
+export interface CashChargeConfirmRequestDto {
+  /**
+     * Toss 결제 키
+     * @minLength 1
+     */
+  paymentKey: string;
+  /**
+     * 충전 요청 고유 ID (멱등키)
+     * @minLength 1
+     */
+  orderId: string;
+  /**
+     * 충전 요청 금액 (최소 10,000원)
+     * @minimum 0
+     */
+  amount: number;
+}
+
+/**
  * 지갑 잔액 조회 응답
  */
 export interface WalletBalanceDto {
   holderId?: number;
   balance?: number;
+}
+
+export type CashChargeDtoOutcome = typeof CashChargeDtoOutcome[keyof typeof CashChargeDtoOutcome];
+
+
+export const CashChargeDtoOutcome = {
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED',
+} as const;
+
+/**
+ * 충전 승인 확정 결과. PG 승인이 거절돼도 200이고 outcome이 FAILED
+ */
+export interface CashChargeDto {
+  outcome: CashChargeDtoOutcome;
+  balance: number;
+}
+
+/**
+ * 예치금 전액 환급 결과
+ */
+export interface CashWithdrawalDto {
+  withdrawnAmount: number;
+  balance: number;
+}
+
+export interface RsDataCashWithdrawalDto {
+  status?: number;
+  message?: string;
+  data?: CashWithdrawalDto;
+}
+
+export interface RsDataCashChargeDto {
+  status?: number;
+  message?: string;
+  data?: CashChargeDto;
 }
 
 export interface RsDataWalletBalanceDto {

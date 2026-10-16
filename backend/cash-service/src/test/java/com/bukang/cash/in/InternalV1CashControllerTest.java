@@ -1,6 +1,7 @@
 package com.bukang.cash.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -206,6 +207,18 @@ class InternalV1CashControllerTest {
 			.andExpect(jsonPath("$.message").value("환불할 결제가 없습니다."));
 
 		assertBalance(CUSTOMER_ID, 10_000);
+	}
+
+	@Test
+	@DisplayName("회원 잔액 조회는 지갑 잔액을 주고, 지갑이 없는 회원은 404가 아니라 0원을 준다")
+	void balanceForWithdrawal() throws Exception {
+		mockMvc.perform(get("/internal/v1/cash/wallets/{memberId}/balance", CUSTOMER_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("잔액을 조회했습니다."))
+			.andExpect(jsonPath("$.data.balance").value(10_000));
+		mockMvc.perform(get("/internal/v1/cash/wallets/{memberId}/balance", 999))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.balance").value(0));
 	}
 
 	private ResultActions pay(int orderId, int memberId, int amount) throws Exception {

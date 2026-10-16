@@ -92,10 +92,26 @@ export interface FileDto {
   url?: string | null;
 }
 
+export type FileUploadDtoHeaders = {[key: string]: string};
+
+export interface FileUploadDto {
+  fileId?: number;
+  uploadUrl?: string;
+  method?: string;
+  headers?: FileUploadDtoHeaders;
+  expiresAt?: string;
+}
+
 export interface RsDataListFileDto {
   status?: number;
   message?: string;
   data?: FileDto[];
+}
+
+export interface RsDataFileUploadDto {
+  status?: number;
+  message?: string;
+  data?: FileUploadDto;
 }
 
 export interface RsDataFileDto {

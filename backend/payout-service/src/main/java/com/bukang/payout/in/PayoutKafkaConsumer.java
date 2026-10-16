@@ -1,6 +1,7 @@
 package com.bukang.payout.in;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 import org.springframework.kafka.annotation.BackOff;
 import org.springframework.kafka.annotation.DltHandler;
@@ -38,6 +39,9 @@ public class PayoutKafkaConsumer {
 	private static final String RETRY_TOPIC_SUFFIX = ".payout.retry";
 	private static final String DLT_TOPIC_SUFFIX = ".payout.dlt";
 
+	// 서버 시간대와 상관없이 한국 시간으로 상태 이력 · 회수 요청 시각을 남긴다 (다른 정산 진입점과 같은 기준)
+	private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+
 	private final PayoutRaceCancelUseCase payoutRaceCancelUseCase;
 	private final JsonConverter jsonConverter;
 
@@ -55,7 +59,7 @@ public class PayoutKafkaConsumer {
 	)
 	public void handleRaceCancel(String payload) {
 		RaceCancelEvent event = jsonConverter.fromJson(payload, RaceCancelEvent.class);
-		payoutRaceCancelUseCase.cancelRace(event.raceId(), LocalDateTime.now());
+		payoutRaceCancelUseCase.cancelRace(event.raceId(), LocalDateTime.now(ZONE));
 	}
 
 	// 끝까지 실패한 메시지. 닫히지 않은 정산 내역이 지급될 수 있으므로 운영자가 확인해 직접 보류를 걸고 다시 보내야 한다
