@@ -27,6 +27,7 @@ import {
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
 import { getBukangProductAPIMock } from '@/shared/api/generated/product/product.msw'
 
+import { fileUploadHandlers } from './file-upload'
 import {
   clearMockRefreshCookie,
   issueMockRefreshCookie,
@@ -169,6 +170,7 @@ export const handlers = [
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
   ...authHandlers,
+  ...fileUploadHandlers,
   myOrdersHandler,
   ...orderHandlers,
   ...generatedHandlers,

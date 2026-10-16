@@ -404,10 +404,73 @@ export interface RaceDetailDto {
   courses?: RaceDetailCourseDto[];
 }
 
+export type RaceSaveDtoSaleStatus = typeof RaceSaveDtoSaleStatus[keyof typeof RaceSaveDtoSaleStatus];
+
+
+export const RaceSaveDtoSaleStatus = {
+  SCHEDULED: 'SCHEDULED',
+  ON_SALE: 'ON_SALE',
+  STOPPED: 'STOPPED',
+  CLOSED: 'CLOSED',
+  CANCELED: 'CANCELED',
+} as const;
+
+export interface RaceSaveDto {
+  raceId?: number;
+  saleStatus?: RaceSaveDtoSaleStatus;
+  saleOpenDate?: string;
+  courseIds?: number[];
+}
+
+export type SellerRaceDtoSaleStatus = typeof SellerRaceDtoSaleStatus[keyof typeof SellerRaceDtoSaleStatus];
+
+
+export const SellerRaceDtoSaleStatus = {
+  SCHEDULED: 'SCHEDULED',
+  ON_SALE: 'ON_SALE',
+  STOPPED: 'STOPPED',
+  CLOSED: 'CLOSED',
+  CANCELED: 'CANCELED',
+} as const;
+
+export type SellerRaceCourseDtoStatus = typeof SellerRaceCourseDtoStatus[keyof typeof SellerRaceCourseDtoStatus];
+
+
+export const SellerRaceCourseDtoStatus = {
+  OPEN: 'OPEN',
+  SOLD_OUT: 'SOLD_OUT',
+} as const;
+
+export interface SellerRaceCourseDto {
+  raceCourseId?: number;
+  name?: string;
+  price?: number;
+  status?: SellerRaceCourseDtoStatus;
+  quota?: number;
+  reserved?: number;
+  sold?: number;
+}
+
+export interface SellerRaceDto {
+  raceId?: number;
+  title?: string;
+  raceDate?: string;
+  saleStatus?: SellerRaceDtoSaleStatus;
+  saleOpenDate?: string;
+  applicationCloseAt?: string;
+  courses?: SellerRaceCourseDto[];
+}
+
 export interface RsDataRaceDetailDto {
   status?: number;
   message?: string;
   data?: RaceDetailDto;
+}
+
+export interface RsDataRaceSaveDto {
+  status?: number;
+  message?: string;
+  data?: RaceSaveDto;
 }
 
 export interface RsDataRacePageDto {
@@ -420,6 +483,12 @@ export interface RsDataRaceSuggestionDto {
   status?: number;
   message?: string;
   data?: RaceSuggestionDto;
+}
+
+export interface RsDataListSellerRaceDto {
+  status?: number;
+  message?: string;
+  data?: SellerRaceDto[];
 }
 
 export type SearchParams = {

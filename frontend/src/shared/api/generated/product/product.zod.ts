@@ -151,7 +151,16 @@ export const UpdateBody = zod.object({
 }).describe('종목 등록·수정 요청')).min(1).describe('종목 목록')
 }).describe('대회 등록·수정 요청 (수정할 때도 대회 전체를 보낸다)')
 
-export const UpdateResponse = zod.unknown()
+export const UpdateResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "raceId": zod.int().optional(),
+  "saleStatus": zod.enum(['SCHEDULED', 'ON_SALE', 'STOPPED', 'CLOSED', 'CANCELED']).optional(),
+  "saleOpenDate": zod.iso.date().optional(),
+  "courseIds": zod.array(zod.int()).optional()
+}).optional()
+})
 
 
 /**
@@ -302,7 +311,16 @@ export const RegisterBody = zod.object({
 }).describe('종목 등록·수정 요청')).min(1).describe('종목 목록')
 }).describe('대회 등록·수정 요청 (수정할 때도 대회 전체를 보낸다)')
 
-export const RegisterResponse = zod.void()
+export const RegisterResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "raceId": zod.int().optional(),
+  "saleStatus": zod.enum(['SCHEDULED', 'ON_SALE', 'STOPPED', 'CLOSED', 'CANCELED']).optional(),
+  "saleOpenDate": zod.iso.date().optional(),
+  "courseIds": zod.array(zod.int()).optional()
+}).optional()
+})
 
 
 /**
@@ -313,7 +331,16 @@ export const CancelParams = zod.object({
   "raceId": zod.int().describe('대회 ID')
 })
 
-export const CancelResponse = zod.unknown()
+export const CancelResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "raceId": zod.int().optional(),
+  "saleStatus": zod.enum(['SCHEDULED', 'ON_SALE', 'STOPPED', 'CLOSED', 'CANCELED']).optional(),
+  "saleOpenDate": zod.iso.date().optional(),
+  "courseIds": zod.array(zod.int()).optional()
+}).optional()
+})
 
 
 /**
@@ -348,4 +375,24 @@ export const SuggestResponse = zod.object({
  * 승인된 판매자가 등록한 대회를 최근 등록 순으로 모두 돌려준다(취소된 대회 포함). 종목마다 정원·결제 대기·판매 수를 함께 준다.
  * @summary 판매자 내 대회 목록
  */
-export const FindMineResponse = zod.unknown()
+export const FindMineResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.array(zod.object({
+  "raceId": zod.int().optional(),
+  "title": zod.string().optional(),
+  "raceDate": zod.iso.datetime({"offset":true}).optional(),
+  "saleStatus": zod.enum(['SCHEDULED', 'ON_SALE', 'STOPPED', 'CLOSED', 'CANCELED']).optional(),
+  "saleOpenDate": zod.iso.date().optional(),
+  "applicationCloseAt": zod.iso.datetime({"offset":true}).optional(),
+  "courses": zod.array(zod.object({
+  "raceCourseId": zod.int().optional(),
+  "name": zod.string().optional(),
+  "price": zod.int().optional(),
+  "status": zod.enum(['OPEN', 'SOLD_OUT']).optional(),
+  "quota": zod.int().optional(),
+  "reserved": zod.int().optional(),
+  "sold": zod.int().optional()
+})).optional()
+})).optional()
+})
