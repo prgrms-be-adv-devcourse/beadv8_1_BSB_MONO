@@ -5,10 +5,12 @@ import static jakarta.persistence.FetchType.LAZY;
 
 import java.time.LocalDateTime;
 
+import com.bukang.cash.config.crypto.EncryptedStringConverter;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.ManyToOne;
@@ -33,6 +35,7 @@ public class WalletCharge extends BaseIdAndTime {
 	@Column(nullable = false, length = 30)
 	private String pgProvider;
 
+	@Convert(converter = EncryptedStringConverter.class) // DB 저장 시 AES 암호화, 조회 시 복호화
 	@Column(length = 255)
 	private String pgPaymentKey;
 	@Column(nullable = false, unique = true, length = 64) // 중복 충전 방지
