@@ -14,6 +14,11 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(properties = {
 	"spring.datasource.url=jdbc:h2:mem:flyway-baseline;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
 	"spring.flyway.enabled=true",
+	// dev·운영과 같은 Flyway 설정 (BE-024)
+	"spring.flyway.table=flyway_schema_history_member",
+	"spring.flyway.baseline-on-migrate=true",
+	"spring.flyway.baseline-version=0",
+	"spring.flyway.out-of-order=true",
 	"spring.jpa.hibernate.ddl-auto=validate"
 })
 @ActiveProfiles("test")

@@ -18,11 +18,13 @@ spring:
     open-in-view: false
 
   # 표 변경은 Flyway SQL(db/migration)로만 한다 (BE-024)
-  # 이미 표가 있는 DB는 V1(기준선)을 실행하지 않고 "1번까지 됨"으로 표시만 한다
+  # 모든 서비스가 같은 스키마를 쓰므로, 기록 표는 member 전용 이름으로 둔다 (다른 서비스가 Flyway를 붙여도 섞이지 않게)
+  # 기준선을 0번으로 둬 V1(create table if not exists)은 항상 돈다. 다른 서비스 표만 있는 DB에서도 member 표가 생긴다
   # SQL 번호는 날짜·시각이라 머지 순서와 다를 수 있어 out-of-order를 켠다
   flyway:
+    table: flyway_schema_history_member
     baseline-on-migrate: true
-    baseline-version: 1
+    baseline-version: 0
     out-of-order: true
 
   kafka:
