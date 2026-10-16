@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -39,8 +40,10 @@ import com.bukang.member.out.TermsRepository;
 @ActiveProfiles("test")
 class ApiV1AuthJoinTest {
 	private static final String EMAIL = "runner1@crewrun.com";
+	private static final String PASSWORD = "password1234";
 	private static final String NICKNAME = "러너1";
 	private static final String PHONE = "010-1234-5678";
+	private static final String DEFAULT_AGREED_TERMS = "\"agreedTerms\": [\"SERVICE\", \"PRIVACY\"]";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -109,6 +112,69 @@ class ApiV1AuthJoinTest {
 		// 문자 규칙과 칸 수(3칸) 둘 다 어겨 어느 메시지가 먼저 나올지 정해져 있지 않으므로 상태만 확인한다
 		join(EMAIL, "ㅋㅋㅋ", PHONE)
 			.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@DisplayName("이메일이 255자면 가입할 수 있다")
+	void joinSucceedsWithEmailOfMaxLength() throws Exception {
+		join(emailOfLength(255), NICKNAME, PHONE)
+			.andExpect(status().isCreated());
+	}
+
+	@Test
+	@DisplayName("이메일이 255자를 넘으면 400이다")
+	void joinFailsWithTooLongEmail() throws Exception {
+		join(emailOfLength(256), NICKNAME, PHONE)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("이메일은 255자 이하로 작성해주세요."));
+	}
+
+	@Test
+	@DisplayName("이름이 255자면 가입할 수 있다")
+	void joinSucceedsWithNameOfMaxLength() throws Exception {
+		joinWith(EMAIL, PASSWORD, "가".repeat(255), NICKNAME, PHONE)
+			.andExpect(status().isCreated());
+	}
+
+	@Test
+	@DisplayName("이름이 255자를 넘으면 400이다")
+	void joinFailsWithTooLongName() throws Exception {
+		joinWith(EMAIL, PASSWORD, "가".repeat(256), NICKNAME, PHONE)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("이름은 255자 이하로 작성해주세요."));
+	}
+
+	// 영문 72자, 한글 24자(3바이트씩), 섞어서 72바이트
+	@ParameterizedTest
+	@ValueSource(strings = {
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"가나다라마바사아자차카타파하가나다라마바사아자차",
+		"가나다라마바사아자차카타파하가나다라마바사아자abc"
+	})
+	@DisplayName("비밀번호가 UTF-8로 72바이트면 가입할 수 있다")
+	void joinSucceedsWithPasswordOf72Bytes(String password) throws Exception {
+		assertThat(password.getBytes(StandardCharsets.UTF_8)).hasSize(72);
+
+		joinWith(EMAIL, password, "김러너", NICKNAME, PHONE)
+			.andExpect(status().isCreated());
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"가나다라마바사아자차카타파하가나다라마바사아자차a",
+		"가나다라마바사아자차카타파하가나다라마바사아자차카"
+	})
+	@DisplayName("비밀번호가 UTF-8로 72바이트를 넘으면 400이다")
+	void joinFailsWithPasswordOver72Bytes(String password) throws Exception {
+		assertThat(password.getBytes(StandardCharsets.UTF_8).length).isGreaterThan(72);
+
+		joinWith(EMAIL, password, "김러너", NICKNAME, PHONE)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("비밀번호가 너무 깁니다."));
 	}
 
 	@Test
@@ -266,24 +332,40 @@ class ApiV1AuthJoinTest {
 	}
 
 	private ResultActions join(String email, String nickname, String phone) throws Exception {
-		return join(email, nickname, phone, "\"agreedTerms\": [\"SERVICE\", \"PRIVACY\"]");
+		return joinWith(email, PASSWORD, "김러너", nickname, phone);
 	}
 
 	// agreedTermsField는 JSON 칸 하나(예: "agreedTerms": [...])이고, 빈 문자열이면 칸을 아예 보내지 않는다
 	private ResultActions join(String email, String nickname, String phone, String agreedTermsField)
 		throws Exception {
+		return joinWith(email, PASSWORD, "김러너", nickname, phone, agreedTermsField);
+	}
+
+	// 총 길이가 length인 이메일 (로컬 파트 64자, 도메인 라벨 63자 이하라 형식 검사를 통과한다)
+	private String emailOfLength(int length) {
+		int lastLabelLength = length - 65 - 128;
+		return "a".repeat(64) + "@" + "b".repeat(63) + "." + "c".repeat(63) + "." + "d".repeat(lastLabelLength);
+	}
+
+	private ResultActions joinWith(String email, String password, String name, String nickname, String phone)
+		throws Exception {
+		return joinWith(email, password, name, nickname, phone, DEFAULT_AGREED_TERMS);
+	}
+
+	private ResultActions joinWith(String email, String password, String name, String nickname, String phone,
+		String agreedTermsField) throws Exception {
 		String extraField = agreedTermsField.isEmpty() ? "" : ", " + agreedTermsField;
 		return mockMvc.perform(post("/api/v1/auth/join")
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("""
 				{
 					"email": "%s",
-					"password": "password1234",
-					"name": "김러너",
+					"password": "%s",
+					"name": "%s",
 					"nickname": "%s",
 					"phone": "%s",
 					"birthDate": "1995-04-12"%s
 				}
-				""".formatted(email, nickname, phone, extraField)));
+				""".formatted(email, password, name, nickname, phone, extraField)));
 	}
 }

@@ -20,12 +20,38 @@ import type {
 } from './member.schemas';
 
 
+export const getFindMeResponseMock = (): RsDataMemberDto => ({"status":200,"message":"내 정보를 조회했습니다.","data":{"id":1,"createDate":"2026-10-05T21:25:35","modifyDate":"2026-10-05T21:25:35","nickname":"러너1","email":"runner1@crewrun.com","phone":"010-1234-5678","name":"김러너","birthDate":"1995-04-12"}})
+
+export const getModifyMeResponseMock = (): RsDataMemberDto => ({"status":200,"message":"내 정보를 수정했습니다.","data":{"id":1,"createDate":"2026-10-05T21:25:35","modifyDate":"2026-10-15T10:12:08","nickname":"러너2","email":"runner1@crewrun.com","phone":"010-9876-5432","name":"김러너","birthDate":"1995-04-12"}})
+
 export const getReissueResponseMock = (): RsDataTokenReissueResponseDto => ({"status":200,"message":"토큰 재발급 성공","data":{"accessToken":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature"}})
 
-export const getLoginResponseMock = (): RsDataMemberLoginResponseDto => ({"status":200,"message":"로그인 성공","data":{"accessToken":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature","member":{"id":1,"createDate":"2026-10-05T21:25:35","modifyDate":"2026-10-05T21:25:35","nickname":"러너1","email":"runner1@crewrun.com","phone":"010-1234-5678"}}})
+export const getLoginResponseMock = (): RsDataMemberLoginResponseDto => ({"status":200,"message":"로그인 성공","data":{"accessToken":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIiwidHlwZSI6IkFDQ0VTUyJ9.signature","member":{"id":1,"createDate":"2026-10-05T21:25:35","modifyDate":"2026-10-05T21:25:35","nickname":"러너1","email":"runner1@crewrun.com","phone":"010-1234-5678","name":"김러너","birthDate":"1995-04-12"}}})
 
-export const getFindMeResponseMock = (): RsDataMemberDto => ({"status":200,"message":"내 정보를 조회했습니다.","data":{"id":1,"createDate":"2026-10-05T21:25:35","modifyDate":"2026-10-05T21:25:35","nickname":"러너1","email":"runner1@crewrun.com","phone":"010-1234-5678"}})
 
+export const getFindMeMockHandler = (overrideResponse?: RsDataMemberDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataMemberDto> | RsDataMemberDto), options?: RequestHandlerOptions) => {
+  return http.get('*/api/v1/member/members/me', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getFindMeResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
+
+export const getModifyMeMockHandler = (overrideResponse?: RsDataMemberDto | ((info: Parameters<Parameters<typeof http.put>[1]>[0]) => Promise<RsDataMemberDto> | RsDataMemberDto), options?: RequestHandlerOptions) => {
+  return http.put('*/api/v1/member/members/me', async (info: Parameters<Parameters<typeof http.put>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getModifyMeResponseMock(),
+      { status: 200
+      })
+  }, options)
+}
 
 export const getReissueMockHandler = (overrideResponse?: RsDataTokenReissueResponseDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataTokenReissueResponseDto> | RsDataTokenReissueResponseDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/auth/reissue', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
@@ -70,22 +96,11 @@ export const getJoinMockHandler = (overrideResponse?: unknown | ((info: Paramete
       })
   }, options)
 }
-
-export const getFindMeMockHandler = (overrideResponse?: RsDataMemberDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataMemberDto> | RsDataMemberDto), options?: RequestHandlerOptions) => {
-  return http.get('*/api/v1/member/members/me', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
-
-
-    return HttpResponse.json(overrideResponse !== undefined
-    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
-    : getFindMeResponseMock(),
-      { status: 200
-      })
-  }, options)
-}
 export const getBukangMemberAPIMock = () => [
+  getFindMeMockHandler(),
+  getModifyMeMockHandler(),
   getReissueMockHandler(),
   getLogoutMockHandler(),
   getLoginMockHandler(),
-  getJoinMockHandler(),
-  getFindMeMockHandler()
+  getJoinMockHandler()
 ]

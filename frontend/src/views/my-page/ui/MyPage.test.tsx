@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getAuthStatus, setAccessToken } from '@/shared/api'
-import { server } from '@/shared/testing'
+import { memberMock, server } from '@/shared/testing'
 
 import { MyPage } from './MyPage'
 
@@ -58,5 +58,57 @@ describe('MyPage 로그아웃', () => {
 
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/login'))
     expect(getAuthStatus()).toBe('anonymous')
+  })
+})
+
+describe('MyPage 회원 정보', () => {
+  it('내 정보 조회 API의 닉네임 · 이메일 · 이름 · 휴대폰(가림) · 생년월일을 보여 준다', async () => {
+    server.use(
+      memberMock.getFindMeMockHandler({
+        status: 200,
+        message: '내 정보를 조회했습니다.',
+        data: {
+          id: 1,
+          nickname: '달리는곰',
+          email: 'bear@crewrun.kr',
+          phone: '01098765432',
+          name: '김곰',
+          birthDate: '1990-01-31',
+        },
+      }),
+    )
+    setAccessToken('access-token')
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MyPage />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('달리는곰')).toBeInTheDocument()
+    expect(screen.getByText('bear@crewrun.kr')).toBeInTheDocument()
+    expect(screen.getByText('김곰')).toBeInTheDocument()
+    expect(screen.getByText('010-****-5432')).toBeInTheDocument()
+    expect(screen.getByText('1990.01.31')).toBeInTheDocument()
+  })
+
+  it('내 정보를 불러오지 못하면 안내 문구를 띄운다', async () => {
+    server.use(
+      http.get('*/api/v1/member/members/me', () =>
+        HttpResponse.json(
+          { status: 404, message: '존재하지 않는 회원입니다.', data: null },
+          { status: 404 },
+        ),
+      ),
+    )
+    setAccessToken('access-token')
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MyPage />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('회원 정보를 불러오지 못했어요')
   })
 })

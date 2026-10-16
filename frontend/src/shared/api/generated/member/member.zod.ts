@@ -8,6 +8,64 @@
 import * as zod from 'zod';
 
 /**
+ * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
+ * @summary 내 정보 조회
+ */
+export const FindMeResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "nickname": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
+}).optional()
+})
+
+
+/**
+ * X-Member-Id 헤더의 회원의 이름, 생년월일, 휴대폰 번호, 닉네임을 바꾼다. 다른 회원이 쓰는 닉네임·휴대폰 번호인지 검사하고(내 행은 제외, 휴대폰은 하이픈 유무 무관), 4칸이 모두 그대로면 저장하지 않는다.
+ * @summary 내 정보 수정
+ */
+export const modifyMeBodyNameMin = 0;
+export const modifyMeBodyNameMax = 255;
+
+
+
+export const modifyMeBodyNicknameRegExp = new RegExp('^[가-힣A-Za-z0-9]+$');
+
+
+export const modifyMeBodyPhoneRegExp = new RegExp('^01[016789]-?\\d{3,4}-?\\d{4}$');
+
+
+export const ModifyMeBody = zod.object({
+  "name": zod.string().min(modifyMeBodyNameMin).max(modifyMeBodyNameMax).describe('실명'),
+  "nickname": zod.string().min(1).regex(modifyMeBodyNicknameRegExp).describe('닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)'),
+  "phone": zod.string().min(1).regex(modifyMeBodyPhoneRegExp).describe('휴대폰 번호 (하이픈 생략 가능)'),
+  "birthDate": zod.iso.date().describe('생년월일')
+}).describe('내 정보 수정 요청')
+
+export const ModifyMeResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "nickname": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
+}).optional()
+})
+
+
+/**
  * 쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). 이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).
  * @summary 토큰 재발급
  */
@@ -51,7 +109,9 @@ export const LoginResponse = zod.object({
   "modifyDate": zod.iso.datetime({"offset":true}).optional(),
   "nickname": zod.string().optional(),
   "email": zod.string().optional(),
-  "phone": zod.string().optional()
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
 }).optional().describe('로그인한 회원')
 }).optional().describe('로그인 응답')
 })
@@ -85,21 +145,3 @@ export const JoinBody = zod.object({
 }).describe('회원가입 요청')
 
 export const JoinResponse = zod.void()
-
-
-/**
- * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
- * @summary 내 정보 조회
- */
-export const FindMeResponse = zod.object({
-  "status": zod.int().optional(),
-  "message": zod.string().optional(),
-  "data": zod.object({
-  "id": zod.int().optional(),
-  "createDate": zod.iso.datetime({"offset":true}).optional(),
-  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
-  "nickname": zod.string().optional(),
-  "email": zod.string().optional(),
-  "phone": zod.string().optional()
-}).optional()
-})

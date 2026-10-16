@@ -35,6 +35,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
 	private static final String BEARER_PREFIX = "Bearer ";
 
+	// 401 응답의 code. 프론트가 오류 원인을 구분하는 값이라 이 한곳에서만 정의한다
+	private static final String CODE_LOGIN_REQUIRED = "AUTH_LOGIN_REQUIRED";
+	private static final String CODE_TOKEN_EXPIRED = "AUTH_TOKEN_EXPIRED";
+	private static final String CODE_INVALID_TOKEN = "AUTH_INVALID_TOKEN";
+
 	private final JwtProvider jwtProvider;
 	// 토큰 없이 통과하는 주소는 코드가 아니라 application.yaml의 gateway.auth.public-paths에 둔다
 	private final PublicPaths publicPaths;
@@ -54,18 +59,18 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 		}
 
 		if (token == null) {
-			return unauthorized(exchange.getResponse(), "로그인이 필요합니다.");
+			return unauthorized(exchange.getResponse(), CODE_LOGIN_REQUIRED, "로그인이 필요합니다.");
 		}
 
 		JwtClaims claims;
 		try {
 			claims = jwtProvider.parse(token, TokenType.ACCESS);
 		} catch (InvalidTokenException e) {
-			// 만료는 클라이언트가 재발급을 시도할 수 있도록 메시지를 구분한다
-			String message = e.getReason() == InvalidTokenException.Reason.EXPIRED
-				? "만료된 토큰입니다."
-				: "유효하지 않은 토큰입니다.";
-			return unauthorized(exchange.getResponse(), message);
+			// 만료는 클라이언트가 재발급을 시도할 수 있도록 코드와 메시지를 구분한다
+			if (e.getReason() == InvalidTokenException.Reason.EXPIRED) {
+				return unauthorized(exchange.getResponse(), CODE_TOKEN_EXPIRED, "만료된 토큰입니다.");
+			}
+			return unauthorized(exchange.getResponse(), CODE_INVALID_TOKEN, "유효하지 않은 토큰입니다.");
 		}
 
 		ServerHttpRequest authenticated = request.mutate()
@@ -108,11 +113,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 		return token.isEmpty() ? null : token;
 	}
 
-	// 게이트웨이는 common(webmvc)에 의존하지 않으므로 RsData {status, message, data} 형식의 JSON을 직접 만든다
-	// message는 이 클래스의 고정 문구만 들어오므로 JSON 이스케이프가 필요 없다
-	private Mono<Void> unauthorized(ServerHttpResponse response, String message) {
+	// 게이트웨이는 common(webmvc)에 의존하지 않으므로 RsData {status, code, message, data} 형식의 JSON을 직접 만든다
+	// code와 message는 이 클래스의 고정 상수·문구만 들어오므로 JSON 이스케이프가 필요 없다
+	private Mono<Void> unauthorized(ServerHttpResponse response, String code, String message) {
 		HttpStatus status = HttpStatus.UNAUTHORIZED;
-		String body = "{\"status\":%d,\"message\":\"%s\",\"data\":null}".formatted(status.value(), message);
+		String body = "{\"status\":%d,\"code\":\"%s\",\"message\":\"%s\",\"data\":null}"
+			.formatted(status.value(), code, message);
 		DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
 		response.setStatusCode(status);
 		response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
