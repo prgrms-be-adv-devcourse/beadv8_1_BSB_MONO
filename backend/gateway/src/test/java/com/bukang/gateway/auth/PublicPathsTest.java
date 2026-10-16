@@ -17,7 +17,8 @@ class PublicPathsTest {
 
 	private final PublicPaths publicPaths = new PublicPaths(new GatewayAuthProperties(List.of(
 		new PublicPath("/api/v1/auth/login", null),
-		new PublicPath("/api/v1/product/**", Set.of(HttpMethod.GET))
+		new PublicPath("/api/v1/product/**", Set.of(HttpMethod.GET)),
+		new PublicPath("/api/v1/member/members/email-availability", Set.of(HttpMethod.GET))
 	)));
 
 	@Test
@@ -43,6 +44,14 @@ class PublicPathsTest {
 		assertThat(matches(HttpMethod.GET, "/api/v1/product/races/1/courses")).isTrue();
 		assertThat(matches(HttpMethod.POST, "/api/v1/product/races")).isFalse();
 		assertThat(matches(HttpMethod.GET, "/api/v1/products")).isFalse();
+	}
+
+	@Test
+	@DisplayName("이메일 중복 확인은 GET만 공개로 보고, 같은 부모의 다른 회원 주소는 공개로 보지 않는다")
+	void emailAvailabilityIsPublicOnlyForGet() {
+		assertThat(matches(HttpMethod.GET, "/api/v1/member/members/email-availability")).isTrue();
+		assertThat(matches(HttpMethod.POST, "/api/v1/member/members/email-availability")).isFalse();
+		assertThat(matches(HttpMethod.GET, "/api/v1/member/members/me")).isFalse();
 	}
 
 	@Test

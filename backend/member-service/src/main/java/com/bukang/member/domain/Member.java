@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.Period;
 
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
+import com.bukang.common.shared.member.event.MemberModifiedEvent;
 import com.bukang.member.dto.MemberDto;
 
 import jakarta.persistence.AttributeOverride;
@@ -53,6 +54,11 @@ public class Member extends SourceMember {
 	// 가입 이벤트를 발행한다. ID는 저장할 때(IDENTITY) 정해지므로 save() 뒤에 부른다
 	public void publishJoinedEvent() {
 		publishEvent(new MemberJoinedEvent(getId(), getCreateDate(), getModifyDate(), getNickname()));
+	}
+
+	// 수정 이벤트를 발행한다. 수정 시각은 DB에 반영(flush)할 때 채워지므로 saveAndFlush() 뒤에 부른다 (BE-015)
+	public void publishModifiedEvent() {
+		publishEvent(new MemberModifiedEvent(getId(), getCreateDate(), getModifyDate(), getNickname()));
 	}
 
 	// 한글 완성형(가~힣)은 화면에서 영문보다 두 배쯤 넓어 2칸, 그 밖의 글자는 1칸으로 센다 ("러너abc" = 7칸)
