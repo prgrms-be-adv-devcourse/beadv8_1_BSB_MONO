@@ -59,6 +59,14 @@ public class MemberFacade {
 		).toDto();
 	}
 
+	// 관리자 역할을 준다. 관리자 지정 API는 없고 개발용 기본 데이터(MemberDataInit)에서만 부른다
+	@Transactional
+	public void grantAdmin(String email) {
+		memberRepository.findByEmail(email)
+			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."))
+			.grantAdmin();
+	}
+
 	public boolean existsByEmail(String email) {
 		return memberRepository.existsByEmail(email);
 	}

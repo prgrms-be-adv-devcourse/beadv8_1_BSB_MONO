@@ -54,6 +54,10 @@ public class MemberDataInit {
 		join("사용자3", "사용자3", "user3@crewrun.com", "010-1111-2227");
 		// 정산 샘플 데이터(payout-service PayoutDataInit)의 판매자. 판매자 역할은 아직 없어 일반 회원으로 만든다
 		join("판매자1", "판매자1", "seller1@crewrun.com", "010-1111-2228");
+		// 판매자1의 판매자 신청·승인은 여기서 만들지 않는다. product·payout 시작 데이터가 판매자 ID 7로 따로 만들어 두는데,
+		// 여기서 신청하면 새 ID(빈 DB면 1)로 승인 이벤트가 나가 product에 회원 7의 승인 판매자가 두 행이 된다 (BE-020)
+		// 관리자 API(판매자 심사)를 쓸 수 있게 역할을 준다. 이미 관리자여도 다시 줘서 결과가 같다 (BE-020 결정 8)
+		memberFacade.grantAdmin("admin@crewrun.com");
 	}
 
 	private void join(String name, String nickname, String email, String phone) {
