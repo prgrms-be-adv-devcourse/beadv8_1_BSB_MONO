@@ -4,12 +4,14 @@ import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
 
+import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.member.domain.Member;
 import com.bukang.member.domain.exception.MemberNotFoundException;
 import com.bukang.member.domain.exception.WithdrawCashLeftException;
 import com.bukang.member.domain.exception.WithdrawTicketLeftException;
 import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.RefreshTokenRepository;
+import com.bukang.member.out.SellerRepository;
 import com.bukang.member.out.cash.CashBalancePort;
 import com.bukang.member.out.order.ActiveTicketPort;
 
@@ -28,6 +30,7 @@ public class MemberWithdrawUseCase {
 	static final String TICKET_LEFT_MESSAGE = "끝나지 않은 참가권이 있어 탈퇴할 수 없습니다. 대회가 끝나거나 참가권을 취소한 뒤 탈퇴해주세요.";
 
 	private final MemberRepository memberRepository;
+	private final SellerRepository sellerRepository;
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final CashBalancePort cashBalancePort;
 	private final ActiveTicketPort activeTicketPort;
@@ -46,9 +49,13 @@ public class MemberWithdrawUseCase {
 			throw new WithdrawTicketLeftException(TICKET_LEFT_MESSAGE);
 		}
 
-		member.withdraw(LocalDateTime.now());
+		LocalDateTime now = LocalDateTime.now();
+		member.withdraw(now);
 		// CHECK 제약 위반 같은 DB 오류를 이 트랜잭션 안에서 드러내려고 바로 반영한다
 		memberRepository.saveAndFlush(member);
+		// 탈퇴 전에 낸 대기 중 판매자 신청은 반려한다. 남겨 두면 관리자가 승인해 탈퇴한 회원이 판매자가 된다 (PRO-217)
+		sellerRepository.findAllByMemberIdAndStatusForUpdate(memberId, SellerStatus.PENDING)
+			.forEach(seller -> seller.rejectByWithdrawal(now));
 		// 그 회원의 모든 기기 재발급을 막는다. Redis 오류면 예외가 나가 탈퇴도 롤백된다
 		refreshTokenRepository.deleteAll(memberId);
 		// 커밋된 뒤에만 Kafka로 나간다 (MemberKafkaPublisher, AFTER_COMMIT)

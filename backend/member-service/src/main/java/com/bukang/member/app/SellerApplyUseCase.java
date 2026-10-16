@@ -35,7 +35,9 @@ public class SellerApplyUseCase {
 		LocalDateTime now
 	) {
 		// 탈퇴한 회원은 남은 Access Token으로 불러도 없는 회원으로 본다 (PRO-217, BE-022 결정 6)
-		Member member = memberRepository.findActiveById(memberId)
+		// 회원 줄을 잠가 탈퇴와 신청의 순서를 정한다. 탈퇴가 먼저 커밋되면 여기서 탈퇴한 회원을 보고 404가 된다
+		Member member = memberRepository.findByIdForUpdate(memberId)
+			.filter(found -> !found.isWithdrawn())
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
 		if (sellerRepository.existsByMemberIdAndStatusIn(memberId, ACTIVE_STATUSES)) {
 			throw new SellerAlreadyAppliedException("이미 심사 중이거나 승인된 판매자 신청이 있습니다.");
