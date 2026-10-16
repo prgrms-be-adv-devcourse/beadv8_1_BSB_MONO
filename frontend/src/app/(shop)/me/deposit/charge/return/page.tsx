@@ -8,7 +8,7 @@ function positiveInt(v: string | string[] | undefined) {
 }
 
 // 토스 결제창이 돌려보내는 주소. successUrl은 ?result=success&paymentKey&orderId&amount,
-// failUrl은 ?result=fail&code&message&orderId 를 붙여 온다. returnOrderId는 결제 중 충전일 때 우리가 붙인 주문 ID다.
+// failUrl은 ?result=fail&code&message&orderId 를 붙여 온다. 돌아갈 주문은 주소가 아니라 떠나기 전 충전 기록으로 정한다.
 export default async function Page({ searchParams }: PageProps<'/me/deposit/charge/return'>) {
   const params = await searchParams
   return (
@@ -18,7 +18,6 @@ export default async function Page({ searchParams }: PageProps<'/me/deposit/char
       orderId={text(params.orderId)}
       amount={positiveInt(params.amount)}
       code={text(params.code)}
-      returnOrderId={positiveInt(params.returnOrderId)}
     />
   )
 }

@@ -58,7 +58,7 @@ describe('충전 결과 화면 (토스 결제창에서 돌아옴)', () => {
     const bodies: unknown[] = []
     server.use(confirmHandler('COMPLETED', bodies))
 
-    renderPage(success({ returnOrderId: 1 }))
+    renderPage(success())
 
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/checkout?orderId=1&charged=1'))
     expect(bodies).toEqual([{ paymentKey: 'pk_test', orderId: ORDER_ID, amount: 12_000 }])
@@ -70,7 +70,7 @@ describe('충전 결과 화면 (토스 결제창에서 돌아옴)', () => {
     savePending({ orderId: ORDER_ID, amount: 12_000, returnOrderId: 1 })
     server.use(confirmHandler('FAILED'))
 
-    renderPage(success({ returnOrderId: 1 }))
+    renderPage(success())
 
     await vi.waitFor(() =>
       expect(replace).toHaveBeenCalledWith('/checkout?orderId=1&charge=failed'),
@@ -81,7 +81,7 @@ describe('충전 결과 화면 (토스 결제창에서 돌아옴)', () => {
     savePending({ orderId: ORDER_ID, amount: 12_000, returnOrderId: 1 })
     server.use(http.post('*/api/v1/cash/charges/confirm', () => HttpResponse.error()))
 
-    renderPage(success({ returnOrderId: 1 }))
+    renderPage(success())
 
     await vi.waitFor(() =>
       expect(replace).toHaveBeenCalledWith('/checkout?orderId=1&charge=failed'),
@@ -93,7 +93,7 @@ describe('충전 결과 화면 (토스 결제창에서 돌아옴)', () => {
     const bodies: unknown[] = []
     server.use(confirmHandler('COMPLETED', bodies))
 
-    renderPage(success({ amount: 100, returnOrderId: 1 }))
+    renderPage(success({ amount: 100 }))
 
     await vi.waitFor(() =>
       expect(replace).toHaveBeenCalledWith('/checkout?orderId=1&charge=failed'),
@@ -108,10 +108,21 @@ describe('충전 결과 화면 (토스 결제창에서 돌아옴)', () => {
       result: 'fail',
       code: 'PAY_PROCESS_CANCELED',
       orderId: ORDER_ID,
-      returnOrderId: 1,
     })
 
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/checkout?orderId=1'))
+  })
+
+  it('적어 둔 충전과 orderId가 다른 주소로 열면 그 기록의 주문으로 가지 않는다', async () => {
+    savePending({ orderId: 'charge-other', amount: 12_000, returnOrderId: 1 })
+    const bodies: unknown[] = []
+    server.use(confirmHandler('COMPLETED', bodies))
+
+    renderPage(success())
+
+    // 결제 중 충전인지 알 수 없어 예치금 충전 화면으로 보내고, 확정도 부르지 않는다
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/me/deposit/charge'))
+    expect(bodies).toEqual([])
   })
 
   it('예치금 화면에서 충전했으면 성공은 예치금(M17), 실패는 충전 화면(M21)으로 간다', async () => {
@@ -145,7 +156,6 @@ describe('충전 결과 화면 (토스 결제창에서 돌아옴)', () => {
       paymentKey: back.get('paymentKey') ?? undefined,
       orderId: back.get('orderId') ?? undefined,
       amount: Number(back.get('amount')),
-      returnOrderId: Number(back.get('returnOrderId')),
     })
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/checkout?orderId=1&charged=1'))
 
