@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 
 import org.springframework.stereotype.Service;
 
+import com.bukang.payout.app.PayoutGroupCreator.FirstGroup;
 import com.bukang.payout.app.PayoutGroupCreator.PayoutGroup;
 import com.bukang.payout.domain.PayoutStage;
 import com.bukang.payout.domain.PayoutTargetDate;
@@ -23,6 +24,8 @@ import com.bukang.payout.out.RaceSchedule;
 import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
 import com.bukang.payout.out.SoldEntryPort;
+import com.bukang.payout.out.SoldSummary;
+import com.bukang.payout.out.SoldSummaryPort;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +54,7 @@ public class PayoutCreateUseCase {
 	private final SoldEntryPort soldEntryPort;
 	private final SellerAccountPort sellerAccountPort;
 	private final RacePort racePort;
+	private final SoldSummaryPort soldSummaryPort;
 
 	/**
 	 * today의 배치를 돌린다. 1차 · 최종 모두 어제까지 LOOKBACK_DAYS일 동안 대상일이 된 대회를 보고, 아직 없는 묶음만 만든다
@@ -70,23 +74,46 @@ public class PayoutCreateUseCase {
 			first.skipped + last.skipped, first.failed + last.failed);
 	}
 
-	// 1차: 환불 마감일이 되돌아보기 기간 안인 대회의 판매 내역으로 만든다. 정산 월은 환불 마감일의 달이다
+	// 1차: 환불 마감일이 되돌아보기 기간 안인 대회마다 판매 집계(가격 합 · 장수)로 만든다. 정산 월은 환불 마감일의 달이다
+	// 참가권 목록은 받지 않는다. 대회 하나는 코스 하나라 가격이 하나여서 집계만으로 선금을 계산할 수 있다 (PRO-214)
 	private Counts createFirstPayouts(LocalDate today, LocalDateTime now) {
 		LocalDate toRefundDeadline = PayoutTargetDate.refundDeadlineFor(today);
 		LocalDate fromRefundDeadline = toRefundDeadline.minusDays(LOOKBACK_DAYS - 1);
 
 		Counts counts = new Counts();
 		for (RaceSchedule race : racePort.findRacesByRefundDeadline(fromRefundDeadline, toRefundDeadline)) {
-			// 판매 내역은 대회일로만 물을 수 있어, 그날 열리는 대회 중 이 대회의 참가권만 남긴다
-			Map<SellerRace, List<SoldEntry>> bySeller = soldEntryPort.findSoldEntries(race.raceDate(), race.raceDate())
-				.stream()
-				.filter(entry -> entry.raceId() == race.raceId())
-				.collect(groupingBy(entry -> new SellerRace(entry.sellerId(), entry.raceId())));
+			List<SoldSummary> summaries;
+			try {
+				summaries = soldSummaryPort.summarizeSold(race.raceId());
+			} catch (RuntimeException exception) {
+				counts.failRace(race.raceId(), exception);
+				continue;
+			}
 			YearMonth payoutMonth = YearMonth.from(race.refundDeadline());
-			bySeller.forEach((key, entries) -> createGroup(key, entries, PayoutStage.FIRST, payoutMonth, counts,
-				group -> payoutGroupCreator.createFirst(group, race.refundDeadline(), now)));
+			summaries.forEach(summary -> createFirstGroup(summary, payoutMonth, race.refundDeadline(), counts, now));
 		}
 		return counts;
+	}
+
+	// 1차 묶음 하나를 만든다. 이미 만든 묶음은 건너뛰고, 실패하면 이 묶음만 실패로 남긴다
+	private void createFirstGroup(SoldSummary summary, YearMonth payoutMonth, LocalDate refundDeadline,
+		Counts counts, LocalDateTime now) {
+		SellerRace key = new SellerRace(summary.sellerId(), summary.raceId());
+		try {
+			if (payoutRepository.existsBySellerIdAndRaceIdAndPayoutMonthAndPayoutStage(
+				key.sellerId(), key.raceId(), payoutMonth.toString(), PayoutStage.FIRST)) {
+				counts.skipped++;
+				return;
+			}
+			payoutGroupCreator.createFirst(new FirstGroup(key.sellerId(), key.raceId(), raceNameOf(key.raceId()),
+				sellerAccountPort.hasPayoutAccount(key.sellerId()), summary.priceSum(), summary.ticketCount()),
+				refundDeadline, now);
+			counts.created++;
+		} catch (RuntimeException exception) {
+			counts.failed++;
+			log.error("1차 정산 내역을 만들지 못했습니다. sellerId={}, raceId={}, 참가권 {}장",
+				key.sellerId(), key.raceId(), summary.ticketCount(), exception);
+		}
 	}
 
 	// 최종: 대회일이 되돌아보기 기간 안인 대회의 판매 내역으로 만든다. 정산 월은 대회일의 달이다
@@ -159,6 +186,11 @@ public class PayoutCreateUseCase {
 		private int created;
 		private int skipped;
 		private int failed;
+
+		private void failRace(int raceId, RuntimeException exception) {
+			failed++;
+			log.error("1차 정산용 판매 집계를 받지 못했습니다. raceId={}", raceId, exception);
+		}
 
 		private void fail(SellerRace key, List<SoldEntry> entries, RuntimeException exception) {
 			failed++;

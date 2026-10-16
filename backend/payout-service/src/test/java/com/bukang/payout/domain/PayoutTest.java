@@ -1,6 +1,7 @@
 package com.bukang.payout.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -65,19 +66,29 @@ class PayoutTest {
 	}
 
 	@Test
-	@DisplayName("1차는 수수료 없이 장마다 가격 × 40%를 버려 더한다 (33,333원 × 10장 → 133,330, 합계에 곱한 133,332가 아니다)")
+	@DisplayName("1차는 판매 집계로 1장 몫(가격 × 40% 버림) × 장수를 선금 한 줄로 쓴다 (33,333원 × 10장 → 133,330, 합계에 곱한 133,332가 아니다)")
 	void firstPayoutIsFortyPercentPerTicket() {
 		Payout first = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 10, 1, 3, 0),
 			CALENDAR);
 
-		for (int orderItemId = 1; orderItemId <= 10; orderItemId++) {
-			first.addItem(orderItemId, 33_333L, BigDecimal.ZERO, LocalDate.of(2026, 10, 1));
-		}
+		first.recordAdvance(333_330L, 10, LocalDate.of(2026, 10, 1));
 
 		assertThat(first.getPayoutStage()).isEqualTo(PayoutStage.FIRST);
 		assertThat(first.getSalesAmount()).isEqualTo(333_330L);
 		assertThat(first.getFeeAmount()).isZero();
 		assertThat(first.getPayoutAmount()).isEqualTo(133_330L);
+		assertThat(first.getItems()).singleElement()
+			.satisfies(item -> assertThat(item.getRecordType()).isEqualTo(PayoutRecordType.ADVANCE_PAID));
+	}
+
+	@Test
+	@DisplayName("가격 합이 장수로 나누어떨어지지 않으면(가격이 섞임) 1차 선금을 만들지 않는다")
+	void firstPayoutRejectsMixedPrices() {
+		Payout first = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 10, 1, 3, 0),
+			CALENDAR);
+
+		assertThatThrownBy(() -> first.recordAdvance(83_333L, 2, LocalDate.of(2026, 10, 1)))
+			.isInstanceOf(IllegalStateException.class);
 	}
 
 	@Test

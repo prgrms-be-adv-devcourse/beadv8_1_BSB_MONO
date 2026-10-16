@@ -124,10 +124,9 @@ class PayoutPayUseCaseTest {
 		BusinessDayCalendar calendar = new BusinessDayCalendar();
 		LocalDateTime settledAt = LocalDateTime.of(2026, 10, 1, 3, 0);
 		Payout twoTickets = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), settledAt, calendar);
-		twoTickets.addItem(100, 50_000L, BigDecimal.ZERO, LocalDate.of(2026, 10, 1));
-		twoTickets.addItem(101, 50_000L, BigDecimal.ZERO, LocalDate.of(2026, 10, 1));
+		twoTickets.recordAdvance(100_000L, 2, LocalDate.of(2026, 10, 1));
 		Payout oneTicket = Payout.first(2, 10, "테스트 대회", YearMonth.of(2026, 9), settledAt, calendar);
-		oneTicket.addItem(200, 50_000L, BigDecimal.ZERO, LocalDate.of(2026, 10, 1));
+		oneTicket.recordAdvance(50_000L, 1, LocalDate.of(2026, 10, 1));
 		payoutRepository.save(twoTickets);
 		payoutRepository.save(oneTicket);
 

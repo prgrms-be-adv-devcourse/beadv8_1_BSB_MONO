@@ -47,7 +47,6 @@ public class PayoutDataInit {
 	private static final int ADMIN_ID = 3;
 
 	private static final BigDecimal FEE_RATE = TwoStagePayoutCalculator.FEE_RATE;
-	private static final BigDecimal NO_FEE_RATE = new BigDecimal("0.0000");
 	private static final int REFUND_DEADLINE_DAYS_BEFORE_RACE = 10;
 	private static final long PRICE_10K = 45_000L;
 	private static final long PRICE_5K = 35_000L;
@@ -85,13 +84,13 @@ public class PayoutDataInit {
 		}
 
 		// 봄 한강 10K (화면 '종료', 2,000 / 2,000): 마감 4/2 · 대회 4/12 → 1차 · 최종 모두 4월분이라 5/20에 함께 지급 완료
-		StagePair spring = createPayouts(1, "2026 봄 한강 10K", LocalDate.of(2026, 4, 12), 2_000, PRICE_10K, PRICE_10K);
+		StagePair spring = createPayouts(1, "2026 봄 한강 10K", LocalDate.of(2026, 4, 12), 2_000, PRICE_10K);
 		spring.first().pay(LocalDateTime.of(2026, 5, 20, 4, 0));
 		spring.last().pay(LocalDateTime.of(2026, 5, 20, 4, 0));
 
 		// 여름 야간 레이스: 판매자가 계좌를 늦게 등록한 경우. 1차 · 최종 모두 대상일에 자동 보류 → 8/24 관리자 해제
 		// → 해제일 뒤 지급일 9/20(일)이 밀려 9/21(월) 지급 완료
-		StagePair summer = createPayouts(6, "2026 여름 야간 레이스", LocalDate.of(2026, 7, 18), 800, PRICE_10K, PRICE_5K);
+		StagePair summer = createPayouts(6, "2026 여름 야간 레이스", LocalDate.of(2026, 7, 18), 800, PRICE_5K);
 		for (Payout payout : List.of(summer.first(), summer.last())) {
 			PayoutHold accountHold = hold(payout, PayoutHoldReason.ACCOUNT_NOT_REGISTERED, null,
 				PayoutHold.SYSTEM_MEMBER_ID, payout.getSettledAt());
@@ -100,45 +99,41 @@ public class PayoutDataInit {
 		}
 
 		// 한강 나이트런 (화면 정산 탭): 마감 9/2 · 대회 9/12 → 1차 · 최종 모두 10/20 지급 예정. 요약의 정산 예정액이 된다
-		createPayouts(7, "2026 한강 나이트런", LocalDate.of(2026, 9, 12), 1_200, PRICE_10K, PRICE_5K);
+		createPayouts(7, "2026 한강 나이트런", LocalDate.of(2026, 9, 12), 1_200, PRICE_10K);
 
 		// 가을 하프마라톤: 1차 · 최종 모두 10/20 지급 예정이었으나 관리자가 10/5에 최종을 보류 (지급보류 1건)
-		StagePair half = createPayouts(8, "2026 가을 하프마라톤", LocalDate.of(2026, 9, 26), 1_500, PRICE_HALF,
-			PRICE_10K);
+		StagePair half = createPayouts(8, "2026 가을 하프마라톤", LocalDate.of(2026, 9, 26), 1_500, PRICE_HALF);
 		hold(half.last(), PayoutHoldReason.RACE_CANCELED, "기상 악화로 하프 종목 중단, 환불 범위 확인 중", ADMIN_ID,
 			LocalDateTime.of(2026, 10, 5, 14, 0));
 
 		// 서울숲 가을 10K: 마감 9/23 → 1차 10/20 지급 예정, 대회 10/3 → 최종 11/20 지급 예정 (10/20 뒤의 다음 정산일)
-		createPayouts(9, "2026 서울숲 가을 10K", LocalDate.of(2026, 10, 3), 600, PRICE_10K, PRICE_10K);
+		createPayouts(9, "2026 서울숲 가을 10K", LocalDate.of(2026, 10, 3), 600, PRICE_10K);
 
 		log.info("정산 샘플 데이터 생성: sellerId={}", SELLER_ID);
 	}
 
 	// 정산 생성 배치(PayoutCreateUseCase)처럼 1차는 환불 마감일 다음 날, 최종은 대회 다음 날 03:00에 만든다
-	// 참가권은 10장 중 6장을 mainPrice, 4장을 subPrice로 섞는다 (예: 10K · 5K 종목)
-	private StagePair createPayouts(int raceId, String raceName, LocalDate raceDate, int count, long mainPrice,
-		long subPrice) {
+	// 대회 하나는 코스 하나라 참가권 가격이 하나다 (PRO-214). 1차는 판매 집계(가격 합 · 장수)로 선금 한 줄을 쓴다
+	private StagePair createPayouts(int raceId, String raceName, LocalDate raceDate, int count, long price) {
 		LocalDate refundDeadline = raceDate.minusDays(REFUND_DEADLINE_DAYS_BEFORE_RACE);
 		LocalDate firstTargetDate = PayoutTargetDate.firstOf(refundDeadline);
 		Payout first = Payout.first(SELLER_ID, raceId, raceName, YearMonth.from(refundDeadline),
 			firstTargetDate.atTime(3, 0), calendar);
-		addItems(first, raceId, count, mainPrice, subPrice, NO_FEE_RATE, firstTargetDate);
+		first.recordAdvance(price * count, count, firstTargetDate);
 		save(first);
 
 		LocalDate finalTargetDate = PayoutTargetDate.of(raceDate);
 		Payout last = Payout.finalStage(SELLER_ID, raceId, raceName, YearMonth.from(raceDate), first.getPayoutAmount(),
 			finalTargetDate.atTime(3, 0), calendar);
-		addItems(last, raceId, count, mainPrice, subPrice, FEE_RATE, finalTargetDate);
+		addItems(last, raceId, count, price, finalTargetDate);
 		save(last);
 		return new StagePair(first, last);
 	}
 
-	private void addItems(Payout payout, int raceId, int count, long mainPrice, long subPrice, BigDecimal feeRate,
-		LocalDate targetDate) {
+	private void addItems(Payout payout, int raceId, int count, long price, LocalDate targetDate) {
 		for (int i = 1; i <= count; i++) {
-			long price = i % 10 < 6 ? mainPrice : subPrice;
-			// 주문 상품 ID는 대회마다 겹치지 않게 대회 번호 × 100,000부터 붙인다 (1차 · 최종은 같은 참가권이라 같은 ID)
-			payout.addItem(raceId * 100_000 + i, price, feeRate, targetDate);
+			// 주문 상품 ID는 대회마다 겹치지 않게 대회 번호 × 100,000부터 붙인다
+			payout.addItem(raceId * 100_000 + i, price, FEE_RATE, targetDate);
 		}
 	}
 

@@ -152,26 +152,37 @@ public class Payout extends BaseIdAndTime {
 		return Collections.unmodifiableList(statusHistories);
 	}
 
-	// 참가권 1장을 정산 묶음에 넣는다. 원장 줄은 정산 내역(Payout)을 통해서만 만든다 (금액 캐시와 함께 바뀌어야 하므로)
+	/**
+	 * 1차 선금 한 줄(ADVANCE_PAID)을 쓴다. 참가권 목록 없이 판매 집계(가격 합 · 장수)만으로 계산한다 (PRO-214)
+	 * 대회 하나는 코스 하나라 참가권 가격이 하나다. 그래서 가격 합 ÷ 장수가 1장 가격이고,
+	 * 선금 = DOWN(1장 가격 × 40%) × 장수는 장마다 40%를 버려 더한 값(정책 Q7)과 같다. 회수 몫(1장 × 40%)과도 정확히 맞는다
+	 * 가격 합이 장수로 나누어떨어지지 않으면 가격이 섞인 것이므로 계산하지 않고 실패로 남긴다
+	 */
+	public PayoutItem recordAdvance(long priceSum, int ticketCount, LocalDate targetDate) {
+		if (payoutStage != PayoutStage.FIRST) {
+			throw new IllegalStateException("선금은 1차 정산에만 씁니다. payoutStage=%s".formatted(payoutStage));
+		}
+		if (ticketCount <= 0 || priceSum % ticketCount != 0) {
+			throw new IllegalStateException("한 대회의 참가권 가격이 하나가 아닙니다. raceId=%d, priceSum=%d, ticketCount=%d"
+				.formatted(raceId, priceSum, ticketCount));
+		}
+		if (items.stream().anyMatch(item -> item.getRecordType() == PayoutRecordType.ADVANCE_PAID)) {
+			throw new IllegalStateException("선금 줄은 정산 묶음에 하나만 씁니다. raceId=%d".formatted(raceId));
+		}
+		salesAmount = priceSum;
+		long share = TwoStagePayoutCalculator.firstShare(priceSum / ticketCount) * ticketCount;
+		return addLine(PayoutRecordType.ADVANCE_PAID, null, share, null, targetDate);
+	}
+
+	// 최종 정산에 참가권 1장을 넣는다. 원장 줄은 정산 내역(Payout)을 통해서만 만든다 (금액 캐시와 함께 바뀌어야 하므로)
 	// 환불 마감일까지 환불된 참가권은 판매 내역에서 빠지므로 판매만 기록한다 (payout.md 2-3)
-	// - 1차: 묶음째 선금 한 줄(ADVANCE_PAID)에 장마다 가격 × 40%(원 미만 버림)를 더한다. 수수료는 떼지 않는다
-	// - 최종: 참가권마다 판매(+가격)와 수수료(−가격 × 5.5%, 원 미만 버림) 두 줄을 쓴다 (payout.md 2-1)
+	// 참가권마다 판매(+가격)와 수수료(−가격 × 5.5%, 원 미만 버림) 두 줄을 쓴다 (payout.md 2-1)
 	// 지급액은 언제나 이 묶음 원장 줄의 합이다
 	public PayoutItem addItem(int orderItemId, long price, BigDecimal feeRate, LocalDate targetDate) {
-		salesAmount += price;
-		if (payoutStage == PayoutStage.FIRST) {
-			long share = TwoStagePayoutCalculator.firstShare(price);
-			PayoutItem advance = items.stream()
-				.filter(item -> item.getRecordType() == PayoutRecordType.ADVANCE_PAID)
-				.findFirst()
-				.orElse(null);
-			if (advance == null) {
-				return addLine(PayoutRecordType.ADVANCE_PAID, null, share, null, targetDate);
-			}
-			advance.accumulate(share);
-			payoutAmount += share;
-			return advance;
+		if (payoutStage != PayoutStage.FINAL) {
+			throw new IllegalStateException("1차 정산은 참가권 줄 없이 recordAdvance로 만듭니다. raceId=%d".formatted(raceId));
 		}
+		salesAmount += price;
 		long fee = TwoStagePayoutCalculator.rate(price, feeRate);
 		feeAmount += fee;
 		PayoutItem sale = addLine(PayoutRecordType.SALE, orderItemId, price, feeRate, targetDate);

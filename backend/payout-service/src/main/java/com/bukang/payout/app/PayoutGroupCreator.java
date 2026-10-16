@@ -1,6 +1,5 @@
 package com.bukang.payout.app;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -36,8 +35,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class PayoutGroupCreator {
-	// 1차 정산 항목에 기록하는 수수료율. 1차는 수수료를 떼지 않는다 (계산식 문서 1장)
-	private static final BigDecimal NO_FEE_RATE = new BigDecimal("0.0000");
 	// 자동 보류의 사유 상세. 관리자가 건 보류와 구분되도록 고정 문구를 남긴다
 	private static final String AUTO_HOLD_REASON = "정산 계좌 미등록으로 자동 보류";
 	private static final String FIRST_HELD_REASON = "1차 정산 보류 중이라 최종 정산도 자동 보류";
@@ -48,16 +45,17 @@ public class PayoutGroupCreator {
 	private final PayoutLedgerUseCase payoutLedgerUseCase;
 
 	/**
-	 * 1차 정산 내역을 만든다. 정산 월은 환불 마감일의 달, 금액은 장마다 가격 × 40%의 합이다
+	 * 1차 정산 내역을 만든다. 정산 월은 환불 마감일의 달이고, 선금 한 줄은 판매 집계(가격 합 · 장수)로 계산한다
+	 * 선금 = DOWN(1장 가격 × 40%) × 장수. 참가권 목록은 받지 않는다 (PRO-214)
 	 * 다른 서비스에 묻는 값(대회 이름, 계좌 등록 여부)은 부르는 쪽이 미리 구해 넘긴다
 	 * (다른 서비스 응답을 기다리는 동안 DB 트랜잭션을 열어 두지 않기 위해서다)
 	 */
 	@Transactional
-	public void createFirst(PayoutGroup group, LocalDate refundDeadline, LocalDateTime now) {
+	public void createFirst(FirstGroup group, LocalDate refundDeadline, LocalDateTime now) {
 		LocalDate targetDate = PayoutTargetDate.firstOf(refundDeadline);
 		Payout payout = Payout.first(group.sellerId(), group.raceId(), group.raceName(),
 			YearMonth.from(refundDeadline), now, businessDayCalendar);
-		group.entries().forEach(entry -> payout.addItem(entry.orderItemId(), entry.price(), NO_FEE_RATE, targetDate));
+		payout.recordAdvance(group.priceSum(), group.ticketCount(), targetDate);
 
 		save(payout);
 		if (!group.hasPayoutAccount()) {
@@ -119,7 +117,14 @@ public class PayoutGroupCreator {
 	}
 
 	/**
-	 * 정산 내역 하나로 묶이는 판매자 × 대회의 참가권과, 저장에 필요한 다른 서비스의 값
+	 * 1차 정산 내역 하나로 묶이는 판매자 × 대회의 판매 집계와, 저장에 필요한 다른 서비스의 값
+	 */
+	public record FirstGroup(int sellerId, int raceId, String raceName, boolean hasPayoutAccount, long priceSum,
+		int ticketCount) {
+	}
+
+	/**
+	 * 최종 정산 내역 하나로 묶이는 판매자 × 대회의 참가권과, 저장에 필요한 다른 서비스의 값
 	 */
 	public record PayoutGroup(int sellerId, int raceId, String raceName, boolean hasPayoutAccount,
 		List<SoldEntry> entries) {

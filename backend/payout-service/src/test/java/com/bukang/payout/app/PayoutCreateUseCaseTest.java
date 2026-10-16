@@ -32,6 +32,8 @@ import com.bukang.payout.out.RaceSchedule;
 import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
 import com.bukang.payout.out.SoldEntryPort;
+import com.bukang.payout.out.SoldSummary;
+import com.bukang.payout.out.SoldSummaryPort;
 import com.bukang.payout.support.StubRacePort;
 
 @DataJpaTest
@@ -84,7 +86,18 @@ class PayoutCreateUseCaseTest {
 			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
 				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
 		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntriesReturning(entries),
-			sellerAccountPort, new StubRacePort(RACE_NAMES, schedules));
+			sellerAccountPort, new StubRacePort(RACE_NAMES, schedules), summariesOf(entries));
+	}
+
+	// 주문 서비스처럼, 대회의 참가권을 판매자별로 묶어 가격 합과 장수를 돌려주는 가짜 포트 (1차 정산용)
+	private SoldSummaryPort summariesOf(List<SoldEntry> entries) {
+		return raceId -> entries.stream()
+			.filter(entry -> entry.raceId() == raceId)
+			.collect(java.util.stream.Collectors.groupingBy(SoldEntry::sellerId))
+			.entrySet().stream()
+			.map(seller -> new SoldSummary(seller.getKey(), raceId,
+				seller.getValue().stream().mapToLong(SoldEntry::price).sum(), seller.getValue().size()))
+			.toList();
 	}
 
 	private Payout payoutOf(int sellerId, PayoutStage stage) {

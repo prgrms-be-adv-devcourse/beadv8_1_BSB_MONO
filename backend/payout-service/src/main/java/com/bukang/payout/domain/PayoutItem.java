@@ -25,7 +25,7 @@ import lombok.NoArgsConstructor;
  * 원장 줄: 판매자 몫이 얼마 늘었는지(+) 줄었는지(−) 한 번의 움직임 (PRO-214)
  * 정산 묶음(payout)에 붙는 줄과 회수(recovery)에 붙는 줄이 있다. 어느 쪽이든 판매자 · 대회를 함께 적어
  * 판매자 × 대회 × 계정으로 잔고를 바로 더할 수 있게 한다
- * 추가만 하고 고치지 않는다. 그래서 setter와 변경 메서드를 두지 않는다 (1차 선금 줄을 묶음 저장 전에 모으는 것만 예외)
+ * 추가만 하고 고치지 않는다. 그래서 setter와 변경 메서드를 두지 않는다
  *
  * 중복 방지 (같은 줄이 두 번 들어가지 않게)
  * - 참가권 줄: (order_item_id, record_type) 유일. 늦게 들어온 참가권이 다른 묶음에 또 들어가는 것까지 막는다 (PRO-118)
@@ -130,13 +130,5 @@ public class PayoutItem extends BaseIdAndTime {
 		} else if (recovery != null) {
 			this.bundleKey = "R%d:%s".formatted(recovery.getId(), recordType);
 		}
-	}
-
-	// 1차 선금은 묶음째 한 줄이라, 묶음을 저장하기 전에 참가권마다 몫을 더해 모은다. 저장한 뒤에는 바꾸지 않는다
-	void accumulate(long delta) {
-		if (getId() != 0) {
-			throw new IllegalStateException("저장된 원장 줄은 고칠 수 없습니다. itemId=%d".formatted(getId()));
-		}
-		this.amount += delta;
 	}
 }

@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.bukang.payout.app.PayoutGroupCreator.FirstGroup;
 import com.bukang.payout.app.PayoutGroupCreator.PayoutGroup;
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
@@ -100,7 +101,8 @@ class PayoutLedgerScenarioTest {
 	}
 
 	private void createFirst() {
-		creator.createFirst(group(range(101, 110)), REFUND_DEADLINE, REFUND_DEADLINE.plusDays(1).atTime(3, 0));
+		creator.createFirst(new FirstGroup(SELLER_ID, RACE_ID, "대회 A", true, PRICE * 10, 10), REFUND_DEADLINE,
+			REFUND_DEADLINE.plusDays(1).atTime(3, 0));
 	}
 
 	private void createFinal(int... orderItemIds) {
