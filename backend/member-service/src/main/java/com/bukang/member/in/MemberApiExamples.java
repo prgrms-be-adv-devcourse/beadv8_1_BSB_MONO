@@ -4,6 +4,14 @@ package com.bukang.member.in;
  * ApiV1MemberController의 Swagger 응답 예시 (실제 응답 메시지와 같게 유지한다)
  */
 final class MemberApiExamples {
+	static final String EMAIL_AVAILABILITY_SUCCESS = """
+		{ "status": 200, "message": "이메일 사용 가능 여부를 확인했습니다.", "data": { "available": true } }
+		""";
+
+	static final String EMAIL_AVAILABILITY_INVALID_INPUT = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "이메일 형식에 맞게 작성해주세요.", "data": null }
+		""";
+
 	static final String FIND_ME_SUCCESS = """
 		{
 			"status": 200,
