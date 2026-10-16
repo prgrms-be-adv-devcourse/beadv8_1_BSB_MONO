@@ -24,7 +24,8 @@ public class MemberModifyUseCase {
 	private final BlindIndexGenerator blindIndexGenerator;
 
 	public Member modify(int memberId, String name, String nickname, String phone, LocalDate birthDate) {
-		Member member = memberRepository.findById(memberId)
+		// 탈퇴한 회원은 없는 회원으로 본다 (BE-022)
+		Member member = memberRepository.findActiveById(memberId)
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
 
 		// 가입 뒤 생년월일을 바꿔 나이 제한을 우회하지 못하게 수정에서도 검사한다

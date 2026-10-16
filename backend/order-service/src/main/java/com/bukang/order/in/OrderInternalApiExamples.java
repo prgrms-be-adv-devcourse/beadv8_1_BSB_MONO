@@ -36,6 +36,14 @@ final class OrderInternalApiExamples {
 			"message": "판매 내역은 한 번에 31일까지 조회할 수 있습니다.", "data": null }
 		""";
 
+	static final String ACTIVE_TICKETS_SUCCESS = """
+		{ "status": 200, "message": "끝나지 않은 참가권 수를 조회했습니다.", "data": { "count": 2 } }
+		""";
+
+	static final String ACTIVE_TICKETS_NONE = """
+		{ "status": 200, "message": "끝나지 않은 참가권 수를 조회했습니다.", "data": { "count": 0 } }
+		""";
+
 	private OrderInternalApiExamples() {
 	}
 }

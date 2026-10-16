@@ -50,6 +50,14 @@ springdoc:
 jwt:
   secret: ${JWT_SECRET}
 
+# 회원 탈퇴 확인용 내부 API. compose.yml의 앱 컨테이너끼리는 컨테이너 이름으로 접속한다
+member:
+  clients:
+    cash:
+      base-url: http://bukang-cash-service:8081
+    order:
+      base-url: http://bukang-order-service:8084
+
 # 민감 정보 변환 정보
 crypto:
   password: ${CRYPTO_PASSWORD}

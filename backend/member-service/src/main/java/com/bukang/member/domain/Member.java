@@ -1,6 +1,7 @@
 package com.bukang.member.domain;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Period;
 
 import com.bukang.common.shared.member.event.MemberJoinedEvent;
@@ -8,6 +9,7 @@ import com.bukang.common.shared.member.event.MemberModifiedEvent;
 import com.bukang.member.dto.MemberDto;
 
 import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.CheckConstraint;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -23,13 +25,19 @@ import lombok.NoArgsConstructor;
 // nickname은 BaseMember(복제본과 공유)에 있어 unique, 길이, NOT NULL을 원본 테이블에서만 건다
 // 길이 16은 가장 긴 닉네임(영문·숫자 16자)에 맞춘다 (BE-013)
 // unique 제약은 이름을 붙여, DB 중복 에러에서 어느 칸인지 구별한다 (BE-014, MemberJoinUseCase)
+// 탈퇴한 회원은 개인정보 칸이 NULL이라 unique에 걸리지 않아, 같은 이메일·번호로 다시 가입할 수 있다 (BE-022)
+// CHECK: 탈퇴(WITHDRAWN)가 아니면 개인정보 칸이 모두 있어야 한다. 성별은 가입 때부터 선택이라 뺀다
 @Table(name = "MEMBER_MEMBER", uniqueConstraints = {
 	@UniqueConstraint(name = "uk_member_email", columnNames = "email"),
 	@UniqueConstraint(name = "uk_member_nickname", columnNames = "nickname"),
 	@UniqueConstraint(name = "uk_member_phone_hash", columnNames = "phone_hash")
-})
-@AttributeOverride(name = "nickname", column = @Column(name = "nickname", nullable = false, length = 16))
+}, check = @CheckConstraint(name = "ck_member_personal_info", constraint = Member.PERSONAL_INFO_CHECK))
+@AttributeOverride(name = "nickname", column = @Column(name = "nickname", length = 16))
 public class Member extends SourceMember {
+	static final String PERSONAL_INFO_CHECK = "status = 'WITHDRAWN' OR (email IS NOT NULL AND name IS NOT NULL"
+		+ " AND nickname IS NOT NULL AND phone IS NOT NULL AND phone_hash IS NOT NULL AND birth_date IS NOT NULL)";
+	// 탈퇴한 회원을 다른 서비스의 회원 사본에 보여 줄 닉네임 (BE-022)
+	public static final String WITHDRAWN_NICKNAME = "탈퇴한 회원";
 	private static final int MIN_JOIN_AGE = 14;
 	// 닉네임 칸 수 범위. 한글 2자·영문 4자 ~ 한글 8자·영문 16자 (BE-013)
 	public static final int NICKNAME_MIN_WIDTH = 4;
@@ -76,6 +84,30 @@ public class Member extends SourceMember {
 	// 수정 이벤트를 발행한다. 수정 시각은 DB에 반영(flush)할 때 채워지므로 saveAndFlush() 뒤에 부른다 (BE-015)
 	public void publishModifiedEvent() {
 		publishEvent(new MemberModifiedEvent(getId(), getCreateDate(), getModifyDate(), getNickname()));
+	}
+
+	// 탈퇴한 회원은 다른 서비스 사본의 닉네임을 "탈퇴한 회원"으로 덮도록 같은 수정 이벤트를 보낸다 (BE-022 결정 7)
+	// 수정 시각에는 탈퇴 시각을 담는다
+	public void publishWithdrawnEvent() {
+		publishEvent(new MemberModifiedEvent(getId(), getCreateDate(), getWithdrawnAt(), WITHDRAWN_NICKNAME));
+	}
+
+	public boolean isWithdrawn() {
+		return getStatus() == MemberStatus.WITHDRAWN;
+	}
+
+	// 탈퇴: 상태와 탈퇴 시각을 함께 바꾸고 개인정보 칸을 비운다 (BE-022 결정 5). 줄은 주문·결제 기록이 가리키므로 남긴다
+	// 비밀번호 해시는 개인정보 목록에 없어 그대로 두지만, 이메일이 비어 로그인에 쓰일 수 없다
+	public void withdraw(LocalDateTime withdrawnAt) {
+		setStatus(MemberStatus.WITHDRAWN);
+		setWithdrawnAt(withdrawnAt);
+		setEmail(null);
+		setName(null);
+		setNickname(null);
+		setPhone(null);
+		setPhoneHash(null);
+		setBirthDate(null);
+		setGender(null);
 	}
 
 	// 한글 완성형(가~힣)은 화면에서 영문보다 두 배쯤 넓어 2칸, 그 밖의 글자는 1칸으로 센다 ("러너abc" = 7칸)

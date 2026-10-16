@@ -2,6 +2,7 @@ package com.bukang.member.in;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -28,7 +29,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Member", description = "이메일 중복 확인, 내 정보 조회, 내 정보 수정 API")
+@Tag(name = "Member", description = "이메일 중복 확인, 내 정보 조회, 내 정보 수정, 회원 탈퇴 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/member/members")
@@ -112,5 +113,38 @@ public class ApiV1MemberController {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "내 정보를 수정했습니다.",
 				memberFacade.modifyMe(memberId, memberModifyRequestDto)));
+	}
+
+	// 탈퇴는 남은 예치금·끝나지 않은 참가권이 없을 때만 바로 끝내고, 줄은 남긴 채 개인정보 칸을 비운다 (BE-022)
+	@DeleteMapping("/me")
+	@Operation(summary = "회원 탈퇴",
+		description = "X-Member-Id 헤더의 회원을 탈퇴시킨다. 예치금 서비스와 주문 서비스에 남은 예치금과 끝나지 않은 참가권"
+			+ "(취소·환불되지 않았고 대회 날짜가 오늘 이후)을 물어, 하나라도 있으면 409로 막는다. "
+			+ "확인에 실패하면 탈퇴하지 않고 503으로 답한다. 탈퇴하면 개인정보 칸을 비우고 모든 기기의 Refresh Token을 지운다. "
+			+ "이미 발급된 Access Token은 만료될 때까지 남는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "탈퇴 성공",
+			content = @Content(examples = @ExampleObject(value = MemberApiExamples.WITHDRAW_ME_SUCCESS))),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = MemberApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "404", description = "헤더의 회원이 없거나 이미 탈퇴함",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = MemberApiExamples.WITHDRAW_ME_NOT_FOUND))),
+		@ApiResponse(responseCode = "409", description = "남은 예치금 또는 끝나지 않은 참가권이 있음",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "예치금 남음", value = MemberApiExamples.WITHDRAW_CASH_LEFT),
+				@ExampleObject(name = "참가권 남음", value = MemberApiExamples.WITHDRAW_TICKET_LEFT)
+			})),
+		@ApiResponse(responseCode = "503", description = "예치금·참가권 확인 실패 (탈퇴하지 않음)",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = MemberApiExamples.WITHDRAW_CHECK_FAILED)))
+	})
+	public ResponseEntity<RsData<Void>> withdrawMe(
+		@Parameter(description = "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) int memberId
+	) {
+		memberFacade.withdrawMe(memberId);
+		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "탈퇴했습니다.", null));
 	}
 }

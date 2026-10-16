@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.cash.dto.CashBalanceResponseDto;
 import com.bukang.cash.dto.CashChargeResponseDto;
 import com.bukang.cash.dto.CashPaymentResponseDto;
 import com.bukang.cash.dto.CashRefundResponseDto;
@@ -39,6 +40,11 @@ public class CashFacade {
 	@Transactional(readOnly = true)
 	public WalletBalanceResponseDto getBalance(int holderId) {
 		return WalletBalanceResponseDto.from(cashSupport.findWalletByHolderId(holderId));
+	}
+
+	@Transactional(readOnly = true)
+	public CashBalanceResponseDto getBalanceOrZero(int memberId) {
+		return new CashBalanceResponseDto(cashSupport.findBalanceOrZero(memberId));
 	}
 
 	@Transactional

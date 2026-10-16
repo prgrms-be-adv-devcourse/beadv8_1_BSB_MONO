@@ -27,6 +27,25 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 		""")
 	List<SoldEntryDto> findSoldEntries(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
+	/**
+	 * 회원의 끝나지 않은 참가권 수 (회원 탈퇴 확인용, BE-022)
+	 * 대회 일시가 from(오늘 0시) 이후이고, 결제 완료(PAID)이거나 결제 기한(now) 전인 결제 대기 주문의 상품을 센다.
+	 * 결제 대기를 세는 이유: 탈퇴 뒤에도 남은 Access Token으로 결제하면 탈퇴한 회원에게 참가권이 생긴다.
+	 * 취소·환불(CANCELED), 기한이 지난 결제 대기·만료된 주문의 상품은 빠진다
+	 */
+	@Query("""
+		select count(i)
+		from OrderItem i
+		where i.order.buyerId = :memberId
+			and i.raceDate >= :from
+			and (i.status = com.bukang.order.domain.OrderItemStatus.PAID
+				or (i.status = com.bukang.order.domain.OrderItemStatus.ORDERED
+					and i.order.status = com.bukang.order.domain.OrderStatus.CREATED
+					and i.order.paymentDueAt > :now))
+		""")
+	long countActiveTickets(@Param("memberId") int memberId, @Param("from") LocalDateTime from,
+		@Param("now") LocalDateTime now);
+
 	// 참가 신청으로 만든 주문의 ID. 참가 신청 하나에는 주문 상품이 하나뿐이다 (uk_order_item_participation)
 	@Query("select i.order.id from OrderItem i where i.participationId = :participationId")
 	Optional<Integer> findOrderIdByParticipationId(@Param("participationId") int participationId);

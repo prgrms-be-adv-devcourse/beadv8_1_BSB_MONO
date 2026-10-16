@@ -26,6 +26,26 @@ final class CashInternalApiExamples {
 		}
 		""";
 
+	static final String BALANCE_SUCCESS = """
+		{
+			"status": 200,
+			"message": "잔액을 조회했습니다.",
+			"data": {
+				"balance": 10000
+			}
+		}
+		""";
+
+	static final String BALANCE_NO_WALLET = """
+		{
+			"status": 200,
+			"message": "잔액을 조회했습니다.",
+			"data": {
+				"balance": 0
+			}
+		}
+		""";
+
 	static final String CANCEL_SUCCESS = """
 		{
 			"status": 200,
