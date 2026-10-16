@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,8 +11,9 @@ import { orderMock, server } from '@/shared/testing'
 import { RaceApplyPage } from './RaceApplyPage'
 
 const push = vi.fn()
+const replace = vi.fn()
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push, back: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push, back: vi.fn(), replace }),
   usePathname: () => '/races/1/apply',
 }))
 
@@ -27,7 +28,10 @@ const COURSE: RaceOption = {
 const OTHER_COURSE: RaceOption = { ...RACE_DETAIL.options[0], id: '4', name: '하프' }
 const RACE = { ...RACE_DETAIL, options: [COURSE, OTHER_COURSE] }
 
-beforeEach(() => push.mockClear())
+beforeEach(() => {
+  push.mockClear()
+  replace.mockClear()
+})
 
 // 결제 · 장바구니 화면이 읽을 스토어 값을 그대로 꺼내 본다.
 function StoreProbe() {
@@ -36,15 +40,21 @@ function StoreProbe() {
   return <output data-testid="store">{JSON.stringify({ selection, applications })}</output>
 }
 
-function renderPage(initialState: BookingFlowInitial = {}, admissionRemainingSeconds?: number) {
+function renderPage(
+  initialState: BookingFlowInitial = {},
+  {
+    race = RACE,
+    previewRemainingSeconds,
+  }: { race?: typeof RACE; previewRemainingSeconds?: number } = {},
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <BookingFlowProvider initialState={initialState}>
         <RaceApplyPage
-          race={RACE}
+          race={race}
           option={COURSE}
-          admissionRemainingSeconds={admissionRemainingSeconds}
+          previewRemainingSeconds={previewRemainingSeconds}
         />
         <StoreProbe />
       </BookingFlowProvider>
@@ -188,6 +198,30 @@ describe('참가 신청 · 참가자 정보', () => {
     await user.click(screen.getByRole('button', { name: '바로 결제' }))
 
     expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('바로 결제가 대기열 입장 전이라 막히면(403) 서버 문구 없이 입장 시간 만료 화면(M07-1)으로 간다', async () => {
+    captureApply()
+    server.use(
+      http.post('*/api/v1/order/orders', () =>
+        HttpResponse.json(
+          { status: 403, code: 'ORDER_QUEUE_NOT_ADMITTED', message: '서버 문구', data: null },
+          { status: 403 },
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    renderPage({}, { race: { ...RACE, id: '1' } })
+
+    await screen.findByLabelText('이름')
+    await agree(user)
+    await user.click(screen.getByRole('button', { name: '바로 결제' }))
+
+    await vi.waitFor(() =>
+      expect(replace).toHaveBeenCalledWith('/checkout?result=timeout&raceId=1'),
+    )
+    expect(screen.queryByText('서버 문구')).not.toBeInTheDocument()
     expect(push).not.toHaveBeenCalled()
   })
 
@@ -424,17 +458,47 @@ describe('참가 신청 · 참가자 정보', () => {
 })
 
 describe('RaceApplyPage 대기열 남은 시간 띠', () => {
-  it('대기열 입장 뒤 남은 초가 있으면 헤더 아래에 mm:ss 띠를 붙인다', () => {
-    renderPage({}, 583)
+  it('시안 미리보기는 시안의 남은 초로 헤더 아래에 mm:ss 띠를 붙인다', () => {
+    renderPage({}, { previewRemainingSeconds: 583 })
 
     expect(screen.getByRole('timer')).toHaveTextContent(
       '내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요09:43',
     )
   })
 
-  it('남은 초가 없으면 띠를 그리지 않는다', () => {
-    renderPage()
+  it('대기열에 입장 중이 아니면 띠를 그리지 않는다', async () => {
+    server.use(
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: false, admissionEndsAt: null, remainingSeconds: 0 },
+      }),
+    )
+    renderPage({}, { race: { ...RACE, id: '1' } })
 
+    await screen.findByLabelText('이름')
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+  })
+
+  it('대기열에서 받은 남은 시간을 이어 받아 띠를 붙이고, 0이 되면 입장 시간 만료 화면(M07-1)으로 간다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      server.use(
+        orderMock.getFindAdmissionMockHandler({
+          status: 200,
+          data: { admitted: true, admissionEndsAt: '2026-10-16T10:10:00', remainingSeconds: 2 },
+        }),
+      )
+      renderPage({}, { race: { ...RACE, id: '1' } })
+
+      expect(await screen.findByRole('timer')).toHaveTextContent(
+        '내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요00:02',
+      )
+      await act(() => vi.advanceTimersByTimeAsync(2000))
+      await vi.waitFor(() =>
+        expect(replace).toHaveBeenCalledWith('/checkout?result=timeout&raceId=1'),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

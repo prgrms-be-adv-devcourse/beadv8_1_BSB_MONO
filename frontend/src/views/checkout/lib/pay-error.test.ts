@@ -21,6 +21,15 @@ describe('toPayFailure', () => {
     expect(toPayFailure(conflict('남은 자리가 없습니다.')).kind).toBe('soldout')
   })
 
+  it('대기열 입장 시간이 끝나 막히면(403 ORDER_QUEUE_NOT_ADMITTED) 문구와 상관없이 시간 초과로 본다', () => {
+    const error = new ApiError(
+      403,
+      { status: 403, code: 'ORDER_QUEUE_NOT_ADMITTED', message: '아무 문구', data: null },
+      '/api/v1/order/orders/1/payment',
+    )
+    expect(toPayFailure(error)).toEqual({ kind: 'timeout' })
+  })
+
   it('409가 아니거나 서버에 닿지 못하면 실패로 본다', () => {
     expect(toPayFailure(new ApiError(500, null, '/x')).kind).toBe('failed')
     expect(toPayFailure(new TypeError('Failed to fetch')).kind).toBe('failed')

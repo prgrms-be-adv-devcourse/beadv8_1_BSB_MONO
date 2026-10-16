@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { SAMPLE_PARTICIPANT, useBookingFlow } from '@/features/booking'
+import { useQueueAdmission } from '@/features/queue-admission'
 import { parseKstDateTime, RACE_DETAIL, raceDetailQueryOptions } from '@/entities/race'
 import { orderApi, unwrapData, type orderModel } from '@/shared/api'
 import { formatNumber } from '@/shared/lib'
@@ -98,19 +99,24 @@ const CHARGE_HREF = '/me/deposit/charge'
 const won = (amount: number) => `₩${formatNumber(amount)}`
 
 // 피그마 V2 · M07 결제 · 부족분 충전 (+ 연결 끊김, M07-1~3 결과)
-// 결제 화면은 주문(/checkout?orderId=)으로 그린다. 남은 시간은 주문의 결제 기한(paymentDueAt)까지 센다.
+// 결제 화면은 주문(/checkout?orderId=)으로 그린다. 남은 시간은 대기열 입장 끝 시각(= 결제 기한)까지 센다.
+// 대기열 화면에서 받은 입장 상태를 이어 쓰고, 입장 상태를 모르면 주문의 결제 기한(paymentDueAt)까지 센다.
 // ?preview=offline|timeout|soldout|failed 시안은 API를 부르지 않고 시안 예시 값을 보여 준다.
+// ?result=timeout&raceId= 는 입장 시간이 끝나 신청 · 대기열 화면에서 넘어온 시간 초과 화면(M07-1)이다.
 // TODO(api): 토스페이먼츠 충전을 붙인다. 지금은 충전창으로 보내기만 한다.
 export function CheckoutPage({
   state = 'default',
   orderId,
+  raceId,
 }: {
   state?: CheckoutState
   /** state가 default일 때 결제할 주문 */
   orderId?: number
+  /** state가 timeout일 때 "대회 다시 보기"가 갈 대회 */
+  raceId?: number
 }) {
   if (state === 'timeout' || state === 'soldout' || state === 'failed') {
-    return <CheckoutResult view={state} />
+    return <CheckoutResult view={state} raceId={state === 'timeout' ? raceId : undefined} />
   }
   if (state === 'offline') return <OfflinePreview />
   // 주문 없이 들어오는 경우는 page.tsx에서 notFound()로 막는다
@@ -197,8 +203,13 @@ function OrderCheckout({ orderId }: { orderId: number }) {
   const [agreed, setAgreed] = useState(false)
   const [failure, setFailure] = useState<PayFailure | null>(null)
 
+  // 남은 시간은 대기열 입장 끝 시각까지 센다. 입장 상태를 묻는 중이거나 입장 중이 아니면(모름) 주문의 결제 기한을 쓴다.
+  const admission = useQueueAdmission(raceId, order.data?.items?.[0]?.raceCourseId, 'follow')
   const dueAt = order.data?.paymentDueAt
-  const remaining = useHoldCountdown(dueAt ? parseKstDateTime(dueAt).getTime() : null)
+  const admissionDeadline = admission.isFetching ? null : admission.deadline
+  const remaining = useHoldCountdown(
+    admissionDeadline ?? (dueAt ? parseKstDateTime(dueAt).getTime() : null),
+  )
 
   const pay = useMutation({
     mutationFn: async () => unwrapData(await orderApi.pay(orderId)),
