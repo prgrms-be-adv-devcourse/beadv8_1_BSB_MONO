@@ -94,6 +94,16 @@ const authHandlers = [
 ]
 
 /**
+ * 탈퇴 목. 성공(200)이 기본이다. 실패(예치금·참가권이 남음, 확인 실패)는 테스트에서 server.use로 바꿔 끼운다.
+ * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ */
+const withdrawHandlers = [
+  http.delete('*/api/v1/member/members/me', () =>
+    HttpResponse.json({ status: 200, message: '탈퇴했습니다.', data: null }),
+  ),
+]
+
+/**
  * 내 참가권 목. 생성된 주문 목록 예시는 결제 대기 · 기한 만료 주문뿐이라 참가권이 하나도 안 보인다.
  * 결제한 주문(주문 상세 예시와 같은 1번)을 맨 앞에 더한다. 생성된 핸들러보다 앞에 둔다.
  */
@@ -184,6 +194,7 @@ export const handlers = [
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
   ...authHandlers,
+  ...withdrawHandlers,
   ...fileUploadHandlers,
   myOrdersHandler,
   ...orderHandlers,

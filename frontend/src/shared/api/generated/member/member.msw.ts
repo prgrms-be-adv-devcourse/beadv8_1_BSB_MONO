@@ -53,6 +53,16 @@ export const getModifyMeMockHandler = (overrideResponse?: RsDataMemberDto | ((in
   }, options)
 }
 
+export const getWithdrawMeMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.delete>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+  return http.delete('*/api/v1/member/members/me', async (info: Parameters<Parameters<typeof http.delete>[1]>[0]) => {
+  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
+
+    return new HttpResponse(null,
+      { status: 200
+      })
+  }, options)
+}
+
 export const getReissueMockHandler = (overrideResponse?: RsDataTokenReissueResponseDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataTokenReissueResponseDto> | RsDataTokenReissueResponseDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/auth/reissue', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
 
@@ -99,6 +109,7 @@ export const getJoinMockHandler = (overrideResponse?: unknown | ((info: Paramete
 export const getBukangMemberAPIMock = () => [
   getFindMeMockHandler(),
   getModifyMeMockHandler(),
+  getWithdrawMeMockHandler(),
   getReissueMockHandler(),
   getLogoutMockHandler(),
   getLoginMockHandler(),
