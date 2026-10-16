@@ -28,8 +28,8 @@ function nextHref(outcome: ChargeOutcome, returnOrderId: number | undefined): Ro
 // 토스 결제창이 successUrl·failUrl로 돌려보내는 화면. 충전을 확정하는 동안 로딩만 보여 준다.
 export function DepositChargeReturnPage(params: ChargeReturn) {
   const router = useRouter()
-  useConfirmChargeReturn(params, (outcome) =>
-    router.replace(nextHref(outcome, params.returnOrderId)),
+  useConfirmChargeReturn(params, ({ outcome, returnOrderId }) =>
+    router.replace(nextHref(outcome, returnOrderId)),
   )
   return (
     <>

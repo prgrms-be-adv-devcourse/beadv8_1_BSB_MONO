@@ -43,10 +43,9 @@ const browserEnv = (): Env => ({
   navigate: (url) => window.location.assign(url),
 })
 
-function returnUrl(origin: string, result: 'success' | 'fail', returnOrderId?: number) {
-  const params = new URLSearchParams({ result })
-  if (returnOrderId !== undefined) params.set('returnOrderId', String(returnOrderId))
-  return `${origin}${CHARGE_RETURN_PATH}?${params}`
+// 돌아갈 주문은 주소에 싣지 않고 sessionStorage의 충전 기록으로만 정한다 (주소를 고쳐도 다른 주문으로 가지 않게)
+function returnUrl(origin: string, result: 'success' | 'fail') {
+  return `${origin}${CHARGE_RETURN_PATH}?result=${result}`
 }
 
 /**
@@ -61,8 +60,8 @@ export async function requestCharge(
 ): Promise<'redirecting' | 'canceled'> {
   const orderId = `charge-${crypto.randomUUID()}`
   savePendingCharge({ orderId, amount, returnOrderId })
-  const successUrl = returnUrl(env.origin, 'success', returnOrderId)
-  const failUrl = returnUrl(env.origin, 'fail', returnOrderId)
+  const successUrl = returnUrl(env.origin, 'success')
+  const failUrl = returnUrl(env.origin, 'fail')
 
   if (env.mocking) {
     const params = new URLSearchParams({

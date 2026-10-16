@@ -249,6 +249,24 @@ describe('결제 화면', () => {
     expect(requestCharge).not.toHaveBeenCalled()
   })
 
+  it('충전하고 돌아와 다시 결제했는데 또 모자라면 결제창을 저절로 띄우지 않고 버튼으로 다시 충전하게 한다', async () => {
+    server.use(
+      balanceHandler(40_000),
+      payHandler(() => conflict('ORDER_INSUFFICIENT_BALANCE', { shortage: 5000 })),
+    )
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderCheckout(undefined, { charged: true })
+
+    const button = await screen.findByRole('button', { name: '₩10,000 충전하고 결제' })
+    await vi.waitFor(() => expect(button).toBeEnabled())
+    expect(requestCharge).not.toHaveBeenCalled()
+
+    await user.click(button)
+    await vi.waitFor(() =>
+      expect(requestCharge).toHaveBeenCalledWith({ amount: 10_000, returnOrderId: 1 }),
+    )
+  })
+
   it('충전하고 돌아왔는데 결제 기한이 지났으면 다시 결제하지 않고 시간 초과 화면(M07-1)을 보여 준다', async () => {
     let paid = false
     server.use(
