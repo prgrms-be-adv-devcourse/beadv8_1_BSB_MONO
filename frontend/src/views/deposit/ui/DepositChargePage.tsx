@@ -1,29 +1,49 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { MIN_CHARGE, requestCharge } from '@/features/deposit-charge'
+import { useMyBalance } from '@/entities/wallet'
 import { Alert, BottomCta, Button, KeyValue } from '@/shared/ui'
 
 const STEPS = [10_000, 50_000, 100_000]
-const BALANCE = 5_000
 const won = (n: number) => n.toLocaleString('ko-KR')
 
-// 피그마 V2 · M21 예치금 충전
-// TODO(api): 토스페이먼츠 결제창을 띄운다
+// 피그마 V2 · M21 예치금 충전 (예치금 M17에서 들어오는 충전)
+// 결제 중 모자란 충전은 결제 화면(M07)이 바로 토스 결제창을 띄우므로 이 화면을 거치지 않는다.
+// 그래서 시안 위쪽의 "결제에 ₩N이 부족해요" 안내는 두지 않는다.
 export function DepositChargePage() {
-  const router = useRouter()
-  const [amount, setAmount] = useState(40_000)
+  const { balance } = useMyBalance()
+  const [amount, setAmount] = useState(MIN_CHARGE)
+  const [charging, setCharging] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  const charge = () => {
+    setCharging(true)
+    setFailed(false)
+    requestCharge({ amount })
+      .then((result) => {
+        if (result === 'canceled') setCharging(false)
+      })
+      .catch(() => {
+        setCharging(false)
+        setFailed(true)
+      })
+  }
 
   return (
     <>
       <AppHeader type="sub" title="예치금 충전" />
       <main className="flex flex-1 flex-col gap-4 px-4 py-6">
-        <Alert
-          title="결제에 ₩40,000이 부족해요"
-          description="부족한 만큼 충전하면 바로 결제로 돌아가요. 1만 원보다 적게 모자라면 1만 원을 충전해요."
-        />
+        {/* 결제창을 띄우지 못했을 때. 시안에 문구가 없어 결제 실패(M07-3) 문구를 쓴다 */}
+        {failed && (
+          <Alert
+            tone="danger"
+            title="결제하지 못했어요"
+            description="잠시 뒤 다시 시도해 주세요."
+          />
+        )}
         <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <label htmlFor="charge-amount" className="text-label-m">
             충전할 금액
@@ -52,10 +72,15 @@ export function DepositChargePage() {
           </div>
           <p className="text-caption text-text-tertiary">1만 원부터 충전할 수 있어요.</p>
           <div className="flex flex-col gap-2 rounded-md bg-bg-subtle p-4">
-            <KeyValue label="지금 예치금" value={`₩${won(BALANCE)}`} />
+            <KeyValue
+              label="지금 예치금"
+              value={balance === undefined ? '-' : `₩${won(balance)}`}
+            />
             <div className="flex items-center justify-between">
               <span className="text-body-s text-text-tertiary">충전 후 예치금</span>
-              <span className="text-label-strong">₩{won(BALANCE + amount)}</span>
+              <span className="text-label-strong">
+                {balance === undefined ? '-' : `₩${won(balance + amount)}`}
+              </span>
             </div>
           </div>
         </section>
@@ -69,7 +94,7 @@ export function DepositChargePage() {
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button size="l" disabled={amount < 10_000} onClick={() => router.push('/checkout')}>
+          <Button size="l" disabled={amount < MIN_CHARGE || charging} onClick={charge}>
             ₩{won(amount)} 충전하기
           </Button>
         }
