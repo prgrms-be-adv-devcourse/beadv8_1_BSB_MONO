@@ -42,6 +42,10 @@ export type RaceOption = {
   /** 종목 대표 이미지 */
   image?: string
   soldOut?: boolean
+  /** 기념품 키트가 있으면 참가 신청 때 키트 배송 주소를 받는다 */
+  kitIncluded?: boolean
+  /** 고를 수 있는 기념 티셔츠 사이즈 (작은 것부터). 비어 있으면 티셔츠가 없는 종목 */
+  shirtSizes?: string[]
 }
 
 export type RaceDetail = {

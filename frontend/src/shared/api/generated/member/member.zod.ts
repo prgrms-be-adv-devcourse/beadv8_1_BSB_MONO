@@ -8,37 +8,85 @@
 import * as zod from 'zod';
 
 /**
- * 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다.
- * @summary 회원가입
+ * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
+ * @summary 내 정보 조회
  */
-
-export const joinBodyPasswordMin = 10;
-export const joinBodyPasswordMax = 2147483647;
-
-
-export const joinBodyNicknameMin = 0;
-export const joinBodyNicknameMax = 30;
-
-
-
-export const joinBodyPhoneRegExp = new RegExp('^01[016789]-?\\d{3,4}-?\\d{4}$');
-
-
-export const JoinBody = zod.object({
-  "email": zod.email().min(1).describe('이메일 (로그인 ID)'),
-  "password": zod.string().min(joinBodyPasswordMin).max(joinBodyPasswordMax).describe('비밀번호 (10자 이상)'),
-  "name": zod.string().min(1).describe('실명'),
-  "nickname": zod.string().min(joinBodyNicknameMin).max(joinBodyNicknameMax).describe('닉네임 (30자 이하)'),
-  "phone": zod.string().min(1).regex(joinBodyPhoneRegExp).describe('휴대폰 번호 (하이픈 생략 가능)'),
-  "birthDate": zod.iso.date().describe('생년월일'),
-  "gender": zod.union([zod.literal('MALE'),zod.literal('FEMALE'),zod.literal(null)]).nullish().describe('성별 (선택)')
-}).describe('회원가입 요청')
-
-export const JoinResponse = zod.void()
+export const FindMeResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "nickname": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
+}).optional()
+})
 
 
 /**
- * 이메일과 비밀번호로 로그인하고 세션에 인증 정보를 저장한다.
+ * X-Member-Id 헤더의 회원의 이름, 생년월일, 휴대폰 번호, 닉네임을 바꾼다. 다른 회원이 쓰는 닉네임·휴대폰 번호인지 검사하고(내 행은 제외, 휴대폰은 하이픈 유무 무관), 4칸이 모두 그대로면 저장하지 않는다.
+ * @summary 내 정보 수정
+ */
+export const modifyMeBodyNameMin = 0;
+export const modifyMeBodyNameMax = 255;
+
+
+
+export const modifyMeBodyNicknameRegExp = new RegExp('^[가-힣A-Za-z0-9]+$');
+
+
+export const modifyMeBodyPhoneRegExp = new RegExp('^01[016789]-?\\d{3,4}-?\\d{4}$');
+
+
+export const ModifyMeBody = zod.object({
+  "name": zod.string().min(modifyMeBodyNameMin).max(modifyMeBodyNameMax).describe('실명'),
+  "nickname": zod.string().min(1).regex(modifyMeBodyNicknameRegExp).describe('닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)'),
+  "phone": zod.string().min(1).regex(modifyMeBodyPhoneRegExp).describe('휴대폰 번호 (하이픈 생략 가능)'),
+  "birthDate": zod.iso.date().describe('생년월일')
+}).describe('내 정보 수정 요청')
+
+export const ModifyMeResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "nickname": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
+}).optional()
+})
+
+
+/**
+ * 쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). 이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).
+ * @summary 토큰 재발급
+ */
+export const ReissueResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "accessToken": zod.string().optional().describe('새 Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다')
+}).optional().describe('토큰 재발급 응답')
+})
+
+
+/**
+ * Redis의 Refresh Token을 지우고 Refresh Token 쿠키를 만료시킨다. 쿠키가 없거나 이미 무효한 토큰이어도 성공으로 응답한다.
+ * @summary 로그아웃
+ */
+export const LogoutResponse = zod.unknown()
+
+
+/**
+ * 이메일과 비밀번호로 로그인하고 Access Token은 응답 본문으로, Refresh Token은 httpOnly 쿠키로 내려준다. Refresh Token은 Redis에도 저장한다.
  * @summary 로그인
  */
 
@@ -50,4 +98,50 @@ export const LoginBody = zod.object({
   "password": zod.string().min(1).describe('비밀번호')
 }).describe('로그인 요청')
 
-export const LoginResponse = zod.unknown()
+export const LoginResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "accessToken": zod.string().optional().describe('Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다'),
+  "member": zod.object({
+  "id": zod.int().optional(),
+  "createDate": zod.iso.datetime({"offset":true}).optional(),
+  "modifyDate": zod.iso.datetime({"offset":true}).optional(),
+  "nickname": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "name": zod.string().optional(),
+  "birthDate": zod.iso.date().optional()
+}).optional().describe('로그인한 회원')
+}).optional().describe('로그인 응답')
+})
+
+
+/**
+ * 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다.
+ * @summary 회원가입
+ */
+
+export const joinBodyPasswordMin = 10;
+export const joinBodyPasswordMax = 2147483647;
+
+
+
+
+export const joinBodyNicknameRegExp = new RegExp('^[가-힣A-Za-z0-9]+$');
+
+
+export const joinBodyPhoneRegExp = new RegExp('^01[016789]-?\\d{3,4}-?\\d{4}$');
+
+
+export const JoinBody = zod.object({
+  "email": zod.email().min(1).describe('이메일 (로그인 ID)'),
+  "password": zod.string().min(joinBodyPasswordMin).max(joinBodyPasswordMax).describe('비밀번호 (10자 이상)'),
+  "name": zod.string().min(1).describe('실명'),
+  "nickname": zod.string().min(1).regex(joinBodyNicknameRegExp).describe('닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)'),
+  "phone": zod.string().min(1).regex(joinBodyPhoneRegExp).describe('휴대폰 번호 (하이픈 생략 가능)'),
+  "birthDate": zod.iso.date().describe('생년월일'),
+  "gender": zod.union([zod.literal('MALE'),zod.literal('FEMALE'),zod.literal(null)]).nullish().describe('성별 (선택)')
+}).describe('회원가입 요청')
+
+export const JoinResponse = zod.void()

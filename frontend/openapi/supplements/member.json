@@ -1,0 +1,95 @@
+{
+  "responses": {
+    "login": {
+      "200": {
+        "wrapper": "RsDataMemberLoginResponseDto",
+        "data": {
+          "$ref": "#/components/schemas/MemberLoginResponseDto"
+        }
+      }
+    },
+    "reissue": {
+      "200": {
+        "wrapper": "RsDataTokenReissueResponseDto",
+        "data": {
+          "$ref": "#/components/schemas/TokenReissueResponseDto"
+        }
+      }
+    },
+    "findMe": {
+      "200": {
+        "wrapper": "RsDataMemberDto",
+        "data": {
+          "$ref": "#/components/schemas/MemberDto"
+        }
+      }
+    },
+    "modifyMe": {
+      "200": {
+        "wrapper": "RsDataMemberDto",
+        "data": {
+          "$ref": "#/components/schemas/MemberDto"
+        }
+      }
+    }
+  },
+  "schemas": {
+    "MemberDto": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "modifyDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nickname": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "birthDate": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "MemberLoginResponseDto": {
+      "type": "object",
+      "description": "로그인 응답",
+      "properties": {
+        "accessToken": {
+          "type": "string",
+          "description": "Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다"
+        },
+        "member": {
+          "$ref": "#/components/schemas/MemberDto",
+          "description": "로그인한 회원"
+        }
+      }
+    },
+    "TokenReissueResponseDto": {
+      "type": "object",
+      "description": "토큰 재발급 응답",
+      "properties": {
+        "accessToken": {
+          "type": "string",
+          "description": "새 Access Token. 인증이 필요한 요청에 Authorization: Bearer {accessToken} 헤더로 보낸다"
+        }
+      }
+    }
+  }
+}

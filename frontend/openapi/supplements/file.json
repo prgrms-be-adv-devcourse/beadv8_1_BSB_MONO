@@ -18,6 +18,22 @@
           "$ref": "#/components/schemas/FileDto"
         }
       }
+    },
+    "createUploadUrl": {
+      "201": {
+        "wrapper": "RsDataFileUploadDto",
+        "data": {
+          "$ref": "#/components/schemas/FileUploadDto"
+        }
+      }
+    },
+    "completeUpload": {
+      "200": {
+        "wrapper": "RsDataFileDto",
+        "data": {
+          "$ref": "#/components/schemas/FileDto"
+        }
+      }
     }
   },
   "schemas": {
@@ -92,6 +108,31 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "FileUploadDto": {
+      "type": "object",
+      "properties": {
+        "fileId": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "uploadUrl": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     }

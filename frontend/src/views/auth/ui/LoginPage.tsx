@@ -8,6 +8,8 @@ import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
+import { safeNextPath, useLogin } from '@/features/auth'
+import { ApiError } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import { Button, FOCUS_RING, Logo, TextField } from '@/shared/ui'
 
@@ -17,8 +19,10 @@ const LINK = cn('rounded-sm', FOCUS_RING)
 
 // 피그마 V2 · M03 로그인 (+ M03-E 로그인 실패)
 // failed는 시안 미리보기(?preview=error)용. 실패 문구를 띄운 채로 보여 준다.
-export function LoginPage({ failed = false }: { failed?: boolean }) {
+// next는 로그인 뒤 돌아갈 경로(?next=). 앱 내부 경로가 아니면 홈으로 간다.
+export function LoginPage({ failed = false, next }: { failed?: boolean; next?: string }) {
   const router = useRouter()
+  const login = useLogin()
   const {
     register,
     handleSubmit,
@@ -30,18 +34,22 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
       ? { email: 'runner@crewrun.kr', password: 'password1' }
       : { email: '', password: '' },
   })
+  // 서버가 준 로그인 실패 문구는 입력을 고치면 지운다 (칸별 입력 검사 문구는 그대로 둔다).
+  // 요청 중에 지우면 성공해도 화면 이동 콜백이 불리지 않으므로 실패했을 때만 지운다.
+  const clearLoginError = () => {
+    if (login.isError) login.reset()
+  }
   return (
     <>
       <AppHeader type="sub" title="로그인" />
       <main className="flex flex-1 flex-col bg-bg-surface">
         <div className="flex-1" />
         <form
-          className="flex flex-col items-center px-6"
+          className="flex flex-col items-center px-4"
           noValidate
-          onSubmit={handleSubmit(() => {
-            // TODO(api): ApiV1AuthController 로그인에 연결한다. 실패하면 AUTH_ERRORS.loginFailed를 띄운다.
-            router.push('/')
-          })}
+          onSubmit={handleSubmit((values) =>
+            login.mutate(values, { onSuccess: () => router.replace(safeNextPath(next)) }),
+          )}
         >
           <Logo className="h-11 w-[150px]" />
           <p className="mt-3 text-center text-heading-s">러닝 대회, 여기서 바로 신청해요</p>
@@ -52,17 +60,25 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
               autoComplete="email"
               placeholder="이메일"
               error={errors.email?.message}
-              {...register('email')}
+              {...register('email', { onChange: clearLoginError })}
             />
             <TextField
               aria-label="비밀번호"
               type="password"
               autoComplete="current-password"
               placeholder="비밀번호"
-              error={errors.password?.message ?? (failed ? AUTH_ERRORS.loginFailed : undefined)}
-              {...register('password')}
+              error={
+                errors.password?.message ??
+                (failed ? AUTH_ERRORS.loginFailed : loginErrorMessage(login.error))
+              }
+              {...register('password', { onChange: clearLoginError })}
             />
-            <Button type="submit" size="l" className="w-full" disabled={!isValid}>
+            <Button
+              type="submit"
+              size="l"
+              className="w-full"
+              disabled={!isValid || login.isPending}
+            >
               로그인
             </Button>
             <LinkRow
@@ -93,6 +109,13 @@ export function LoginPage({ failed = false }: { failed?: boolean }) {
       <BottomNav />
     </>
   )
+}
+
+/** 로그인 실패 문구. 401(이메일·비밀번호 불일치)은 시안(M03-E) 문구, 그 밖에는 서버 문구를 보여 준다. */
+function loginErrorMessage(error: Error | null): string | undefined {
+  if (!error) return undefined
+  if (error instanceof ApiError && error.status === 401) return AUTH_ERRORS.loginFailed
+  return (error instanceof ApiError && error.serverMessage) || AUTH_ERRORS.loginUnavailable
 }
 
 type RowLink = {

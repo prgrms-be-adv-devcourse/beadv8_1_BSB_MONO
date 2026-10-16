@@ -1,0 +1,2 @@
+# 스프링 테스트가 기본 리스너와 함께 자동으로 불러온다 (테스트 클래스에 애너테이션을 붙이지 않아도 된다)
+org.springframework.test.context.TestExecutionListener=com.bukang.common.global.config.GlobalConfigTestExecutionListener

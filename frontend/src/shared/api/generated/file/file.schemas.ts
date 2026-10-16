@@ -5,6 +5,13 @@
  * 크루 중심 마라톤 대회 예매·커머스 플랫폼 파일 API
  * OpenAPI spec version: v1
  */
+export interface RsData {
+  status?: number;
+  code?: string;
+  message?: string;
+  data?: unknown;
+}
+
 /**
  * 파일 용도. 용도마다 받을 수 있는 파일 종류와 크기가 정해져 있다
  */
@@ -42,12 +49,6 @@ export interface FileUploadRequestDto {
      * @minimum 0
      */
   fileSize: number;
-}
-
-export interface RsData {
-  status?: number;
-  message?: string;
-  data?: unknown;
 }
 
 export type FileDtoStatus = typeof FileDtoStatus[keyof typeof FileDtoStatus];
@@ -91,10 +92,26 @@ export interface FileDto {
   url?: string | null;
 }
 
+export type FileUploadDtoHeaders = {[key: string]: string};
+
+export interface FileUploadDto {
+  fileId?: number;
+  uploadUrl?: string;
+  method?: string;
+  headers?: FileUploadDtoHeaders;
+  expiresAt?: string;
+}
+
 export interface RsDataListFileDto {
   status?: number;
   message?: string;
   data?: FileDto[];
+}
+
+export interface RsDataFileUploadDto {
+  status?: number;
+  message?: string;
+  data?: FileUploadDto;
 }
 
 export interface RsDataFileDto {

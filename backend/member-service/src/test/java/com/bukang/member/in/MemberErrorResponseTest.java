@@ -103,6 +103,14 @@ class MemberErrorResponseTest {
 	}
 
 	@Test
+	@DisplayName("Refresh Token으로 재발급하지 못하면 MEMBER_INVALID_REFRESH_TOKEN으로 응답한다")
+	void invalidRefreshToken() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/reissue"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("MEMBER_INVALID_REFRESH_TOKEN"));
+	}
+
+	@Test
 	@DisplayName("예상 못 한 오류는 RsData 형식의 500 INTERNAL_ERROR로 응답한다")
 	void unexpectedError() throws Exception {
 		mockMvc.perform(get("/test/unexpected"))

@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
+import { useLogin } from '@/features/auth'
+import { memberApi } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import {
   BottomCta,
@@ -19,6 +21,7 @@ import {
   TextField,
 } from '@/shared/ui'
 
+import { joinErrorMessage, toJoinRequest } from '../model/join'
 import {
   AUTH_ERRORS,
   signupAccountSchema,
@@ -61,7 +64,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
     resolver: zodResolver(signupAccountSchema),
     mode: 'onTouched',
     defaultValues: invalid
-      ? { email: 'runner@crewrun.kr', password: 'password1', passwordConfirm: 'password2' }
+      ? { email: 'runner@crewrun.kr', password: 'password12', passwordConfirm: 'password13' }
       : account,
   })
   // 입력할 때마다 스토어에 옮겨 둔다. 뒤로 왔다가 다시 와도 값이 남는다.
@@ -76,7 +79,8 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
   const revalidateConfirm = () => {
     if (getValues('passwordConfirm')) void trigger('passwordConfirm')
   }
-  // TODO(api): ApiV1MemberController로 이메일 중복을 확인한다. 중복이면 AUTH_ERRORS.emailTaken.
+  // TODO(api): 이메일 중복 확인 API가 백엔드에 없다. 지금은 마지막 단계의 가입 요청이 409로 알려 준다.
+  // 생기면 여기서 확인하고 중복이면 email 칸에 AUTH_ERRORS.emailTaken을 띄운다.
   const onNext = handleSubmit(() => router.push('/signup/profile'))
   // 약관 시트를 동의 없이 닫았다면 "다음"이 시트를 다시 연다. 동의해야 다음 단계로 간다.
   const onNextClick = termsAgreed || invalid ? onNext : () => setTermsOpen(true)
@@ -107,7 +111,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           type="password"
           autoComplete="new-password"
           placeholder="비밀번호를 입력해 주세요"
-          helper="영문 · 숫자 포함 8자 이상"
+          helper="10자 이상"
           error={errors.password?.message}
           {...register('password', { onChange: revalidateConfirm })}
         />
@@ -150,7 +154,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           <p className="text-body-m text-text-secondary">
             대회 신청과 거래를 위해 꼭 필요한 약관이에요.
           </p>
-          <div className="rounded-[12px] bg-bg-subtle p-4">
+          <div className="rounded-md bg-bg-subtle p-4">
             <Checkbox
               checked={allChecked}
               onCheckedChange={setAllTerms}
@@ -202,12 +206,17 @@ export function SignupProfilePage() {
 
 function SignupProfileForm() {
   const router = useRouter()
+  const account = useSignupStep((s) => s.account)
   const profile = useSignupStep((s) => s.profile)
   const setProfile = useSignupStep((s) => s.setProfile)
+  const join = memberApi.useJoin()
+  const login = useLogin()
+  const [formError, setFormError] = useState<string>()
   const {
     register,
     handleSubmit,
     subscribe,
+    setError,
     formState: { errors, isValid },
   } = useForm<SignupProfileValues>({
     resolver: zodResolver(signupProfileSchema),
@@ -222,8 +231,31 @@ function SignupProfileForm() {
       }),
     [subscribe, setProfile],
   )
-  // TODO(api): ApiV1MemberController 가입에 스토어의 약관 · 계정과 회원 정보를 함께 보낸다.
-  const onSubmit = handleSubmit(() => router.push('/'))
+  // 가입(POST /api/v1/auth/join) 뒤 같은 이메일 · 비밀번호로 바로 로그인해 홈으로 간다.
+  // 가입 API는 토큰을 주지 않는다. 로그인만 실패하면 가입은 됐으므로 로그인 화면으로 보낸다.
+  const onSubmit = handleSubmit((values) => {
+    setFormError(undefined)
+    const body = toJoinRequest(account, values)
+    join.mutate(
+      { data: body },
+      {
+        onSuccess: () =>
+          login.mutate(
+            { email: body.email, password: body.password },
+            {
+              onSuccess: () => router.replace('/'),
+              onError: () => router.replace('/login'),
+            },
+          ),
+        onError: (error) => {
+          const { target, message } = joinErrorMessage(error)
+          if (target === 'form') setFormError(message)
+          else setError(target, { message }, { shouldFocus: true })
+        },
+      },
+    )
+  })
+  const submitting = join.isPending || login.isPending
 
   return (
     <>
@@ -260,18 +292,23 @@ function SignupProfileForm() {
         />
         <TextField
           label="닉네임"
-          helper="다른 사람에게는 실명 대신 닉네임이 보여요. 2~10자"
+          helper="다른 사람에게는 실명 대신 닉네임이 보여요. 한글 2~8자, 영문 4~16자"
           error={errors.nickname?.message}
           {...register('nickname')}
         />
         <p className="text-caption text-text-tertiary">
           이름 · 생년월일 · 휴대폰 번호는 대회 신청 때 참가자 정보로 그대로 가져와요.
         </p>
+        {formError && (
+          <p role="alert" className="text-caption text-text-danger">
+            {formError}
+          </p>
+        )}
       </CenterBody>
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button size="l" disabled={!isValid} onClick={onSubmit}>
+          <Button size="l" disabled={!isValid || submitting} onClick={onSubmit}>
             가입 완료
           </Button>
         }

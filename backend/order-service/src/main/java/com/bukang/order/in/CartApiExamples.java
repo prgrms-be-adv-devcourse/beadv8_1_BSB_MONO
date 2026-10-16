@@ -11,7 +11,6 @@ final class CartApiExamples {
 			"data": {
 				"memberId": 1,
 				"items": [
-					{ "id": 2, "createDate": "2026-10-12T10:20:00", "raceCourseId": 3 },
 					{ "id": 1, "createDate": "2026-10-12T10:15:30", "raceCourseId": 1 }
 				]
 			}
@@ -44,9 +43,7 @@ final class CartApiExamples {
 			"message": "장바구니에서 뺐습니다.",
 			"data": {
 				"memberId": 1,
-				"items": [
-					{ "id": 2, "createDate": "2026-10-12T10:20:00", "raceCourseId": 3 }
-				]
+				"items": []
 			}
 		}
 		""";
@@ -94,7 +91,7 @@ final class CartApiExamples {
 	static final String CHECKOUT_SUCCESS = """
 		{
 			"status": 200,
-			"message": "참가권 3건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
+			"message": "참가권 1건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
 			"data": {
 				"orderedCount": 1,
 				"results": [
@@ -134,20 +131,6 @@ final class CartApiExamples {
 								}
 							]
 						}
-					},
-					{
-						"participationId": 12,
-						"outcome": "SOLD_OUT",
-						"code": "ORDER_SOLD_OUT",
-						"message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
-						"order": null
-					},
-					{
-						"participationId": 13,
-						"outcome": "FAILED",
-						"code": "ORDER_APPLICATION_CLOSED",
-						"message": "접수 기간이 아닙니다.",
-						"order": null
 					}
 				]
 			}
@@ -177,16 +160,18 @@ final class CartApiExamples {
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "결제할 참가 신청을 선택해주세요.", "data": null }
 		""";
 
+	static final String ONE_COURSE_ONLY = """
+		{ "status": 409, "code": "ORDER_CART_ONE_COURSE_ONLY",
+			"message": "장바구니에는 한 종목만 담을 수 있습니다. 담긴 종목을 뺀 뒤 담아주세요.", "data": null }
+		""";
+
 	static final String CHECKOUT_TOO_MANY = """
-		{ "status": 400, "code": "INVALID_REQUEST", "message": "한 번에 10건까지 결제할 수 있습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST",
+			"message": "장바구니에는 한 종목만 담을 수 있어 참가 신청 1건만 결제할 수 있습니다.", "data": null }
 		""";
 
 	static final String CHECKOUT_INVALID_ID = """
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "참가 신청 ID가 올바르지 않습니다.", "data": null }
-		""";
-
-	static final String CHECKOUT_DUPLICATE = """
-		{ "status": 400, "code": "ORDER_CART_CHECKOUT_INVALID", "message": "같은 참가 신청을 두 번 보낼 수 없습니다.", "data": null }
 		""";
 
 	static final String MISSING_IDEMPOTENCY_KEY = """

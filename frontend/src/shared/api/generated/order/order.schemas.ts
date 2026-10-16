@@ -85,7 +85,7 @@ export interface ParticipantInfoRequestDto {
      */
   emergencyContactPhone: string;
   /**
-     * 기념 티셔츠(키트) 사이즈 (키트가 없는 종목이면 비워 둔다, 10자 이하)
+     * 기념 티셔츠(키트) 사이즈. 종목이 주는 사이즈(XS~XXXL 중 종목 정보의 tshirtSizeOption) 중 하나이고, 티셔츠가 없는 종목이면 비워 둔다 (소문자도 받는다, 10자 이하)
      * @minLength 0
      * @maxLength 10
      */
@@ -96,6 +96,7 @@ export interface ParticipantInfoRequestDto {
 
 export interface RsData {
   status?: number;
+  code?: string;
   message?: string;
   data?: unknown;
 }
@@ -138,16 +139,280 @@ export interface CartItemAddRequestDto {
 }
 
 /**
- * 장바구니 결제 요청. 장바구니의 참가권마다 미리 작성한 참가 신청 ID를 보낸다
+ * 장바구니 결제 요청. 장바구니에 담은 참가권(한 종목)의 참가 신청 ID를 보낸다
  */
 export interface CartCheckoutRequestDto {
   /**
-     * 결제할 참가 신청 ID 목록 (최대 10개, 겹치지 않게)
+     * 결제할 참가 신청 ID 목록 (1개)
      * @minItems 0
-     * @maxItems 10
+     * @maxItems 1
      * @items.minimum 0
      */
   participationIds: number[];
+}
+
+/**
+ * 키트 배송지 응답
+ */
+export interface ShippingAddressDto {
+  recipientName?: string;
+  recipientPhone?: string;
+  zipcode?: string;
+  address?: string;
+  /** @nullable */
+  addressDetail?: string | null;
+}
+
+export type ParticipantInfoDtoGender = typeof ParticipantInfoDtoGender[keyof typeof ParticipantInfoDtoGender];
+
+
+export const ParticipantInfoDtoGender = {
+  MALE: 'MALE',
+  FEMALE: 'FEMALE',
+} as const;
+
+/**
+ * 참가자 정보 응답
+ */
+export interface ParticipantInfoDto {
+  name?: string;
+  birth?: string;
+  gender?: ParticipantInfoDtoGender;
+  phone?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  /** @nullable */
+  tshirtSize?: string | null;
+  shippingAddress?: ShippingAddressDto | null;
+}
+
+export type ParticipationDtoParticipationType = typeof ParticipationDtoParticipationType[keyof typeof ParticipationDtoParticipationType];
+
+
+export const ParticipationDtoParticipationType = {
+  INDIVIDUAL: 'INDIVIDUAL',
+  CREW: 'CREW',
+} as const;
+
+export type ParticipationDtoStatus = typeof ParticipationDtoStatus[keyof typeof ParticipationDtoStatus];
+
+
+export const ParticipationDtoStatus = {
+  PENDING: 'PENDING',
+  APPLIED: 'APPLIED',
+  CONFIRMED: 'CONFIRMED',
+  RELEASED: 'RELEASED',
+  FAILED: 'FAILED',
+  CANCELED: 'CANCELED',
+} as const;
+
+/**
+ * 참가 신청
+ */
+export interface ParticipationDto {
+  id?: number;
+  createDate?: string;
+  modifyDate?: string;
+  raceId?: number;
+  raceCourseId?: number;
+  memberId?: number;
+  participationType?: ParticipationDtoParticipationType;
+  status?: ParticipationDtoStatus;
+  participant?: ParticipantInfoDto;
+  /** @nullable */
+  thirdPartyConsent?: boolean | null;
+  /** @nullable */
+  consentedAt?: string | null;
+  /** @nullable */
+  paymentDueAt?: string | null;
+}
+
+export type OrderItemDtoStatus = typeof OrderItemDtoStatus[keyof typeof OrderItemDtoStatus];
+
+
+export const OrderItemDtoStatus = {
+  ORDERED: 'ORDERED',
+  PAID: 'PAID',
+  CANCELED: 'CANCELED',
+} as const;
+
+/**
+ * 주문 상품
+ */
+export interface OrderItemDto {
+  id?: number;
+  participationId?: number;
+  raceCourseId?: number;
+  sellerId?: number;
+  itemName?: string;
+  unitPrice?: number;
+  quantity?: number;
+  amount?: number;
+  status?: OrderItemDtoStatus;
+}
+
+export type OrderDtoStatus = typeof OrderDtoStatus[keyof typeof OrderDtoStatus];
+
+
+export const OrderDtoStatus = {
+  CREATED: 'CREATED',
+  PAID: 'PAID',
+  PARTIAL_CANCELED: 'PARTIAL_CANCELED',
+  CANCELED: 'CANCELED',
+  EXPIRED: 'EXPIRED',
+} as const;
+
+/**
+ * 주문 상세
+ */
+export interface OrderDto {
+  id?: number;
+  createDate?: string;
+  orderNo?: string;
+  buyerId?: number;
+  raceId?: number;
+  status?: OrderDtoStatus;
+  totalAmount?: number;
+  canceledAmount?: number;
+  /** @nullable */
+  paymentDueAt?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  shippingAddress?: ShippingAddressDto | null;
+  items?: OrderItemDto[];
+}
+
+/**
+ * 장바구니 항목
+ */
+export interface CartItemDto {
+  id?: number;
+  createDate?: string;
+  raceCourseId?: number;
+}
+
+/**
+ * 장바구니
+ */
+export interface CartDto {
+  memberId?: number;
+  items?: CartItemDto[];
+}
+
+/**
+ * CREATED·EXISTING이면 order가 있다
+ */
+export type CartCheckoutItemDtoOutcome = typeof CartCheckoutItemDtoOutcome[keyof typeof CartCheckoutItemDtoOutcome];
+
+
+export const CartCheckoutItemDtoOutcome = {
+  CREATED: 'CREATED',
+  EXISTING: 'EXISTING',
+  SOLD_OUT: 'SOLD_OUT',
+  FAILED: 'FAILED',
+} as const;
+
+/**
+ * 장바구니 결제 항목별 결과
+ */
+export interface CartCheckoutItemDto {
+  participationId?: number;
+  /** CREATED·EXISTING이면 order가 있다 */
+  outcome?: CartCheckoutItemDtoOutcome;
+  /**
+     * SOLD_OUT·FAILED일 때 오류 코드 (예: ORDER_SOLD_OUT)
+     * @nullable
+     */
+  code?: string | null;
+  message?: string;
+  order?: OrderDto | null;
+}
+
+/**
+ * 장바구니 결제 결과
+ */
+export interface CartCheckoutDto {
+  orderedCount?: number;
+  results?: CartCheckoutItemDto[];
+}
+
+export type OrderSummaryDtoStatus = typeof OrderSummaryDtoStatus[keyof typeof OrderSummaryDtoStatus];
+
+
+export const OrderSummaryDtoStatus = {
+  CREATED: 'CREATED',
+  PAID: 'PAID',
+  PARTIAL_CANCELED: 'PARTIAL_CANCELED',
+  CANCELED: 'CANCELED',
+  EXPIRED: 'EXPIRED',
+} as const;
+
+/**
+ * 주문 목록의 한 줄
+ */
+export interface OrderSummaryDto {
+  id?: number;
+  createDate?: string;
+  orderNo?: string;
+  status?: OrderSummaryDtoStatus;
+  totalAmount?: number;
+  /** @nullable */
+  paymentDueAt?: string | null;
+  itemName?: string;
+  itemCount?: number;
+}
+
+/**
+ * 주문 목록 한 페이지
+ */
+export interface OrderPageDto {
+  orders?: OrderSummaryDto[];
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+}
+
+export interface RsDataParticipationDto {
+  status?: number;
+  message?: string;
+  data?: ParticipationDto;
+}
+
+export interface RsDataOrderPageDto {
+  status?: number;
+  message?: string;
+  data?: OrderPageDto;
+}
+
+export interface RsDataOrderDto {
+  status?: number;
+  message?: string;
+  data?: OrderDto;
+}
+
+export interface RsDataCartItemDto {
+  status?: number;
+  message?: string;
+  data?: CartItemDto;
+}
+
+export interface RsDataCartCheckoutDto {
+  status?: number;
+  message?: string;
+  data?: CartCheckoutDto;
+}
+
+export interface RsDataParticipantInfoDto {
+  status?: number;
+  message?: string;
+  data?: ParticipantInfoDto | null;
+}
+
+export interface RsDataCartDto {
+  status?: number;
+  message?: string;
+  data?: CartDto;
 }
 
 export type FindMineParams = {
@@ -170,5 +435,18 @@ page?: number;
  * @maximum 100
  */
 size?: number;
+};
+
+export type FindAdmissionParams = {
+/**
+ * 대회 ID
+ * @exclusiveMinimum 0
+ */
+raceId: number;
+/**
+ * 종목 ID
+ * @exclusiveMinimum 0
+ */
+raceCourseId: number;
 };
 

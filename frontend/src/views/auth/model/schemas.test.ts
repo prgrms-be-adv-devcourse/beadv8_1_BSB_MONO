@@ -37,14 +37,18 @@ describe('loginSchema', () => {
 })
 
 describe('signupAccountSchema', () => {
-  const valid = { email: 'runner@crewrun.kr', password: 'password1', passwordConfirm: 'password1' }
+  const valid = {
+    email: 'runner@crewrun.kr',
+    password: 'password12',
+    passwordConfirm: 'password12',
+  }
 
   it('맞는 값은 통과한다', () => {
     expect(signupAccountSchema.safeParse(valid).success).toBe(true)
   })
 
-  it.each(['pass1', 'password', '12345678'])(
-    '비밀번호 규칙(영문 · 숫자 8자 이상)에 안 맞으면 막는다: %s',
+  it.each(['password1', '123456789', ' '.repeat(10)])(
+    '비밀번호 규칙(10자 이상, 공백만은 안 됨)에 안 맞으면 막는다: "%s"',
     (password) => {
       const result = signupAccountSchema.safeParse({
         ...valid,
@@ -54,6 +58,13 @@ describe('signupAccountSchema', () => {
       expect(firstError(result)).toEqual({ path: 'password', message: AUTH_ERRORS.passwordRule })
     },
   )
+
+  it('10자면 영문 · 숫자 섞지 않아도 통과한다 (백엔드와 같음)', () => {
+    const password = '1234567890'
+    expect(
+      signupAccountSchema.safeParse({ ...valid, password, passwordConfirm: password }).success,
+    ).toBe(true)
+  })
 
   it('비밀번호 확인이 다르면 확인 칸에 오류를 낸다', () => {
     const result = signupAccountSchema.safeParse({ ...valid, passwordConfirm: 'password2' })
@@ -65,7 +76,7 @@ describe('signupAccountSchema', () => {
 })
 
 describe('signupProfileSchema', () => {
-  const valid = {
+  const validProfile = {
     name: '김러너',
     birth: '1995.03.02',
     phone: '010-1234-5678',
@@ -73,31 +84,50 @@ describe('signupProfileSchema', () => {
   }
 
   it('맞는 값은 통과한다', () => {
-    expect(signupProfileSchema.safeParse(valid).success).toBe(true)
+    expect(signupProfileSchema.safeParse(validProfile).success).toBe(true)
   })
 
   it('없는 날짜나 형식이 틀린 생년월일은 막는다', () => {
     for (const birth of ['1995-03-02', '1995.02.30', '19950302']) {
-      const result = signupProfileSchema.safeParse({ ...valid, birth })
+      const result = signupProfileSchema.safeParse({ ...validProfile, birth })
       expect(firstError(result)).toEqual({ path: 'birth', message: AUTH_ERRORS.birthFormat })
     }
   })
 
   it('만 14세 미만은 막는다', () => {
     const year = new Date().getFullYear() - 10
-    const result = signupProfileSchema.safeParse({ ...valid, birth: `${year}.01.01` })
+    const result = signupProfileSchema.safeParse({ ...validProfile, birth: `${year}.01.01` })
     expect(firstError(result)).toEqual({ path: 'birth', message: AUTH_ERRORS.birthUnder14 })
   })
 
   it('휴대폰 번호 형식과 닉네임 길이를 검사한다', () => {
-    expect(firstError(signupProfileSchema.safeParse({ ...valid, phone: '02-123-4567' }))).toEqual({
+    expect(
+      firstError(signupProfileSchema.safeParse({ ...validProfile, phone: '02-123-4567' })),
+    ).toEqual({
       path: 'phone',
       message: AUTH_ERRORS.phoneFormat,
     })
-    expect(firstError(signupProfileSchema.safeParse({ ...valid, nickname: '곰' }))).toEqual({
+    expect(firstError(signupProfileSchema.safeParse({ ...validProfile, nickname: '곰' }))).toEqual({
       path: 'nickname',
       message: AUTH_ERRORS.nicknameLength,
     })
+  })
+
+  it.each([
+    ['러너', true],
+    ['abcd', true],
+    ['가나다라마바사아', true],
+    ['abc', false],
+    ['가나다라마바사아자', false],
+  ])('닉네임은 한글 2~8자, 영문 4~16자만 허용한다: %s → %s', (nickname, valid) => {
+    const result = signupProfileSchema.safeParse({ ...validProfile, nickname })
+    expect(result.success).toBe(valid)
+    if (!valid) expect(firstError(result)?.message).toBe(AUTH_ERRORS.nicknameLength)
+  })
+
+  it('닉네임에 한글 · 영문 · 숫자 말고 다른 글자가 있으면 막는다', () => {
+    const result = signupProfileSchema.safeParse({ ...validProfile, nickname: '달리는 곰' })
+    expect(firstError(result)).toEqual({ path: 'nickname', message: AUTH_ERRORS.nicknameChars })
   })
 })
 
@@ -113,7 +143,7 @@ describe('찾기 · 재설정 스키마', () => {
   })
 
   it('새 비밀번호 확인이 다르면 막는다', () => {
-    const result = passwordNewSchema.safeParse({ password: 'password1', passwordConfirm: 'x' })
+    const result = passwordNewSchema.safeParse({ password: 'password12', passwordConfirm: 'x' })
     expect(firstError(result)?.path).toBe('passwordConfirm')
   })
 })

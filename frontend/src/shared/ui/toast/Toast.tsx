@@ -41,7 +41,7 @@ function ToastList() {
     >
       {/* 피그마처럼 라이트·다크 모드 모두 어두운 카드라 dark 토큰으로 고정한다.
           모서리 8은 피그마 Radius 변수에 없는 값이라 그대로 적었다. */}
-      <Toast.Content className="dark flex items-center gap-3 rounded-[8px] bg-bg-subtle px-4 py-3 shadow-lg inset-ring inset-ring-border-default">
+      <Toast.Content className="dark flex items-center gap-3 rounded-md bg-bg-subtle px-4 py-3 shadow-lg inset-ring inset-ring-border-default">
         <Toast.Title className="min-w-0 flex-1 text-body-m text-text-primary" />
         {toast.actionProps && (
           <Toast.Action

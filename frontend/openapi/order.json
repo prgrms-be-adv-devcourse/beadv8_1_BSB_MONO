@@ -11,8 +11,16 @@
       "description": "장바구니 조회, 참가권 담기, 빼기, 장바구니 결제 API"
     },
     {
+      "name": "OrderInternal",
+      "description": "정산용 판매 내역 조회 API (서비스 간 내부 호출 전용)"
+    },
+    {
+      "name": "Queue",
+      "description": "결제 페이지 타이머용 대기열 입장 상태 API"
+    },
+    {
       "name": "Order",
-      "description": "바로 결제 예매(주문 생성·자리 임시 확보), 예치금 결제, 취소·환불, 결제 기한 연장, 주문 내역 조회 API"
+      "description": "바로 결제 예매(주문 생성·자리 임시 확보), 예치금 결제, 취소·환불, 주문 내역 조회 API"
     },
     {
       "name": "Participation",
@@ -105,7 +113,7 @@
             }
           },
           "400": {
-            "description": "입력값 검증 실패, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음 또는 참가 신청 ID·회원 ID 오류",
+            "description": "입력값 검증 실패, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음, 티셔츠 사이즈 없음·고를 수 없는 사이즈 또는 참가 신청 ID·회원 ID 오류",
             "content": {
               "application/json": {
                 "schema": {
@@ -116,6 +124,7 @@
                     "description": "입력값 검증 실패",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "참가자 이름을 작성해주세요.",
                       "data": null
                     }
@@ -124,6 +133,7 @@
                     "description": "요청 본문 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 본문 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -132,6 +142,7 @@
                     "description": "나이 제한 밖",
                     "value": {
                       "status": 400,
+                      "code": "ORDER_AGE_RESTRICTED",
                       "message": "참가할 수 있는 나이가 아닙니다(대회 당일 만 14세 이상, 신청자 만 12세).",
                       "data": null
                     }
@@ -140,7 +151,26 @@
                     "description": "배송 주소 없음",
                     "value": {
                       "status": 400,
+                      "code": "ORDER_SHIPPING_ADDRESS_REQUIRED",
                       "message": "키트를 받을 배송 주소를 작성해주세요.",
+                      "data": null
+                    }
+                  },
+                  "티셔츠 사이즈 없음": {
+                    "description": "티셔츠 사이즈 없음",
+                    "value": {
+                      "status": 400,
+                      "code": "ORDER_TSHIRT_SIZE_REQUIRED",
+                      "message": "티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: S, M, L).",
+                      "data": null
+                    }
+                  },
+                  "고를 수 없는 티셔츠 사이즈": {
+                    "description": "고를 수 없는 티셔츠 사이즈",
+                    "value": {
+                      "status": 400,
+                      "code": "ORDER_TSHIRT_SIZE_NOT_AVAILABLE",
+                      "message": "이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L).",
                       "data": null
                     }
                   },
@@ -148,6 +178,7 @@
                     "description": "참가 신청 ID·회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -156,6 +187,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -173,6 +205,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -188,6 +221,7 @@
                 },
                 "example": {
                   "status": 403,
+                  "code": "ORDER_PARTICIPATION_FORBIDDEN",
                   "message": "본인의 참가 신청만 보거나 고칠 수 있습니다.",
                   "data": null
                 }
@@ -206,6 +240,7 @@
                     "description": "없는 참가 신청",
                     "value": {
                       "status": 404,
+                      "code": "ORDER_PARTICIPATION_NOT_FOUND",
                       "message": "존재하지 않는 참가 신청입니다.",
                       "data": null
                     }
@@ -214,6 +249,7 @@
                     "description": "없는 종목",
                     "value": {
                       "status": 404,
+                      "code": "ORDER_COURSE_NOT_FOUND",
                       "message": "존재하지 않는 종목입니다.",
                       "data": null
                     }
@@ -234,6 +270,7 @@
                     "description": "접수 마감 뒤",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_APPLICATION_CLOSED",
                       "message": "접수가 마감되어 참가자 정보를 고칠 수 없습니다.",
                       "data": null
                     }
@@ -242,6 +279,7 @@
                     "description": "고칠 수 없는 상태",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PARTICIPATION_NOT_EDITABLE",
                       "message": "참가자 정보를 고칠 수 없는 신청입니다(현재 상태: 취소).",
                       "data": null
                     }
@@ -250,6 +288,7 @@
                     "description": "수정 중 주문이 만들어짐",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PARTICIPATION_CHANGE_RETRY",
                       "message": "방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.",
                       "data": null
                     }
@@ -335,7 +374,7 @@
             }
           },
           "400": {
-            "description": "입력값 검증 실패, 제3자 제공 미동의, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음 또는 회원 ID 오류",
+            "description": "입력값 검증 실패, 제3자 제공 미동의, 요청 본문 형식 오류, 나이 제한 밖, 키트 종목의 배송 주소 없음, 티셔츠 사이즈 없음·고를 수 없는 사이즈 또는 회원 ID 오류",
             "content": {
               "application/json": {
                 "schema": {
@@ -346,6 +385,7 @@
                     "description": "입력값 검증 실패",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "참가자 이름을 작성해주세요.",
                       "data": null
                     }
@@ -354,6 +394,7 @@
                     "description": "제3자 제공 미동의",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "개인정보 제3자 제공에 동의해야 신청할 수 있습니다.",
                       "data": null
                     }
@@ -362,6 +403,7 @@
                     "description": "요청 본문 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 본문 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -370,6 +412,7 @@
                     "description": "나이 제한 밖",
                     "value": {
                       "status": 400,
+                      "code": "ORDER_AGE_RESTRICTED",
                       "message": "참가할 수 있는 나이가 아닙니다(대회 당일 만 14세 이상, 신청자 만 12세).",
                       "data": null
                     }
@@ -378,7 +421,26 @@
                     "description": "배송 주소 없음",
                     "value": {
                       "status": 400,
+                      "code": "ORDER_SHIPPING_ADDRESS_REQUIRED",
                       "message": "키트를 받을 배송 주소를 작성해주세요.",
+                      "data": null
+                    }
+                  },
+                  "티셔츠 사이즈 없음": {
+                    "description": "티셔츠 사이즈 없음",
+                    "value": {
+                      "status": 400,
+                      "code": "ORDER_TSHIRT_SIZE_REQUIRED",
+                      "message": "티셔츠 사이즈를 골라주세요(고를 수 있는 사이즈: S, M, L).",
+                      "data": null
+                    }
+                  },
+                  "고를 수 없는 티셔츠 사이즈": {
+                    "description": "고를 수 없는 티셔츠 사이즈",
+                    "value": {
+                      "status": 400,
+                      "code": "ORDER_TSHIRT_SIZE_NOT_AVAILABLE",
+                      "message": "이 종목에서 고를 수 없는 티셔츠 사이즈입니다(고를 수 있는 사이즈: S, M, L).",
                       "data": null
                     }
                   },
@@ -386,6 +448,7 @@
                     "description": "회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -394,6 +457,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -411,6 +475,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -426,6 +491,7 @@
                 },
                 "example": {
                   "status": 404,
+                  "code": "ORDER_COURSE_NOT_FOUND",
                   "message": "존재하지 않는 종목입니다.",
                   "data": null
                 }
@@ -444,6 +510,7 @@
                     "description": "이미 신청함",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_DUPLICATE_PARTICIPATION",
                       "message": "이미 이 대회에 신청했습니다.",
                       "data": null
                     }
@@ -452,6 +519,7 @@
                     "description": "접수 기간 아님",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_APPLICATION_CLOSED",
                       "message": "접수 기간이 아닙니다.",
                       "data": null
                     }
@@ -549,6 +617,7 @@
                     "description": "참가 신청 ID·회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -557,6 +626,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -574,6 +644,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -589,6 +660,7 @@
                 },
                 "example": {
                   "status": 403,
+                  "code": "ORDER_PARTICIPATION_FORBIDDEN",
                   "message": "본인의 참가 신청만 보거나 고칠 수 있습니다.",
                   "data": null
                 }
@@ -604,6 +676,7 @@
                 },
                 "example": {
                   "status": 404,
+                  "code": "ORDER_PARTICIPATION_NOT_FOUND",
                   "message": "존재하지 않는 참가 신청입니다.",
                   "data": null
                 }
@@ -622,6 +695,7 @@
                     "description": "결제 대기 중",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PARTICIPATION_NOT_CANCELABLE",
                       "message": "결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다.",
                       "data": null
                     }
@@ -630,6 +704,7 @@
                     "description": "결제 완료",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PARTICIPATION_NOT_CANCELABLE",
                       "message": "결제한 참가권은 주문 상품 취소로 취소해주세요.",
                       "data": null
                     }
@@ -638,6 +713,7 @@
                     "description": "이미 끝난 신청",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PARTICIPATION_NOT_CANCELABLE",
                       "message": "이미 끝난 신청입니다(현재 상태: 취소).",
                       "data": null
                     }
@@ -772,6 +848,7 @@
                     "description": "시작일이 종료일보다 늦음",
                     "value": {
                       "status": 400,
+                      "code": "ORDER_INVALID_SEARCH_PERIOD",
                       "message": "조회 시작일이 종료일보다 늦습니다.",
                       "data": null
                     }
@@ -780,6 +857,7 @@
                     "description": "페이지 크기 초과",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "한 번에 100개까지 조회할 수 있습니다.",
                       "data": null
                     }
@@ -788,6 +866,7 @@
                     "description": "날짜·숫자 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -796,6 +875,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -813,6 +893,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -826,7 +907,7 @@
           "Order"
         ],
         "summary": "바로 결제 예매 ([결제하기])",
-        "description": "자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받고, 결제 기한 10분짜리 주문(CREATED)을 만든다. 같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. 남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.",
+        "description": "대기열에 입장 중인지 확인하고, 자리 확보 전(PENDING) 참가 신청으로 상품 서비스에 자리 1석을 확보받아 입장 끝 시각을 결제 기한으로 하는 주문(CREATED)을 만든다. 입장 중이 아니면 403(ORDER_QUEUE_NOT_ADMITTED). 같은 Idempotency-Key로 다시 보내면 새 주문 없이 처음 주문을 돌려준다. 남은 자리가 없으면 참가 신청이 확보 실패(FAILED)가 되고 주문은 만들지 않는다.",
         "operationId": "create",
         "parameters": [
           {
@@ -963,6 +1044,7 @@
                     "description": "입력값 검증 실패",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "결제할 참가 신청을 선택해주세요.",
                       "data": null
                     }
@@ -971,6 +1053,7 @@
                     "description": "요청 본문 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 본문 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -979,6 +1062,7 @@
                     "description": "Idempotency-Key 없음",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.",
                       "data": null
                     }
@@ -987,6 +1071,7 @@
                     "description": "Idempotency-Key 길이 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "Idempotency-Key는 1~64자로 보내주세요.",
                       "data": null
                     }
@@ -995,6 +1080,7 @@
                     "description": "회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -1003,6 +1089,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -1020,6 +1107,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -1027,16 +1115,31 @@
             }
           },
           "403": {
-            "description": "다른 회원의 참가 신청",
+            "description": "다른 회원의 참가 신청, 대기열에 입장 중이 아님",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RsData"
                 },
-                "example": {
-                  "status": 403,
-                  "message": "본인의 참가 신청만 결제할 수 있습니다.",
-                  "data": null
+                "examples": {
+                  "다른 회원의 참가 신청": {
+                    "description": "다른 회원의 참가 신청",
+                    "value": {
+                      "status": 403,
+                      "code": "ORDER_PARTICIPATION_FORBIDDEN",
+                      "message": "본인의 참가 신청만 결제할 수 있습니다.",
+                      "data": null
+                    }
+                  },
+                  "대기열 입장 전": {
+                    "description": "대기열 입장 전",
+                    "value": {
+                      "status": 403,
+                      "code": "ORDER_QUEUE_NOT_ADMITTED",
+                      "message": "대기열에서 입장한 뒤 결제할 수 있습니다.",
+                      "data": null
+                    }
+                  }
                 }
               }
             }
@@ -1053,6 +1156,7 @@
                     "description": "없는 참가 신청",
                     "value": {
                       "status": 404,
+                      "code": "ORDER_PARTICIPATION_NOT_FOUND",
                       "message": "존재하지 않는 참가 신청입니다.",
                       "data": null
                     }
@@ -1061,6 +1165,7 @@
                     "description": "없는 종목",
                     "value": {
                       "status": 404,
+                      "code": "ORDER_COURSE_NOT_FOUND",
                       "message": "존재하지 않는 종목입니다.",
                       "data": null
                     }
@@ -1081,6 +1186,7 @@
                     "description": "매진",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_SOLD_OUT",
                       "message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
                       "data": null
                     }
@@ -1089,6 +1195,7 @@
                     "description": "결제할 수 없는 상태",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PARTICIPATION_NOT_PAYABLE",
                       "message": "결제를 시작할 수 없는 신청입니다(현재 상태: 결제 대기).",
                       "data": null
                     }
@@ -1097,6 +1204,7 @@
                     "description": "접수 기간 아님",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_APPLICATION_CLOSED",
                       "message": "접수 기간이 아닙니다.",
                       "data": null
                     }
@@ -1105,6 +1213,7 @@
                     "description": "요청 겹침",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_REQUEST_IN_PROGRESS",
                       "message": "같은 주문 요청을 처리하고 있습니다. 잠시 뒤 주문 내역을 확인해주세요.",
                       "data": null
                     }
@@ -1113,6 +1222,7 @@
                     "description": "다른 신청서에 쓴 키",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_IDEMPOTENCY_KEY_REUSED",
                       "message": "이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요.",
                       "data": null
                     }
@@ -1231,6 +1341,7 @@
                     "description": "주문 ID·회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -1239,6 +1350,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -1256,6 +1368,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -1271,6 +1384,7 @@
                 },
                 "example": {
                   "status": 403,
+                  "code": "ORDER_FORBIDDEN",
                   "message": "본인의 주문만 결제할 수 있습니다.",
                   "data": null
                 }
@@ -1286,6 +1400,7 @@
                 },
                 "example": {
                   "status": 404,
+                  "code": "ORDER_NOT_FOUND",
                   "message": "존재하지 않는 주문입니다.",
                   "data": null
                 }
@@ -1304,14 +1419,18 @@
                     "description": "잔액 부족",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_INSUFFICIENT_BALANCE",
                       "message": "예치금이 12,000원 부족합니다. 충전한 뒤 결제 기한 안에 다시 결제해주세요.",
-                      "data": null
+                      "data": {
+                        "shortage": 12000
+                      }
                     }
                   },
                   "기한 지남": {
                     "description": "기한 지남",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PAYMENT_DEADLINE_PASSED",
                       "message": "결제 기한이 지났습니다.",
                       "data": null
                     }
@@ -1320,6 +1439,7 @@
                     "description": "자리 판매 거절",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PAYMENT_DEADLINE_PASSED",
                       "message": "결제 기한이 지나 결제하지 못했습니다. 빠져나간 예치금은 돌려드렸습니다.",
                       "data": null
                     }
@@ -1328,7 +1448,8 @@
                     "description": "결제 대기가 아님",
                     "value": {
                       "status": 409,
-                      "message": "결제할 수 없는 주문입니다(현재 상태: 기한 만료).",
+                      "code": "ORDER_NOT_PAYABLE",
+                      "message": "결제할 수 없는 주문입니다(현재 상태: 취소).",
                       "data": null
                     }
                   }
@@ -1439,6 +1560,7 @@
                     "description": "ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -1447,6 +1569,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -1464,6 +1587,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -1479,6 +1603,7 @@
                 },
                 "example": {
                   "status": 403,
+                  "code": "ORDER_FORBIDDEN",
                   "message": "본인의 주문만 취소할 수 있습니다.",
                   "data": null
                 }
@@ -1497,6 +1622,7 @@
                     "description": "없는 주문",
                     "value": {
                       "status": 404,
+                      "code": "ORDER_NOT_FOUND",
                       "message": "존재하지 않는 주문입니다.",
                       "data": null
                     }
@@ -1505,6 +1631,7 @@
                     "description": "주문에 없는 상품",
                     "value": {
                       "status": 404,
+                      "code": "ORDER_ITEM_NOT_FOUND",
                       "message": "주문에 없는 상품입니다.",
                       "data": null
                     }
@@ -1513,6 +1640,7 @@
                     "description": "없는 종목",
                     "value": {
                       "status": 404,
+                      "code": "ORDER_COURSE_NOT_FOUND",
                       "message": "존재하지 않는 종목입니다.",
                       "data": null
                     }
@@ -1533,6 +1661,7 @@
                     "description": "이미 취소함",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_ITEM_NOT_CANCELABLE",
                       "message": "이미 취소한 상품입니다.",
                       "data": null
                     }
@@ -1541,6 +1670,7 @@
                     "description": "결제 전 상품",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_ITEM_NOT_CANCELABLE",
                       "message": "결제한 상품만 취소할 수 있습니다(현재 상태: 결제 대기).",
                       "data": null
                     }
@@ -1549,6 +1679,7 @@
                     "description": "환불 기한 지남",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_REFUND_PERIOD_PASSED",
                       "message": "환불 기한(2026-07-15)이 지나 취소할 수 없습니다.",
                       "data": null
                     }
@@ -1557,6 +1688,7 @@
                     "description": "환불 기한·일정 변경 환불 기간 지남",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_REFUND_PERIOD_PASSED",
                       "message": "환불 기한(2026-07-15)과 일정 변경 뒤 전액 환불 기간(2026-07-25까지)이 지나 취소할 수 없습니다.",
                       "data": null
                     }
@@ -1565,6 +1697,7 @@
                     "description": "정산 대상일 지남",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_PAYOUT_STARTED",
                       "message": "정산이 시작된 참가권이라 취소할 수 없습니다.",
                       "data": null
                     }
@@ -1582,197 +1715,9 @@
                 },
                 "example": {
                   "status": 503,
+                  "code": "ORDER_EXTERNAL_SERVICE_UNAVAILABLE",
                   "message": "정산 서비스에 연결하지 못했습니다. 잠시 뒤 다시 시도해주세요.",
                   "data": null
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/order/orders/{orderId}/deadline-extension": {
-      "post": {
-        "tags": [
-          "Order"
-        ],
-        "summary": "결제 기한 2분 늘리기",
-        "description": "PG 충전창에 들어갈 때 프론트가 부른다. 결제 대기(CREATED) 주문의 결제 기한을 2분 늘리고, 주문당 한 번만 된다. 상품 서비스의 자리 기한을 먼저 늘린 뒤 주문·참가 신청의 결제 기한을 함께 바꾼다.",
-        "operationId": "extendDeadline",
-        "parameters": [
-          {
-            "name": "X-Member-Id",
-            "in": "header",
-            "description": "요청한 회원 ID (게이트웨이가 넣어 줄 예정)",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "exclusiveMinimum": 0
-            },
-            "example": 1
-          },
-          {
-            "name": "orderId",
-            "in": "path",
-            "description": "주문 ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "example": 1
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "기한 연장",
-            "content": {
-              "application/json": {
-                "example": {
-                  "status": 200,
-                  "message": "결제 기한을 2분 늘렸습니다.",
-                  "data": {
-                    "id": 1,
-                    "createDate": "2026-10-12T10:00:00",
-                    "orderNo": "OD-20261012-0001",
-                    "buyerId": 1,
-                    "raceId": 1,
-                    "status": "CREATED",
-                    "totalAmount": 50000,
-                    "canceledAmount": 0,
-                    "paymentDueAt": "2026-10-12T10:12:00",
-                    "paidAt": null,
-                    "shippingAddress": {
-                      "recipientName": "김러너",
-                      "recipientPhone": "010-1234-5678",
-                      "zipcode": "04700",
-                      "address": "서울 성동구 왕십리로 00",
-                      "addressDetail": "101동 1001호"
-                    },
-                    "items": [
-                      {
-                        "id": 1,
-                        "participationId": 1,
-                        "raceCourseId": 1,
-                        "sellerId": 1,
-                        "itemName": "2026 서울 하프 마라톤 10K",
-                        "unitPrice": 50000,
-                        "quantity": 1,
-                        "amount": 50000,
-                        "status": "ORDERED"
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "주문 ID·회원 ID 오류",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RsData"
-                },
-                "examples": {
-                  "주문 ID·회원 ID 형식 오류": {
-                    "description": "주문 ID·회원 ID 형식 오류",
-                    "value": {
-                      "status": 400,
-                      "message": "요청 값의 형식이 올바르지 않습니다.",
-                      "data": null
-                    }
-                  },
-                  "회원 ID가 0 이하": {
-                    "description": "회원 ID가 0 이하",
-                    "value": {
-                      "status": 400,
-                      "message": "회원 ID가 올바르지 않습니다.",
-                      "data": null
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "회원 ID 헤더 없음",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RsData"
-                },
-                "example": {
-                  "status": 401,
-                  "message": "로그인이 필요합니다.",
-                  "data": null
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "다른 회원의 주문",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RsData"
-                },
-                "example": {
-                  "status": 403,
-                  "message": "본인의 주문만 결제 기한을 늘릴 수 있습니다.",
-                  "data": null
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "없는 주문",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RsData"
-                },
-                "example": {
-                  "status": 404,
-                  "message": "존재하지 않는 주문입니다.",
-                  "data": null
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "이미 한 번 늘림, 기한 지남, 결제 대기가 아닌 주문",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RsData"
-                },
-                "examples": {
-                  "이미 한 번 늘림": {
-                    "description": "이미 한 번 늘림",
-                    "value": {
-                      "status": 409,
-                      "message": "결제 기한은 한 번만 늘릴 수 있습니다.",
-                      "data": null
-                    }
-                  },
-                  "기한 지남": {
-                    "description": "기한 지남",
-                    "value": {
-                      "status": 409,
-                      "message": "결제 기한이 지났습니다.",
-                      "data": null
-                    }
-                  },
-                  "결제 대기가 아님": {
-                    "description": "결제 대기가 아님",
-                    "value": {
-                      "status": 409,
-                      "message": "결제 대기 중인 주문만 결제 기한을 늘릴 수 있습니다(현재 상태: 기한 만료).",
-                      "data": null
-                    }
-                  }
                 }
               }
             }
@@ -1786,7 +1731,7 @@
           "Cart"
         ],
         "summary": "장바구니에 참가권 담기",
-        "description": "종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. 담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다.",
+        "description": "종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. 담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다. 장바구니에는 한 종목만 담는다. 다른 종목이 담겨 있으면 409(ORDER_CART_ONE_COURSE_ONLY)다.",
         "operationId": "addItem",
         "parameters": [
           {
@@ -1857,6 +1802,7 @@
                     "description": "입력값 검증 실패",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "담을 종목을 선택해주세요.",
                       "data": null
                     }
@@ -1865,6 +1811,7 @@
                     "description": "요청 본문 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 본문 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -1873,6 +1820,7 @@
                     "description": "회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -1881,6 +1829,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -1898,6 +1847,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -1913,6 +1863,7 @@
                 },
                 "example": {
                   "status": 404,
+                  "code": "ORDER_COURSE_NOT_FOUND",
                   "message": "존재하지 않는 종목입니다.",
                   "data": null
                 }
@@ -1920,7 +1871,7 @@
             }
           },
           "409": {
-            "description": "접수 마감된 종목 또는 동시에 담는 요청이 겹침",
+            "description": "접수 마감된 종목, 다른 종목이 이미 담김, 동시에 담는 요청이 겹침",
             "content": {
               "application/json": {
                 "schema": {
@@ -1931,7 +1882,17 @@
                     "description": "접수 마감",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_APPLICATION_CLOSED",
                       "message": "접수가 마감된 종목은 담을 수 없습니다.",
+                      "data": null
+                    }
+                  },
+                  "다른 종목이 담김": {
+                    "description": "다른 종목이 담김",
+                    "value": {
+                      "status": 409,
+                      "code": "ORDER_CART_ONE_COURSE_ONLY",
+                      "message": "장바구니에는 한 종목만 담을 수 있습니다. 담긴 종목을 뺀 뒤 담아주세요.",
                       "data": null
                     }
                   },
@@ -1939,6 +1900,7 @@
                     "description": "요청 겹침",
                     "value": {
                       "status": 409,
+                      "code": "ORDER_CART_CONFLICT",
                       "message": "장바구니에 담는 요청이 겹쳤습니다. 다시 시도해주세요.",
                       "data": null
                     }
@@ -1956,7 +1918,7 @@
           "Cart"
         ],
         "summary": "장바구니 결제",
-        "description": "장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. 항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. 매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.",
+        "description": "장바구니에 담은 참가권(한 종목)의 참가 신청으로 [결제하기]를 해 결제 대기 주문(CREATED)을 만든다. 장바구니에는 한 종목만 담으므로 참가 신청은 1건만 받는다(2건 이상이면 400). 주문한 종목은 장바구니에서 뺀다. [결제하기]처럼 대기열에 입장 중인지 확인해, 입장 중이 아니면 실패(FAILED)로 돌려준다. 매진·실패하면 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.",
         "operationId": "checkout",
         "parameters": [
           {
@@ -1996,15 +1958,15 @@
         },
         "responses": {
           "200": {
-            "description": "항목별 처리 결과 (일부 또는 전부 매진·실패여도 200)",
+            "description": "처리 결과 (매진·실패여도 200)",
             "content": {
               "application/json": {
                 "examples": {
-                  "일부 주문": {
-                    "description": "일부 주문",
+                  "주문함": {
+                    "description": "주문함",
                     "value": {
                       "status": 200,
-                      "message": "참가권 3건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
+                      "message": "참가권 1건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
                       "data": {
                         "orderedCount": 1,
                         "results": [
@@ -2044,18 +2006,6 @@
                                 }
                               ]
                             }
-                          },
-                          {
-                            "participationId": 12,
-                            "outcome": "SOLD_OUT",
-                            "message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
-                            "order": null
-                          },
-                          {
-                            "participationId": 13,
-                            "outcome": "FAILED",
-                            "message": "접수 기간이 아닙니다.",
-                            "order": null
                           }
                         ]
                       }
@@ -2072,6 +2022,7 @@
                           {
                             "participationId": 12,
                             "outcome": "SOLD_OUT",
+                            "code": "ORDER_SOLD_OUT",
                             "message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
                             "order": null
                           }
@@ -2095,15 +2046,17 @@
                     "description": "참가 신청 없음",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "결제할 참가 신청을 선택해주세요.",
                       "data": null
                     }
                   },
-                  "10건 초과": {
-                    "description": "10건 초과",
+                  "2건 이상": {
+                    "description": "2건 이상",
                     "value": {
                       "status": 400,
-                      "message": "한 번에 10건까지 결제할 수 있습니다.",
+                      "code": "INVALID_REQUEST",
+                      "message": "장바구니에는 한 종목만 담을 수 있어 참가 신청 1건만 결제할 수 있습니다.",
                       "data": null
                     }
                   },
@@ -2111,15 +2064,8 @@
                     "description": "참가 신청 ID 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "참가 신청 ID가 올바르지 않습니다.",
-                      "data": null
-                    }
-                  },
-                  "같은 참가 신청 두 번": {
-                    "description": "같은 참가 신청 두 번",
-                    "value": {
-                      "status": 400,
-                      "message": "같은 참가 신청을 두 번 보낼 수 없습니다.",
                       "data": null
                     }
                   },
@@ -2127,6 +2073,7 @@
                     "description": "요청 본문 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 본문 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -2135,6 +2082,7 @@
                     "description": "Idempotency-Key 없음",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.",
                       "data": null
                     }
@@ -2143,6 +2091,7 @@
                     "description": "Idempotency-Key 길이 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "Idempotency-Key는 1~64자로 보내주세요.",
                       "data": null
                     }
@@ -2151,6 +2100,7 @@
                     "description": "회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -2159,6 +2109,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -2176,6 +2127,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -2191,6 +2143,7 @@
                 },
                 "example": {
                   "status": 403,
+                  "code": "ORDER_PARTICIPATION_FORBIDDEN",
                   "message": "본인의 참가 신청만 결제할 수 있습니다.",
                   "data": null
                 }
@@ -2206,7 +2159,134 @@
                 },
                 "example": {
                   "status": 404,
+                  "code": "ORDER_PARTICIPATION_NOT_FOUND",
                   "message": "존재하지 않는 참가 신청입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/order/queue/admission": {
+      "get": {
+        "tags": [
+          "Queue"
+        ],
+        "summary": "대기열 입장 상태 (결제 페이지 타이머)",
+        "description": "이 종목에 대기열로 입장 중인지와 입장 끝 시각, 남은 초를 돌려준다. 입장 끝 시각이 [결제하기]의 결제 기한이다. 타이머는 remainingSeconds로 센다(서버 시각 기준). 입장 중이 아니면 admitted=false이고 [결제하기]가 403이다. 대기열 API(PRO-182)가 나오기 전에는 가짜 대기열이 답한다: 결제 페이지를 처음 열 때 입장해 10분 뒤 끝나고, 끝난 뒤 이 API를 다시 부르면(페이지를 다시 열면) 다시 입장한다.",
+        "operationId": "findAdmission",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "요청한 회원 ID (게이트웨이가 넣어 줄 예정)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 1
+          },
+          {
+            "name": "raceId",
+            "in": "query",
+            "description": "대회 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 1
+          },
+          {
+            "name": "raceCourseId",
+            "in": "query",
+            "description": "종목 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "입장 중": {
+                    "description": "입장 중",
+                    "value": {
+                      "status": 200,
+                      "message": "대기열에 입장 중입니다.",
+                      "data": {
+                        "admitted": true,
+                        "admissionEndsAt": "2026-10-15T11:40:00",
+                        "remainingSeconds": 583
+                      }
+                    }
+                  },
+                  "입장 중 아님": {
+                    "description": "입장 중 아님",
+                    "value": {
+                      "status": 200,
+                      "message": "대기열에 입장 중이 아닙니다.",
+                      "data": {
+                        "admitted": false,
+                        "admissionEndsAt": null,
+                        "remainingSeconds": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "회원 ID·대회 ID·종목 ID 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "회원 ID가 0 이하": {
+                    "description": "회원 ID가 0 이하",
+                    "value": {
+                      "status": 400,
+                      "message": "회원 ID가 올바르지 않습니다.",
+                      "data": null
+                    }
+                  },
+                  "대회 ID가 0 이하": {
+                    "description": "대회 ID가 0 이하",
+                    "value": {
+                      "status": 400,
+                      "message": "대회 ID가 올바르지 않습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
                   "data": null
                 }
               }
@@ -2301,6 +2381,7 @@
                     "description": "참가 신청 ID·회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -2309,6 +2390,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -2326,6 +2408,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -2341,6 +2424,7 @@
                 },
                 "example": {
                   "status": 403,
+                  "code": "ORDER_PARTICIPATION_FORBIDDEN",
                   "message": "본인의 참가 신청만 보거나 고칠 수 있습니다.",
                   "data": null
                 }
@@ -2356,6 +2440,7 @@
                 },
                 "example": {
                   "status": 404,
+                  "code": "ORDER_PARTICIPATION_NOT_FOUND",
                   "message": "존재하지 않는 참가 신청입니다.",
                   "data": null
                 }
@@ -2440,6 +2525,7 @@
                     "description": "회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -2448,6 +2534,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -2465,6 +2552,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -2563,6 +2651,7 @@
                     "description": "주문 ID·회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -2571,6 +2660,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -2588,6 +2678,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -2603,6 +2694,7 @@
                 },
                 "example": {
                   "status": 403,
+                  "code": "ORDER_FORBIDDEN",
                   "message": "본인의 주문만 볼 수 있습니다.",
                   "data": null
                 }
@@ -2618,6 +2710,7 @@
                 },
                 "example": {
                   "status": 404,
+                  "code": "ORDER_NOT_FOUND",
                   "message": "존재하지 않는 주문입니다.",
                   "data": null
                 }
@@ -2704,6 +2797,7 @@
                     "description": "회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -2712,6 +2806,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -2729,6 +2824,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -2805,6 +2901,7 @@
                     "description": "장바구니 항목 ID·회원 ID 형식 오류",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "요청 값의 형식이 올바르지 않습니다.",
                       "data": null
                     }
@@ -2813,6 +2910,7 @@
                     "description": "회원 ID가 0 이하",
                     "value": {
                       "status": 400,
+                      "code": "INVALID_REQUEST",
                       "message": "회원 ID가 올바르지 않습니다.",
                       "data": null
                     }
@@ -2830,6 +2928,7 @@
                 },
                 "example": {
                   "status": 401,
+                  "code": "ORDER_LOGIN_REQUIRED",
                   "message": "로그인이 필요합니다.",
                   "data": null
                 }
@@ -2845,6 +2944,7 @@
                 },
                 "example": {
                   "status": 403,
+                  "code": "ORDER_CART_ITEM_FORBIDDEN",
                   "message": "본인의 장바구니 항목만 뺄 수 있습니다.",
                   "data": null
                 }
@@ -2860,6 +2960,7 @@
                 },
                 "example": {
                   "status": 404,
+                  "code": "ORDER_CART_ITEM_NOT_FOUND",
                   "message": "장바구니에 없는 항목입니다.",
                   "data": null
                 }
@@ -2921,7 +3022,7 @@
           },
           "tshirtSize": {
             "type": "string",
-            "description": "기념 티셔츠(키트) 사이즈 (키트가 없는 종목이면 비워 둔다, 10자 이하)",
+            "description": "기념 티셔츠(키트) 사이즈. 종목이 주는 사이즈(XS~XXXL 중 종목 정보의 tshirtSizeOption) 중 하나이고, 티셔츠가 없는 종목이면 비워 둔다 (소문자도 받는다, 10자 이하)",
             "example": "L",
             "maxLength": 10,
             "minLength": 0
@@ -2994,6 +3095,9 @@
             "type": "integer",
             "format": "int32"
           },
+          "code": {
+            "type": "string"
+          },
           "message": {
             "type": "string"
           },
@@ -3061,18 +3165,18 @@
       },
       "CartCheckoutRequestDto": {
         "type": "object",
-        "description": "장바구니 결제 요청. 장바구니의 참가권마다 미리 작성한 참가 신청 ID를 보낸다",
+        "description": "장바구니 결제 요청. 장바구니에 담은 참가권(한 종목)의 참가 신청 ID를 보낸다",
         "properties": {
           "participationIds": {
             "type": "array",
-            "description": "결제할 참가 신청 ID 목록 (최대 10개, 겹치지 않게)",
+            "description": "결제할 참가 신청 ID 목록 (1개)",
             "items": {
               "type": "integer",
               "format": "int32",
               "example": 1,
               "minimum": 0
             },
-            "maxItems": 10,
+            "maxItems": 1,
             "minItems": 0
           }
         },

@@ -110,7 +110,7 @@ export interface RaceCourseSaveRequestDto {
   /** 키트 포함 여부 */
   kitIncluded: boolean;
   /**
-     * 참가비에 포함된 키트 금액 (원)
+     * 참가비에 포함된 키트 금액 (원). 참가비보다 클 수 없다
      * @minimum 0
      */
   kitPrice: number;
@@ -169,11 +169,11 @@ export interface RaceSaveRequestDto {
   regionSigungu: string;
   /** 대회 일시 */
   raceDate: string;
-  /** 크루 예매 시작 일시 (비우면 크루 모집 없이 개인 예매만) */
+  /** 크루 예매 시작 일시 (비우면 크루 모집 없이 개인 예매만). 이 날짜가 판매 시작일이 되며, 오늘로부터 이틀 뒤부터 */
   crewSaleStartAt?: string;
   /** 크루 예매 마감 일시 (크루 예매 시작보다 늦게) */
   crewSaleEndAt?: string;
-  /** 개인 예매 오픈 일시 (크루 예매가 있으면 크루 마감일 다음 날 06:00 이후) */
+  /** 개인 예매 오픈 일시 (크루 예매가 있으면 크루 마감일 다음 날 06:00 이후). 크루 예매가 없으면 이 날짜가 판매 시작일이 되며, 오늘로부터 이틀 뒤부터 */
   individualOpenAt: string;
   /** 접수 마감 일시 (참가자 정보 수정 기한, 대회 일시 이전) */
   applicationCloseAt: string;
@@ -197,6 +197,7 @@ export interface RaceSaveRequestDto {
 
 export interface RsData {
   status?: number;
+  code?: string;
   message?: string;
   data?: unknown;
 }
@@ -403,10 +404,73 @@ export interface RaceDetailDto {
   courses?: RaceDetailCourseDto[];
 }
 
+export type RaceSaveDtoSaleStatus = typeof RaceSaveDtoSaleStatus[keyof typeof RaceSaveDtoSaleStatus];
+
+
+export const RaceSaveDtoSaleStatus = {
+  SCHEDULED: 'SCHEDULED',
+  ON_SALE: 'ON_SALE',
+  STOPPED: 'STOPPED',
+  CLOSED: 'CLOSED',
+  CANCELED: 'CANCELED',
+} as const;
+
+export interface RaceSaveDto {
+  raceId?: number;
+  saleStatus?: RaceSaveDtoSaleStatus;
+  saleOpenDate?: string;
+  courseIds?: number[];
+}
+
+export type SellerRaceDtoSaleStatus = typeof SellerRaceDtoSaleStatus[keyof typeof SellerRaceDtoSaleStatus];
+
+
+export const SellerRaceDtoSaleStatus = {
+  SCHEDULED: 'SCHEDULED',
+  ON_SALE: 'ON_SALE',
+  STOPPED: 'STOPPED',
+  CLOSED: 'CLOSED',
+  CANCELED: 'CANCELED',
+} as const;
+
+export type SellerRaceCourseDtoStatus = typeof SellerRaceCourseDtoStatus[keyof typeof SellerRaceCourseDtoStatus];
+
+
+export const SellerRaceCourseDtoStatus = {
+  OPEN: 'OPEN',
+  SOLD_OUT: 'SOLD_OUT',
+} as const;
+
+export interface SellerRaceCourseDto {
+  raceCourseId?: number;
+  name?: string;
+  price?: number;
+  status?: SellerRaceCourseDtoStatus;
+  quota?: number;
+  reserved?: number;
+  sold?: number;
+}
+
+export interface SellerRaceDto {
+  raceId?: number;
+  title?: string;
+  raceDate?: string;
+  saleStatus?: SellerRaceDtoSaleStatus;
+  saleOpenDate?: string;
+  applicationCloseAt?: string;
+  courses?: SellerRaceCourseDto[];
+}
+
 export interface RsDataRaceDetailDto {
   status?: number;
   message?: string;
   data?: RaceDetailDto;
+}
+
+export interface RsDataRaceSaveDto {
+  status?: number;
+  message?: string;
+  data?: RaceSaveDto;
 }
 
 export interface RsDataRacePageDto {
@@ -419,6 +483,12 @@ export interface RsDataRaceSuggestionDto {
   status?: number;
   message?: string;
   data?: RaceSuggestionDto;
+}
+
+export interface RsDataListSellerRaceDto {
+  status?: number;
+  message?: string;
+  data?: SellerRaceDto[];
 }
 
 export type SearchParams = {
