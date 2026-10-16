@@ -9,6 +9,7 @@ import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.dto.CashPaymentDto;
 import com.bukang.cash.dto.CashRefundDto;
+import com.bukang.cash.dto.CashWithdrawalResponseDto;
 import com.bukang.cash.dto.WalletBalanceDto;
 
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class CashFacade {
 	private final CashCompleteOrderPaymentUseCase cashCompleteOrderPaymentUseCase;
 	private final CashCancelOrderPaymentUseCase cashCancelOrderPaymentUseCase;
 	private final CashRefundPaymentUseCase cashRefundPaymentUseCase;
+	private final CashWithdrawalUseCase cashWithdrawalUseCase;
 
 
 	@Transactional
@@ -53,4 +55,11 @@ public class CashFacade {
 		return cashRefundPaymentUseCase.refund(orderId, customerId);
 	}
 
+	@Transactional
+	public CashWithdrawalResponseDto requestWithdrawal(
+		int customerId, String bankCode, String accountNumber, String accountHolder, String idempotencyKey
+	) {
+		return cashWithdrawalUseCase.requestWithdrawal(
+			customerId, bankCode, accountNumber, accountHolder, idempotencyKey);
+	}
 }
