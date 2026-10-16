@@ -32,6 +32,7 @@ import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.TermsAgreementRepository;
+import com.bukang.member.out.TermsRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -53,6 +54,12 @@ class ApiV1AuthJoinTest {
 
 	@Autowired
 	private TermsAgreementRepository termsAgreementRepository;
+
+	@Autowired
+	private TermsRepository termsRepository;
+
+	@Autowired
+	private TermsDataInit termsDataInit;
 
 	@AfterEach
 	void tearDown() {
@@ -217,6 +224,23 @@ class ApiV1AuthJoinTest {
 		join(EMAIL, NICKNAME, PHONE, "\"agreedTerms\": [\"SERVICE\", \"PRIVACY\", \"FOO\"]")
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+	}
+
+	@Test
+	@DisplayName("시행 중인 필수 약관이 없으면 500이고 회원도 동의 기록도 저장하지 않는다")
+	void joinFailsClosedWithoutCurrentTerms() throws Exception {
+		termsRepository.deleteAll();
+		try {
+			join(EMAIL, NICKNAME, PHONE)
+				.andExpect(status().isInternalServerError())
+				.andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
+
+			assertThat(memberRepository.existsByEmail(EMAIL)).isFalse();
+			assertThat(termsAgreementRepository.count()).isZero();
+		} finally {
+			// 다른 테스트가 쓰는 기본 약관을 되돌린다
+			termsDataInit.makeBaseTerms();
+		}
 	}
 
 	private Map<TermsType, Boolean> agreedByType(int memberId) {

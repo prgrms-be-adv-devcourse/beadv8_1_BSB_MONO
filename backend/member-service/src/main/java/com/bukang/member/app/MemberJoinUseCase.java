@@ -50,7 +50,11 @@ public class MemberJoinUseCase {
 		}
 
 		// 지금 버전의 약관 가운데 필수 약관이 빠졌으면 막는다 (입력값 검사라 중복 검사보다 먼저 한다)
+		// 시행 중인 필수 약관이 하나도 없으면 검사가 빈 채로 통과하므로, 서버 설정 문제로 보고 가입을 막는다
 		List<Terms> currentTerms = termsRepository.findCurrent(LocalDate.now());
+		if (currentTerms.stream().noneMatch(Terms::isRequired)) {
+			throw new IllegalStateException("시행 중인 필수 약관이 없어 가입을 받을 수 없습니다.");
+		}
 		boolean requiredMissing = currentTerms.stream()
 			.anyMatch(terms -> terms.isRequired() && !agreedTerms.contains(terms.getType()));
 		if (requiredMissing) {
