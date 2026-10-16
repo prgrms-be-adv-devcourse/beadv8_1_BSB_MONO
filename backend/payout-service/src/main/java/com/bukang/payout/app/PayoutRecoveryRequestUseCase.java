@@ -37,12 +37,13 @@ public class PayoutRecoveryRequestUseCase {
 	private final PayoutLedgerUseCase payoutLedgerUseCase;
 
 	/**
+	 * @param raceCourseId 환불된 참가권의 코스 (원장 줄에 적어 코스별로 본다)
 	 * @param price 환불된 참가권의 가격 (주문 상품 가격)
 	 * @return 만든 회수. 1차 정산이 없으면(선금을 준 적이 없으면) 돌려받을 것이 없어 빈 값
 	 */
 	@Transactional
-	public Optional<PayoutRecovery> requestScheduleChange(int sellerId, int raceId, int orderItemId, long price,
-		LocalDateTime now) {
+	public Optional<PayoutRecovery> requestScheduleChange(int sellerId, int raceId, int raceCourseId, int orderItemId,
+		long price, LocalDateTime now) {
 		if (payoutRecoveryRepository.existsByOrderItemId(orderItemId)) {
 			throw new PayoutRecoveryConflictException("이미 회수를 요청한 참가권입니다.");
 		}
@@ -59,9 +60,9 @@ public class PayoutRecoveryRequestUseCase {
 			PayoutRecovery.scheduleChanged(sellerId, raceId, orderItemId, amount, now));
 		// 선금에서 빼고, 같은 금액을 갚을 돈으로 옮긴다
 		payoutItemRepository.save(
-			PayoutItem.ofRecovery(recovery, PayoutRecordType.RECOVERY_REQUESTED, orderItemId, -amount));
+			PayoutItem.ofRecovery(recovery, PayoutRecordType.RECOVERY_REQUESTED, orderItemId, raceCourseId, -amount));
 		payoutItemRepository.save(
-			PayoutItem.ofRecovery(recovery, PayoutRecordType.RECEIVABLE_ADDED, orderItemId, amount));
+			PayoutItem.ofRecovery(recovery, PayoutRecordType.RECEIVABLE_ADDED, orderItemId, raceCourseId, amount));
 
 		payoutLedgerUseCase.settle(sellerId, raceId, now);
 		return Optional.of(recovery);

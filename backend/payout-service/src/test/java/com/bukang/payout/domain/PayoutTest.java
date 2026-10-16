@@ -71,7 +71,7 @@ class PayoutTest {
 		Payout first = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 10, 1, 3, 0),
 			CALENDAR);
 
-		first.recordAdvance(333_330L, 10, LocalDate.of(2026, 10, 1));
+		first.recordAdvance(10, 333_330L, 10, LocalDate.of(2026, 10, 1));
 
 		assertThat(first.getPayoutStage()).isEqualTo(PayoutStage.FIRST);
 		assertThat(first.getSalesAmount()).isEqualTo(333_330L);
@@ -87,7 +87,7 @@ class PayoutTest {
 		Payout first = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 10, 1, 3, 0),
 			CALENDAR);
 
-		assertThatThrownBy(() -> first.recordAdvance(83_333L, 2, LocalDate.of(2026, 10, 1)))
+		assertThatThrownBy(() -> first.recordAdvance(10, 83_333L, 2, LocalDate.of(2026, 10, 1)))
 			.isInstanceOf(IllegalStateException.class);
 	}
 

@@ -55,7 +55,8 @@ public class PayoutGroupCreator {
 		LocalDate targetDate = PayoutTargetDate.firstOf(refundDeadline);
 		Payout payout = Payout.first(group.sellerId(), group.raceId(), group.raceName(),
 			YearMonth.from(refundDeadline), now, businessDayCalendar);
-		payout.recordAdvance(group.priceSum(), group.ticketCount(), targetDate);
+		group.courses().forEach(course ->
+			payout.recordAdvance(course.raceCourseId(), course.priceSum(), course.ticketCount(), targetDate));
 
 		save(payout);
 		if (!group.hasPayoutAccount()) {
@@ -85,7 +86,8 @@ public class PayoutGroupCreator {
 			advanceDeduction, now, businessDayCalendar);
 
 		group.entries().forEach(entry ->
-			payout.addItem(entry.orderItemId(), entry.price(), TwoStagePayoutCalculator.FEE_RATE, targetDate));
+			payout.addItem(entry.orderItemId(), entry.raceCourseId(), entry.price(), TwoStagePayoutCalculator.FEE_RATE,
+				targetDate));
 
 		save(payout);
 		payoutLedgerUseCase.settle(group.sellerId(), group.raceId(), now);
@@ -118,10 +120,15 @@ public class PayoutGroupCreator {
 	}
 
 	/**
-	 * 1차 정산 내역 하나로 묶이는 판매자 × 대회의 판매 집계와, 저장에 필요한 다른 서비스의 값
+	 * 1차 정산 내역 하나로 묶이는 판매자 × 대회의 코스별 판매 집계와, 저장에 필요한 다른 서비스의 값
+	 * 정산 묶음은 대회 단위이고, 선금 줄은 코스마다 하나씩 쓴다
 	 */
-	public record FirstGroup(int sellerId, int raceId, String raceName, boolean hasPayoutAccount, long priceSum,
-		int ticketCount) {
+	public record FirstGroup(int sellerId, int raceId, String raceName, boolean hasPayoutAccount,
+		List<CourseSale> courses) {
+	}
+
+	// 코스 하나의 판매 집계 (가격 합 · 장수)
+	public record CourseSale(int raceCourseId, long priceSum, int ticketCount) {
 	}
 
 	/**

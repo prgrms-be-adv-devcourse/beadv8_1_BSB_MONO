@@ -30,7 +30,7 @@ import lombok.NoArgsConstructor;
  * 중복 방지 (같은 줄이 두 번 들어가지 않게)
  * - 참가권 줄: (order_item_id, record_type) 유일. 늦게 들어온 참가권이 다른 묶음에 또 들어가는 것까지 막는다 (PRO-118)
  * - 묶음째 줄(order_item_id NULL): MySQL 유일 인덱스는 NULL끼리 막지 않으므로, NULL일 때만 값을 갖는 칼럼
- *   bundle_key(예: P1:ADVANCE_PAID, R4:RECOVERY_REQUESTED)에 유일 제약을 건다
+ *   bundle_key(예: P1:ADVANCE_PAID:C3, R4:RECOVERY_REQUESTED)에 유일 제약을 건다. 코스가 있으면 키에 코스를 넣는다
  *   DB 생성 칼럼으로 두면 테스트 DB(H2)에서 INSERT 때 DB가 닫혀, 저장 직전에 Java에서 계산해 넣는다 (PRO-214, 원인 미확인)
  * - 상계 줄(RECOVERY_OFFSET)은 한 묶음에 여러 번 생길 수 있어 bundle_key를 두지 않는다.
  *   상계액을 잔고로 다시 계산하고 묶음 행을 잠그므로, 다시 실행해도 0원이라 줄이 생기지 않는다
@@ -75,6 +75,10 @@ public class PayoutItem extends BaseIdAndTime {
 	// 주문 도메인의 주문 상품 ID. 참가권 줄에만 있고, 묶음째 줄(선금 · 선지급 차감 · 상계 · 대회 취소 회수)은 NULL
 	private Integer orderItemId;
 
+	// 상품 도메인의 코스 ID. 정산 묶음은 대회 단위이고, 판매자가 코스별로 보도록 줄에 코스를 적는다 (PRO-214)
+	// 선금(코스마다 한 줄) · 판매 · 수수료 · 일정 변경 회수 줄에 있고, 선지급 차감 · 상계 · 대회 취소 회수 줄은 NULL
+	private Integer raceCourseId;
+
 	// 판매자 기준 부호: 판매자에게 가면 +, 판매자에게서 오면 −
 	@Column(nullable = false)
 	private long amount;
@@ -91,7 +95,7 @@ public class PayoutItem extends BaseIdAndTime {
 	private String bundleKey;
 
 	private PayoutItem(Payout payout, PayoutRecovery recovery, int sellerId, int raceId, PayoutRecordType recordType,
-		Integer orderItemId, long amount, BigDecimal feeRate, LocalDate targetDate) {
+		Integer orderItemId, Integer raceCourseId, long amount, BigDecimal feeRate, LocalDate targetDate) {
 		this.payout = payout;
 		this.recovery = recovery;
 		this.sellerId = sellerId;
@@ -99,23 +103,24 @@ public class PayoutItem extends BaseIdAndTime {
 		this.account = recordType.getAccount();
 		this.recordType = recordType;
 		this.orderItemId = orderItemId;
+		this.raceCourseId = raceCourseId;
 		this.amount = amount;
 		this.feeRate = feeRate;
 		this.targetDate = targetDate;
 	}
 
 	// 정산 묶음에 붙는 줄. Payout 안에서만 만든다 (묶음 금액 캐시와 함께 바뀌어야 하므로)
-	static PayoutItem ofPayout(Payout payout, PayoutRecordType recordType, Integer orderItemId, long amount,
-		BigDecimal feeRate, LocalDate targetDate) {
-		return new PayoutItem(payout, null, payout.getSellerId(), payout.getRaceId(), recordType, orderItemId, amount,
-			feeRate, targetDate);
+	static PayoutItem ofPayout(Payout payout, PayoutRecordType recordType, Integer orderItemId, Integer raceCourseId,
+		long amount, BigDecimal feeRate, LocalDate targetDate) {
+		return new PayoutItem(payout, null, payout.getSellerId(), payout.getRaceId(), recordType, orderItemId,
+			raceCourseId, amount, feeRate, targetDate);
 	}
 
 	// 회수에 붙는 줄 (요청 · 입금)
 	public static PayoutItem ofRecovery(PayoutRecovery recovery, PayoutRecordType recordType, Integer orderItemId,
-		long amount) {
+		Integer raceCourseId, long amount) {
 		return new PayoutItem(null, recovery, recovery.getSellerId(), recovery.getRaceId(), recordType, orderItemId,
-			amount, null, null);
+			raceCourseId, amount, null, null);
 	}
 
 	// 묶음(payout)은 먼저 저장돼 ID가 있으므로 줄을 저장하기 직전에 키를 만든다
@@ -125,10 +130,12 @@ public class PayoutItem extends BaseIdAndTime {
 			|| recordType == PayoutRecordType.RECOVERY_OFFSET_CANCELED) {
 			return;
 		}
+		// 선금은 코스마다 한 줄이라 코스가 있으면 키에 넣는다 (예: P1:ADVANCE_PAID:C3)
+		String course = raceCourseId == null ? "" : ":C" + raceCourseId;
 		if (payout != null) {
-			this.bundleKey = "P%d:%s".formatted(payout.getId(), recordType);
+			this.bundleKey = "P%d:%s%s".formatted(payout.getId(), recordType, course);
 		} else if (recovery != null) {
-			this.bundleKey = "R%d:%s".formatted(recovery.getId(), recordType);
+			this.bundleKey = "R%d:%s%s".formatted(recovery.getId(), recordType, course);
 		}
 	}
 }

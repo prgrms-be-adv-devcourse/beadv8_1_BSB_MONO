@@ -45,7 +45,7 @@ public class PayoutRecoveryUseCase {
 		long deposit = Math.min(recovery.getAmount(), receivable);
 		if (deposit > 0) {
 			payoutItemRepository.save(
-				PayoutItem.ofRecovery(recovery, PayoutRecordType.RECOVERY_RECEIVED, null, -deposit));
+				PayoutItem.ofRecovery(recovery, PayoutRecordType.RECOVERY_RECEIVED, null, null, -deposit));
 		}
 		recovery.complete(completedBy, now);
 		if (receivable - deposit == 0) {

@@ -119,7 +119,8 @@ public class PayoutDataInit {
 		LocalDate firstTargetDate = PayoutTargetDate.firstOf(refundDeadline);
 		Payout first = Payout.first(SELLER_ID, raceId, raceName, YearMonth.from(refundDeadline),
 			firstTargetDate.atTime(3, 0), calendar);
-		first.recordAdvance(price * count, count, firstTargetDate);
+		// 샘플은 대회마다 코스가 하나라고 보고 코스 ID를 대회 ID와 같게 둔다
+		first.recordAdvance(raceId, price * count, count, firstTargetDate);
 		save(first);
 
 		LocalDate finalTargetDate = PayoutTargetDate.of(raceDate);
@@ -133,7 +134,7 @@ public class PayoutDataInit {
 	private void addItems(Payout payout, int raceId, int count, long price, LocalDate targetDate) {
 		for (int i = 1; i <= count; i++) {
 			// 주문 상품 ID는 대회마다 겹치지 않게 대회 번호 × 100,000부터 붙인다
-			payout.addItem(raceId * 100_000 + i, price, FEE_RATE, targetDate);
+			payout.addItem(raceId * 100_000 + i, raceId, price, FEE_RATE, targetDate);
 		}
 	}
 

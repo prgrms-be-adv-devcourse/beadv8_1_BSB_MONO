@@ -2,9 +2,11 @@ package com.bukang.payout.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -15,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import com.bukang.payout.app.PayoutGroupCreator.CourseSale;
 import com.bukang.payout.app.PayoutGroupCreator.FirstGroup;
 import com.bukang.payout.app.PayoutGroupCreator.PayoutGroup;
 import com.bukang.payout.domain.BusinessDayCalendar;
@@ -91,7 +94,7 @@ class PayoutLedgerScenarioTest {
 
 	private PayoutGroup group(int... orderItemIds) {
 		List<SoldEntry> entries = Arrays.stream(orderItemIds)
-			.mapToObj(id -> new SoldEntry(id, SELLER_ID, RACE_ID, RACE_DATE, PRICE))
+			.mapToObj(id -> new SoldEntry(id, SELLER_ID, RACE_ID, RACE_ID, RACE_DATE, PRICE))
 			.toList();
 		return new PayoutGroup(SELLER_ID, RACE_ID, "대회 A", true, entries);
 	}
@@ -101,7 +104,8 @@ class PayoutLedgerScenarioTest {
 	}
 
 	private void createFirst() {
-		creator.createFirst(new FirstGroup(SELLER_ID, RACE_ID, "대회 A", true, PRICE * 10, 10), REFUND_DEADLINE,
+		creator.createFirst(new FirstGroup(SELLER_ID, RACE_ID, "대회 A", true,
+			List.of(new CourseSale(RACE_ID, PRICE * 10, 10))), REFUND_DEADLINE,
 			REFUND_DEADLINE.plusDays(1).atTime(3, 0));
 	}
 
@@ -114,7 +118,7 @@ class PayoutLedgerScenarioTest {
 	}
 
 	private PayoutRecovery requestRecovery(int orderItemId, LocalDateTime at) {
-		return recoveryRequestUseCase.requestScheduleChange(SELLER_ID, RACE_ID, orderItemId, PRICE, at)
+		return recoveryRequestUseCase.requestScheduleChange(SELLER_ID, RACE_ID, RACE_ID, orderItemId, PRICE, at)
 			.orElseThrow();
 	}
 
@@ -170,6 +174,44 @@ class PayoutLedgerScenarioTest {
 		assertThat(balance(PayoutAccount.ADVANCE)).isZero();
 		assertThat(balance(PayoutAccount.EARNING)).isEqualTo(472_500L);
 		assertEveryPayoutLineSumMatches();
+	}
+
+	@Test
+	@DisplayName("코스가 둘인 대회: 1차 선금은 코스마다 한 줄, 최종 판매 · 수수료 줄에도 코스가 남아 코스별로 더할 수 있다")
+	void twoCourses() {
+		int course10k = 71;
+		int course5k = 72;
+		creator.createFirst(new FirstGroup(SELLER_ID, RACE_ID, "대회 A", true, List.of(
+			new CourseSale(course10k, 50_000L * 6, 6),
+			new CourseSale(course5k, 30_000L * 4, 4))), REFUND_DEADLINE, REFUND_DEADLINE.plusDays(1).atTime(3, 0));
+		pay(FIRST_PAY_DATE);
+		List<SoldEntry> entries = new ArrayList<>();
+		for (int id = 101; id <= 106; id++) {
+			entries.add(new SoldEntry(id, SELLER_ID, RACE_ID, course10k, RACE_DATE, 50_000L));
+		}
+		for (int id = 107; id <= 110; id++) {
+			entries.add(new SoldEntry(id, SELLER_ID, RACE_ID, course5k, RACE_DATE, 30_000L));
+		}
+		creator.createFinal(new PayoutGroup(SELLER_ID, RACE_ID, "대회 A", true, entries), RACE_DATE,
+			RACE_DATE.plusDays(1).atTime(3, 0));
+
+		// 10K 6장 × 20,000 + 5K 4장 × 12,000
+		assertThat(payout(PayoutStage.FIRST).getItems())
+			.extracting(PayoutItem::getRaceCourseId, PayoutItem::getAmount)
+			.containsExactlyInAnyOrder(tuple(course10k, 120_000L), tuple(course5k, 48_000L));
+		// 10K 6장 × (50,000 − 2,750) = 283,500, 5K 4장 × (30,000 − 1,650) = 113,400
+		Payout last = payout(PayoutStage.FINAL);
+		assertThat(courseSum(last, course10k)).isEqualTo(283_500L);
+		assertThat(courseSum(last, course5k)).isEqualTo(113_400L);
+		assertThat(lineSum(last)).isEqualTo(283_500L + 113_400L - 168_000L);
+		assertEveryPayoutLineSumMatches();
+	}
+
+	private long courseSum(Payout payout, int raceCourseId) {
+		return payout.getItems().stream()
+			.filter(item -> Integer.valueOf(raceCourseId).equals(item.getRaceCourseId()))
+			.mapToLong(PayoutItem::getAmount)
+			.sum();
 	}
 
 	@Test

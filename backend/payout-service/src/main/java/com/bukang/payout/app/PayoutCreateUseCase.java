@@ -14,6 +14,7 @@ import java.util.function.Consumer;
 
 import org.springframework.stereotype.Service;
 
+import com.bukang.payout.app.PayoutGroupCreator.CourseSale;
 import com.bukang.payout.app.PayoutGroupCreator.FirstGroup;
 import com.bukang.payout.app.PayoutGroupCreator.PayoutGroup;
 import com.bukang.payout.domain.PayoutStage;
@@ -91,30 +92,34 @@ public class PayoutCreateUseCase {
 				continue;
 			}
 			YearMonth payoutMonth = YearMonth.from(race.refundDeadline());
-			summaries.forEach(summary -> createFirstGroup(summary, race.raceName(), payoutMonth, race.refundDeadline(),
-				counts, now));
+			// 정산 묶음은 판매자 × 대회 단위이고, 코스별 집계는 그 안의 선금 줄이 된다
+			summaries.stream()
+				.collect(groupingBy(SoldSummary::sellerId))
+				.forEach((sellerId, courses) -> createFirstGroup(new SellerRace(sellerId, race.raceId()), courses,
+					race.raceName(), payoutMonth, race.refundDeadline(), counts, now));
 		}
 		return counts;
 	}
 
 	// 1차 묶음 하나를 만든다. 이미 만든 묶음은 건너뛰고, 실패하면 이 묶음만 실패로 남긴다
-	private void createFirstGroup(SoldSummary summary, String raceName, YearMonth payoutMonth,
+	private void createFirstGroup(SellerRace key, List<SoldSummary> courses, String raceName, YearMonth payoutMonth,
 		LocalDate refundDeadline, Counts counts, LocalDateTime now) {
-		SellerRace key = new SellerRace(summary.sellerId(), summary.raceId());
 		try {
 			if (payoutRepository.existsBySellerIdAndRaceIdAndPayoutMonthAndPayoutStage(
 				key.sellerId(), key.raceId(), payoutMonth.toString(), PayoutStage.FIRST)) {
 				counts.skipped++;
 				return;
 			}
+			List<CourseSale> courseSales = courses.stream()
+				.map(course -> new CourseSale(course.raceCourseId(), course.priceSum(), course.ticketCount()))
+				.toList();
 			payoutGroupCreator.createFirst(new FirstGroup(key.sellerId(), key.raceId(), raceName,
-				sellerAccountPort.hasPayoutAccount(key.sellerId()), summary.priceSum(), summary.ticketCount()),
-				refundDeadline, now);
+				sellerAccountPort.hasPayoutAccount(key.sellerId()), courseSales), refundDeadline, now);
 			counts.created++;
 		} catch (RuntimeException exception) {
 			counts.failed++;
-			log.error("1차 정산 내역을 만들지 못했습니다. sellerId={}, raceId={}, 참가권 {}장",
-				key.sellerId(), key.raceId(), summary.ticketCount(), exception);
+			log.error("1차 정산 내역을 만들지 못했습니다. sellerId={}, raceId={}, 코스 {}개",
+				key.sellerId(), key.raceId(), courses.size(), exception);
 		}
 	}
 

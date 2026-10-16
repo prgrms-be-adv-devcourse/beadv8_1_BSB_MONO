@@ -97,7 +97,7 @@ class PayoutCreateUseCaseTest {
 			.filter(entry -> entry.raceId() == raceId)
 			.collect(java.util.stream.Collectors.groupingBy(SoldEntry::sellerId))
 			.entrySet().stream()
-			.map(seller -> new SoldSummary(seller.getKey(), raceId,
+			.map(seller -> new SoldSummary(seller.getKey(), raceId, raceId,
 				seller.getValue().stream().mapToLong(SoldEntry::price).sum(), seller.getValue().size()))
 			.toList();
 	}
@@ -113,8 +113,8 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("정산 내역에 상품 서비스에서 받은 대회 이름을 저장하고, 상품 서비스가 모르는 대회는 정산하지 않는다")
 	void savesRaceName() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
-			new SoldEntry(300, 3, 30, RACE_DATE, 40_000L)
+			new SoldEntry(100, 1, 10, 10, RACE_DATE, 50_000L),
+			new SoldEntry(300, 3, 30, 30, RACE_DATE, 40_000L)
 		));
 
 		useCase.run(TARGET_DATE, NOW);
@@ -135,9 +135,9 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("정산 대상일에 판매자 × 대회별로 정산 내역을 만들고, 참가권마다 정산 항목을 만든다")
 	void createsPayoutPerSellerAndRace() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
-			new SoldEntry(101, 1, 10, RACE_DATE, 50_000L),
-			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
+			new SoldEntry(100, 1, 10, 10, RACE_DATE, 50_000L),
+			new SoldEntry(101, 1, 10, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 20, 20, RACE_DATE, 30_000L)
 		));
 
 		useCase.run(TARGET_DATE, NOW);
@@ -166,7 +166,7 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("정산 ID는 'ST-만든 날-16진수 4자리' 형식이다")
 	void assignsPayoutCode() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L)
+			new SoldEntry(100, 1, 10, 10, RACE_DATE, 50_000L)
 		));
 
 		useCase.run(TARGET_DATE, NOW);
@@ -179,7 +179,7 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("같은 날 배치를 두 번 돌려도 정산 내역이 중복으로 만들어지지 않는다")
 	void runTwiceDoesNotDuplicate() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L)
+			new SoldEntry(100, 1, 10, 10, RACE_DATE, 50_000L)
 		));
 
 		useCase.run(TARGET_DATE, NOW);
@@ -193,8 +193,8 @@ class PayoutCreateUseCaseTest {
 	void holdsPayoutOfSellerWithoutAccount() {
 		// 판매자 2만 계좌가 없다
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
-			new SoldEntry(200, 2, 20, RACE_DATE, 30_000L)
+			new SoldEntry(100, 1, 10, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 20, 20, RACE_DATE, 30_000L)
 		), sellerId -> sellerId != 2);
 
 		useCase.run(TARGET_DATE, NOW);
@@ -219,7 +219,7 @@ class PayoutCreateUseCaseTest {
 	void catchesUpMissedDay() {
 		LocalDate raceDate = LocalDate.of(2026, 9, 28);
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, raceDate, 50_000L)
+			new SoldEntry(100, 1, 10, 10, raceDate, 50_000L)
 		));
 
 		// 9/29 03:00 실행은 서버가 없어 돌지 않았다
@@ -238,8 +238,8 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("월 경계: 9/29 대회는 9/30 · 10/1 실행이 모두 봐도 9월 정산 내역 하나만 만든다 (정산 월은 실행일 · 대상일이 아니라 대회일로 정한다)")
 	void monthBoundaryDoesNotDuplicate() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, LocalDate.of(2026, 9, 29), 50_000L),
-			new SoldEntry(200, 2, 20, LocalDate.of(2026, 9, 30), 30_000L)
+			new SoldEntry(100, 1, 10, 10, LocalDate.of(2026, 9, 29), 50_000L),
+			new SoldEntry(200, 2, 20, 20, LocalDate.of(2026, 9, 30), 30_000L)
 		));
 
 		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
@@ -258,10 +258,10 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("되돌아보기는 어제부터 7일치 대회다. 그보다 오래된 대회와 오늘 열린 대회는 만들지 않는다")
 	void looksBackSevenDays() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, LocalDate.of(2026, 9, 22), 50_000L),
-			new SoldEntry(200, 2, 20, LocalDate.of(2026, 9, 23), 30_000L),
-			new SoldEntry(300, 3, 50, LocalDate.of(2026, 9, 29), 40_000L),
-			new SoldEntry(400, 4, 40, LocalDate.of(2026, 9, 30), 20_000L)
+			new SoldEntry(100, 1, 10, 10, LocalDate.of(2026, 9, 22), 50_000L),
+			new SoldEntry(200, 2, 20, 20, LocalDate.of(2026, 9, 23), 30_000L),
+			new SoldEntry(300, 3, 50, 50, LocalDate.of(2026, 9, 29), 40_000L),
+			new SoldEntry(400, 4, 40, 40, LocalDate.of(2026, 9, 30), 20_000L)
 		));
 
 		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
@@ -276,9 +276,9 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("한 대회의 참가권 대회일이 서로 다르면 어느 날로 정산할지 고르지 않고 그 묶음을 만들지 않는다")
 	void skipsGroupWithMixedRaceDates() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, LocalDate.of(2026, 9, 27), 50_000L),
-			new SoldEntry(101, 1, 10, LocalDate.of(2026, 9, 28), 50_000L),
-			new SoldEntry(200, 2, 20, LocalDate.of(2026, 9, 28), 30_000L)
+			new SoldEntry(100, 1, 10, 10, LocalDate.of(2026, 9, 27), 50_000L),
+			new SoldEntry(101, 1, 10, 10, LocalDate.of(2026, 9, 28), 50_000L),
+			new SoldEntry(200, 2, 20, 20, LocalDate.of(2026, 9, 28), 30_000L)
 		));
 
 		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
@@ -294,8 +294,8 @@ class PayoutCreateUseCaseTest {
 		LocalDate refundDeadline = LocalDate.of(2026, 9, 30);
 		LocalDate raceDate = LocalDate.of(2026, 10, 10);
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, raceDate, 50_000L),
-			new SoldEntry(101, 1, 10, raceDate, 50_000L)
+			new SoldEntry(100, 1, 10, 10, raceDate, 50_000L),
+			new SoldEntry(101, 1, 10, 10, raceDate, 50_000L)
 		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, refundDeadline)));
 
 		// 9/30(마감일 당일) 실행은 아직 1차를 만들지 않는다
@@ -326,7 +326,7 @@ class PayoutCreateUseCaseTest {
 		LocalDate raceDate = LocalDate.of(2026, 10, 10);
 		// 2장 중 1장은 마감 전에 환불되어 주문 서비스가 돌려주지 않는다
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, raceDate, 50_000L)
+			new SoldEntry(100, 1, 10, 10, raceDate, 50_000L)
 		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 30))));
 
 		useCase.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
@@ -339,8 +339,8 @@ class PayoutCreateUseCaseTest {
 	void firstPayoutOnlyForScheduledRace() {
 		LocalDate raceDate = LocalDate.of(2026, 10, 10);
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, raceDate, 50_000L),
-			new SoldEntry(200, 1, 20, raceDate, 30_000L)
+			new SoldEntry(100, 1, 10, 10, raceDate, 50_000L),
+			new SoldEntry(200, 1, 20, 20, raceDate, 30_000L)
 		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 30))));
 
 		useCase.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
@@ -355,8 +355,8 @@ class PayoutCreateUseCaseTest {
 	void createsFinalPayoutDeductingFirst() {
 		LocalDate sameDay = LocalDate.of(2026, 9, 30);
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, sameDay, 50_000L),
-			new SoldEntry(101, 1, 10, sameDay, 50_000L)
+			new SoldEntry(100, 1, 10, 10, sameDay, 50_000L),
+			new SoldEntry(101, 1, 10, 10, sameDay, 50_000L)
 		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", sameDay, sameDay)));
 
 		// 마감일과 대회일이 같아 한 실행에서 1차를 먼저, 최종을 나중에 만든다
@@ -378,7 +378,7 @@ class PayoutCreateUseCaseTest {
 	@DisplayName("1차가 보류 중이면 최종을 만들고 같은 사유로 보류한다")
 	void holdsFinalWhenFirstIsHeld() {
 		LocalDate raceDate = LocalDate.of(2026, 9, 30);
-		List<SoldEntry> entries = List.of(new SoldEntry(100, 1, 10, raceDate, 50_000L));
+		List<SoldEntry> entries = List.of(new SoldEntry(100, 1, 10, 10, raceDate, 50_000L));
 		List<RaceSchedule> schedules =
 			List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 20)));
 
@@ -404,7 +404,7 @@ class PayoutCreateUseCaseTest {
 	void firstPayoutRunTwiceAndCatchesUp() {
 		LocalDate raceDate = LocalDate.of(2026, 10, 10);
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
-			new SoldEntry(100, 1, 10, raceDate, 50_000L)
+			new SoldEntry(100, 1, 10, 10, raceDate, 50_000L)
 		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 28))));
 
 		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));

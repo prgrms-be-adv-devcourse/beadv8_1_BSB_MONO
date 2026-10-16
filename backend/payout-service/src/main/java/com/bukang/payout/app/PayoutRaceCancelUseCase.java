@@ -84,8 +84,10 @@ public class PayoutRaceCancelUseCase {
 		}
 		PayoutRecovery recovery = payoutRecoveryRepository.save(
 			new PayoutRecovery(sellerId, raceId, PayoutRecoveryReason.RACE_CANCELED, amount, now));
-		payoutItemRepository.save(PayoutItem.ofRecovery(recovery, PayoutRecordType.RECOVERY_REQUESTED, null, -amount));
-		payoutItemRepository.save(PayoutItem.ofRecovery(recovery, PayoutRecordType.RECEIVABLE_ADDED, null, amount));
+		payoutItemRepository.save(
+			PayoutItem.ofRecovery(recovery, PayoutRecordType.RECOVERY_REQUESTED, null, null, -amount));
+		payoutItemRepository.save(
+			PayoutItem.ofRecovery(recovery, PayoutRecordType.RECEIVABLE_ADDED, null, null, amount));
 		return true;
 	}
 

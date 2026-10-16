@@ -14,7 +14,7 @@ import com.bukang.common.global.rsdata.RsData;
 
 /**
  * 주문 서비스의 1차 정산용 판매 집계 내부 API를 HTTP로 부르는 어댑터 (PRO-214)
- * GET {주문 서비스}/internal/v1/order/sold-summary?raceId= → RsData.data 배열을 SoldSummary로 바꾼다
+ * GET {주문 서비스}/internal/v1/order/sold-summary?raceId= → RsData.data 배열(판매자 × 코스)을 SoldSummary로 바꾼다
  *
  * 주문 서비스에는 아직 이 API가 없다 (사이클 4 리팩토링에서 만든다). 응답 모양을 가정하고 먼저 둔다
  * 지금은 FakeRaceAdapter가 1차 대상 대회를 하나도 돌려주지 않아 이 어댑터가 불리지 않는다
@@ -65,9 +65,9 @@ public class OrderSoldSummaryAdapter implements SoldSummaryPort {
 	}
 
 	// 주문 서비스 응답의 가정한 모양. 포트의 SoldSummary가 응답 형식에 묶이지 않도록 따로 둔다
-	private record SoldSummaryResponse(int sellerId, int raceId, long priceSum, int ticketCount) {
+	private record SoldSummaryResponse(int sellerId, int raceId, int raceCourseId, long priceSum, int ticketCount) {
 		SoldSummary toSoldSummary() {
-			return new SoldSummary(sellerId, raceId, priceSum, ticketCount);
+			return new SoldSummary(sellerId, raceId, raceCourseId, priceSum, ticketCount);
 		}
 	}
 }

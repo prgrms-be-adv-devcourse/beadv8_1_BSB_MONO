@@ -57,11 +57,12 @@ class PayoutItemConstraintTest {
 	@DisplayName("같은 1차 묶음에 선금 줄을 두 번 넣으면 저장에 실패한다 (bundle_key)")
 	void advancePaidTwice() {
 		Payout first = Payout.first(1, 7, "대회 A", YearMonth.of(2026, 10), SETTLED_AT, CALENDAR);
-		first.recordAdvance(50_000L, 1, TARGET_DATE);
+		first.recordAdvance(7, 50_000L, 1, TARGET_DATE);
 		entityManager.persist(first);
 		entityManager.flush();
 
-		PayoutItem again = PayoutItem.ofPayout(first, PayoutRecordType.ADVANCE_PAID, null, 20_000L, null, TARGET_DATE);
+		PayoutItem again = PayoutItem.ofPayout(first, PayoutRecordType.ADVANCE_PAID, null, 7, 20_000L, null,
+			TARGET_DATE);
 
 		assertThatThrownBy(() -> {
 			entityManager.persist(again);
