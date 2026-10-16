@@ -13,7 +13,10 @@ final class AuthApiExamples {
 				"createDate": "2026-10-05T21:25:35",
 				"modifyDate": "2026-10-05T21:25:35",
 				"nickname": "러너1",
-				"email": "runner1@crewrun.com"
+				"email": "runner1@crewrun.com",
+				"phone": "010-1234-5678",
+				"name": "김러너",
+				"birthDate": "1995-04-12"
 			}
 		}
 		""";
@@ -30,7 +33,9 @@ final class AuthApiExamples {
 					"modifyDate": "2026-10-05T21:25:35",
 					"nickname": "러너1",
 					"email": "runner1@crewrun.com",
-					"phone": "010-1234-5678"
+					"phone": "010-1234-5678",
+					"name": "김러너",
+					"birthDate": "1995-04-12"
 				}
 			}
 		}
@@ -68,6 +73,15 @@ final class AuthApiExamples {
 
 	static final String JOIN_UNDER_AGE = """
 		{ "status": 400, "code": "MEMBER_UNDER_AGE", "message": "만 14세 미만은 가입할 수 없습니다.", "data": null }
+		""";
+
+	static final String JOIN_REQUIRED_TERMS_NOT_AGREED = """
+		{
+			"status": 400,
+			"code": "MEMBER_REQUIRED_TERMS_NOT_AGREED",
+			"message": "필수 약관에 동의해야 가입할 수 있습니다.",
+			"data": null
+		}
 		""";
 
 	static final String DUPLICATE_EMAIL = """

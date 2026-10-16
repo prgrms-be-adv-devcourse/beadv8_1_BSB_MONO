@@ -78,6 +78,14 @@ final class PayoutApiExamples {
 		{ "status": 409, "message": "이미 지급 완료된 정산 내역입니다.", "data": null }
 		""";
 
+	static final String HOLD_CANCELED_PAYOUT = """
+		{ "status": 409, "message": "취소된 정산 내역입니다.", "data": null }
+		""";
+
+	static final String RELEASE_CANCELED_PAYOUT = """
+		{ "status": 409, "message": "취소된 정산 내역의 지급보류는 풀 수 없습니다.", "data": null }
+		""";
+
 	static final String ALREADY_RELEASED = """
 		{ "status": 409, "message": "이미 해제된 지급보류입니다.", "data": null }
 		""";

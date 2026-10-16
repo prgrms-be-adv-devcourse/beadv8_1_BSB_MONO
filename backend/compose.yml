@@ -154,6 +154,8 @@ services:
     depends_on:
       bukang-db:
         condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
 
   file-service:
     build:

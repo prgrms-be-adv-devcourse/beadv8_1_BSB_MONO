@@ -1,33 +1,31 @@
+'use client'
+
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 
 import { ConsoleCard, ConsoleLoading, ConsoleOffline, ConsolePage } from '@/widgets/console-page'
-import { cn } from '@/shared/lib'
+import { formatMonthDay, formatWeekday } from '@/entities/payout'
+import { myRacesQueryOptions, toSellerRaceRow } from '@/entities/race'
+import { ApiError, payoutApi, unwrapData } from '@/shared/api'
+import { cn, formatNumber } from '@/shared/lib'
 import {
+  Alert,
   Badge,
   buttonClassName,
   DataTable,
+  EmptyState,
   FOCUS_RING,
   ProgressBar,
+  Skeleton,
   StatTile,
   type BadgeTone,
 } from '@/shared/ui'
 
-// TODO(api): 판매자 대시보드 API로 바꾼다. 지금은 시안 예시 값.
-const RACES = [
-  {
-    title: '2026 용감한 쿠키RUN in 서울',
-    period: '접수 10/14~10/31 · 대회 11/1',
-    applied: 2410,
-    capacity: 3000,
-  },
-  {
-    title: '2026 춘천 나이트런',
-    period: '접수 10/5~11/5 · 대회 12/6',
-    applied: 1500,
-    capacity: 5000,
-  },
-]
+function errorText(error: unknown) {
+  return (error instanceof ApiError && error.serverMessage) || '잠시 뒤 다시 시도해 주세요.'
+}
 
+// TODO(api): 처리할 일 API가 없다. 지금은 시안 예시 값 (처리할 일 카드 + 위 "처리할 일" 숫자 타일).
 const TODOS = [
   {
     title: '배송 대기 키트',
@@ -48,6 +46,7 @@ type Order = {
   paidAt: string
 }
 
+// TODO(api): 최근 주문 API가 없다. 지금은 시안 예시 값.
 const ORDERS: Order[] = [
   {
     id: 'R-20261019-0907',
@@ -109,12 +108,46 @@ export function SellerDashboardPage({ state }: { state?: 'loading' | 'offline' }
 }
 
 function DashboardBody() {
+  const summary = payoutApi.useSummary({ query: { select: unwrapData } })
+  const races = useQuery({
+    ...myRacesQueryOptions(),
+    select: (list) => list.map(toSellerRaceRow),
+  })
+  const onSale = races.data?.filter((r) => r.saleStatus === 'ON_SALE')
+
   return (
     <>
       <div className="flex gap-4">
-        <StatTile label="다음 정산일" value="11/20" unit="(금)" />
-        <StatTile tone="accent" className="flex-2" label="정산 예정액" value="₩1,920,000" />
-        <StatTile label="판매 중 대회" value="2" unit="개" />
+        {summary.data ? (
+          <>
+            <StatTile
+              label="다음 정산일"
+              value={formatMonthDay(summary.data.nextPayDate)}
+              unit={`(${formatWeekday(summary.data.nextPayDate)})`}
+            />
+            <StatTile
+              tone="accent"
+              className="flex-2"
+              label="정산 예정액"
+              value={`₩${formatNumber(summary.data.scheduledPayoutAmount)}`}
+            />
+          </>
+        ) : summary.isError ? (
+          <Alert
+            tone="danger"
+            className="flex-3"
+            title="정산 요약을 불러오지 못했어요"
+            description={errorText(summary.error)}
+          />
+        ) : (
+          <Skeleton className="h-24 flex-3" />
+        )}
+        {onSale ? (
+          <StatTile label="판매 중 대회" value={String(onSale.length)} unit="개" />
+        ) : (
+          <Skeleton className="h-24 flex-1" />
+        )}
+        {/* TODO(api): 처리할 일 건수 API가 없다. 예시 값 */}
         <StatTile label="처리할 일" value="5" unit="건" />
       </div>
 
@@ -128,20 +161,35 @@ function DashboardBody() {
           }
           className="min-w-130 flex-1"
         >
-          {RACES.map((race) => (
-            <div key={race.title} className="flex flex-col gap-3 rounded-md bg-bg-subtle p-5">
-              <div className="flex items-center gap-2">
-                <p className="text-label-l">{race.title}</p>
-                <Badge tone="brand">판매 중</Badge>
+          {races.isError ? (
+            <Alert
+              tone="danger"
+              title="대회 목록을 불러오지 못했어요"
+              description={errorText(races.error)}
+            />
+          ) : !onSale ? (
+            <Skeleton className="h-40 w-full" />
+          ) : onSale.length === 0 ? (
+            <EmptyState
+              title="판매 중인 대회가 없어요"
+              description="대회를 등록하면 여기에서 접수 현황을 볼 수 있어요"
+            />
+          ) : (
+            onSale.map((race) => (
+              <div key={race.id} className="flex flex-col gap-3 rounded-md bg-bg-subtle p-5">
+                <div className="flex items-center gap-2">
+                  <p className="text-label-l">{race.title}</p>
+                  <Badge tone={race.badge.tone}>{race.badge.label}</Badge>
+                </div>
+                <p className="text-body-s text-text-secondary">{race.period}</p>
+                <ProgressBar
+                  label="접수율"
+                  value={race.capacity > 0 ? Math.round((race.sold / race.capacity) * 100) : 0}
+                  valueText={`${formatNumber(race.sold)}/${formatNumber(race.capacity)}명`}
+                />
               </div>
-              <p className="text-body-s text-text-secondary">{race.period}</p>
-              <ProgressBar
-                label="접수율"
-                value={Math.round((race.applied / race.capacity) * 100)}
-                valueText={`${race.applied.toLocaleString('ko-KR')}/${race.capacity.toLocaleString('ko-KR')}명`}
-              />
-            </div>
-          ))}
+            ))
+          )}
         </ConsoleCard>
 
         <ConsoleCard title="처리할 일" className="w-100 shrink-0 gap-0">

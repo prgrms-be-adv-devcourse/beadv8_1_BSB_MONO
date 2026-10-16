@@ -187,7 +187,8 @@ class ApiV1PayoutSellerControllerTest {
 					fieldWithPath("data[].advanceDeductionAmount").description("선지급 차감 (최종만. 1차 지급액 − 회수액)"),
 					fieldWithPath("data[].payoutAmount").description(
 						"지급액 (1차: 참가권마다 가격 × 40% 버림의 합, 최종: 판매액 − 환불액 − 수수료 − 선지급 차감)"),
-					fieldWithPath("data[].status").description("상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)"),
+					fieldWithPath("data[].status").description("상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, "
+						+ "CANCELED: 대회 취소로 닫힘)"),
 					fieldWithPath("data[].settledAt").description("정산 내역을 만든 일시"),
 					fieldWithPath("data[].scheduledPayDate").description("지급 예정일 (보류를 풀면 해제일 뒤 돌아오는 지급일로 바뀐다)"),
 					fieldWithPath("data[].paidAt").description("지급 완료 일시 (지급 전에는 null)")

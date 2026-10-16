@@ -43,7 +43,7 @@ public class ApiV1CartController {
 	// 에러 응답은 GlobalExceptionHandler, OrderExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	@GetMapping
 	@Operation(summary = "내 장바구니 조회",
-		description = "회원별로 서버에 저장한 장바구니를 최근에 담은 항목부터 돌려준다. 담은 적이 없으면 빈 목록이다.")
+		description = "회원별로 서버에 저장한 장바구니를 돌려준다. 장바구니에는 한 종목만 담기므로 항목은 하나다. 담은 적이 없으면 빈 목록이다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = {

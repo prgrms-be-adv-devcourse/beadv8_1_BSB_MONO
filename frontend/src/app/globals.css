@@ -259,6 +259,20 @@
   --text-label-tag--font-weight: 700;
 }
 
+/* 움직임. 값 없는 ProgressBar(대기열)가 쓴다. */
+@theme {
+  --animate-progress-indeterminate: progress-indeterminate 1.4s ease-in-out infinite;
+
+  @keyframes progress-indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(340%);
+    }
+  }
+}
+
 /* 글꼴은 layout.tsx의 next/font가 만든 변수를 가리키므로 inline으로 둔다. */
 @theme inline {
   --font-*: initial;

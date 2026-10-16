@@ -12,6 +12,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa") // dataJpa
 	implementation("org.springframework.boot:spring-boot-starter-validation") // @Valid 요청 검증
 	implementation("org.springframework.boot:spring-boot-starter-kafka") // kafka (회원 이벤트 수신)
+	// 계좌번호·pgPaymentKey 암호화(AES-GCM)에만 쓴다. 인증이 필요 없어서 starter-security 전체 대신 crypto 모듈만 가져온다
+	implementation("org.springframework.security:spring-security-crypto")
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0") //swagger and openapi
 
 	developmentOnly("org.springframework.boot:spring-boot-devtools") // dev-tools
@@ -24,6 +26,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	testImplementation(testFixtures(project(":common"))) // GlobalConfigTestExecutionListener (테스트마다 EventPublisher 재설정)
 
 	// QueryDSL (Jakarta 버전, 버전은 Spring Boot BOM의 querydsl.version 사용)
 	val querydslVersion = dependencyManagement.importedProperties["querydsl.version"]

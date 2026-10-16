@@ -25,12 +25,20 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CheckEmailAvailabilityParams,
+  FindAllParams,
   MemberJoinRequestDto,
   MemberLoginRequestDto,
+  MemberModifyRequestDto,
   RsData,
+  RsDataEmailAvailabilityResponseDto,
+  RsDataListSellerDto,
   RsDataMemberDto,
   RsDataMemberLoginResponseDto,
-  RsDataTokenReissueResponseDto
+  RsDataSellerDto,
+  RsDataTokenReissueResponseDto,
+  SellerApplyRequestDto,
+  SellerRejectRequestDto
 } from './member.schemas';
 
 import { customFetch } from '../../fetcher';
@@ -54,6 +62,272 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getFindMeUrl = () => {
+
+
+
+
+  return `/api/v1/member/members/me`
+}
+
+/**
+ * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
+ * @summary 내 정보 조회
+ */
+export const findMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataMemberDto> => {
+
+  return customFetch<RsDataMemberDto>(getFindMeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindMeQueryKey = () => {
+    return [
+    `/api/v1/member/members/me`
+    ] as const;
+    }
+
+
+export const getFindMeQueryOptions = <TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findMe>>> = ({ signal }) => findMe({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type FindMeQueryResult = NonNullable<Awaited<ReturnType<typeof findMe>>>
+export type FindMeQueryError = RsData
+
+
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findMe>>,
+          TError,
+          Awaited<ReturnType<typeof findMe>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findMe>>,
+          TError,
+          Awaited<ReturnType<typeof findMe>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 내 정보 조회
+ */
+
+export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getFindMeQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getModifyMeUrl = () => {
+
+
+
+
+  return `/api/v1/member/members/me`
+}
+
+/**
+ * X-Member-Id 헤더의 회원의 이름, 생년월일, 휴대폰 번호, 닉네임을 바꾼다. 다른 회원이 쓰는 닉네임·휴대폰 번호인지 검사하고(내 행은 제외, 휴대폰은 하이픈 유무 무관), 4칸이 모두 그대로면 저장하지 않는다.
+ * @summary 내 정보 수정
+ */
+export const modifyMe = async (memberModifyRequestDto: MemberModifyRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataMemberDto> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RsDataMemberDto>(getModifyMeUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(memberModifyRequestDto)
+  }
+);}
+
+
+
+
+
+export const getModifyMeMutationKey = () => ['modifyMe'] as const;
+
+export const getModifyMeMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifyMe>>, TError,ModifyMeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof modifyMe>>, TError,ModifyMeMutationVariables, TContext> => {
+
+const mutationKey = getModifyMeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof modifyMe>>, ModifyMeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  modifyMe(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ModifyMeMutationResult = NonNullable<Awaited<ReturnType<typeof modifyMe>>>
+    export type ModifyMeMutationBody = MemberModifyRequestDto
+    export type ModifyMeMutationError = RsData
+    export type ModifyMeMutationVariables = {data: MemberModifyRequestDto}
+
+    /**
+ * @summary 내 정보 수정
+ */
+export const useModifyMe = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifyMe>>, TError,ModifyMeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof modifyMe>>,
+        TError,
+        ModifyMeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getModifyMeMutationOptions(options), queryClient);
+    }
+
+export const getWithdrawMeUrl = () => {
+
+
+
+
+  return `/api/v1/member/members/me`
+}
+
+/**
+ * 남은 예치금과 끝나지 않은 참가권이 없을 때만 탈퇴한다. 기록은 남기고 개인정보는 비우며, 모든 기기의 재발급을 막는다. 다른 서비스 확인에 실패하면 탈퇴하지 않는다.
+ * @summary 회원 탈퇴
+ */
+export const withdrawMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getWithdrawMeUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getWithdrawMeMutationKey = () => ['withdrawMe'] as const;
+
+export const getWithdrawMeMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawMe>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawMe>>, TError,void, TContext> => {
+
+const mutationKey = getWithdrawMeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawMe>>, void> = () => {
+
+
+          return  withdrawMe(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawMeMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawMe>>>
+
+    export type WithdrawMeMutationError = RsData
+
+
+    /**
+ * @summary 회원 탈퇴
+ */
+export const useWithdrawMe = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawMe>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawMe>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getWithdrawMeMutationOptions(options), queryClient);
+    }
 
 export const getReissueUrl = () => {
 
@@ -303,7 +577,7 @@ export const getJoinUrl = () => {
 }
 
 /**
- * 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다.
+ * 필수 약관 동의를 확인하고 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다. 지금 버전의 약관마다 동의 여부를 기록한다.
  * @summary 회원가입
  */
 export const join = async (memberJoinRequestDto: MemberJoinRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
@@ -383,21 +657,28 @@ export const useJoin = <TError = RsData,
       return useMutation(getJoinMutationOptions(options), queryClient);
     }
 
-export const getFindMeUrl = () => {
+export const getCheckEmailAvailabilityUrl = (params: CheckEmailAvailabilityParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/v1/member/members/me`
+  return stringifiedParams.length > 0 ? `/api/v1/member/members/email-availability?${stringifiedParams}` : `/api/v1/member/members/email-availability`
 }
 
 /**
- * 게이트웨이가 Access Token에서 꺼내 넣은 회원 ID(X-Member-Id 헤더)로 로그인한 회원의 정보를 조회한다.
- * @summary 내 정보 조회
+ * 이메일이 아직 가입되지 않았으면 available=true, 이미 가입됐으면 false를 돌려준다. 로그인 없이 부를 수 있다. 탈퇴한 회원의 이메일은 비워지므로 다시 쓸 수 있다.
+ * @summary 이메일 사용 가능 여부 확인
  */
-export const findMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataMemberDto> => {
+export const checkEmailAvailability = async (params: CheckEmailAvailabilityParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataEmailAvailabilityResponseDto> => {
 
-  return customFetch<RsDataMemberDto>(getFindMeUrl(),
+  return customFetch<RsDataEmailAvailabilityResponseDto>(getCheckEmailAvailabilityUrl(params),
   {
     ...options,
     method: 'GET'
@@ -410,69 +691,534 @@ export const findMe = async ( options?: Parameters<typeof customFetch>[1]): Prom
 
 
 
-export const getFindMeQueryKey = () => {
+export const getCheckEmailAvailabilityQueryKey = (params?: CheckEmailAvailabilityParams,) => {
     return [
-    `/api/v1/member/members/me`
+    `/api/v1/member/members/email-availability`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getFindMeQueryOptions = <TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export const getCheckEmailAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(params: CheckEmailAvailabilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getFindMeQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getCheckEmailAvailabilityQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof findMe>>> = ({ signal }) => findMe({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof checkEmailAvailability>>> = ({ signal }) => checkEmailAvailability(params, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type FindMeQueryResult = NonNullable<Awaited<ReturnType<typeof findMe>>>
-export type FindMeQueryError = RsData
+export type CheckEmailAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof checkEmailAvailability>>>
+export type CheckEmailAvailabilityQueryError = RsData
 
 
-export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
-  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
+export function useCheckEmailAvailability<TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(
+ params: CheckEmailAvailabilityParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof findMe>>,
+          Awaited<ReturnType<typeof checkEmailAvailability>>,
           TError,
-          Awaited<ReturnType<typeof findMe>>
+          Awaited<ReturnType<typeof checkEmailAvailability>>
         > , 'initialData'
       >, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>> & Pick<
+export function useCheckEmailAvailability<TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(
+ params: CheckEmailAvailabilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof findMe>>,
+          Awaited<ReturnType<typeof checkEmailAvailability>>,
           TError,
-          Awaited<ReturnType<typeof findMe>>
+          Awaited<ReturnType<typeof checkEmailAvailability>>
         > , 'initialData'
       >, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export function useCheckEmailAvailability<TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(
+ params: CheckEmailAvailabilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary 내 정보 조회
+ * @summary 이메일 사용 가능 여부 확인
  */
 
-export function useFindMe<TData = Awaited<ReturnType<typeof findMe>>, TError = RsData>(
-  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMe>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export function useCheckEmailAvailability<TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(
+ params: CheckEmailAvailabilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getFindMeQueryOptions(options)
+  const queryOptions = getCheckEmailAvailabilityQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getApplyUrl = () => {
+
+
+
+
+  return `/api/v1/member/sellers`
+}
+
+/**
+ * X-Member-Id 헤더의 회원이 판매자 등록을 신청한다. 사업자는 상호·사업자등록번호가 필수이고, 비사업자가 보낸 상호·사업자등록번호는 버린다. 대기·승인 상태 신청이 있으면 막고, 반려만 있으면 새로 신청한다.
+ * @summary 판매자 등록 신청
+ */
+export const apply = async (sellerApplyRequestDto: SellerApplyRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataSellerDto> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RsDataSellerDto>(getApplyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(sellerApplyRequestDto)
+  }
+);}
+
+
+
+
+
+export const getApplyMutationKey = () => ['apply'] as const;
+
+export const getApplyMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof apply>>, TError,ApplyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof apply>>, TError,ApplyMutationVariables, TContext> => {
+
+const mutationKey = getApplyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof apply>>, ApplyMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  apply(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyMutationResult = NonNullable<Awaited<ReturnType<typeof apply>>>
+    export type ApplyMutationBody = SellerApplyRequestDto
+    export type ApplyMutationError = RsData
+    export type ApplyMutationVariables = {data: SellerApplyRequestDto}
+
+    /**
+ * @summary 판매자 등록 신청
+ */
+export const useApply = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof apply>>, TError,ApplyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof apply>>,
+        TError,
+        ApplyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getApplyMutationOptions(options), queryClient);
+    }
+
+export const getRejectUrl = (id: number,) => {
+
+
+
+
+  return `/api/v1/member/admin/sellers/${id}/rejection`
+}
+
+/**
+ * 관리자가 대기 중인 판매자 신청을 사유와 함께 반려한다. 사유는 신청자만 보고 이벤트에는 넣지 않는다.
+ * @summary 판매자 신청 반려
+ */
+export const reject = async (id: number,
+    sellerRejectRequestDto: SellerRejectRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataSellerDto> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RsDataSellerDto>(getRejectUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(sellerRejectRequestDto)
+  }
+);}
+
+
+
+
+
+export const getRejectMutationKey = () => ['reject'] as const;
+
+export const getRejectMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reject>>, TError,RejectMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reject>>, TError,RejectMutationVariables, TContext> => {
+
+const mutationKey = getRejectMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reject>>, RejectMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reject(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectMutationResult = NonNullable<Awaited<ReturnType<typeof reject>>>
+    export type RejectMutationBody = SellerRejectRequestDto
+    export type RejectMutationError = RsData
+    export type RejectMutationVariables = {id: number;data: SellerRejectRequestDto}
+
+    /**
+ * @summary 판매자 신청 반려
+ */
+export const useReject = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reject>>, TError,RejectMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reject>>,
+        TError,
+        RejectMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRejectMutationOptions(options), queryClient);
+    }
+
+export const getApproveUrl = (id: number,) => {
+
+
+
+
+  return `/api/v1/member/admin/sellers/${id}/approval`
+}
+
+/**
+ * 관리자가 대기 중인 판매자 신청을 승인한다. 커밋 뒤 판매자 변경 이벤트를 보낸다.
+ * @summary 판매자 신청 승인
+ */
+export const approve = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataSellerDto> => {
+
+  return customFetch<RsDataSellerDto>(getApproveUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApproveMutationKey = () => ['approve'] as const;
+
+export const getApproveMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approve>>, TError,ApproveMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approve>>, TError,ApproveMutationVariables, TContext> => {
+
+const mutationKey = getApproveMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approve>>, ApproveMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  approve(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveMutationResult = NonNullable<Awaited<ReturnType<typeof approve>>>
+
+    export type ApproveMutationError = RsData
+    export type ApproveMutationVariables = {id: number}
+
+    /**
+ * @summary 판매자 신청 승인
+ */
+export const useApprove = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approve>>, TError,ApproveMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof approve>>,
+        TError,
+        ApproveMutationVariables,
+        TContext
+      > => {
+      return useMutation(getApproveMutationOptions(options), queryClient);
+    }
+
+export const getFindMineUrl = () => {
+
+
+
+
+  return `/api/v1/member/sellers/me`
+}
+
+/**
+ * X-Member-Id 헤더의 회원의 가장 최근 판매자 신청을 조회한다. 반려됐으면 반려 사유도 담는다.
+ * @summary 내 판매자 신청 조회
+ */
+export const findMine = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataSellerDto> => {
+
+  return customFetch<RsDataSellerDto>(getFindMineUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindMineQueryKey = () => {
+    return [
+    `/api/v1/member/sellers/me`
+    ] as const;
+    }
+
+
+export const getFindMineQueryOptions = <TData = Awaited<ReturnType<typeof findMine>>, TError = RsData>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMine>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindMineQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findMine>>> = ({ signal }) => findMine({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findMine>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type FindMineQueryResult = NonNullable<Awaited<ReturnType<typeof findMine>>>
+export type FindMineQueryError = RsData
+
+
+export function useFindMine<TData = Awaited<ReturnType<typeof findMine>>, TError = RsData>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMine>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findMine>>,
+          TError,
+          Awaited<ReturnType<typeof findMine>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindMine<TData = Awaited<ReturnType<typeof findMine>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMine>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findMine>>,
+          TError,
+          Awaited<ReturnType<typeof findMine>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindMine<TData = Awaited<ReturnType<typeof findMine>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMine>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 내 판매자 신청 조회
+ */
+
+export function useFindMine<TData = Awaited<ReturnType<typeof findMine>>, TError = RsData>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findMine>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getFindMineQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getFindAllUrl = (params?: FindAllParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/member/admin/sellers?${stringifiedParams}` : `/api/v1/member/admin/sellers`
+}
+
+/**
+ * 관리자가 판매자 신청을 최근 신청부터 조회한다. status를 주면 그 상태만, 비우면 전체를 돌려준다.
+ * @summary 판매자 신청 목록 조회
+ */
+export const findAll = async (params?: FindAllParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataListSellerDto> => {
+
+  return customFetch<RsDataListSellerDto>(getFindAllUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindAllQueryKey = (params?: FindAllParams,) => {
+    return [
+    `/api/v1/member/admin/sellers`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getFindAllQueryOptions = <TData = Awaited<ReturnType<typeof findAll>>, TError = RsData>(params?: FindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAll>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindAllQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findAll>>> = ({ signal }) => findAll(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findAll>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type FindAllQueryResult = NonNullable<Awaited<ReturnType<typeof findAll>>>
+export type FindAllQueryError = RsData
+
+
+export function useFindAll<TData = Awaited<ReturnType<typeof findAll>>, TError = RsData>(
+ params: undefined |  FindAllParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAll>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findAll>>,
+          TError,
+          Awaited<ReturnType<typeof findAll>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindAll<TData = Awaited<ReturnType<typeof findAll>>, TError = RsData>(
+ params?: FindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAll>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findAll>>,
+          TError,
+          Awaited<ReturnType<typeof findAll>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindAll<TData = Awaited<ReturnType<typeof findAll>>, TError = RsData>(
+ params?: FindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAll>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 판매자 신청 목록 조회
+ */
+
+export function useFindAll<TData = Awaited<ReturnType<typeof findAll>>, TError = RsData>(
+ params?: FindAllParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findAll>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getFindAllQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

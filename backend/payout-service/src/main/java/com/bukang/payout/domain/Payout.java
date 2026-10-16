@@ -106,6 +106,11 @@ public class Payout extends BaseIdAndTime {
 	@OneToMany(mappedBy = "payout", cascade = ALL)
 	private List<PayoutItem> items = new ArrayList<>();
 
+	// 상태 이력도 추가만 한다. 상태를 바꾸는 메서드가 changeStatus로 한 줄씩 남겨 빠뜨릴 수 없게 한다 (PRO-34)
+	// LAZY라 상태를 바꿀 때 이력 목록을 한 번 읽는다. 그래서 상태 변경은 트랜잭션(세션) 안에서만 한다
+	@OneToMany(mappedBy = "payout", cascade = ALL)
+	private List<PayoutStatusHistory> statusHistories = new ArrayList<>();
+
 	private Payout(int sellerId, int raceId, String raceName, PayoutStage payoutStage, YearMonth payoutMonth,
 		long advanceDeductionAmount, LocalDateTime settledAt, BusinessDayCalendar calendar) {
 		this.sellerId = sellerId;
@@ -115,8 +120,9 @@ public class Payout extends BaseIdAndTime {
 		this.payoutMonth = payoutMonth.toString();
 		this.advanceDeductionAmount = advanceDeductionAmount;
 		this.settledAt = settledAt;
-		this.status = PayoutStatus.CALCULATED;
 		this.scheduledPayDate = payDayOf(payoutMonth.plusMonths(1), calendar);
+		// 정산 내역은 배치가 만든다
+		changeStatus(PayoutStatus.CALCULATED, PayoutHold.SYSTEM_MEMBER_ID, settledAt, null);
 		this.payoutAmount = -advanceDeductionAmount;
 	}
 
@@ -136,6 +142,10 @@ public class Payout extends BaseIdAndTime {
 	// 바깥에서 remove, clear로 정산 기록을 바꾸지 못하도록 읽기 전용으로 내보낸다 (추가는 addItem으로만)
 	public List<PayoutItem> getItems() {
 		return Collections.unmodifiableList(items);
+	}
+
+	public List<PayoutStatusHistory> getStatusHistories() {
+		return Collections.unmodifiableList(statusHistories);
 	}
 
 	// 정산 항목(PayoutItem)은 정산 내역(Payout)을 통해서만 만든다 (payout_id NOT NULL)
@@ -170,7 +180,8 @@ public class Payout extends BaseIdAndTime {
 			throw new IllegalStateException("정산 예정 상태가 아니라 지급할 수 없습니다. payoutId=%d, status=%s"
 				.formatted(getId(), status));
 		}
-		this.status = PayoutStatus.PAID;
+		// 지급은 지급 배치가 한다
+		changeStatus(PayoutStatus.PAID, PayoutHold.SYSTEM_MEMBER_ID, paidAt, null);
 		this.paidAt = paidAt;
 	}
 
@@ -183,7 +194,10 @@ public class Payout extends BaseIdAndTime {
 		if (status == PayoutStatus.PAID) {
 			throw new PayoutHoldConflictException("이미 지급 완료된 정산 내역입니다.");
 		}
-		this.status = PayoutStatus.HELD;
+		if (status == PayoutStatus.CANCELED) {
+			throw new PayoutHoldConflictException("취소된 정산 내역입니다.");
+		}
+		changeStatus(PayoutStatus.HELD, heldBy, heldAt, reasonType.getKorean());
 		return new PayoutHold(this, reasonType, reason, heldBy, heldAt);
 	}
 
@@ -197,12 +211,35 @@ public class Payout extends BaseIdAndTime {
 		if (hold.getPayout().getId() != getId()) {
 			throw new IllegalArgumentException("이 정산 내역의 지급보류가 아닙니다. payoutId=%d".formatted(getId()));
 		}
+		// 대회 취소로 닫힌 정산 내역에는 보류 기록이 HELD로 남아 있을 수 있다. 풀어도 지급 예정으로 돌리지 않는다
+		if (status == PayoutStatus.CANCELED) {
+			throw new PayoutHoldConflictException("취소된 정산 내역의 지급보류는 풀 수 없습니다.");
+		}
 		hold.markReleased(releasedBy, releasedAt);
-		this.status = PayoutStatus.CALCULATED;
+		changeStatus(PayoutStatus.CALCULATED, releasedBy, releasedAt, null);
 		LocalDate payDateAfterRelease = nextPayDateAfter(releasedAt.toLocalDate(), calendar);
 		if (payDateAfterRelease.isAfter(scheduledPayDate)) {
 			this.scheduledPayDate = payDateAfterRelease;
 		}
+	}
+
+	// 대회 취소로 닫기: 지급 전(CALCULATED · HELD) 정산 내역을 CANCELED로 바꿔 다시는 지급되지 않게 한다 (PRO-34)
+	// 금액 칸은 만들 때 그대로 둔다(얼마가 나갈 뻔했는지 남긴다). 합계 · 지급 조회는 상태로 고르므로 CANCELED는 빠진다
+	// 보류 중이었으면 보류 기록은 HELD로 두고 상태만 최신으로 바꾼다. 무엇이었는지는 상태 이력에 남는다
+	// 이미 지급한 정산 내역은 닫지 않는다. 지급 뒤 대회 취소는 회수(PRO-33)가 맡는다
+	public void cancel(int canceledBy, LocalDateTime canceledAt, String reason) {
+		if (status == PayoutStatus.PAID) {
+			throw new IllegalStateException("이미 지급 완료된 정산 내역은 취소할 수 없습니다. payoutId=%d".formatted(getId()));
+		}
+		if (status == PayoutStatus.CANCELED) {
+			throw new IllegalStateException("이미 취소된 정산 내역입니다. payoutId=%d".formatted(getId()));
+		}
+		changeStatus(PayoutStatus.CANCELED, canceledBy, canceledAt, reason);
+	}
+
+	private void changeStatus(PayoutStatus to, int changedBy, LocalDateTime changedAt, String reason) {
+		statusHistories.add(new PayoutStatusHistory(this, status, to, changedBy, changedAt, reason));
+		this.status = to;
 	}
 
 	// date "뒤"의 지급일: 이번 달 지급일이 date보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일

@@ -26,6 +26,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-kafka-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-elasticsearch-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	testImplementation(testFixtures(project(":common"))) // GlobalConfigTestExecutionListener (테스트마다 EventPublisher 재설정)
 	// 테스트용 ES(nori 설치 이미지)를 Docker로 띄운다
 	testImplementation("org.springframework.boot:spring-boot-testcontainers") // @ServiceConnection
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter") // @Testcontainers
