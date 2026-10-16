@@ -62,7 +62,7 @@ class PayoutRaceCancelUseCaseTest {
 	// 유일 조건 (seller_id, race_id, payout_month)에 걸리지 않도록 정산 월을 달리해 만든다
 	// 참가권 한 장(price)을 넣어 지급액이 생기게 한다 (5.5% 수수료를 뗀 금액)
 	private Payout savePayout(int raceId, YearMonth month, long price) {
-		Payout payout = new Payout(SELLER_ID, raceId, "테스트 대회", month,
+		Payout payout = Payout.finalStage(SELLER_ID, raceId, "테스트 대회", month, 0L,
 			month.atEndOfMonth().atTime(3, 0), new BusinessDayCalendar());
 		if (price > 0) {
 			payout.addItem(1, price, FEE_RATE, month.atEndOfMonth());

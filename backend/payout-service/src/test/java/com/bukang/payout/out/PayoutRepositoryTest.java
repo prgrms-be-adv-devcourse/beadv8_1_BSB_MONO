@@ -36,7 +36,8 @@ class PayoutRepositoryTest {
 	@Test
 	@DisplayName("정산 내역(Payout)을 정산 항목(PayoutItem)과 함께 저장하면, 다시 읽을 때 항목도 함께 나온다")
 	void saveWithItems() {
-		Payout payout = new Payout(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 9, 26, 3, 0),
+		Payout payout = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 0L,
+			LocalDateTime.of(2026, 9, 26, 3, 0),
 			CALENDAR);
 		payout.addItem(100, 50_000L, FEE_RATE, LocalDate.of(2026, 9, 26));
 		payout.addItem(101, 50_000L, FEE_RATE, LocalDate.of(2026, 9, 26));
@@ -56,9 +57,11 @@ class PayoutRepositoryTest {
 	@DisplayName("같은 판매자 · 대회 · 월의 정산 내역은 두 번 저장할 수 없다 (중복 지급 방지)")
 	void rejectDuplicateSellerRaceMonth() {
 		payoutRepository.saveAndFlush(
-			new Payout(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR));
+			Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 0L,
+				LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR));
 
-		Payout duplicate = new Payout(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 9, 27, 3, 0),
+		Payout duplicate = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 0L,
+			LocalDateTime.of(2026, 9, 27, 3, 0),
 			CALENDAR);
 
 		assertThatThrownBy(() -> payoutRepository.saveAndFlush(duplicate))

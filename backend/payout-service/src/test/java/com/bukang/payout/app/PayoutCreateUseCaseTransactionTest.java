@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.IntFunction;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +30,7 @@ import com.bukang.payout.out.RacePort;
 import com.bukang.payout.out.SellerAccountPort;
 import com.bukang.payout.out.SoldEntry;
 import com.bukang.payout.out.SoldEntryPort;
+import com.bukang.payout.support.StubRacePort;
 
 /**
  * 정산 대상일 배치가 판매자 × 대회 묶음마다 트랜잭션을 나누는지 확인한다 (PRO-60)
@@ -44,7 +46,7 @@ class PayoutCreateUseCaseTransactionTest {
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 26, 3, 0);
 
 	// 대회 30의 이름은 PAYOUT_PAYOUT.race_name(200자)보다 길어 정산 내역 저장이 DB에서 실패한다
-	private static final RacePort RACE_NAMES = raceId -> raceId == 30
+	private static final IntFunction<Optional<String>> RACE_NAMES = raceId -> raceId == 30
 		? Optional.of("가".repeat(201))
 		: Optional.of("대회 " + raceId);
 
@@ -75,7 +77,7 @@ class PayoutCreateUseCaseTransactionTest {
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
 		SoldEntryPort soldEntryPort = (from, to) -> entries;
 		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntryPort, sellerAccountPort,
-			RACE_NAMES);
+			new StubRacePort(RACE_NAMES, List.of()));
 	}
 
 	@Test
