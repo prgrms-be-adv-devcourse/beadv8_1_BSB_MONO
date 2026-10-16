@@ -38,7 +38,7 @@ import com.bukang.payout.support.StubRacePort;
  */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({PayoutGroupCreator.class, BusinessDayCalendar.class})
+@Import({PayoutGroupCreator.class, BusinessDayCalendar.class, PayoutLedger.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PayoutCreateUseCaseTransactionTest {
 	private static final LocalDate RACE_DATE = LocalDate.of(2026, 9, 25);
@@ -94,7 +94,8 @@ class PayoutCreateUseCaseTransactionTest {
 		assertThat(payoutRepository.findAll())
 			.extracting(Payout::getSellerId)
 			.containsExactlyInAnyOrder(1, 2);
-		assertThat(payoutItemRepository.count()).isEqualTo(2);
+		// 최종 묶음 2개 × (선지급 차감 1줄 + 참가권 판매 · 수수료 2줄) (PRO-214)
+		assertThat(payoutItemRepository.count()).isEqualTo(6);
 	}
 
 	@Test
@@ -147,8 +148,8 @@ class PayoutCreateUseCaseTransactionTest {
 		Payout retried = payouts.stream().filter(p -> p.getSellerId() == 2).findFirst().orElseThrow();
 		assertThat(retried.getPayoutMonth()).isEqualTo("2026-09");
 		assertThat(payoutItemRepository.findAll())
-			.filteredOn(item -> item.getOrderItemId() == 200)
+			.filteredOn(item -> Integer.valueOf(200).equals(item.getOrderItemId()))
 			.extracting(PayoutItem::getTargetDate)
-			.containsExactly(TARGET_DATE);
+			.containsOnly(TARGET_DATE);
 	}
 }

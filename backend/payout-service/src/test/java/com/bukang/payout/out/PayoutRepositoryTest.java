@@ -18,6 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutItem;
+import com.bukang.payout.domain.PayoutRecordType;
 
 import jakarta.persistence.EntityManager;
 
@@ -49,6 +50,7 @@ class PayoutRepositoryTest {
 		Payout found = payoutRepository.findById(payout.getId()).orElseThrow();
 		assertThat(found.getPayoutMonth()).isEqualTo("2026-09");
 		assertThat(found.getItems())
+			.filteredOn(item -> item.getRecordType() == PayoutRecordType.SALE)
 			.extracting(PayoutItem::getOrderItemId)
 			.containsExactlyInAnyOrder(100, 101);
 	}

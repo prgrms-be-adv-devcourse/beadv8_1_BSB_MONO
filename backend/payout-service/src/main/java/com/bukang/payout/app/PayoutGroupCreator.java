@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
+import com.bukang.payout.domain.PayoutAccount;
 import com.bukang.payout.domain.PayoutHold;
 import com.bukang.payout.domain.PayoutHoldReason;
 import com.bukang.payout.domain.PayoutHoldStatus;
@@ -44,6 +45,7 @@ public class PayoutGroupCreator {
 	private final PayoutRepository payoutRepository;
 	private final PayoutHoldRepository payoutHoldRepository;
 	private final BusinessDayCalendar businessDayCalendar;
+	private final PayoutLedger payoutLedger;
 
 	/**
 	 * 1차 정산 내역을 만든다. 정산 월은 환불 마감일의 달, 금액은 장마다 가격 × 40%의 합이다
@@ -64,7 +66,8 @@ public class PayoutGroupCreator {
 	}
 
 	/**
-	 * 최종 정산 내역을 만든다. 정산 월은 대회일의 달이고, 같은 판매자 × 대회의 1차 지급액을 선지급 차감으로 뺀다
+	 * 최종 정산 내역을 만든다. 정산 월은 대회일의 달이고, 같은 판매자 × 대회의 남은 선금(ADVANCE 잔고)을 선지급 차감으로 뺀다
+	 * 만든 뒤 아직 못 받은 갚을 돈(RECEIVABLE)이 있으면 이 묶음에서 바로 상계한다 (PRO-214)
 	 * 1차가 보류 중이면 최종도 같은 사유로 보류한다 (사유는 PRO-189에서 다시 정한다)
 	 */
 	@Transactional
@@ -77,8 +80,8 @@ public class PayoutGroupCreator {
 			log.warn("1차 정산 내역 없이 최종 정산을 만듭니다. 선지급 차감은 0입니다. sellerId={}, raceId={}",
 				group.sellerId(), group.raceId());
 		}
-		// 회수액은 회수(PRO-33)가 생기면 뺀다. 지금은 1차 지급 뒤 환불이 없으므로 0이다
-		long advanceDeduction = first.map(Payout::getPayoutAmount).orElse(0L);
+		// 남은 선금 = 1차 선금 − 회수 요청액. 회수 요청 때 이미 선금에서 뺐으므로 진행 중인 회수액을 또 빼지 않는다
+		long advanceDeduction = payoutLedger.balance(group.sellerId(), group.raceId(), PayoutAccount.ADVANCE);
 
 		Payout payout = Payout.finalStage(group.sellerId(), group.raceId(), group.raceName(), YearMonth.from(raceDate),
 			advanceDeduction, now, businessDayCalendar);
@@ -86,6 +89,7 @@ public class PayoutGroupCreator {
 			payout.addItem(entry.orderItemId(), entry.price(), TwoStagePayoutCalculator.FEE_RATE, targetDate));
 
 		save(payout);
+		payoutLedger.settle(group.sellerId(), group.raceId(), now);
 		Optional<PayoutHold> firstHold = first.filter(firstPayout -> firstPayout.getStatus() == PayoutStatus.HELD)
 			.flatMap(held -> payoutHoldRepository.findFirstByPayoutIdAndStatusOrderByIdDesc(
 				held.getId(), PayoutHoldStatus.HELD));

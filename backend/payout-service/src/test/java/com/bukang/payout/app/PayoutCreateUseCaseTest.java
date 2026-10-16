@@ -21,9 +21,12 @@ import com.bukang.payout.domain.PayoutHold;
 import com.bukang.payout.domain.PayoutHoldReason;
 import com.bukang.payout.domain.PayoutHoldStatus;
 import com.bukang.payout.domain.PayoutItem;
+import com.bukang.payout.domain.PayoutRecordType;
 import com.bukang.payout.domain.PayoutStage;
 import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.out.PayoutHoldRepository;
+import com.bukang.payout.out.PayoutItemRepository;
+import com.bukang.payout.out.PayoutRecoveryRepository;
 import com.bukang.payout.out.PayoutRepository;
 import com.bukang.payout.out.RaceSchedule;
 import com.bukang.payout.out.SellerAccountPort;
@@ -51,6 +54,12 @@ class PayoutCreateUseCaseTest {
 	@Autowired
 	private PayoutHoldRepository payoutHoldRepository;
 
+	@Autowired
+	private PayoutItemRepository payoutItemRepository;
+
+	@Autowired
+	private PayoutRecoveryRepository payoutRecoveryRepository;
+
 	// 주문 서비스처럼, 물어본 기간(양 끝 포함)에 열린 대회의 참가권만 돌려주는 가짜 포트
 	private SoldEntryPort soldEntriesReturning(List<SoldEntry> entries) {
 		return (from, to) -> entries.stream()
@@ -72,7 +81,8 @@ class PayoutCreateUseCaseTest {
 		List<RaceSchedule> schedules) {
 		// 테스트 전체가 트랜잭션 하나라 묶음별 트랜잭션은 보이지 않는다 (묶음별 트랜잭션은 PayoutCreateUseCaseTransactionTest)
 		PayoutGroupCreator payoutGroupCreator =
-			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar());
+			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
+				new PayoutLedger(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
 		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntriesReturning(entries),
 			sellerAccountPort, new StubRacePort(RACE_NAMES, schedules));
 	}
@@ -126,10 +136,13 @@ class PayoutCreateUseCaseTest {
 		assertThat(seller1.getStatus()).isEqualTo(PayoutStatus.CALCULATED);
 		assertThat(seller1.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
 		assertThat(seller1.getPayoutAmount()).isEqualTo(94_500L);
+		// 최종은 참가권마다 판매 · 수수료 두 줄과 묶음째 선지급 차감 한 줄 (PRO-214)
 		assertThat(seller1.getItems())
+			.filteredOn(item -> item.getRecordType() == PayoutRecordType.SALE)
 			.extracting(PayoutItem::getOrderItemId)
 			.containsExactlyInAnyOrder(100, 101);
 		assertThat(seller1.getItems())
+			.filteredOn(item -> item.getOrderItemId() != null)
 			.extracting(PayoutItem::getTargetDate)
 			.containsOnly(TARGET_DATE);
 	}
@@ -201,6 +214,7 @@ class PayoutCreateUseCaseTest {
 		assertThat(payout.getPayoutMonth()).isEqualTo("2026-09");
 		assertThat(payout.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
 		assertThat(payout.getItems())
+			.filteredOn(item -> item.getOrderItemId() != null)
 			.extracting(PayoutItem::getTargetDate)
 			.containsOnly(LocalDate.of(2026, 9, 29));
 	}
