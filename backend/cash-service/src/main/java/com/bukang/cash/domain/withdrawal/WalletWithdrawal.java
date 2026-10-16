@@ -33,8 +33,10 @@ public class WalletWithdrawal extends BaseIdAndTime {
 
 	@Column(nullable = false, length = 10)
 	private String bankCode;
+	// AES-GCM 암호화(IV 16바이트+태그 16바이트) 후 Base64로 저장하면 평문보다 약 4/3배 길어진다.
+	// 실제 계좌번호는 짧지만, 요청 DTO가 최대 255자까지 받으므로 그 길이가 들어와도 되게 넉넉히 둔다
 	@Convert(converter = EncryptedStringConverter.class) // DB 저장 시 AES 암호화, 조회 시 복호화
-	@Column(nullable = false, length = 255)
+	@Column(nullable = false, length = 512)
 	private String accountNumber;
 	@Column(nullable = false, length = 50)
 	private String accountHolder;
