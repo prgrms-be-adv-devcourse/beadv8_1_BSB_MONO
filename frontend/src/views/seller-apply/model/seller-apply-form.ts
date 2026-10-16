@@ -1,14 +1,17 @@
 import { z } from 'zod'
 
 // 판매자 등록 신청(S01) 입력 규칙. 시안에 적힌 입력 칸·안내문에서 확실한 것만 검사한다.
-// 길이 제한처럼 서버가 정할 규칙은 백엔드 판매자 신청 DTO가 나온 뒤에 맞춘다. (TODO(api): PRO-129)
+// 길이 제한은 서버(SellerApplyRequestDto)와 같다: 상호 100자, 대표자·성명 50자.
 
 export const SELLER_APPLY_ERRORS = {
   businessNumberRequired: '사업자등록번호를 입력해 주세요.',
   businessNumberFormat: '사업자등록번호를 123-45-67890처럼 입력해 주세요.',
   businessNameRequired: '상호를 입력해 주세요.',
+  businessNameTooLong: '상호는 100자 이하로 입력해 주세요.',
   representativeRequired: '대표자를 입력해 주세요.',
+  representativeTooLong: '대표자는 50자 이하로 입력해 주세요.',
   nameRequired: '성명을 입력해 주세요.',
+  nameTooLong: '성명은 50자 이하로 입력해 주세요.',
   phoneRequired: '연락처를 입력해 주세요.',
   bankRequired: '은행을 선택해 주세요.',
   accountHolderRequired: '예금주를 입력해 주세요.',
@@ -70,13 +73,19 @@ export const sellerApplyFormSchema = z
       }
       if (!values.businessName) {
         need('businessName', SELLER_APPLY_ERRORS.businessNameRequired)
+      } else if (values.businessName.length > 100) {
+        need('businessName', SELLER_APPLY_ERRORS.businessNameTooLong)
       }
       if (!values.representative) {
         need('representative', SELLER_APPLY_ERRORS.representativeRequired)
+      } else if (values.representative.length > 50) {
+        need('representative', SELLER_APPLY_ERRORS.representativeTooLong)
       }
     } else {
       if (!values.name) {
         need('name', SELLER_APPLY_ERRORS.nameRequired)
+      } else if (values.name.length > 50) {
+        need('name', SELLER_APPLY_ERRORS.nameTooLong)
       }
       if (!values.phone) {
         need('phone', SELLER_APPLY_ERRORS.phoneRequired)

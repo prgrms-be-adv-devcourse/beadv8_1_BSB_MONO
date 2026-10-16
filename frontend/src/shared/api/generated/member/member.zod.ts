@@ -167,3 +167,150 @@ export const CheckEmailAvailabilityResponse = zod.object({
   "available": zod.boolean().optional().describe('사용 가능하면 true, 이미 가입된 이메일이면 false')
 }).optional().describe('이메일 사용 가능 여부 응답')
 })
+
+
+/**
+ * X-Member-Id 헤더의 회원이 판매자 등록을 신청한다. 사업자는 상호·사업자등록번호가 필수이고, 비사업자가 보낸 상호·사업자등록번호는 버린다. 대기·승인 상태 신청이 있으면 막고, 반려만 있으면 새로 신청한다.
+ * @summary 판매자 등록 신청
+ */
+export const applyBodyBusinessNameMin = 0;
+export const applyBodyBusinessNameMax = 100;
+
+export const applyBodyBusinessNumberRegExp = new RegExp('^\\d{3}-?\\d{2}-?\\d{5}$');
+export const applyBodyRepresentativeNameMin = 0;
+export const applyBodyRepresentativeNameMax = 50;
+
+
+
+export const ApplyBody = zod.object({
+  "sellerType": zod.enum(['BUSINESS', 'INDIVIDUAL']).describe('판매자 종류 (BUSINESS: 사업자, INDIVIDUAL: 비사업자)'),
+  "businessName": zod.string().min(applyBodyBusinessNameMin).max(applyBodyBusinessNameMax).optional().describe('상호 (사업자만, 100자 이하)'),
+  "businessNumber": zod.string().regex(applyBodyBusinessNumberRegExp).optional().describe('사업자등록번호 (사업자만, 숫자 10자리, 하이픈 생략 가능)'),
+  "representativeName": zod.string().min(applyBodyRepresentativeNameMin).max(applyBodyRepresentativeNameMax).describe('대표자 (비사업자는 본인 성명, 50자 이하)')
+}).describe('판매자 등록 신청 요청')
+
+export const ApplyResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int(),
+  "memberId": zod.int(),
+  "sellerType": zod.enum(['BUSINESS', 'INDIVIDUAL']),
+  "businessName": zod.string().nullish(),
+  "businessNumber": zod.string().nullish(),
+  "representativeName": zod.string(),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "requestedAt": zod.iso.datetime({"offset":true}),
+  "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "rejectReason": zod.string().nullish()
+}).optional()
+})
+
+
+/**
+ * 관리자가 대기 중인 판매자 신청을 사유와 함께 반려한다. 사유는 신청자만 보고 이벤트에는 넣지 않는다.
+ * @summary 판매자 신청 반려
+ */
+export const RejectParams = zod.object({
+  "id": zod.int().describe('판매자 신청 ID')
+})
+
+export const rejectBodyReasonMin = 0;
+export const rejectBodyReasonMax = 500;
+
+
+
+export const RejectBody = zod.object({
+  "reason": zod.string().min(rejectBodyReasonMin).max(rejectBodyReasonMax).describe('반려 사유 (500자 이하, 신청자에게 보여 준다)')
+}).describe('판매자 신청 반려 요청')
+
+export const RejectResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int(),
+  "memberId": zod.int(),
+  "sellerType": zod.enum(['BUSINESS', 'INDIVIDUAL']),
+  "businessName": zod.string().nullish(),
+  "businessNumber": zod.string().nullish(),
+  "representativeName": zod.string(),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "requestedAt": zod.iso.datetime({"offset":true}),
+  "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "rejectReason": zod.string().nullish()
+}).optional()
+})
+
+
+/**
+ * 관리자가 대기 중인 판매자 신청을 승인한다. 커밋 뒤 판매자 변경 이벤트를 보낸다.
+ * @summary 판매자 신청 승인
+ */
+export const ApproveParams = zod.object({
+  "id": zod.int().describe('판매자 신청 ID')
+})
+
+export const ApproveResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int(),
+  "memberId": zod.int(),
+  "sellerType": zod.enum(['BUSINESS', 'INDIVIDUAL']),
+  "businessName": zod.string().nullish(),
+  "businessNumber": zod.string().nullish(),
+  "representativeName": zod.string(),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "requestedAt": zod.iso.datetime({"offset":true}),
+  "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "rejectReason": zod.string().nullish()
+}).optional()
+})
+
+
+/**
+ * X-Member-Id 헤더의 회원의 가장 최근 판매자 신청을 조회한다. 반려됐으면 반려 사유도 담는다.
+ * @summary 내 판매자 신청 조회
+ */
+export const FindMineResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int(),
+  "memberId": zod.int(),
+  "sellerType": zod.enum(['BUSINESS', 'INDIVIDUAL']),
+  "businessName": zod.string().nullish(),
+  "businessNumber": zod.string().nullish(),
+  "representativeName": zod.string(),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "requestedAt": zod.iso.datetime({"offset":true}),
+  "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "rejectReason": zod.string().nullish()
+}).optional()
+})
+
+
+/**
+ * 관리자가 판매자 신청을 최근 신청부터 조회한다. status를 주면 그 상태만, 비우면 전체를 돌려준다.
+ * @summary 판매자 신청 목록 조회
+ */
+export const FindAllQueryParams = zod.object({
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']).optional().describe('신청 상태 (비우면 전체)')
+})
+
+export const FindAllResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.array(zod.object({
+  "id": zod.int(),
+  "memberId": zod.int(),
+  "sellerType": zod.enum(['BUSINESS', 'INDIVIDUAL']),
+  "businessName": zod.string().nullish(),
+  "businessNumber": zod.string().nullish(),
+  "representativeName": zod.string(),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "requestedAt": zod.iso.datetime({"offset":true}),
+  "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "rejectReason": zod.string().nullish()
+})).optional()
+})
