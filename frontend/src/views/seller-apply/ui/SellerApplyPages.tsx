@@ -1,12 +1,15 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 
 import { ConsoleCard } from '@/widgets/console-page'
+import { useAuthStatus } from '@/features/auth'
+import { memberApi, unwrapData, type memberModel } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import {
   Alert,
@@ -18,10 +21,19 @@ import {
   Radio,
   RadioGroup,
   Select,
+  Skeleton,
   TextField,
   type BadgeTone,
 } from '@/shared/ui'
 
+import {
+  applyErrorMessage,
+  isNoApplication,
+  SELLER_API_ERRORS,
+  toApplyRequest,
+  toApplyStatus,
+  type SellerApplyStatus,
+} from '../model/seller-apply-api'
 import {
   EMPTY_SELLER_APPLY_FORM,
   sellerApplyFormSchema,
@@ -61,9 +73,12 @@ function FormBody({
 }
 
 // 피그마 V2 · S01 판매자 등록 신청
-// TODO(api): PRO-129 판매자 신청 API로 보낸다. 지금은 검사를 통과하면 결과 화면(심사 중)으로 간다.
+// 검사를 통과하면 판매자 신청 API(POST /api/v1/member/sellers)로 보내고, 성공하면 결과 화면으로 간다.
 export function SellerApplyPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const apply = memberApi.useApply()
+  const [formError, setFormError] = useState<string>()
   const {
     register,
     control,
@@ -76,8 +91,19 @@ export function SellerApplyPage() {
   const business = useWatch({ control, name: 'business' })
   const agreed = useWatch({ control, name: 'agreed' })
 
-  const onSubmit = handleSubmit(() => {
-    router.push('/seller-apply/result')
+  const onSubmit = handleSubmit((values) => {
+    setFormError(undefined)
+    apply.mutate(
+      { data: toApplyRequest(values) },
+      {
+        onSuccess: (response) => {
+          // 응답이 방금 낸 신청이라 결과 화면이 다시 부르지 않고 바로 쓴다.
+          queryClient.setQueryData(memberApi.getFindMineQueryKey(), response)
+          router.push('/seller-apply/result')
+        },
+        onError: (error) => setFormError(applyErrorMessage(error)),
+      },
+    )
   })
 
   return (
@@ -197,11 +223,13 @@ export function SellerApplyPage() {
           description="거래 당사자는 판매자님이에요. 판매자 정보는 대회 상세 화면에서 구매자에게 보여요."
         />
 
+        {formError && <Alert tone="danger" title={formError} />}
+
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="l">
             임시 저장
           </Button>
-          <Button type="submit" size="l" disabled={!agreed}>
+          <Button type="submit" size="l" disabled={!agreed} loading={apply.isPending}>
             신청하기
           </Button>
         </div>
@@ -210,10 +238,7 @@ export function SellerApplyPage() {
   )
 }
 
-export type SellerApplyStatus = 'pending' | 'rejected' | 'approved'
-
 type ResultCard = {
-  status: SellerApplyStatus
   tone: BadgeTone
   badge: string
   title: string
@@ -221,64 +246,96 @@ type ResultCard = {
   actions: ReactNode
 }
 
-const RESULTS: ResultCard[] = [
-  {
-    status: 'pending',
+// 반려 사유는 서버가 준 값(rejectReason)을 그대로 보여 준다.
+function resultCard(seller: memberModel.SellerDto): ResultCard {
+  const status: SellerApplyStatus = toApplyStatus(seller.status)
+  if (status === 'rejected') {
+    return {
+      tone: 'danger',
+      badge: '반려',
+      title: '신청이 반려됐어요',
+      description: seller.rejectReason ? `사유: ${seller.rejectReason}` : '',
+      actions: (
+        <Link href="/seller-apply" className={buttonClassName()}>
+          고쳐서 다시 신청하기
+        </Link>
+      ),
+    }
+  }
+  if (status === 'approved') {
+    return {
+      tone: 'success',
+      badge: '승인',
+      title: '판매자로 승인됐어요',
+      description:
+        '이제 대회를 등록할 수 있어요. 정산 계좌가 없으면 정산금 지급이 보류되니 먼저 확인해 주세요.',
+      actions: (
+        <>
+          <Link href="/seller" className={buttonClassName()}>
+            판매자 홈으로
+          </Link>
+          <Link href="/seller/settings" className={buttonClassName({ variant: 'secondary' })}>
+            정산 계좌 확인
+          </Link>
+        </>
+      ),
+    }
+  }
+  return {
     tone: 'neutral',
     badge: '심사 중',
     title: '관리자가 신청 내용을 확인하고 있어요',
     description: '결과가 나오면 알림(M25)으로 알려 드려요. 심사 중에는 신청 내용을 고칠 수 없어요.',
+    // TODO(design): 신청 내용을 다시 보는 화면은 시안에 없다. 지금은 신청 폼으로 연결한다.
     actions: (
       <Link href="/seller-apply" className={buttonClassName({ variant: 'secondary' })}>
         신청 내용 보기
       </Link>
     ),
-  },
-  {
-    status: 'rejected',
-    tone: 'danger',
-    badge: '반려',
-    title: '신청이 반려됐어요',
-    description:
-      '사유: 사업자등록번호와 상호가 맞지 않아요. 사업자등록증의 상호로 다시 신청해 주세요.',
-    actions: (
-      <Link href="/seller-apply" className={buttonClassName()}>
-        고쳐서 다시 신청하기
-      </Link>
-    ),
-  },
-  {
-    status: 'approved',
-    tone: 'success',
-    badge: '승인',
-    title: '판매자로 승인됐어요',
-    description:
-      '이제 대회를 등록할 수 있어요. 정산 계좌가 없으면 정산금 지급이 보류되니 먼저 확인해 주세요.',
-    actions: (
-      <>
-        <Link href="/seller" className={buttonClassName()}>
-          판매자 홈으로
-        </Link>
-        <Link href="/seller/settings" className={buttonClassName({ variant: 'secondary' })}>
-          정산 계좌 확인
-        </Link>
-      </>
-    ),
-  },
-]
+  }
+}
 
-// 피그마 V2 · S01-1 판매자 등록 신청 · 결과 (심사 중 · 반려 · 승인 중 신청 상태에 맞는 카드 하나)
-// TODO(api): PRO-129 신청 상태를 불러와 status로 넘긴다. 지금은 ?status= 로 미리 본다.
-export function SellerApplyResultPage({ status = 'pending' }: { status?: SellerApplyStatus }) {
-  const result = RESULTS.find((card) => card.status === status) ?? RESULTS[0]
+// 피그마 V2 · S01-1 판매자 등록 신청 · 결과 (심사 중 · 반려 · 승인 중 내 신청 상태에 맞는 카드 하나)
+// 내 신청 조회(GET /api/v1/member/sellers/me)로 상태를 가져온다. 신청 내역이 없으면(404 SELLER_NOT_FOUND) 신청하러 가도록 안내한다.
+export function SellerApplyResultPage() {
+  const mine = memberApi.useFindMine({
+    query: {
+      select: unwrapData,
+      enabled: useAuthStatus() === 'authenticated',
+      // 신청 내역이 없는 404는 다시 불러도 같아서 재시도하지 않는다.
+      retry: false,
+    },
+  })
+
   return (
     <FormBody width="w-180" title="판매자 등록 신청 결과">
-      <section className="flex flex-col items-start gap-3 rounded-lg bg-bg-surface p-5 inset-ring inset-ring-border-default">
-        <Badge tone={result.tone}>{result.badge}</Badge>
-        <h2 className="text-heading-s">{result.title}</h2>
-        <p className="text-body-s text-text-secondary">{result.description}</p>
-        <div className="flex gap-2">{result.actions}</div>
-      </section>
+      {mine.data ? (
+        <ResultSection card={resultCard(mine.data)} />
+      ) : mine.isError ? (
+        isNoApplication(mine.error) ? (
+          <section className="flex flex-col items-start gap-3 rounded-lg bg-bg-surface p-5 inset-ring inset-ring-border-default">
+            <h2 className="text-heading-s">아직 판매자 신청을 하지 않았어요</h2>
+            <Link href="/seller-apply" className={buttonClassName()}>
+              판매자 신청하러 가기
+            </Link>
+          </section>
+        ) : (
+          <Alert tone="danger" title={SELLER_API_ERRORS.loadFailed} />
+        )
+      ) : (
+        <Skeleton shape="rect" className="h-40 w-full" />
+      )}
     </FormBody>
+  )
+}
+
+function ResultSection({ card }: { card: ResultCard }) {
+  return (
+    <section className="flex flex-col items-start gap-3 rounded-lg bg-bg-surface p-5 inset-ring inset-ring-border-default">
+      <Badge tone={card.tone}>{card.badge}</Badge>
+      <h2 className="text-heading-s">{card.title}</h2>
+      {card.description && <p className="text-body-s text-text-secondary">{card.description}</p>}
+      <div className="flex gap-2">{card.actions}</div>
+    </section>
   )
 }
