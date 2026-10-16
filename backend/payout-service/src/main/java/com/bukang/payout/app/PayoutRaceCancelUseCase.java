@@ -38,7 +38,7 @@ public class PayoutRaceCancelUseCase {
 	private final PayoutRepository payoutRepository;
 	private final PayoutItemRepository payoutItemRepository;
 	private final PayoutRecoveryRepository payoutRecoveryRepository;
-	private final PayoutLedger payoutLedger;
+	private final PayoutLedgerUseCase payoutLedgerUseCase;
 
 	// 한 트랜잭션으로 묶는다. 지급 배치와 부딪혀 낙관적 락으로 실패하면 모두 되돌리고, 메시지를 다시 처리한다
 	// 다시 처리해도 이미 닫은 정산 내역은 CANCELED라 건너뛰고, 회수는 이미 있으면 만들지 않는다
@@ -66,8 +66,8 @@ public class PayoutRaceCancelUseCase {
 	// 판매자가 손에 든 돈 = 남은 선금 + 번 돈. 지급 전 묶음은 방금 되돌렸으므로 지급한 묶음의 몫만 남는다
 	// 이미 요청 중인 갚을 돈(RECEIVABLE)은 따로 받으므로 더하지 않는다
 	private boolean requestRecovery(int sellerId, int raceId, LocalDateTime now) {
-		long advance = payoutLedger.balance(sellerId, raceId, PayoutAccount.ADVANCE);
-		long earning = payoutLedger.balance(sellerId, raceId, PayoutAccount.EARNING);
+		long advance = payoutLedgerUseCase.balance(sellerId, raceId, PayoutAccount.ADVANCE);
+		long earning = payoutLedgerUseCase.balance(sellerId, raceId, PayoutAccount.EARNING);
 		if (earning != 0) {
 			// 최종 지급 뒤의 대회 취소는 번 돈까지 되돌려야 하는데 아직 정하지 않았다 (PRO-214 미룸). 금액만 맞춰 선금 줄로 남긴다
 			log.warn("최종 지급 뒤 대회 취소: 번 돈까지 회수합니다. sellerId={}, raceId={}, earning={}",

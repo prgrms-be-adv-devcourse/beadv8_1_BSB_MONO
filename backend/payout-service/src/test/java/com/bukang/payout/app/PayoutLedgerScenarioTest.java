@@ -68,7 +68,7 @@ class PayoutLedgerScenarioTest {
 	@Autowired
 	private EntityManager entityManager;
 
-	private PayoutLedger ledger;
+	private PayoutLedgerUseCase ledgerUseCase;
 	private PayoutGroupCreator creator;
 	private PayoutPayUseCase payUseCase;
 	private PayoutRecoveryRequestUseCase recoveryRequestUseCase;
@@ -78,14 +78,14 @@ class PayoutLedgerScenarioTest {
 	@BeforeEach
 	void setUp() {
 		BusinessDayCalendar calendar = new BusinessDayCalendar();
-		ledger = new PayoutLedger(payoutRepository, payoutItemRepository, payoutRecoveryRepository);
-		creator = new PayoutGroupCreator(payoutRepository, payoutHoldRepository, calendar, ledger);
+		ledgerUseCase = new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository);
+		creator = new PayoutGroupCreator(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
 		payUseCase = new PayoutPayUseCase(payoutRepository);
 		recoveryRequestUseCase = new PayoutRecoveryRequestUseCase(payoutRepository, payoutItemRepository,
-			payoutRecoveryRepository, ledger);
-		recoveryUseCase = new PayoutRecoveryUseCase(payoutRecoveryRepository, payoutItemRepository, ledger);
+			payoutRecoveryRepository, ledgerUseCase);
+		recoveryUseCase = new PayoutRecoveryUseCase(payoutRecoveryRepository, payoutItemRepository, ledgerUseCase);
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, payoutItemRepository,
-			payoutRecoveryRepository, ledger);
+			payoutRecoveryRepository, ledgerUseCase);
 	}
 
 	private PayoutGroup group(int... orderItemIds) {
@@ -128,7 +128,7 @@ class PayoutLedgerScenarioTest {
 	}
 
 	private long balance(PayoutAccount account) {
-		return ledger.balance(SELLER_ID, RACE_ID, account);
+		return ledgerUseCase.balance(SELLER_ID, RACE_ID, account);
 	}
 
 	// 판매자가 실제로 받은 돈 = 송금된 정산 묶음 지급액 합 − 입금으로 돌려준 회수액

@@ -57,7 +57,7 @@ class PayoutRaceCancelUseCaseTest {
 
 	private PayoutRaceCancelUseCase useCase() {
 		return new PayoutRaceCancelUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository,
-			new PayoutLedger(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
+			new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
 	}
 
 	private PayoutHoldUseCase holdUseCase() {

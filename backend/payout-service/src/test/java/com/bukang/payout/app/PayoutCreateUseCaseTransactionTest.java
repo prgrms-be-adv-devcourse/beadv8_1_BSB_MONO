@@ -38,7 +38,7 @@ import com.bukang.payout.support.StubRacePort;
  */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({PayoutGroupCreator.class, BusinessDayCalendar.class, PayoutLedger.class})
+@Import({PayoutGroupCreator.class, BusinessDayCalendar.class, PayoutLedgerUseCase.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PayoutCreateUseCaseTransactionTest {
 	private static final LocalDate RACE_DATE = LocalDate.of(2026, 9, 25);

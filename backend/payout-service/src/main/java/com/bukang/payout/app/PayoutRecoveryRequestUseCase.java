@@ -34,7 +34,7 @@ public class PayoutRecoveryRequestUseCase {
 	private final PayoutRepository payoutRepository;
 	private final PayoutItemRepository payoutItemRepository;
 	private final PayoutRecoveryRepository payoutRecoveryRepository;
-	private final PayoutLedger payoutLedger;
+	private final PayoutLedgerUseCase payoutLedgerUseCase;
 
 	/**
 	 * @param price 환불된 참가권의 가격 (주문 상품 가격)
@@ -63,7 +63,7 @@ public class PayoutRecoveryRequestUseCase {
 		payoutItemRepository.save(
 			PayoutItem.ofRecovery(recovery, PayoutRecordType.RECEIVABLE_ADDED, orderItemId, amount));
 
-		payoutLedger.settle(sellerId, raceId, now);
+		payoutLedgerUseCase.settle(sellerId, raceId, now);
 		return Optional.of(recovery);
 	}
 

@@ -31,7 +31,7 @@ import lombok.RequiredArgsConstructor;
 public class PayoutRecoveryUseCase {
 	private final PayoutRecoveryRepository payoutRecoveryRepository;
 	private final PayoutItemRepository payoutItemRepository;
-	private final PayoutLedger payoutLedger;
+	private final PayoutLedgerUseCase payoutLedgerUseCase;
 
 	@Transactional
 	public PayoutRecoveryDto complete(int recoveryId, int completedBy, LocalDateTime now) {
@@ -40,7 +40,7 @@ public class PayoutRecoveryUseCase {
 		if (recovery.getStatus() == PayoutRecoveryStatus.COMPLETED) {
 			throw new PayoutRecoveryConflictException("이미 완료된 회수입니다.");
 		}
-		long receivable = payoutLedger.balance(recovery.getSellerId(), recovery.getRaceId(),
+		long receivable = payoutLedgerUseCase.balance(recovery.getSellerId(), recovery.getRaceId(),
 			PayoutAccount.RECEIVABLE);
 		long deposit = Math.min(recovery.getAmount(), receivable);
 		if (deposit > 0) {

@@ -45,7 +45,7 @@ public class PayoutGroupCreator {
 	private final PayoutRepository payoutRepository;
 	private final PayoutHoldRepository payoutHoldRepository;
 	private final BusinessDayCalendar businessDayCalendar;
-	private final PayoutLedger payoutLedger;
+	private final PayoutLedgerUseCase payoutLedgerUseCase;
 
 	/**
 	 * 1차 정산 내역을 만든다. 정산 월은 환불 마감일의 달, 금액은 장마다 가격 × 40%의 합이다
@@ -81,7 +81,7 @@ public class PayoutGroupCreator {
 				group.sellerId(), group.raceId());
 		}
 		// 남은 선금 = 1차 선금 − 회수 요청액. 회수 요청 때 이미 선금에서 뺐으므로 진행 중인 회수액을 또 빼지 않는다
-		long advanceDeduction = payoutLedger.balance(group.sellerId(), group.raceId(), PayoutAccount.ADVANCE);
+		long advanceDeduction = payoutLedgerUseCase.balance(group.sellerId(), group.raceId(), PayoutAccount.ADVANCE);
 
 		Payout payout = Payout.finalStage(group.sellerId(), group.raceId(), group.raceName(), YearMonth.from(raceDate),
 			advanceDeduction, now, businessDayCalendar);
@@ -89,7 +89,7 @@ public class PayoutGroupCreator {
 			payout.addItem(entry.orderItemId(), entry.price(), TwoStagePayoutCalculator.FEE_RATE, targetDate));
 
 		save(payout);
-		payoutLedger.settle(group.sellerId(), group.raceId(), now);
+		payoutLedgerUseCase.settle(group.sellerId(), group.raceId(), now);
 		Optional<PayoutHold> firstHold = first.filter(firstPayout -> firstPayout.getStatus() == PayoutStatus.HELD)
 			.flatMap(held -> payoutHoldRepository.findFirstByPayoutIdAndStatusOrderByIdDesc(
 				held.getId(), PayoutHoldStatus.HELD));

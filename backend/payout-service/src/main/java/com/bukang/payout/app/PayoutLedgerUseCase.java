@@ -26,7 +26,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-public class PayoutLedger {
+public class PayoutLedgerUseCase {
 	// 아직 송금하지 않은 정산 묶음. 보류(HELD)도 송금 전이라 상계 대상이다
 	private static final List<PayoutStatus> UNSENT = List.of(PayoutStatus.CALCULATED, PayoutStatus.HELD);
 
