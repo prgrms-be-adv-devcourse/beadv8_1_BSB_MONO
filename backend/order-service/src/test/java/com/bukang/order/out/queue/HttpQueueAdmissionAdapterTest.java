@@ -86,8 +86,9 @@ class HttpQueueAdmissionAdapterTest {
 	}
 
 	@Test
-	@DisplayName("응답에 입장 여부가 없거나, 입장 중인데 남은 시간이 없으면 503 예외로 알린다")
+	@DisplayName("응답이 JSON이 아니거나, 입장 여부가 없거나, 입장 중인데 남은 시간이 없으면 503 예외로 알린다")
 	void malformed() {
+		server.expect(requestTo(URL)).andRespond(withSuccess("<html>gateway error</html>", MediaType.TEXT_HTML));
 		server.expect(requestTo(URL)).andRespond(withSuccess(
 			"{ \"status\": 200, \"message\": \"확인\", \"data\": null }", MediaType.APPLICATION_JSON));
 		server.expect(requestTo(URL)).andRespond(withSuccess(
@@ -96,7 +97,7 @@ class HttpQueueAdmissionAdapterTest {
 			"{ \"status\": 200, \"message\": \"확인\", \"data\": { \"admitted\": true, \"remainingMillis\": 0 } }",
 			MediaType.APPLICATION_JSON));
 
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < 4; i++) {
 			assertThatThrownBy(() -> adapter.findAdmissionEndsAt(MEMBER_ID, RACE_ID, RACE_COURSE_ID, NOW))
 				.isInstanceOf(ExternalServiceUnavailableException.class);
 		}
