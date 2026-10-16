@@ -159,6 +159,8 @@ class PayoutHoldUseCaseTest {
 
 		// 지급 배치가 CALCULATED(version 0)로 읽어 둔 상태를 흉내 낸다
 		Payout readByBatch = payoutRepository.findById(payout.getId()).orElseThrow();
+		// 상태를 바꾸면 이력 목록(LAZY)에 한 줄을 더하므로, 세션이 있을 때 미리 읽어 둔다 (운영의 지급 배치는 트랜잭션 안이다)
+		readByBatch.getStatusHistories().size();
 		entityManager.detach(readByBatch);
 
 		// 그 사이 관리자가 보류를 건다 (version 1)
