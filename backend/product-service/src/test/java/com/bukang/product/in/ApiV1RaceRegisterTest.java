@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.common.shared.file.domain.FileType;
 import com.bukang.common.shared.kafka.KafkaTopics;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.product.domain.CourseStatus;
@@ -41,7 +42,6 @@ import com.bukang.product.domain.ProductMember;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
 import com.bukang.product.domain.RaceCourse;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.TshirtSize;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceCourseSaveRequestDto;

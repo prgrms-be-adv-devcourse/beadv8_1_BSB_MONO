@@ -13,6 +13,7 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.DynamicUpdate;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.common.shared.race.event.RaceCourseChangedEvent;
 import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
 import com.bukang.product.dto.RaceCourseSaveRequestDto;
 
@@ -188,6 +189,16 @@ public class RaceCourse extends BaseIdAndTime {
 		if (saleStarted) {
 			throw new RaceChangeNotAllowedException(withName("판매가 시작된 대회는 종목을 뺄 수 없습니다."));
 		}
+	}
+
+	// 대기열에 보낼 종목 변경 메시지 (어느 대회의 종목인지와 수정 일시)
+	public RaceCourseChangedEvent toChangedEvent() {
+		return new RaceCourseChangedEvent(getId(), race.getId(), getModifyDate(), false);
+	}
+
+	// 대회에서 뺀 종목의 삭제 메시지. 지운 행에는 수정 일시가 남지 않으므로 삭제 시각을 받아 담는다
+	public RaceCourseChangedEvent toDeletedEvent(LocalDateTime deletedAt) {
+		return new RaceCourseChangedEvent(getId(), race.getId(), deletedAt, true);
 	}
 
 	// 바뀐 참가 조건의 이름을 돌려준다 (바뀐 것이 없으면 null). 거리는 10과 10.00을 같게 본다

@@ -183,7 +183,8 @@ class ApiV1PayoutSellerControllerTest {
 					fieldWithPath("data[].refundAmount").description("환불액 (세미는 항상 0)"),
 					fieldWithPath("data[].feeAmount").description("플랫폼 수수료 (참가권마다 5.5%, 원 미만 버림의 합)"),
 					fieldWithPath("data[].payoutAmount").description("지급액 (판매액 − 환불액 − 수수료)"),
-					fieldWithPath("data[].status").description("상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)"),
+					fieldWithPath("data[].status").description("상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, "
+						+ "CANCELED: 대회 취소로 닫힘)"),
 					fieldWithPath("data[].settledAt").description("정산 내역을 만든 일시"),
 					fieldWithPath("data[].scheduledPayDate").description("지급 예정일 (보류를 풀면 해제일 뒤 돌아오는 지급일로 바뀐다)"),
 					fieldWithPath("data[].paidAt").description("지급 완료 일시 (지급 전에는 null)")

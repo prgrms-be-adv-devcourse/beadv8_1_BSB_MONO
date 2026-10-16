@@ -24,7 +24,6 @@ import {
   getFindCartResponseMock,
   getFindMineMockHandler,
   getFindMineResponseMock,
-  getPayMockHandler,
   getPayResponseMock,
   getRemoveItemMockHandler,
   getRemoveItemResponseMock,
@@ -46,6 +45,8 @@ import {
   issueMockRefreshCookie,
   MOCK_REFRESH_COOKIE_NAME,
 } from './mock-session'
+import { resetMockKitsForTesting, sellerKitHandlers } from './seller-kits'
+import { payFromMockWallet, walletHandlers } from './wallet'
 
 /** 경로 변수(:raceId) 수. 적은 것부터 둬야 /races/suggestions가 /races/:raceId에 먼저 걸리지 않는다. */
 function pathParamCount(handler: RequestHandler): number {
@@ -204,6 +205,9 @@ const MOCK_ADMISSION_MS = 10 * 60 * 1000
 /** (대회, 종목)마다 입장 여부를 물은 횟수와 입장 끝 시각 */
 const mockQueue = new Map<string, { asked: number; endsAt?: number }>()
 
+/** 테스트 사이에 키트 발송 · 배송 완료 상태가 넘어가지 않게 처음으로 돌린다. */
+export { resetMockKitsForTesting }
+
 /** 테스트 사이에 대기열 순서가 넘어가지 않게 처음(아무도 줄 서지 않음)으로 돌린다. */
 export function resetMockQueueForTesting() {
   mockQueue.clear()
@@ -307,9 +311,23 @@ const orderHandlers = [
     const example = getRemoveItemResponseMock()
     return { ...example, data: { ...example.data, items: [] } }
   }),
-  getPayMockHandler(() => {
+  // 진짜 서버처럼 예치금(wallet.ts)에서 주문 금액을 뺀다. 모자라면 409 ORDER_INSUFFICIENT_BALANCE + 부족 금액
+  http.post('*/api/v1/order/orders/:orderId/payment', () => {
+    const paid = getPayResponseMock()
+    const { shortage } = payFromMockWallet(paid.data?.totalAmount ?? 0)
+    if (shortage > 0) {
+      return HttpResponse.json(
+        {
+          status: 409,
+          code: 'ORDER_INSUFFICIENT_BALANCE',
+          message: `예치금이 ${shortage.toLocaleString('ko-KR')}원 부족합니다. 충전한 뒤 결제 기한 안에 다시 결제해주세요.`,
+          data: { shortage },
+        },
+        { status: 409 },
+      )
+    }
     mockOrderAwaitingPayment = false
-    return getPayResponseMock()
+    return HttpResponse.json(paid)
   }),
   getFindById1MockHandler(() => {
     if (!mockOrderAwaitingPayment) return getFindById1ResponseMock()
@@ -343,5 +361,7 @@ export const handlers = [
   myOrdersHandler,
   ...raceHandlers,
   ...orderHandlers,
+  ...walletHandlers,
+  ...sellerKitHandlers,
   ...generatedHandlers,
 ]

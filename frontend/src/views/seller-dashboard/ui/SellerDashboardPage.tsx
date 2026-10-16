@@ -1,11 +1,14 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
+import type { Route } from 'next'
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 
 import { ConsoleCard, ConsoleLoading, ConsoleOffline, ConsolePage } from '@/widgets/console-page'
 import { formatMonthDay, formatWeekday } from '@/entities/payout'
 import { myRacesQueryOptions, toSellerRaceRow } from '@/entities/race'
+import { shippableCount, useSellerKitSummary } from '@/entities/seller-kit'
 import { ApiError, payoutApi, unwrapData } from '@/shared/api'
 import { cn, formatNumber } from '@/shared/lib'
 import {
@@ -25,13 +28,9 @@ function errorText(error: unknown) {
   return (error instanceof ApiError && error.serverMessage) || '잠시 뒤 다시 시도해 주세요.'
 }
 
-// TODO(api): 처리할 일 API가 없다. 지금은 시안 예시 값 (처리할 일 카드 + 위 "처리할 일" 숫자 타일).
+// TODO(api): 처리할 일 API가 없다. 키트 배송 대기만 키트 건수 API로 채우고, 나머지는 시안 예시 값이다.
+// (위 "처리할 일" 숫자 타일도 예시 값)
 const TODOS = [
-  {
-    title: '배송 대기 키트',
-    description: '환불 기한이 지난 주문 · 송장 번호를 넣으면 배송 중으로 바뀌어요',
-    count: '12건',
-  },
   { title: '접수 마감 임박', description: '쿠키RUN · 10/31 18:00 접수 마감', count: 'D-7' },
   { title: '지급보류 알림', description: 'HD-20261027-01A2 · 정산 계좌 미등록', count: '1건' },
 ]
@@ -107,6 +106,38 @@ export function SellerDashboardPage({ state }: { state?: 'loading' | 'offline' }
   )
 }
 
+const TODO_ROW = 'flex items-center gap-3 border-b border-border-default py-3 last:border-b-0'
+
+// 처리할 일 한 줄. href가 있으면 그 화면으로 가는 링크
+function TodoRow({
+  href,
+  title,
+  description,
+  count,
+}: {
+  href?: Route
+  title: string
+  description: string
+  count: ReactNode
+}) {
+  const body = (
+    <>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="text-label-l">{title}</p>
+        <p className="text-body-s text-text-secondary">{description}</p>
+      </div>
+      {count}
+    </>
+  )
+  return href ? (
+    <Link href={href} className={cn(TODO_ROW, 'rounded-sm', FOCUS_RING)}>
+      {body}
+    </Link>
+  ) : (
+    <div className={TODO_ROW}>{body}</div>
+  )
+}
+
 function DashboardBody() {
   const summary = payoutApi.useSummary({ query: { select: unwrapData } })
   const races = useQuery({
@@ -114,6 +145,7 @@ function DashboardBody() {
     select: (list) => list.map(toSellerRaceRow),
   })
   const onSale = races.data?.filter((r) => r.saleStatus === 'ON_SALE')
+  const kits = useSellerKitSummary()
 
   return (
     <>
@@ -193,17 +225,27 @@ function DashboardBody() {
         </ConsoleCard>
 
         <ConsoleCard title="처리할 일" className="w-100 shrink-0 gap-0">
+          <TodoRow
+            href="/seller/kits"
+            title="배송 대기 키트"
+            description="환불 기한이 지난 주문 · 송장 번호를 넣으면 배송 중으로 바뀌어요"
+            count={
+              kits.data ? (
+                <Badge tone="warning">{shippableCount(kits.data)}건</Badge>
+              ) : kits.isError ? (
+                <Badge tone="neutral">-</Badge>
+              ) : (
+                <Skeleton className="h-6 w-10" />
+              )
+            }
+          />
           {TODOS.map((todo) => (
-            <div
+            <TodoRow
               key={todo.title}
-              className="flex items-center gap-3 border-b border-border-default py-3 last:border-b-0"
-            >
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <p className="text-label-l">{todo.title}</p>
-                <p className="text-body-s text-text-secondary">{todo.description}</p>
-              </div>
-              <Badge tone="warning">{todo.count}</Badge>
-            </div>
+              title={todo.title}
+              description={todo.description}
+              count={<Badge tone="warning">{todo.count}</Badge>}
+            />
           ))}
         </ConsoleCard>
       </div>

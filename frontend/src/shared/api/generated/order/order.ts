@@ -28,7 +28,9 @@ import type {
   CartCheckoutRequestDto,
   CartItemAddRequestDto,
   FindAdmissionParams,
+  FindKitsParams,
   FindMineParams,
+  KitShipmentRequestDto,
   OrderCreateRequestDto,
   ParticipantInfoRequestDto,
   ParticipationApplyRequestDto,
@@ -37,10 +39,14 @@ import type {
   RsDataCartDto,
   RsDataCartItemDto,
   RsDataOrderDto,
+  RsDataOrderItemDto,
   RsDataOrderPageDto,
   RsDataParticipantInfoDto,
   RsDataParticipationDto,
-  RsDataQueueAdmissionDto
+  RsDataQueueAdmissionDto,
+  RsDataSellerKitPageDto,
+  RsDataSellerKitSummaryDto,
+  SummarizeParams
 } from './order.schemas';
 
 import { customFetch } from '../../fetcher';
@@ -1437,5 +1443,388 @@ export const useRemoveItem = <TError = RsData,
         TContext
       > => {
       return useMutation(getRemoveItemMutationOptions(options), queryClient);
+    }
+
+export const getFindKitsUrl = (params?: FindKitsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/order/seller/kits?${stringifiedParams}` : `/api/v1/order/seller/kits`
+}
+
+/**
+ * 판매자 대회의 키트가 있는 참가권 중 결제했거나 이미 보낸 것을 최근 주문부터 돌려준다. 대회(raceId)·배송 상태(status)로 거를 수 있다. 보낸 뒤 취소된 참가권은 orderItemStatus가 CANCELED로 남는다.
+ * @summary 내 대회 키트 주문 목록
+ */
+export const findKits = async (params?: FindKitsParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataSellerKitPageDto> => {
+
+  return customFetch<RsDataSellerKitPageDto>(getFindKitsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getFindKitsQueryKey = (params?: FindKitsParams,) => {
+    return [
+    `/api/v1/order/seller/kits`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getFindKitsQueryOptions = <TData = Awaited<ReturnType<typeof findKits>>, TError = RsData>(params?: FindKitsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findKits>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getFindKitsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof findKits>>> = ({ signal }) => findKits(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof findKits>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type FindKitsQueryResult = NonNullable<Awaited<ReturnType<typeof findKits>>>
+export type FindKitsQueryError = RsData
+
+
+export function useFindKits<TData = Awaited<ReturnType<typeof findKits>>, TError = RsData>(
+ params: undefined |  FindKitsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof findKits>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findKits>>,
+          TError,
+          Awaited<ReturnType<typeof findKits>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindKits<TData = Awaited<ReturnType<typeof findKits>>, TError = RsData>(
+ params?: FindKitsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findKits>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof findKits>>,
+          TError,
+          Awaited<ReturnType<typeof findKits>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useFindKits<TData = Awaited<ReturnType<typeof findKits>>, TError = RsData>(
+ params?: FindKitsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findKits>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 내 대회 키트 주문 목록
+ */
+
+export function useFindKits<TData = Awaited<ReturnType<typeof findKits>>, TError = RsData>(
+ params?: FindKitsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof findKits>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getFindKitsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSummarizeUrl = (params?: SummarizeParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/order/seller/kits/summary?${stringifiedParams}` : `/api/v1/order/seller/kits/summary`
+}
+
+/**
+ * 배송 준비·배송 중·배송 완료 건수와, 배송 준비 중 아직 환불할 수 있어 보낼 수 없는(환불 기한 전) 건수를 돌려준다.
+ * @summary 키트 배송 건수
+ */
+export const summarize = async (params?: SummarizeParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataSellerKitSummaryDto> => {
+
+  return customFetch<RsDataSellerKitSummaryDto>(getSummarizeUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSummarizeQueryKey = (params?: SummarizeParams,) => {
+    return [
+    `/api/v1/order/seller/kits/summary`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSummarizeQueryOptions = <TData = Awaited<ReturnType<typeof summarize>>, TError = RsData>(params?: SummarizeParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof summarize>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSummarizeQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof summarize>>> = ({ signal }) => summarize(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof summarize>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type SummarizeQueryResult = NonNullable<Awaited<ReturnType<typeof summarize>>>
+export type SummarizeQueryError = RsData
+
+
+export function useSummarize<TData = Awaited<ReturnType<typeof summarize>>, TError = RsData>(
+ params: undefined |  SummarizeParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof summarize>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof summarize>>,
+          TError,
+          Awaited<ReturnType<typeof summarize>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSummarize<TData = Awaited<ReturnType<typeof summarize>>, TError = RsData>(
+ params?: SummarizeParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof summarize>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof summarize>>,
+          TError,
+          Awaited<ReturnType<typeof summarize>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useSummarize<TData = Awaited<ReturnType<typeof summarize>>, TError = RsData>(
+ params?: SummarizeParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof summarize>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 키트 배송 건수
+ */
+
+export function useSummarize<TData = Awaited<ReturnType<typeof summarize>>, TError = RsData>(
+ params?: SummarizeParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof summarize>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getSummarizeQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getShipUrl = (orderItemId: number,) => {
+
+
+
+
+  return `/api/v1/order/seller/kits/${orderItemId}/shipment`
+}
+
+/**
+ * 택배사와 송장 번호를 넣어 배송 중으로 바꾼다. 결제한 참가권의 키트만, 한 번만 보낸다. 아직 환불할 수 있는 동안은 409다.
+ * @summary 키트 발송 (배송 준비 → 배송 중)
+ */
+export const ship = async (orderItemId: number,
+    kitShipmentRequestDto: KitShipmentRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderItemDto> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RsDataOrderItemDto>(getShipUrl(orderItemId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(kitShipmentRequestDto)
+  }
+);}
+
+
+
+
+
+export const getShipMutationKey = () => ['ship'] as const;
+
+export const getShipMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ship>>, TError,ShipMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof ship>>, TError,ShipMutationVariables, TContext> => {
+
+const mutationKey = getShipMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ship>>, ShipMutationVariables> = (props) => {
+          const {orderItemId,data} = props ?? {};
+
+          return  ship(orderItemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ShipMutationResult = NonNullable<Awaited<ReturnType<typeof ship>>>
+    export type ShipMutationBody = KitShipmentRequestDto
+    export type ShipMutationError = RsData
+    export type ShipMutationVariables = {orderItemId: number;data: KitShipmentRequestDto}
+
+    /**
+ * @summary 키트 발송 (배송 준비 → 배송 중)
+ */
+export const useShip = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ship>>, TError,ShipMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ship>>,
+        TError,
+        ShipMutationVariables,
+        TContext
+      > => {
+      return useMutation(getShipMutationOptions(options), queryClient);
+    }
+
+export const getCompleteDeliveryUrl = (orderItemId: number,) => {
+
+
+
+
+  return `/api/v1/order/seller/kits/${orderItemId}/delivery`
+}
+
+/**
+ * 보낸 키트를 배송 완료로 바꾼다. 한 번만 바꾼다.
+ * @summary 키트 배송 완료 (배송 중 → 배송 완료)
+ */
+export const completeDelivery = async (orderItemId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataOrderItemDto> => {
+
+  return customFetch<RsDataOrderItemDto>(getCompleteDeliveryUrl(orderItemId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteDeliveryMutationKey = () => ['completeDelivery'] as const;
+
+export const getCompleteDeliveryMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeDelivery>>, TError,CompleteDeliveryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeDelivery>>, TError,CompleteDeliveryMutationVariables, TContext> => {
+
+const mutationKey = getCompleteDeliveryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeDelivery>>, CompleteDeliveryMutationVariables> = (props) => {
+          const {orderItemId} = props ?? {};
+
+          return  completeDelivery(orderItemId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteDeliveryMutationResult = NonNullable<Awaited<ReturnType<typeof completeDelivery>>>
+
+    export type CompleteDeliveryMutationError = RsData
+    export type CompleteDeliveryMutationVariables = {orderItemId: number}
+
+    /**
+ * @summary 키트 배송 완료 (배송 중 → 배송 완료)
+ */
+export const useCompleteDelivery = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeDelivery>>, TError,CompleteDeliveryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof completeDelivery>>,
+        TError,
+        CompleteDeliveryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCompleteDeliveryMutationOptions(options), queryClient);
     }
 

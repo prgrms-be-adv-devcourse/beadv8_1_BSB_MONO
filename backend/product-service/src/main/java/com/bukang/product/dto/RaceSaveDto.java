@@ -3,7 +3,7 @@ package com.bukang.product.dto;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.bukang.product.domain.RaceSaleStatus;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
