@@ -183,6 +183,25 @@ class GatewayAuthenticationTest {
 	}
 
 	@Test
+	@DisplayName("이메일 중복 확인 GET은 로그인 없이 통과하고, 클라이언트가 보낸 X-Member-Id는 지운다")
+	void passesEmailAvailabilityWithoutToken() throws Exception {
+		HttpResponse<String> response = send(request("/api/v1/member/members/email-availability?email=a@b.com")
+			.header(MEMBER_ID_HEADER, "999"));
+
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(RECEIVED_MEMBER_IDS).containsExactly("없음");
+	}
+
+	@Test
+	@DisplayName("이메일 중복 확인 주소라도 GET이 아니면 토큰이 필요하다")
+	void requiresTokenForEmailAvailabilityNonGet() throws Exception {
+		HttpResponse<String> response = send(request("/api/v1/member/members/email-availability")
+			.POST(HttpRequest.BodyPublishers.noBody()));
+
+		assertUnauthorized(response, "로그인이 필요합니다.");
+	}
+
+	@Test
 	@DisplayName("공개 주소와 앞부분만 같은 주소는 토큰이 필요하다")
 	void requiresTokenForPathOnlyStartingWithPublicPath() throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/auth/login-history")
