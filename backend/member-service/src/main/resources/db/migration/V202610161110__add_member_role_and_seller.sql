@@ -20,7 +20,9 @@ CREATE TABLE member_seller (
 	reviewed_by INT,
 	PRIMARY KEY (seller_id),
 	CONSTRAINT fk_member_seller_member FOREIGN KEY (member_id) REFERENCES member_member (member_id)
-);
+-- 판매자 ID는 1000부터 시작한다. product·order·payout 시작 데이터가 판매자1을 ID 7로 미리 만들어 두어,
+-- 1부터 늘리면 일곱 번째 신청의 이벤트가 그 행을 다른 회원 것으로 덮어쓴다
+) AUTO_INCREMENT = 1000;
 
 -- 회원의 대기·승인 신청 확인, 가장 최근 신청 조회 (Seller의 @Index)
 CREATE INDEX idx_member_seller_member ON member_seller (member_id, status);

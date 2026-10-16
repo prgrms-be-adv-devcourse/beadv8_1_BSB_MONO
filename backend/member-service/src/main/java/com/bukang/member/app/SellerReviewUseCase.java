@@ -29,8 +29,9 @@ public class SellerReviewUseCase {
 		return seller;
 	}
 
+	// 줄을 잠그고 읽어, 같은 신청을 동시에 심사하면 뒤 요청이 409(이미 심사함)가 되게 한다
 	private Seller findSeller(int sellerId) {
-		return sellerRepository.findById(sellerId)
+		return sellerRepository.findByIdForUpdate(sellerId)
 			.orElseThrow(() -> new SellerNotFoundException("존재하지 않는 판매자 신청입니다."));
 	}
 }
