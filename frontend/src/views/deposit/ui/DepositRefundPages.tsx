@@ -1,82 +1,250 @@
 'use client'
 
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Controller, useForm } from 'react-hook-form'
+import { z } from 'zod'
 
 import { AppHeader } from '@/widgets/app-header'
+import { useMyBalance } from '@/entities/wallet'
+import { ApiError, cashApi, cashZod, unwrapData } from '@/shared/api'
 import {
+  Alert,
   BottomCta,
   Button,
   buttonClassName,
   KeyValue,
   Select,
+  Skeleton,
   Stepper,
   TextField,
 } from '@/shared/ui'
 
-const BANKS = ['국민은행', '신한은행', '우리은행', '하나은행', '카카오뱅크', '토스뱅크'].map(
-  (b) => ({ value: b, label: b }),
-)
+import {
+  bankName,
+  BANKS,
+  formatKstShort,
+  maskAccount,
+  parseLastWithdrawal,
+  readLastWithdrawalRaw,
+  saveLastWithdrawal,
+  type BankCode,
+} from '../lib/refund'
 
-// 피그마 V2 · M22 예치금 돌려받기
-// TODO(api): 환급 신청을 보낸다
+const won = (n: number) => `₩${n.toLocaleString('ko-KR')}`
+
+// 시안에 입력 오류 문구가 없어, 다 채우기 전에는 버튼만 막는다 (서버 길이 제한은 생성된 zod 값을 쓴다)
+const refundFormSchema = z.object({
+  bankCode: z.enum(BANKS.map((b) => b.value) as [BankCode, ...BankCode[]]),
+  accountNumber: z
+    .string()
+    .trim()
+    .regex(/^[\d-]*\d[\d-]*$/)
+    .max(cashZod.requestWithdrawalBodyAccountNumberMax),
+  accountHolder: z.string().trim().min(1).max(cashZod.requestWithdrawalBodyAccountHolderMax),
+})
+
+type RefundFormValues = z.infer<typeof refundFormSchema>
+
+/**
+ * 같은 환급 신청인지 서버가 알아보는 키(idempotencyKey).
+ * 처음 누를 때 한 번 만들고, 성공하거나 서버가 4xx로 거절할 때까지 다시 눌러도 같은 키를 보낸다.
+ * 네트워크 오류·5xx는 서버에서 처리됐는지 모르므로 같은 키로 다시 보내야 두 번 빠져나가지 않는다.
+ * 4xx는 저장되지 않은 요청이라 다음에는 새 키를 만든다.
+ */
+function useWithdrawalKey() {
+  const key = useRef<string | null>(null)
+  return {
+    current: () => (key.current ??= crypto.randomUUID()),
+    reset: () => {
+      key.current = null
+    },
+  }
+}
+
+// 피그마 V2 · M22 예치금 돌려받기. 신청하면 바로 환급이 끝난다(백엔드 PRO-84, 1차는 모의 처리).
 export function DepositRefundPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const { balance, isPending: balancePending } = useMyBalance()
+  const withdrawalKey = useWithdrawalKey()
+  const [failed, setFailed] = useState(false)
+  // 두 번 누르기: 버튼이 꺼지는 렌더보다 두 번째 클릭이 먼저 올 수 있어 요청 중인지를 바로 적어 둔다
+  const inFlight = useRef(false)
+  const {
+    control,
+    register,
+    handleSubmit,
+    formState: { isValid },
+  } = useForm<RefundFormValues>({
+    resolver: zodResolver(refundFormSchema),
+    mode: 'onChange',
+    defaultValues: { bankCode: '004', accountNumber: '', accountHolder: '' },
+  })
+
+  const withdraw = useMutation({
+    mutationFn: async (values: RefundFormValues) => {
+      const result = unwrapData(
+        await cashApi.requestWithdrawal({
+          bankCode: values.bankCode,
+          accountNumber: values.accountNumber.replace(/\D/g, ''),
+          accountHolder: values.accountHolder.trim(),
+          idempotencyKey: withdrawalKey.current(),
+        }),
+      )
+      return { result, values }
+    },
+    onSuccess: ({ result, values }) => {
+      saveLastWithdrawal({
+        amount: result.withdrawnAmount,
+        balance: result.balance,
+        bankName: bankName(values.bankCode),
+        maskedAccount: maskAccount(values.accountNumber.trim()),
+        accountHolder: values.accountHolder.trim(),
+        at: Date.now(),
+      })
+      withdrawalKey.reset()
+      // 잔액이 0원이 된 것을 예치금 화면들이 다시 불러오게 한다
+      void queryClient.invalidateQueries()
+      router.push('/me/deposit/refund/done')
+    },
+    onError: (error) => {
+      // 서버가 확실히 거절한 요청(잔액 없음 400, 다른 회원 키 409 등)이면 다음에는 새 키를 쓴다
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        withdrawalKey.reset()
+        void queryClient.invalidateQueries()
+      }
+      setFailed(true)
+    },
+  })
+
+  const submit = (values: RefundFormValues) => {
+    if (inFlight.current) return
+    inFlight.current = true
+    setFailed(false)
+    withdraw.mutate(values, {
+      onSettled: () => {
+        inFlight.current = false
+      },
+    })
+  }
+
+  const amount = balance ?? 0
+  const disabled = !isValid || amount <= 0 || withdraw.isPending
+
   return (
     <>
       <AppHeader type="sub" title="예치금 돌려받기" />
-      <main className="flex flex-1 flex-col gap-4 px-4 py-6">
-        <section className="flex flex-col gap-1 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
-          <p className="text-label-m text-text-secondary">돌려받을 금액</p>
-          <p className="font-display text-display-l">₩5,000</p>
-          <p className="text-body-s text-text-secondary">
-            남은 예치금 전부를 아래 계좌로 돌려받아요.
-            <br />
-            관리자가 확인한 뒤 보내요.
-          </p>
-        </section>
-        <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
-          <h2 className="text-heading-s">환급 계좌</h2>
-          <Select label="은행" items={BANKS} defaultValue="국민은행" />
-          <TextField label="계좌번호" inputMode="numeric" defaultValue="123456-01-234567" />
-          <TextField label="예금주" defaultValue="김러너" helper="본인 명의 계좌만 쓸 수 있어요" />
-        </section>
-      </main>
-      <BottomCta
-        className="sticky bottom-0 z-10"
-        primary={
-          <Button size="l" onClick={() => router.push('/me/deposit/refund/done')}>
-            ₩5,000 돌려받기 신청
-          </Button>
-        }
-      />
+      <form className="flex flex-1 flex-col" onSubmit={(event) => void handleSubmit(submit)(event)}>
+        <main className="flex flex-1 flex-col gap-4 px-4 py-6">
+          {/* 시안에 환급 실패 문구가 없어 결제 실패(M07-3)의 안내 문구를 쓴다 */}
+          {failed && <Alert tone="danger" title="잠시 뒤 다시 시도해 주세요." />}
+          <section className="flex flex-col gap-1 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
+            <p className="text-label-m text-text-secondary">돌려받을 금액</p>
+            {balancePending ? (
+              <Skeleton shape="rect" className="h-11 w-36" />
+            ) : (
+              <p className="font-display text-display-l">
+                {balance === undefined ? '-' : won(balance)}
+              </p>
+            )}
+            <p className="text-body-s text-text-secondary">
+              남은 예치금 전부를 아래 계좌로 돌려받아요.
+              <br />
+              신청하면 바로 보내요.
+            </p>
+          </section>
+          <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
+            <h2 className="text-heading-s">환급 계좌</h2>
+            <Controller
+              control={control}
+              name="bankCode"
+              render={({ field }) => (
+                <Select
+                  label="은행"
+                  items={[...BANKS]}
+                  value={field.value}
+                  onValueChange={(value) => value && field.onChange(value)}
+                />
+              )}
+            />
+            <TextField label="계좌번호" inputMode="numeric" {...register('accountNumber')} />
+            <TextField
+              label="예금주"
+              helper="본인 명의 계좌만 쓸 수 있어요"
+              {...register('accountHolder')}
+            />
+          </section>
+        </main>
+        <BottomCta
+          className="sticky bottom-0 z-10"
+          primary={
+            <Button type="submit" size="l" disabled={disabled}>
+              {`${won(amount)} 돌려받기 신청`}
+            </Button>
+          }
+        />
+      </form>
     </>
   )
 }
 
-// 피그마 V2 · M22-1 예치금 돌려받기 · 신청 완료
+/** 이 화면에 있는 동안 저장 값은 바뀌지 않아 구독할 것이 없다 */
+const noSubscribe = () => () => {}
+
+// 피그마 V2 · M22-1 예치금 돌려받기 · 환급 완료 (10/16 즉시 완료로 시안 문구 수정)
 export function DepositRefundDonePage() {
+  const router = useRouter()
+  // sessionStorage는 브라우저에만 있다. 서버 렌더에서는 undefined(로딩)로 두고, 브라우저에서 읽는다
+  const raw = useSyncExternalStore(noSubscribe, readLastWithdrawalRaw, () => undefined)
+  const withdrawal = useMemo(
+    () => (raw === undefined ? undefined : parseLastWithdrawal(raw)),
+    [raw],
+  )
+  useEffect(() => {
+    if (withdrawal === null) router.replace('/me/deposit')
+  }, [withdrawal, router])
+
+  if (!withdrawal) {
+    return (
+      <>
+        <AppHeader type="sub" title="환급 완료" close backHref="/me/deposit" />
+        <main aria-busy className="flex flex-1 flex-col gap-4 px-4 py-6">
+          <Skeleton shape="rect" className="h-64" />
+        </main>
+      </>
+    )
+  }
+
   return (
     <>
-      <AppHeader type="sub" title="신청 완료" close backHref="/me/deposit?preview=refunding" />
+      <AppHeader type="sub" title="환급 완료" close backHref="/me/deposit" />
       <main className="flex flex-1 flex-col gap-5 px-4 pt-6 pb-8">
         <div className="flex flex-col gap-2">
-          <h2 className="text-heading-l">돌려받기를 신청했어요</h2>
-          <p className="text-body-m text-text-secondary">관리자가 확인한 뒤 아래 계좌로 보내요.</p>
+          <h2 className="text-heading-l">예치금을 돌려받았어요</h2>
+          <p className="text-body-m text-text-secondary">
+            남은 예치금 전부를 아래 계좌로 보냈어요.
+          </p>
         </div>
         <section className="flex flex-col gap-4 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <h3 className="text-heading-s">진행 단계</h3>
-          <Stepper steps={['신청', '처리 중', '환급 완료']} current={1} />
+          <Stepper steps={['신청', '처리 중', '환급 완료']} current={2} />
           <p className="text-caption text-text-tertiary">
-            관리자가 보내면 &apos;환급 완료&apos;로 바뀌고 알림이 가요.
+            신청하면 바로 보내고 &apos;환급 완료&apos;로 바뀌어요.
           </p>
         </section>
         <section className="flex flex-col gap-3 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
-          <KeyValue label="신청 금액" value="₩5,000" />
-          <KeyValue label="받을 계좌" value="국민은행 123456-**-***567" />
-          <KeyValue label="예금주" value="김러너" />
-          <KeyValue label="지금 예치금" value="₩0" />
-          <KeyValue label="신청 일시" value="10/6 (화) 14:20" />
+          <KeyValue label="환급 금액" value={won(withdrawal.amount)} />
+          <KeyValue
+            label="받을 계좌"
+            value={`${withdrawal.bankName} ${withdrawal.maskedAccount}`}
+          />
+          <KeyValue label="예금주" value={withdrawal.accountHolder} />
+          <KeyValue label="지금 예치금" value={won(withdrawal.balance)} />
+          <KeyValue label="환급 일시" value={formatKstShort(withdrawal.at)} />
         </section>
       </main>
       <BottomCta
@@ -87,7 +255,7 @@ export function DepositRefundDonePage() {
           </Link>
         }
         primary={
-          <Link href="/me/deposit?preview=refunding" className={buttonClassName({ size: 'l' })}>
+          <Link href="/me/deposit" className={buttonClassName({ size: 'l' })}>
             예치금 보기
           </Link>
         }
