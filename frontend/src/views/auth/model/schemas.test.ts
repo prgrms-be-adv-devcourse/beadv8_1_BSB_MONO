@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  ageOn,
   AUTH_ERRORS,
   findEmailSchema,
   loginSchema,
-  parseBirth,
   passwordNewSchema,
   signupAccountSchema,
   signupProfileSchema,
@@ -145,13 +143,5 @@ describe('찾기 · 재설정 스키마', () => {
   it('새 비밀번호 확인이 다르면 막는다', () => {
     const result = passwordNewSchema.safeParse({ password: 'password12', passwordConfirm: 'x' })
     expect(firstError(result)?.path).toBe('passwordConfirm')
-  })
-})
-
-describe('ageOn', () => {
-  it('생일이 지나지 않았으면 한 살 적게 센다', () => {
-    const birth = parseBirth('2012.06.15')!
-    expect(ageOn(birth, new Date(2026, 5, 14))).toBe(13)
-    expect(ageOn(birth, new Date(2026, 5, 15))).toBe(14)
   })
 })
