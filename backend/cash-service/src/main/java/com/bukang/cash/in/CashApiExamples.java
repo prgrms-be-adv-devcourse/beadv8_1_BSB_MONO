@@ -50,7 +50,26 @@ final class CashApiExamples {
 		""";
 
 	static final String INVALID_BODY = """
-		{ "status": 400, "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String WITHDRAWAL_SUCCESS = """
+		{
+			"status": 200,
+			"message": "환급 신청이 완료되었습니다.",
+			"data": {
+				"withdrawnAmount": 50000,
+				"balance": 0
+			}
+		}
+		""";
+
+	static final String WALLET_BALANCE_EMPTY = """
+		{ "status": 400, "message": "환급할 잔액이 없습니다.", "data": null }
+		""";
+
+	static final String WITHDRAWAL_INVALID_INPUT = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "은행 코드를 작성해주세요.", "data": null }
 		""";
 
 	private CashApiExamples() {
