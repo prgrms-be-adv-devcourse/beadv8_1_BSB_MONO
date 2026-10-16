@@ -12,7 +12,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -28,17 +27,19 @@ import lombok.NoArgsConstructor;
 @Entity
 @NoArgsConstructor(access = PROTECTED)
 @Getter
-// 대회 취소 회수는 대회당 1건이다. 같은 메시지를 두 곳이 동시에 처리해 확인을 함께 통과해도 DB가 두 번째 저장을 막는다
-// 그 처리는 예외로 롤백되고 재시도 때 이미 만든 회수를 보고 건너뛴다
-@Table(name = "PAYOUT_PAYOUT_RECOVERY", uniqueConstraints = {
-	@UniqueConstraint(name = "uk_payout_recovery_race_reason", columnNames = {"race_id", "reason_type"})
-})
+@Table(name = "PAYOUT_PAYOUT_RECOVERY")
 public class PayoutRecovery extends BaseIdAndTime {
 	@Column(nullable = false)
 	private int sellerId;
 
 	@Column(nullable = false)
 	private int raceId;
+
+	// 회수 중복 방지 키. 대회 취소는 대회당 1건(R{대회ID}:RACE_CANCELED), 일정 변경은 참가권당 1건(O{주문 상품ID}:SCHEDULE_CHANGED)
+	// 같은 메시지를 두 곳이 동시에 처리해 앱의 확인을 함께 통과해도 DB가 두 번째 저장을 막는다 (PRO-34 리뷰)
+	// (race_id, reason_type) 유일 조건은 일정 변경 회수를 대회당 1건으로 막아 이 키로 바꿨다 (PRO-214)
+	@Column(nullable = false, unique = true, length = 50, updatable = false)
+	private String recoveryKey;
 
 	// 일정 변경 회수의 환불된 참가권(주문 상품). 같은 참가권으로 회수가 두 번 생기지 않게 유일하다. 대회 취소는 NULL
 	@Column(unique = true)
@@ -83,6 +84,7 @@ public class PayoutRecovery extends BaseIdAndTime {
 		this.raceId = raceId;
 		this.orderItemId = orderItemId;
 		this.reasonType = reasonType;
+		this.recoveryKey = recoveryKeyOf(raceId, orderItemId, reasonType);
 		this.amount = amount;
 		this.requestedAt = requestedAt;
 		this.status = PayoutRecoveryStatus.REQUESTED;
@@ -93,6 +95,18 @@ public class PayoutRecovery extends BaseIdAndTime {
 		LocalDateTime requestedAt) {
 		return new PayoutRecovery(sellerId, raceId, orderItemId, PayoutRecoveryReason.SCHEDULE_CHANGED, amount,
 			requestedAt);
+	}
+
+	private static String recoveryKeyOf(int raceId, Integer orderItemId, PayoutRecoveryReason reasonType) {
+		return switch (reasonType) {
+			case RACE_CANCELED -> "R%d:%s".formatted(raceId, reasonType);
+			case SCHEDULE_CHANGED -> {
+				if (orderItemId == null) {
+					throw new IllegalArgumentException("일정 변경 회수에는 참가권(주문 상품) ID가 있어야 합니다.");
+				}
+				yield "O%d:%s".formatted(orderItemId, reasonType);
+			}
+		};
 	}
 
 	// 판매자의 입금을 확인했다
