@@ -20,6 +20,9 @@ public interface PayoutRepository extends JpaRepository<Payout, Integer> {
 	boolean existsBySellerIdAndRaceIdAndPayoutMonthAndPayoutStage(int sellerId, int raceId, String payoutMonth,
 		PayoutStage payoutStage);
 
+	// 1차 정산 생성: 같은 판매자 × 대회의 최종 정산이 이미 있는지 본다 (최종이 먼저 생겼으면 1차를 만들지 않는다)
+	boolean existsBySellerIdAndRaceIdAndPayoutStage(int sellerId, int raceId, PayoutStage payoutStage);
+
 	// 최종 정산 생성: 같은 판매자 × 대회의 1차 정산 내역 (선지급 차감과 보류 여부를 읽는다)
 	// 1차 정산 월은 환불 마감일로 정해지고 마감일은 움직이지 않으므로 하나뿐이다
 	Optional<Payout> findFirstBySellerIdAndRaceIdAndPayoutStageOrderByIdAsc(int sellerId, int raceId,

@@ -400,6 +400,41 @@ class PayoutCreateUseCaseTest {
 	}
 
 	@Test
+	@DisplayName("1차가 실패한 실행에서 최종이 먼저 만들어지면, 다음 실행은 1차를 만들지 않아 선금이 두 번 나가지 않는다")
+	void skipsFirstWhenFinalAlreadyExists() {
+		// 환불 마감 9/28, 대회 10/1: 10/2 실행의 되돌아보기 기간에 1차와 최종이 함께 들어온다
+		LocalDate raceDate = LocalDate.of(2026, 10, 1);
+		List<SoldEntry> entries = List.of(new SoldEntry(100, 1, 10, 10, raceDate, 50_000L));
+		List<RaceSchedule> schedules =
+			List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 28)));
+		boolean[] summaryDown = {true};
+		SoldSummaryPort working = summariesOf(entries);
+		SoldSummaryPort flaky = raceId -> {
+			if (summaryDown[0]) {
+				throw new IllegalStateException("주문 서비스 응답 없음");
+			}
+			return working.summarizeSold(raceId);
+		};
+		PayoutGroupCreator payoutGroupCreator =
+			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
+				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
+		PayoutCreateUseCase useCase = new PayoutCreateUseCase(payoutRepository, payoutGroupCreator,
+			soldEntriesReturning(entries), sellerId -> true, new StubRacePort(RACE_NAMES, schedules, entries), flaky);
+
+		// 10/2: 1차는 판매 집계를 못 받아 실패, 최종은 선지급 차감 없이 판매자 정산액 전부로 만들어진다
+		useCase.run(LocalDate.of(2026, 10, 2), LocalDateTime.of(2026, 10, 2, 3, 0));
+		assertThat(payoutOf(1, PayoutStage.FINAL).getPayoutAmount()).isEqualTo(47_250L);
+
+		// 10/3: 판매 집계가 돌아와도 최종이 이미 있으므로 1차를 만들지 않는다
+		summaryDown[0] = false;
+		useCase.run(LocalDate.of(2026, 10, 3), LocalDateTime.of(2026, 10, 3, 3, 0));
+
+		assertThat(payoutRepository.findAll())
+			.extracting(Payout::getPayoutStage)
+			.containsExactly(PayoutStage.FINAL);
+	}
+
+	@Test
 	@DisplayName("1차 배치도 두 번 돌려도 중복이 없고, 놓친 날은 다음 실행이 따라잡는다 (마감 9/28, 9/29 실행을 놓침)")
 	void firstPayoutRunTwiceAndCatchesUp() {
 		LocalDate raceDate = LocalDate.of(2026, 10, 10);

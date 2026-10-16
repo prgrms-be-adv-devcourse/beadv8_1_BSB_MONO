@@ -110,6 +110,16 @@ public class PayoutCreateUseCase {
 				counts.skipped++;
 				return;
 			}
+			// 최종이 먼저 만들어졌으면 1차를 만들지 않는다. 환불 마감일과 대회일이 되돌아보기 기간(7일) 안에 있으면
+			// 1차가 실패한 실행에서 최종이 선지급 차감 0원(판매자 정산액 전부)으로 만들어지고, 다음 실행에서 1차가
+			// 만들어져 선금이 한 번 더 나간다. 최종이 이미 전액을 계산했으므로 건너뛴다 (1차 없는 최종은 PRO-190)
+			if (payoutRepository.existsBySellerIdAndRaceIdAndPayoutStage(key.sellerId(), key.raceId(),
+				PayoutStage.FINAL)) {
+				log.warn("최종 정산이 이미 있어 1차 정산을 만들지 않습니다. sellerId={}, raceId={}", key.sellerId(),
+					key.raceId());
+				counts.skipped++;
+				return;
+			}
 			List<CourseSale> courseSales = courses.stream()
 				.map(course -> new CourseSale(course.raceCourseId(), course.priceSum(), course.ticketCount()))
 				.toList();
