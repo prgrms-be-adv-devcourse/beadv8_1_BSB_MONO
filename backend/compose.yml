@@ -48,12 +48,15 @@ services:
         API_MOCKING: "off"
         IMAGE_REMOTE_HOSTS: ${IMAGE_REMOTE_HOSTS:-}
         NEXT_PUBLIC_IMAGE_CDN_URL: ${NEXT_PUBLIC_IMAGE_CDN_URL:-}
+        # 공유 카드(og:image)의 절대 주소. 서버(EC2)에서는 접속 주소(도메인)로 바꾼다
+        # layout.tsx의 metadata가 모듈을 불러올 때 한 번 계산돼, 빌드 때 만든 정적 페이지에는 빌드 시점 값이 남으므로 빌드에도 넘긴다
+        SITE_URL: ${SITE_URL:-http://localhost}
     image: bukang-web:latest
     container_name: bukang-web
     profiles: [ app ]
     environment:
       BACKEND_URL: http://bukang-gateway:8000
-      # 공유 카드(og:image)의 절대 주소. 서버(EC2)에서는 접속 주소(도메인)로 바꾼다
+      # 실행 중에 새로 그리는 페이지도 같은 값을 쓰게 한다 (위 build.args와 같은 값)
       SITE_URL: ${SITE_URL:-http://localhost}
     depends_on:
       gateway:
