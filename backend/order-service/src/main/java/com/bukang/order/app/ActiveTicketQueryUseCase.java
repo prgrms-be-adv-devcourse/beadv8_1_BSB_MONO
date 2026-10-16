@@ -1,6 +1,7 @@
 package com.bukang.order.app;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,8 +22,8 @@ import lombok.RequiredArgsConstructor;
 public class ActiveTicketQueryUseCase {
 	private final OrderItemRepository orderItemRepository;
 
-	public ActiveTicketCountDto countActiveTickets(int memberId, LocalDate today) {
-		long count = orderItemRepository.countActiveTickets(memberId, today.atStartOfDay());
+	public ActiveTicketCountDto countActiveTickets(int memberId, LocalDate today, LocalDateTime now) {
+		long count = orderItemRepository.countActiveTickets(memberId, today.atStartOfDay(), now);
 		return new ActiveTicketCountDto(Math.toIntExact(count));
 	}
 }

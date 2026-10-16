@@ -51,6 +51,7 @@ class InternalV1OrderControllerTest {
 	private static final int COURSE_TODAY = 12;
 	private static final int COURSE_YESTERDAY = 13;
 	private static final int COURSE_UNPAID = 14;
+	private static final int COURSE_OVERDUE = 15;
 	private static final int TICKET_PRICE = StubRaceCoursePort.PRICE;
 
 	@Autowired
@@ -182,18 +183,21 @@ class InternalV1OrderControllerTest {
 		raceCoursePort.put(courseOn(COURSE_TODAY, 102, LocalDateTime.of(2026, 11, 20, 8, 0)));
 		raceCoursePort.put(courseOn(COURSE_YESTERDAY, 103, LocalDateTime.of(2026, 11, 21, 8, 0)));
 		raceCoursePort.put(courseOn(COURSE_UNPAID, 104, LocalDateTime.of(2026, 11, 22, 8, 0)));
+		raceCoursePort.put(courseOn(COURSE_OVERDUE, 105, LocalDateTime.of(2026, 11, 23, 8, 0)));
 		paidOrderItem(1, COURSE_1115);
 		changeRaceDate(paidOrderItem(1, COURSE_TODAY), today.atStartOfDay());
-		// 지난 대회, 취소(환불)한 참가권, 결제 전 주문, 다른 회원의 참가권은 세지 않는다
+		// 결제 기한 안의 결제 대기 주문도 센다 (탈퇴 뒤 남은 Access Token으로 결제하는 것을 막기 위해)
+		createdOrder(1, COURSE_UNPAID);
+		// 지난 대회, 취소(환불)한 참가권, 결제 기한이 지난 결제 대기 주문, 다른 회원의 참가권은 세지 않는다
 		changeRaceDate(paidOrderItem(1, COURSE_YESTERDAY), today.minusDays(1).atTime(23, 59));
 		markCanceled(paidOrderItem(1, COURSE_1116));
-		createdOrder(1, COURSE_UNPAID);
+		makeOverdue(createdOrder(1, COURSE_OVERDUE));
 		paidOrderItem(2, COURSE_1115);
 
 		countActiveTickets(1)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("끝나지 않은 참가권 수를 조회했습니다."))
-			.andExpect(jsonPath("$.data.count").value(2));
+			.andExpect(jsonPath("$.data.count").value(3));
 		countActiveTickets(3)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.count").value(0));
@@ -225,6 +229,11 @@ class InternalV1OrderControllerTest {
 			.filter(candidate -> candidate.getId() == orderItemId)
 			.findFirst()
 			.orElseThrow();
+	}
+
+	private void makeOverdue(int orderId) {
+		transactionTemplate.executeWithoutResult(status -> ReflectionTestUtils.setField(
+			orderRepository.findById(orderId).orElseThrow(), "paymentDueAt", LocalDateTime.now().minusMinutes(1)));
 	}
 
 	private void markCanceled(int orderItemId) {

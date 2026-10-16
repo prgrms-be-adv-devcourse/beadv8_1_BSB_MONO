@@ -1,6 +1,7 @@
 package com.bukang.order.in;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -90,6 +91,7 @@ public class InternalV1OrderController {
 		@Parameter(description = "회원 ID", example = "3") @PathVariable int memberId
 	) {
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "끝나지 않은 참가권 수를 조회했습니다.",
-			activeTicketQueryUseCase.countActiveTickets(memberId, LocalDate.now(RACE_ZONE))));
+			// 결제 기한은 주문을 만들 때 서버 시각(LocalDateTime.now())으로 정하므로 같은 시각으로 비교한다
+			activeTicketQueryUseCase.countActiveTickets(memberId, LocalDate.now(RACE_ZONE), LocalDateTime.now())));
 	}
 }
