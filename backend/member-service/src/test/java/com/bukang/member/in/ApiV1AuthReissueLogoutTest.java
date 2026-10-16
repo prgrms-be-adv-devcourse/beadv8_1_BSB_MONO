@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -33,6 +34,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.bukang.jwt.JwtProvider;
 import com.bukang.jwt.TokenType;
 import com.bukang.member.app.MemberFacade;
+import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.RefreshTokenRepository;
@@ -40,6 +42,7 @@ import com.bukang.member.out.RefreshTokenRepository.NewFamily;
 import com.bukang.member.out.RefreshTokenRepository.Rotation;
 import com.bukang.member.out.RotationOutcome;
 import com.bukang.member.out.RotationResult;
+import com.bukang.member.out.TermsAgreementRepository;
 import com.jayway.jsonpath.JsonPath;
 
 import jakarta.servlet.http.Cookie;
@@ -62,6 +65,9 @@ class ApiV1AuthReissueLogoutTest {
 
 	@Autowired
 	private MemberRepository memberRepository;
+
+	@Autowired
+	private TermsAgreementRepository termsAgreementRepository;
 
 	@Autowired
 	private JwtProvider jwtProvider;
@@ -88,12 +94,14 @@ class ApiV1AuthReissueLogoutTest {
 			.given(refreshTokenRepository).deleteIfFamily(anyLong(), anyString());
 
 		memberId = memberFacade.join(new MemberJoinRequestDto(
-			EMAIL, PASSWORD, "김러너", "러너1", "010-1234-5678", LocalDate.of(1995, 4, 12), null
+			EMAIL, PASSWORD, "김러너", "러너1", "010-1234-5678", LocalDate.of(1995, 4, 12), null,
+			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		)).getId();
 	}
 
 	@AfterEach
 	void tearDown() {
+		termsAgreementRepository.deleteAll();
 		memberRepository.deleteAll();
 	}
 
