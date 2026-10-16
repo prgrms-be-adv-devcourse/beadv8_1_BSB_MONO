@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.bukang.cash.domain.charge.ChargeStatus;
 import com.bukang.cash.domain.charge.WalletCharge;
 import com.bukang.cash.domain.exception.ChargeAmountTooSmallException;
+import com.bukang.cash.domain.exception.ChargeMemberMismatchException;
 import com.bukang.cash.domain.exception.PaymentApprovalFailedException;
 import com.bukang.cash.domain.exception.WalletNotFoundException;
 import com.bukang.cash.domain.member.CashMember;
@@ -166,6 +167,26 @@ class CashChargeConfirmUseCaseTest {
 	}
 
 	@Test
+	@DisplayName("다른 회원의 orderId로 요청하면 거절하고 PG를 부르지 않는다")
+	void rejectsWhenOrderIdBelongsToAnotherMember() {
+		int otherMemberId = 4;
+		Wallet otherWallet = createWallet(otherMemberId, 10_000);
+		WalletCharge otherCharge = walletChargeRepository.save(
+			new WalletCharge(otherWallet, 10_000, "TOSS", "order_1"));
+		ReflectionTestUtils.setField(otherCharge, "status", ChargeStatus.COMPLETED);
+		walletChargeRepository.saveAndFlush(otherCharge);
+
+		createCustomerWallet(0);
+
+		assertThatThrownBy(() -> cashFacade.confirmWalletCharge(CUSTOMER_ID, "pay_1", "order_1", 10_000))
+			.isInstanceOf(ChargeMemberMismatchException.class);
+
+		assertBalance(otherMemberId, 10_000);
+		assertBalance(CUSTOMER_ID, 0);
+		verify(paymentClient, never()).approve(anyString(), anyString(), anyInt());
+	}
+
+	@Test
 	@DisplayName("지갑이 없으면 404 예외로 알린다")
 	void walletNotFound() {
 		assertThatThrownBy(() -> cashFacade.confirmWalletCharge(999, "pay_1", "order_1", 10_000))
@@ -173,13 +194,17 @@ class CashChargeConfirmUseCaseTest {
 	}
 
 	private Wallet createCustomerWallet(int initialBalance) {
+		return createWallet(CUSTOMER_ID, initialBalance);
+	}
+
+	private Wallet createWallet(int memberId, int initialBalance) {
 		return transactionTemplate.execute(status -> {
 			LocalDateTime now = LocalDateTime.of(2026, 10, 15, 10, 0);
-			CashMember member = cashMemberRepository.save(new CashMember(CUSTOMER_ID, now, now, "러너3"));
+			CashMember member = cashMemberRepository.save(new CashMember(memberId, now, now, "러너" + memberId));
 			Wallet wallet = walletRepository.save(new Wallet(member));
 			if (initialBalance != 0) {
 				walletLedgerRepository.save(
-					wallet.credit(initialBalance, LedgerType.충전__PG결제_토스페이먼츠, LedgerRefType.WalletCharge, CUSTOMER_ID));
+					wallet.credit(initialBalance, LedgerType.충전__PG결제_토스페이먼츠, LedgerRefType.WalletCharge, memberId));
 			}
 			return wallet;
 		});
