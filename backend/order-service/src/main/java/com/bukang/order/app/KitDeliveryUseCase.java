@@ -2,10 +2,10 @@ package com.bukang.order.app;
 
 import java.time.LocalDateTime;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -18,7 +18,7 @@ import com.bukang.order.domain.exception.OrderAccessDeniedException;
 import com.bukang.order.domain.exception.OrderItemNotFoundException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
 import com.bukang.order.dto.OrderItemDto;
-import com.bukang.order.dto.SellerKitDto;
+import com.bukang.order.dto.SellerKitPageDto;
 import com.bukang.order.dto.SellerKitSummaryDto;
 import com.bukang.order.out.OrderItemRepository;
 import com.bukang.order.out.OrderRepository;
@@ -77,10 +77,11 @@ public class KitDeliveryUseCase {
 		});
 	}
 
-	// 판매자의 키트 주문 목록. raceId·status가 null이면 거르지 않는다
+	// 판매자의 키트 주문 목록 한 페이지 (최근 주문 상품부터). raceId·status가 null이면 거르지 않는다
 	@Transactional(readOnly = true)
-	public List<SellerKitDto> findKits(int sellerId, Integer raceId, KitDeliveryStatus status) {
-		return orderItemRepository.findSellerKits(sellerId, raceId, status);
+	public SellerKitPageDto findKits(int sellerId, Integer raceId, KitDeliveryStatus status, int page, int size) {
+		return SellerKitPageDto.from(
+			orderItemRepository.findSellerKits(sellerId, raceId, status, PageRequest.of(page, size)));
 	}
 
 	// 배송 상태별 건수와, 배송 준비 중 환불 기한 전이라 아직 보낼 수 없는 건수
