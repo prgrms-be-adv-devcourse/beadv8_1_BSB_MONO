@@ -50,17 +50,26 @@ const refundFormSchema = z.object({
 type RefundFormValues = z.infer<typeof refundFormSchema>
 
 /**
- * 같은 환급 신청인지 서버가 알아보는 키(idempotencyKey).
- * 처음 누를 때 한 번 만들고, 성공하거나 서버가 4xx로 거절할 때까지 다시 눌러도 같은 키를 보낸다.
+ * 같은 환급 신청인지 서버가 알아보는 키(idempotencyKey)와 그 키로 처음 보낸 입력값.
+ * 처음 누를 때 한 번 만들고, 성공하거나 서버가 4xx로 거절할 때까지 다시 눌러도 같은 키 · 같은 값을 보낸다.
  * 네트워크 오류·5xx는 서버에서 처리됐는지 모르므로 같은 키로 다시 보내야 두 번 빠져나가지 않는다.
- * 4xx는 저장되지 않은 요청이라 다음에는 새 키를 만든다.
+ * 이때 서버는 처음 결과를 돌려주므로, 입력을 고쳐 다시 보내면 완료 화면에 실제로 보내지 않은 계좌가 나온다.
+ * 그래서 처음 값을 키와 함께 두고 다시 보낼 때 그 값을 쓰며, 그동안(locked) 입력란을 잠근다.
+ * 4xx는 저장되지 않은 요청이라 다음에는 새 키 · 지금 입력값을 쓴다.
  */
-function useWithdrawalKey() {
-  const key = useRef<string | null>(null)
+function usePendingWithdrawal() {
+  const pending = useRef<{ key: string; values: RefundFormValues } | null>(null)
+  const [locked, setLocked] = useState(false)
   return {
-    current: () => (key.current ??= crypto.randomUUID()),
+    locked,
+    /** 이번에 보낼 키와 값. 결과를 모르는 요청이 남아 있으면 그때의 키 · 값 */
+    take: (values: RefundFormValues) => (pending.current ??= { key: crypto.randomUUID(), values }),
+    /** 결과를 모르는 채로 끝남: 다음에도 같은 키 · 값을 보낸다 */
+    lock: () => setLocked(true),
+    /** 성공하거나 서버가 확실히 거절함: 다음에는 새 키 · 지금 입력값 */
     reset: () => {
-      key.current = null
+      pending.current = null
+      setLocked(false)
     },
   }
 }
@@ -70,7 +79,7 @@ export function DepositRefundPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { balance, isPending: balancePending } = useMyBalance()
-  const withdrawalKey = useWithdrawalKey()
+  const pending = usePendingWithdrawal()
   const [failed, setFailed] = useState(false)
   // 두 번 누르기: 버튼이 꺼지는 렌더보다 두 번째 클릭이 먼저 올 수 있어 요청 중인지를 바로 적어 둔다
   const inFlight = useRef(false)
@@ -86,13 +95,13 @@ export function DepositRefundPage() {
   })
 
   const withdraw = useMutation({
-    mutationFn: async (values: RefundFormValues) => {
+    mutationFn: async ({ key, values }: { key: string; values: RefundFormValues }) => {
       const result = unwrapData(
         await cashApi.requestWithdrawal({
           bankCode: values.bankCode,
           accountNumber: values.accountNumber.replace(/\D/g, ''),
           accountHolder: values.accountHolder.trim(),
-          idempotencyKey: withdrawalKey.current(),
+          idempotencyKey: key,
         }),
       )
       return { result, values }
@@ -106,7 +115,7 @@ export function DepositRefundPage() {
         accountHolder: values.accountHolder.trim(),
         at: Date.now(),
       })
-      withdrawalKey.reset()
+      pending.reset()
       // 잔액이 0원이 된 것을 예치금 화면들이 다시 불러오게 한다
       void queryClient.invalidateQueries()
       router.push('/me/deposit/refund/done')
@@ -114,8 +123,10 @@ export function DepositRefundPage() {
     onError: (error) => {
       // 서버가 확실히 거절한 요청(잔액 없음 400, 다른 회원 키 409 등)이면 다음에는 새 키를 쓴다
       if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
-        withdrawalKey.reset()
+        pending.reset()
         void queryClient.invalidateQueries()
+      } else {
+        pending.lock()
       }
       setFailed(true)
     },
@@ -125,7 +136,7 @@ export function DepositRefundPage() {
     if (inFlight.current) return
     inFlight.current = true
     setFailed(false)
-    withdraw.mutate(values, {
+    withdraw.mutate(pending.take(values), {
       onSettled: () => {
         inFlight.current = false
       },
@@ -165,16 +176,23 @@ export function DepositRefundPage() {
               render={({ field }) => (
                 <Select
                   label="은행"
+                  disabled={pending.locked}
                   items={[...BANKS]}
                   value={field.value}
                   onValueChange={(value) => value && field.onChange(value)}
                 />
               )}
             />
-            <TextField label="계좌번호" inputMode="numeric" {...register('accountNumber')} />
+            <TextField
+              label="계좌번호"
+              inputMode="numeric"
+              readOnly={pending.locked}
+              {...register('accountNumber')}
+            />
             <TextField
               label="예금주"
               helper="본인 명의 계좌만 쓸 수 있어요"
+              readOnly={pending.locked}
               {...register('accountHolder')}
             />
           </section>

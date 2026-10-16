@@ -146,6 +146,59 @@ describe('예치금 돌려받기 (M22)', () => {
     expect(keys[1]).toBe(keys[0])
   })
 
+  it('결과를 모르는 실패 뒤에는 입력을 잠그고, 다시 보낼 때 처음 값을 보내 완료 화면도 그 계좌로 보인다', async () => {
+    const bodies: WithdrawalBody[] = []
+    server.use(
+      http.post('*/api/v1/cash/withdrawals', async ({ request }) => {
+        bodies.push((await request.json()) as WithdrawalBody)
+        if (bodies.length === 1) return HttpResponse.error()
+        return HttpResponse.json({
+          status: 200,
+          message: '아무 문구',
+          data: { withdrawnAmount: 5000, balance: 0 },
+        })
+      }),
+    )
+    const user = userEvent.setup()
+    renderWithClient(<DepositRefundPage />)
+
+    const button = await submit()
+    await fillAccount(user)
+    await user.click(button)
+    await screen.findByText('잠시 뒤 다시 시도해 주세요.')
+
+    // 서버가 처음 계좌로 처리했을 수 있어 고치지 못하게 잠근다
+    const account = screen.getByLabelText('계좌번호')
+    expect(account).toHaveAttribute('readonly')
+    await user.type(account, '999')
+    expect(account).toHaveValue('123456-01-234567')
+
+    await user.click(button)
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/me/deposit/refund/done'))
+    expect(bodies[1]).toEqual(bodies[0])
+    expect(JSON.parse(sessionStorage.getItem('crewrun:last-withdrawal') ?? '{}')).toMatchObject({
+      maskedAccount: '123456-**-***567',
+      accountHolder: '김러너',
+    })
+  })
+
+  it('서버가 거절(4xx)하면 입력 잠금을 풀어 고칠 수 있다', async () => {
+    server.use(
+      http.post('*/api/v1/cash/withdrawals', () =>
+        HttpResponse.json({ status: 400, message: '아무 문구', data: null }, { status: 400 }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderWithClient(<DepositRefundPage />)
+
+    const button = await submit()
+    await fillAccount(user)
+    await user.click(button)
+    await screen.findByText('잠시 뒤 다시 시도해 주세요.')
+
+    expect(screen.getByLabelText('계좌번호')).not.toHaveAttribute('readonly')
+  })
+
   it('서버가 5xx로 답해도 다음 시도에 같은 키를 쓰고, 4xx로 거절하면 새 키를 쓴다', async () => {
     const keys: string[] = []
     const answers = [500, 400, 200]
