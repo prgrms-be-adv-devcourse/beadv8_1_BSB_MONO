@@ -151,6 +151,10 @@ describe('결제 화면', () => {
     await user.click(pay)
 
     expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.getByText(/입장 시간이 끝나 잡아 둔 자리가 풀렸어요\./)).toBeInTheDocument()
+    expect(screen.getByText(/충전한 예치금은 그대로 남아 있어요\./)).toBeInTheDocument()
+    // 주문의 대회 상세(M02)로 돌아간다
+    expect(screen.getByRole('link', { name: '대회 다시 보기' })).toHaveAttribute('href', '/races/1')
   })
 
   it('결제 때 남은 자리가 없다고 하면(409) 자리 마감 화면을 보여 준다', async () => {
@@ -204,5 +208,7 @@ describe('결제 화면', () => {
     renderCheckout('timeout')
 
     expect(screen.getByText('결제 시간이 지났어요')).toBeInTheDocument()
+    // 대회를 모르는 미리보기는 대회 목록으로 간다
+    expect(screen.getByRole('link', { name: '대회 다시 보기' })).toHaveAttribute('href', '/races')
   })
 })

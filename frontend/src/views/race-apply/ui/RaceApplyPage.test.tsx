@@ -34,12 +34,16 @@ function StoreProbe() {
   return <output data-testid="store">{JSON.stringify({ selection, applications })}</output>
 }
 
-function renderPage(initialState: BookingFlowInitial = {}) {
+function renderPage(initialState: BookingFlowInitial = {}, admissionRemainingSeconds?: number) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <BookingFlowProvider initialState={initialState}>
-        <RaceApplyPage race={RACE} option={COURSE} />
+        <RaceApplyPage
+          race={RACE}
+          option={COURSE}
+          admissionRemainingSeconds={admissionRemainingSeconds}
+        />
         <StoreProbe />
       </BookingFlowProvider>
     </QueryClientProvider>,
@@ -329,5 +333,21 @@ describe('참가 신청 · 참가자 정보', () => {
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout?orderId=1'))
     expect(changedId).toBe('7')
     expect(bodies).toHaveLength(0)
+  })
+})
+
+describe('RaceApplyPage 대기열 남은 시간 띠', () => {
+  it('대기열 입장 뒤 남은 초가 있으면 헤더 아래에 mm:ss 띠를 붙인다', () => {
+    renderPage({}, 583)
+
+    expect(screen.getByRole('timer')).toHaveTextContent(
+      '내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요09:43',
+    )
+  })
+
+  it('남은 초가 없으면 띠를 그리지 않는다', () => {
+    renderPage()
+
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
   })
 })

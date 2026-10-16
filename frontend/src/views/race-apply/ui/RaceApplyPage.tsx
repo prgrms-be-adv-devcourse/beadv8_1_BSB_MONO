@@ -33,6 +33,7 @@ import {
   Skeleton,
   Stepper,
   TextField,
+  TimerBar,
 } from '@/shared/ui'
 
 import {
@@ -60,11 +61,27 @@ type ReplaceCart = {
 // 피그마 V2 · M05 참가 신청 · 참가자 정보 (+ M05-1 장바구니 바꾸기 확인)
 // 종목은 page.tsx에서 정원이 남은 종목 중에 골라 넘긴다 (상품 API의 대회 상세 courses).
 // 입력 칸은 이번에 입력해 둔 값(결제에서 돌아온 경우) → 지난 신청 값 → 회원 정보 순으로 채운다.
-export function RaceApplyPage({ race, option }: { race: RaceDetail; option: RaceOption }) {
+// 대기열에서 내 차례(M05-Q2)로 들어오면 남은 시간 띠가 결제(M07)까지 따라간다.
+export function RaceApplyPage({
+  race,
+  option,
+  admissionRemainingSeconds,
+}: {
+  race: RaceDetail
+  option: RaceOption
+  /** 대기열 입장 뒤 남은 초. 있으면 헤더 아래에 남은 시간 띠를 붙인다 */
+  admissionRemainingSeconds?: number
+}) {
   const defaults = useParticipantDefaults(option)
   return (
     <>
       <AppHeader type="sub" title="참가 신청" />
+      {admissionRemainingSeconds !== undefined && (
+        <TimerBar
+          message="내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요"
+          remainingSeconds={admissionRemainingSeconds}
+        />
+      )}
       {defaults ? (
         <ParticipantForm race={race} option={option} defaults={defaults} />
       ) : (

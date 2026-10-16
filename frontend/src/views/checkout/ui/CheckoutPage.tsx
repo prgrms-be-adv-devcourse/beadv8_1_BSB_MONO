@@ -22,6 +22,7 @@ import {
   RadioGroup,
   Skeleton,
   Stepper,
+  TimerBar,
   type IconName,
 } from '@/shared/ui'
 
@@ -42,6 +43,7 @@ const RESULT: Record<
     title: string
     description: ReactNode
     action: string
+    /** 대회를 모를 때(미리보기) 가는 곳. 시간 초과는 대회를 알면 그 대회 상세(M02)로 간다 */
     href: '/races' | '/checkout'
   }
 > = {
@@ -50,7 +52,7 @@ const RESULT: Record<
     title: '결제 시간이 지났어요',
     description: (
       <>
-        10분이 지나 잡아 둔 자리가 풀렸어요.
+        입장 시간이 끝나 잡아 둔 자리가 풀렸어요.
         <br />
         충전한 예치금은 그대로 남아 있어요.
       </>
@@ -116,8 +118,19 @@ export function CheckoutPage({
   return <OrderCheckout orderId={orderId} />
 }
 
-function CheckoutResult({ view, onRetry }: { view: ResultView; onRetry?: () => void }) {
+function CheckoutResult({
+  view,
+  raceId,
+  onRetry,
+}: {
+  view: ResultView
+  /** 시간 초과 화면의 "대회 다시 보기"가 갈 대회. 모르면 대회 목록으로 간다 */
+  raceId?: number
+  onRetry?: () => void
+}) {
   const result = RESULT[view]
+  const href =
+    view === 'timeout' && raceId !== undefined ? (`/races/${raceId}` as const) : result.href
   return (
     <>
       <AppHeader type="sub" title="결제" close backHref="/" />
@@ -132,7 +145,7 @@ function CheckoutResult({ view, onRetry }: { view: ResultView; onRetry?: () => v
               {result.action}
             </Button>
           ) : (
-            <Link href={result.href} className={buttonClassName({ size: 'l' })}>
+            <Link href={href} className={buttonClassName({ size: 'l' })}>
               {result.action}
             </Link>
           )
@@ -206,7 +219,7 @@ function OrderCheckout({ orderId }: { orderId: number }) {
   if (order.isError) return <CheckoutResult view="failed" onRetry={() => void order.refetch()} />
   if (!order.data || status === 'PAID') return <CheckoutSkeleton />
   if (status === 'EXPIRED' || remaining === 0 || failure?.kind === 'timeout') {
-    return <CheckoutResult view="timeout" />
+    return <CheckoutResult view="timeout" raceId={raceId} />
   }
   if (failure?.kind === 'soldout') return <CheckoutResult view="soldout" />
   if (failure?.kind === 'failed' || status !== 'CREATED') {
@@ -309,17 +322,15 @@ function CheckoutForm({
   return (
     <>
       <AppHeader type="sub" title="결제" />
-      <div
-        role="timer"
-        className="sticky top-(--layout-header-height) z-[5] flex items-center justify-between bg-bg-brand-subtle px-4 py-3 text-text-brand"
-      >
-        <p className="text-body-s">
-          {offline
+      {/* 대기열 내 차례(M05-Q2)에서 이어지는 남은 시간 띠 */}
+      <TimerBar
+        message={
+          offline
             ? '연결이 끊긴 동안에도 시간은 흘러요'
-            : '자리를 잡아 뒀어요. 시간 안에 결제해 주세요'}
-        </p>
-        <p className="text-heading-s tabular-nums">{formatTimer(remaining)}</p>
-      </div>
+            : '자리를 잡아 뒀어요. 시간 안에 결제해 주세요'
+        }
+        remainingSeconds={remaining}
+      />
       <main className="flex flex-1 flex-col px-4 py-6">
         <div className="flex flex-col gap-7 rounded-lg bg-bg-surface p-5 shadow-sm inset-ring inset-ring-border-default">
           <Stepper steps={['종목 선택', '참가자 정보', '결제']} current={2} />
@@ -383,10 +394,4 @@ function CheckoutForm({
       <BottomCta className="sticky bottom-0 z-10" primary={action} />
     </>
   )
-}
-
-function formatTimer(seconds: number) {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
