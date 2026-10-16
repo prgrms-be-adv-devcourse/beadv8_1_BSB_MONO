@@ -14,17 +14,27 @@ import type {
 } from 'msw';
 
 import type {
+  RsDataListSellerRaceDto,
   RsDataRaceDetailDto,
   RsDataRacePageDto,
+  RsDataRaceSaveDto,
   RsDataRaceSuggestionDto
 } from './product.schemas';
 
 
 export const getFindRaceResponseMock = (): RsDataRaceDetailDto => ({"status":200,"message":"대회를 조회했습니다.","data":{"raceId":1,"title":"2026 용감한 쿠키RUN in 서울","description":"서울숲에서 달리는 가을 러닝 대회","location":"서울숲 일대","regionSido":"서울특별시","regionSigungu":"성동구","raceDate":"2026-11-01T08:00:00","saleStatus":"ON_SALE","saleOpenDate":"2026-10-20","crewSaleStartAt":null,"crewSaleEndAt":null,"individualOpenAt":"2026-10-20T09:00:00","applicationCloseAt":"2026-10-31T18:00:00","refundDeadline":"2026-10-31","refundPolicy":"환불 기한까지 취소하면 전액 환불됩니다.","crewMinCount":5,"crewMaxCount":null,"scheduleChangedAt":null,"seller":{"sellerId":7001,"sellerType":"BUSINESS","businessName":"(주)쿠키런","businessNumber":"123-45-67890","representativeName":"김대표"},"courses":[{"raceCourseId":1,"name":"10K","courseType":"KM_10","surface":"ROAD","distanceKm":10,"timeLimitMinutes":90,"minAge":14,"maxAge":70,"price":45000,"kitIncluded":true,"kitPrice":0,"tshirtSizeOption":["S","M","L","XL"],"status":"OPEN","crewQuota":0,"individualQuota":600,"crewRemaining":0,"individualRemaining":580}]}})
 
+export const getUpdateResponseMock = (): RsDataRaceSaveDto => ({"status":200,"message":"대회를 수정했습니다.","data":{"raceId":1,"saleStatus":"SCHEDULED","saleOpenDate":"2026-10-20","courseIds":[1,2]}})
+
 export const getSearchResponseMock = (): RsDataRacePageDto => ({"status":200,"message":"대회 목록을 조회했습니다.","data":{"races":[{"raceId":1,"title":"2026 용감한 쿠키RUN in 서울","location":"서울숲 일대","regionSido":"서울특별시","regionSigungu":"성동구","raceDate":"2026-11-01T08:00:00","saleStatus":"ON_SALE","saleOpenDate":"2026-10-20","crewSaleStartAt":null,"crewSaleEndAt":null,"individualOpenAt":"2026-10-20T09:00:00","applicationCloseAt":"2026-10-31T18:00:00","minPrice":45000,"courses":[{"raceCourseId":1,"name":"10K","courseType":"KM_10","distanceKm":10,"price":45000,"status":"OPEN","individualRemaining":580}]}],"page":0,"size":20,"totalElements":1,"totalPages":1}})
 
+export const getRegisterResponseMock = (): RsDataRaceSaveDto => ({"status":201,"message":"대회를 등록했습니다. 10월 20일 0시부터 판매 중으로 표시되고, 개인 예매는 10월 20일 09:00에 열립니다.","data":{"raceId":1,"saleStatus":"SCHEDULED","saleOpenDate":"2026-10-20","courseIds":[1]}})
+
+export const getCancelResponseMock = (): RsDataRaceSaveDto => ({"status":200,"message":"대회를 취소했습니다.","data":{"raceId":1,"saleStatus":"CANCELED","saleOpenDate":"2026-10-20","courseIds":[1]}})
+
 export const getSuggestResponseMock = (): RsDataRaceSuggestionDto => ({"status":200,"message":"연관검색어를 조회했습니다.","data":{"races":[{"raceId":1,"title":"2026 용감한 쿠키RUN in 서울"}],"courses":[{"raceCourseId":1,"raceId":1,"label":"2026 용감한 쿠키RUN in 서울 10K"}]}})
+
+export const getFindMineResponseMock = (): RsDataListSellerRaceDto => ({"status":200,"message":"내 대회 목록을 조회했습니다.","data":[{"raceId":1,"title":"2026 용감한 쿠키RUN in 서울","raceDate":"2026-11-01T08:00:00","saleStatus":"ON_SALE","saleOpenDate":"2026-10-20","applicationCloseAt":"2026-10-31T18:00:00","courses":[{"raceCourseId":1,"name":"10K","price":45000,"status":"OPEN","quota":600,"reserved":5,"sold":15}]}]})
 
 
 export const getFindRaceMockHandler = (overrideResponse?: RsDataRaceDetailDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataRaceDetailDto> | RsDataRaceDetailDto), options?: RequestHandlerOptions) => {
@@ -39,11 +49,13 @@ export const getFindRaceMockHandler = (overrideResponse?: RsDataRaceDetailDto | 
   }, options)
 }
 
-export const getUpdateMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.put>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getUpdateMockHandler = (overrideResponse?: RsDataRaceSaveDto | ((info: Parameters<Parameters<typeof http.put>[1]>[0]) => Promise<RsDataRaceSaveDto> | RsDataRaceSaveDto), options?: RequestHandlerOptions) => {
   return http.put('*/api/v1/product/races/:raceId', async (info: Parameters<Parameters<typeof http.put>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getUpdateResponseMock(),
       { status: 200
       })
   }, options)
@@ -61,21 +73,25 @@ export const getSearchMockHandler = (overrideResponse?: RsDataRacePageDto | ((in
   }, options)
 }
 
-export const getRegisterMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getRegisterMockHandler = (overrideResponse?: RsDataRaceSaveDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataRaceSaveDto> | RsDataRaceSaveDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/product/races', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
-      { status: 200
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getRegisterResponseMock(),
+      { status: 201
       })
   }, options)
 }
 
-export const getCancelMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getCancelMockHandler = (overrideResponse?: RsDataRaceSaveDto | ((info: Parameters<Parameters<typeof http.post>[1]>[0]) => Promise<RsDataRaceSaveDto> | RsDataRaceSaveDto), options?: RequestHandlerOptions) => {
   return http.post('*/api/v1/product/races/:raceId/cancel', async (info: Parameters<Parameters<typeof http.post>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getCancelResponseMock(),
       { status: 200
       })
   }, options)
@@ -93,11 +109,13 @@ export const getSuggestMockHandler = (overrideResponse?: RsDataRaceSuggestionDto
   }, options)
 }
 
-export const getFindMineMockHandler = (overrideResponse?: unknown | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<unknown> | unknown), options?: RequestHandlerOptions) => {
+export const getFindMineMockHandler = (overrideResponse?: RsDataListSellerRaceDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataListSellerRaceDto> | RsDataListSellerRaceDto), options?: RequestHandlerOptions) => {
   return http.get('*/api/v1/product/races/mine', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
-  if (typeof overrideResponse === 'function') {await overrideResponse(info); }
 
-    return new HttpResponse(null,
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : getFindMineResponseMock(),
       { status: 200
       })
   }, options)

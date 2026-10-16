@@ -29,7 +29,12 @@ import type {
   ItemsParams,
   PayoutHoldRequestDto,
   PayoutsParams,
-  RsData
+  RsData,
+  RsDataListPayoutDto,
+  RsDataListSellerPayoutHoldDto,
+  RsDataPayoutHoldDto,
+  RsDataPayoutItemPageDto,
+  RsDataPayoutSummaryDto
 } from './payout.schemas';
 
 import { customFetch } from '../../fetcher';
@@ -67,7 +72,7 @@ export const getHoldUrl = (payoutId: number,) => {
  * @summary 지급보류 걸기
  */
 export const hold = async (payoutId: number,
-    payoutHoldRequestDto: PayoutHoldRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+    payoutHoldRequestDto: PayoutHoldRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataPayoutHoldDto> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -83,7 +88,7 @@ export const hold = async (payoutId: number,
     }
     return headers;
   };
-return customFetch<unknown>(getHoldUrl(payoutId),
+return customFetch<RsDataPayoutHoldDto>(getHoldUrl(payoutId),
   {
     ...options,
     method: 'POST',
@@ -156,9 +161,9 @@ export const getReleaseUrl = (holdId: number,) => {
  * 지급보류를 해제하고 정산 내역을 정산 예정(CALCULATED)으로 돌린다. 지급 예정일은 해제일 뒤 돌아오는 지급일(매월 20일, 휴일이면 다음 영업일)로 다시 정하며, 해제일이 지급일 당일이면 다음 달 지급일이다.
  * @summary 지급보류 풀기
  */
-export const release = async (holdId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const release = async (holdId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataPayoutHoldDto> => {
 
-  return customFetch<unknown>(getReleaseUrl(holdId),
+  return customFetch<RsDataPayoutHoldDto>(getReleaseUrl(holdId),
   {
     ...options,
     method: 'POST'
@@ -231,9 +236,9 @@ export const getSummaryUrl = () => {
  * 다음 정산일, 정산 예정액(다음 정산일에 나갈 지급액 합계, 보류 제외), 지급보류 중인 정산 내역 수를 돌려준다. 조회 기간과 상관없이 판매자의 지금 상태로 계산한다.
  * @summary 정산 요약 조회
  */
-export const summary = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const summary = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataPayoutSummaryDto> => {
 
-  return customFetch<unknown>(getSummaryUrl(),
+  return customFetch<RsDataPayoutSummaryDto>(getSummaryUrl(),
   {
     ...options,
     method: 'GET'
@@ -340,9 +345,9 @@ export const getPayoutsUrl = (params: PayoutsParams,) => {
  * 정산 월(정산 대상일이 속한 달)이 기간 안인 정산 내역을 최근 달부터 돌려준다. 시작 달을 포함해 최대 12개월까지 한 번에 조회한다.
  * @summary 정산 내역 조회
  */
-export const payouts = async (params: PayoutsParams, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const payouts = async (params: PayoutsParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataListPayoutDto> => {
 
-  return customFetch<unknown>(getPayoutsUrl(params),
+  return customFetch<RsDataListPayoutDto>(getPayoutsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -449,9 +454,9 @@ export const getItemsUrl = (params: ItemsParams,) => {
  * 정산 대상일이 기간 안인 정산 항목(참가권 1장)을 최근 날부터 페이지로 나눠 돌려준다. 끝 날이 시작 날 + 1개월 전이어야 한다(최대 1개월). 페이지는 0부터, 크기는 기본 50 · 최대 100이다.
  * @summary 건별 정산 조회
  */
-export const items = async (params: ItemsParams, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const items = async (params: ItemsParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataPayoutItemPageDto> => {
 
-  return customFetch<unknown>(getItemsUrl(params),
+  return customFetch<RsDataPayoutItemPageDto>(getItemsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -558,9 +563,9 @@ export const getHoldsUrl = (params: HoldsParams,) => {
  * 보류한 날이 기간 안인 지급보류를 최근 것부터 돌려준다. 해제된 보류도 포함한다. 끝 날이 시작 날 + 1개월 전이어야 한다(최대 1개월).
  * @summary 지급보류 내역 조회
  */
-export const holds = async (params: HoldsParams, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const holds = async (params: HoldsParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataListSellerPayoutHoldDto> => {
 
-  return customFetch<unknown>(getHoldsUrl(params),
+  return customFetch<RsDataListSellerPayoutHoldDto>(getHoldsUrl(params),
   {
     ...options,
     method: 'GET'

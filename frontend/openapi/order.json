@@ -1731,7 +1731,7 @@
           "Cart"
         ],
         "summary": "장바구니에 참가권 담기",
-        "description": "종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. 담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다.",
+        "description": "종목(참가권)을 장바구니에 담는다. 수량은 1로 고정이라 같은 종목을 다시 담으면 기존 항목을 그대로 돌려준다. 담기만으로는 자리를 확보하지 않는다. 접수가 마감된 종목은 담을 수 없다. 장바구니에는 한 종목만 담는다. 다른 종목이 담겨 있으면 409(ORDER_CART_ONE_COURSE_ONLY)다.",
         "operationId": "addItem",
         "parameters": [
           {
@@ -1871,7 +1871,7 @@
             }
           },
           "409": {
-            "description": "접수 마감된 종목 또는 동시에 담는 요청이 겹침",
+            "description": "접수 마감된 종목, 다른 종목이 이미 담김, 동시에 담는 요청이 겹침",
             "content": {
               "application/json": {
                 "schema": {
@@ -1884,6 +1884,15 @@
                       "status": 409,
                       "code": "ORDER_APPLICATION_CLOSED",
                       "message": "접수가 마감된 종목은 담을 수 없습니다.",
+                      "data": null
+                    }
+                  },
+                  "다른 종목이 담김": {
+                    "description": "다른 종목이 담김",
+                    "value": {
+                      "status": 409,
+                      "code": "ORDER_CART_ONE_COURSE_ONLY",
+                      "message": "장바구니에는 한 종목만 담을 수 있습니다. 담긴 종목을 뺀 뒤 담아주세요.",
                       "data": null
                     }
                   },
@@ -1909,7 +1918,7 @@
           "Cart"
         ],
         "summary": "장바구니 결제",
-        "description": "장바구니의 참가권마다 미리 작성한 참가 신청으로 [결제하기]를 한 번씩 해, 참가권마다 결제 대기 주문(CREATED)을 1건씩 만든다. 항목마다 따로 처리하므로 일부가 매진이거나 결제할 수 없어도 나머지는 주문하고, 주문한 종목은 장바구니에서 뺀다. [결제하기]처럼 종목마다 대기열에 입장 중인지 확인해, 입장 중이 아닌 종목은 실패(FAILED)로 돌려준다. 매진·실패한 항목은 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.",
+        "description": "장바구니에 담은 참가권(한 종목)의 참가 신청으로 [결제하기]를 해 결제 대기 주문(CREATED)을 만든다. 장바구니에는 한 종목만 담으므로 참가 신청은 1건만 받는다(2건 이상이면 400). 주문한 종목은 장바구니에서 뺀다. [결제하기]처럼 대기열에 입장 중인지 확인해, 입장 중이 아니면 실패(FAILED)로 돌려준다. 매진·실패하면 장바구니에 남는다. 같은 Idempotency-Key로 다시 보내면 이미 만든 주문을 돌려준다(EXISTING). 결제는 주문마다 예치금 결제 API로 한다.",
         "operationId": "checkout",
         "parameters": [
           {
@@ -1949,15 +1958,15 @@
         },
         "responses": {
           "200": {
-            "description": "항목별 처리 결과 (일부 또는 전부 매진·실패여도 200)",
+            "description": "처리 결과 (매진·실패여도 200)",
             "content": {
               "application/json": {
                 "examples": {
-                  "일부 주문": {
-                    "description": "일부 주문",
+                  "주문함": {
+                    "description": "주문함",
                     "value": {
                       "status": 200,
-                      "message": "참가권 3건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
+                      "message": "참가권 1건 중 1건의 자리를 확보했습니다. 결제 기한 안에 결제해주세요.",
                       "data": {
                         "orderedCount": 1,
                         "results": [
@@ -1997,20 +2006,6 @@
                                 }
                               ]
                             }
-                          },
-                          {
-                            "participationId": 12,
-                            "outcome": "SOLD_OUT",
-                            "code": "ORDER_SOLD_OUT",
-                            "message": "남은 자리가 없습니다. 참가 신청서를 다시 작성해 신청할 수 있습니다.",
-                            "order": null
-                          },
-                          {
-                            "participationId": 13,
-                            "outcome": "FAILED",
-                            "code": "ORDER_APPLICATION_CLOSED",
-                            "message": "접수 기간이 아닙니다.",
-                            "order": null
                           }
                         ]
                       }
@@ -2056,12 +2051,12 @@
                       "data": null
                     }
                   },
-                  "10건 초과": {
-                    "description": "10건 초과",
+                  "2건 이상": {
+                    "description": "2건 이상",
                     "value": {
                       "status": 400,
                       "code": "INVALID_REQUEST",
-                      "message": "한 번에 10건까지 결제할 수 있습니다.",
+                      "message": "장바구니에는 한 종목만 담을 수 있어 참가 신청 1건만 결제할 수 있습니다.",
                       "data": null
                     }
                   },
@@ -2071,15 +2066,6 @@
                       "status": 400,
                       "code": "INVALID_REQUEST",
                       "message": "참가 신청 ID가 올바르지 않습니다.",
-                      "data": null
-                    }
-                  },
-                  "같은 참가 신청 두 번": {
-                    "description": "같은 참가 신청 두 번",
-                    "value": {
-                      "status": 400,
-                      "code": "ORDER_CART_CHECKOUT_INVALID",
-                      "message": "같은 참가 신청을 두 번 보낼 수 없습니다.",
                       "data": null
                     }
                   },
@@ -3179,18 +3165,18 @@
       },
       "CartCheckoutRequestDto": {
         "type": "object",
-        "description": "장바구니 결제 요청. 장바구니의 참가권마다 미리 작성한 참가 신청 ID를 보낸다",
+        "description": "장바구니 결제 요청. 장바구니에 담은 참가권(한 종목)의 참가 신청 ID를 보낸다",
         "properties": {
           "participationIds": {
             "type": "array",
-            "description": "결제할 참가 신청 ID 목록 (최대 10개, 겹치지 않게)",
+            "description": "결제할 참가 신청 ID 목록 (1개)",
             "items": {
               "type": "integer",
               "format": "int32",
               "example": 1,
               "minimum": 0
             },
-            "maxItems": 10,
+            "maxItems": 1,
             "minItems": 0
           }
         },

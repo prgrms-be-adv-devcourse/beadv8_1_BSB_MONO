@@ -12,17 +12,19 @@ import {
   Button,
   buttonClassName,
   Checkbox,
+  Dialog,
   FOCUS_RING,
   KeyValue,
 } from '@/shared/ui'
 
 // 피그마 V2 · M31 회원 탈퇴 (남은 일이 있으면 탈퇴 버튼을 막는다)
-// TODO(api): 남은 예치금 · 끝나지 않은 참가권을 확인하고 탈퇴 요청을 보낸다
-export function WithdrawPage() {
+// 피그마 V2 · M31-C 회원 탈퇴 최종 확인 (탈퇴하기를 누르면 뜨는 창)
+// TODO(api): 남은 예치금 · 끝나지 않은 참가권을 확인한다 (blocked)
+// TODO(api): PRO-130 탈퇴 요청을 보낸다
+export function WithdrawPage({ blocked = true }: { blocked?: boolean }) {
   const router = useRouter()
   const [checked, setChecked] = useState(false)
-  // 시안처럼 남은 일이 있는 상태. 다 끝나면 false가 된다.
-  const blocked = true
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   return (
     <>
@@ -80,14 +82,26 @@ export function WithdrawPage() {
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button
-            size="l"
-            disabled={blocked || !checked}
-            onClick={() => router.push('/me/withdraw/done')}
-          >
+          <Button size="l" disabled={blocked || !checked} onClick={() => setConfirmOpen(true)}>
             탈퇴하기
           </Button>
         }
+      />
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        type="danger"
+        title="정말 탈퇴할까요?"
+        body={
+          <>
+            계정과 개인정보가 바로 지워져요.
+            <br />
+            탈퇴하면 되돌릴 수 없어요.
+          </>
+        }
+        confirmLabel="탈퇴하기"
+        cancelLabel="그대로 두기"
+        onConfirm={() => router.push('/me/withdraw/done')}
       />
     </>
   )
