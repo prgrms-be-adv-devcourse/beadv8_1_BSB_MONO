@@ -181,13 +181,24 @@ export function SellerApplyPage() {
                   items={BANKS}
                   value={field.value || null}
                   onValueChange={(bank) => field.onChange(bank ?? '')}
+                  error={errors.bank?.message}
                   className="flex-1"
                 />
               )}
             />
-            <TextField label="예금주" className="flex-1" {...register('accountHolder')} />
+            <TextField
+              label="예금주"
+              className="flex-1"
+              error={errors.accountHolder?.message}
+              {...register('accountHolder')}
+            />
           </div>
-          <TextField label="계좌번호" inputMode="numeric" {...register('accountNumber')} />
+          <TextField
+            label="계좌번호"
+            inputMode="numeric"
+            error={errors.accountNumber?.message}
+            {...register('accountNumber')}
+          />
           <Alert
             tone="warning"
             title="정산 계좌가 없으면 정산이 지급보류돼요"
@@ -226,7 +237,8 @@ export function SellerApplyPage() {
         {formError && <Alert tone="danger" title={formError} />}
 
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" size="l">
+          {/* TODO(api): PRO-129 임시 저장 API가 생기면 켠다 */}
+          <Button type="button" variant="secondary" size="l" disabled>
             임시 저장
           </Button>
           <Button type="submit" size="l" disabled={!agreed} loading={apply.isPending}>

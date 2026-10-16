@@ -9,6 +9,11 @@ import { memberApi, setAccessToken, type memberModel } from '@/shared/api'
 import { memberMock, server } from '@/shared/testing'
 
 import { SELLER_API_ERRORS } from '../model/seller-apply-api'
+import {
+  EMPTY_SELLER_APPLY_FORM,
+  SELLER_APPLY_ERRORS,
+  sellerApplyFormSchema,
+} from '../model/seller-apply-form'
 import { SellerApplyPage, SellerApplyResultPage } from './SellerApplyPages'
 
 const push = vi.fn()
@@ -273,5 +278,36 @@ describe('SellerApplyResultPage 상태별 카드', () => {
     renderWithClient(<SellerApplyResultPage />)
 
     expect(await screen.findByText(SELLER_API_ERRORS.loadFailed)).toBeInTheDocument()
+  })
+})
+
+describe('정산 계좌 묶음 검사', () => {
+  const base = {
+    ...EMPTY_SELLER_APPLY_FORM,
+    businessNumber: '123-45-67890',
+    businessName: '(주)러닝',
+    representative: '김주최',
+    agreed: true,
+  }
+  const messages = (values: typeof base) => {
+    const result = sellerApplyFormSchema.safeParse(values)
+    return result.success ? [] : result.error.issues.map((i) => i.message)
+  }
+
+  it('계좌번호만 넣으면 은행 · 예금주 오류가 난다', () => {
+    expect(messages({ ...base, accountNumber: '1234567890' })).toEqual([
+      SELLER_APPLY_ERRORS.bankRequired,
+      SELLER_APPLY_ERRORS.accountHolderRequired,
+    ])
+  })
+
+  it('셋 다 비우면 통과한다', () => {
+    expect(messages(base)).toEqual([])
+  })
+
+  it('셋 다 넣으면 통과한다', () => {
+    expect(
+      messages({ ...base, bank: '국민은행', accountHolder: '김주최', accountNumber: '1234567890' }),
+    ).toEqual([])
   })
 })

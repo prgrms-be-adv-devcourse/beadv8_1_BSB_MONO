@@ -70,10 +70,15 @@ export function AdminSellersPage({ rejectOpen = false }: { rejectOpen?: boolean 
   const refetchLists = () =>
     queryClient.invalidateQueries({ queryKey: memberApi.getFindAllQueryKey() })
 
-  const onReviewed = () => {
+  // 다른 신청을 고르거나 탭을 바꾸면 앞 신청에 적던 사유가 남지 않게 비운다.
+  const resetReviewInput = () => {
     setReviewError(undefined)
     setReason('')
     setReasonError(undefined)
+  }
+
+  const onReviewed = () => {
+    resetReviewInput()
     setDialogOpen(false)
     return refetchLists()
   }
@@ -115,7 +120,7 @@ export function AdminSellersPage({ rejectOpen = false }: { rejectOpen?: boolean 
         onChange={(next) => {
           setTab(next)
           setSelectedId(undefined)
-          setReviewError(undefined)
+          resetReviewInput()
         }}
         items={[
           { value: 'pending', label: '승인 대기', count: pending.data?.length },
@@ -133,7 +138,7 @@ export function AdminSellersPage({ rejectOpen = false }: { rejectOpen?: boolean 
             selected={app ? String(app.id) : undefined}
             onRowClick={(a) => {
               setSelectedId(a.id)
-              setReviewError(undefined)
+              resetReviewInput()
             }}
             columns={[
               {

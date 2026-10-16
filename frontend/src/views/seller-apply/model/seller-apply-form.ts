@@ -13,6 +13,9 @@ export const SELLER_APPLY_ERRORS = {
   nameRequired: '성명을 입력해 주세요.',
   nameTooLong: '성명은 50자 이하로 입력해 주세요.',
   phoneRequired: '연락처를 입력해 주세요.',
+  bankRequired: '은행을 선택해 주세요.',
+  accountHolderRequired: '예금주를 입력해 주세요.',
+  accountNumberRequired: '계좌번호를 입력해 주세요.',
   agreedRequired: '판매자 이용약관에 동의해 주세요.',
 } as const
 
@@ -86,6 +89,18 @@ export const sellerApplyFormSchema = z
       }
       if (!values.phone) {
         need('phone', SELLER_APPLY_ERRORS.phoneRequired)
+      }
+    }
+    // 정산 계좌는 선택이지만, 하나라도 넣으면 셋 다 받는다.
+    if (values.bank || values.accountHolder || values.accountNumber) {
+      if (!values.bank) {
+        need('bank', SELLER_APPLY_ERRORS.bankRequired)
+      }
+      if (!values.accountHolder) {
+        need('accountHolder', SELLER_APPLY_ERRORS.accountHolderRequired)
+      }
+      if (!values.accountNumber) {
+        need('accountNumber', SELLER_APPLY_ERRORS.accountNumberRequired)
       }
     }
   }) satisfies z.ZodType<SellerApplyFormValues, SellerApplyFormValues>

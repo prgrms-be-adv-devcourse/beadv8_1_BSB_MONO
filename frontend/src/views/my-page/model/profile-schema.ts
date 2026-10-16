@@ -1,6 +1,11 @@
 import { z } from 'zod'
 
-import { isNicknameWidthValid } from '@/entities/member'
+import {
+  BIRTH_UNDER_14_MESSAGE,
+  isJoinableAge,
+  isNicknameWidthValid,
+  parseBirth,
+} from '@/entities/member'
 import { ApiError, memberZod } from '@/shared/api'
 
 import { toIsoDate } from './member-format'
@@ -11,6 +16,7 @@ import { toIsoDate } from './member-format'
 export const PROFILE_ERRORS = {
   name: '이름을 입력해 주세요.',
   birth: '생년월일을 1995.03.02처럼 입력해 주세요.',
+  birthUnder14: BIRTH_UNDER_14_MESSAGE,
   phone: '휴대폰 번호를 010-1234-5678처럼 입력해 주세요.',
   nicknameChars: '닉네임은 한글 · 영문 · 숫자만 쓸 수 있어요.',
   nicknameWidth: '닉네임은 한글 2~8자, 영문 4~16자로 정해 주세요.',
@@ -35,7 +41,11 @@ export const profileSchema = z.object({
       (value) =>
         /^\d{4}\.\d{2}\.\d{2}$/.test(value) && body.birthDate.safeParse(toIsoDate(value)).success,
       PROFILE_ERRORS.birth,
-    ),
+    )
+    .refine((value) => {
+      const date = parseBirth(value)
+      return date === null || isJoinableAge(date)
+    }, PROFILE_ERRORS.birthUnder14),
   phone: follow(body.phone, PROFILE_ERRORS.phone),
   nickname: follow(body.nickname, PROFILE_ERRORS.nicknameChars).refine(
     isNicknameWidthValid,
