@@ -2,6 +2,7 @@ package com.bukang.member.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -18,6 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -132,7 +134,8 @@ class ApiV1MemberWithdrawTest {
 			.satisfies(event -> {
 				assertThat(event.id()).isEqualTo(memberId);
 				assertThat(event.nickname()).isEqualTo(Member.WITHDRAWN_NICKNAME);
-				assertThat(event.modifyDate()).isEqualTo(withdrawn.getWithdrawnAt());
+				// 리눅스(CI)의 now()는 나노초까지 만들고 DB(H2)는 마이크로초로 반올림해 저장하므로 1마이크로초 차이까지 같게 본다
+				assertThat(event.modifyDate()).isCloseTo(withdrawn.getWithdrawnAt(), within(1, ChronoUnit.MICROS));
 				assertThat(event.createDate()).isNotNull();
 			});
 	}
