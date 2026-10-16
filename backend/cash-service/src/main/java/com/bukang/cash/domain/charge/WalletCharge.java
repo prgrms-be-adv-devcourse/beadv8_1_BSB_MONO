@@ -5,10 +5,12 @@ import static jakarta.persistence.FetchType.LAZY;
 
 import java.time.LocalDateTime;
 
+import com.bukang.cash.config.crypto.EncryptedStringConverter;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.ManyToOne;
@@ -33,7 +35,10 @@ public class WalletCharge extends BaseIdAndTime {
 	@Column(nullable = false, length = 30)
 	private String pgProvider;
 
-	@Column(length = 255)
+	// AES-GCM 암호화(IV 16바이트+태그 16바이트) 후 Base64로 저장하면 평문보다 약 4/3배 길어진다.
+	// Toss paymentKey 최대 길이(200자) 기준 암호문은 312자라, 넉넉히 512로 둔다
+	@Convert(converter = EncryptedStringConverter.class) // DB 저장 시 AES 암호화, 조회 시 복호화
+	@Column(length = 512)
 	private String pgPaymentKey;
 	@Column(nullable = false, unique = true, length = 64) // 중복 충전 방지
 	private String idempotencyKey;
