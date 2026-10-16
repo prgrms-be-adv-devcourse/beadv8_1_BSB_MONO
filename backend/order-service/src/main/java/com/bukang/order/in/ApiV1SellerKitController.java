@@ -52,9 +52,10 @@ public class ApiV1SellerKitController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공 (없으면 빈 목록)",
 			content = @Content(examples = @ExampleObject(value = SellerKitApiExamples.LIST_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "페이지·회원 ID 오류",
+		@ApiResponse(responseCode = "400", description = "페이지·배송 상태·회원 ID 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "페이지 크기 초과", value = SellerKitApiExamples.INVALID_PAGE),
+				@ExampleObject(name = "없는 배송 상태·숫자 아닌 값", value = SellerKitApiExamples.INVALID_FORMAT),
 				@ExampleObject(name = "회원 ID가 0 이하", value = SellerKitApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",

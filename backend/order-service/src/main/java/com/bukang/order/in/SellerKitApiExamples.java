@@ -101,6 +101,10 @@ final class SellerKitApiExamples {
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "한 번에 100개까지 조회할 수 있습니다.", "data": null }
 		""";
 
+	static final String INVALID_FORMAT = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
+		""";
+
 	static final String INVALID_MEMBER_ID = """
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
 		""";

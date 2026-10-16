@@ -220,11 +220,14 @@ class ApiV1SellerKitTest {
 	}
 
 	@Test
-	@DisplayName("페이지 크기가 100을 넘거나 회원 ID 헤더가 없으면 판매자 확인 전에 400·401이다")
+	@DisplayName("페이지 크기가 100을 넘거나 없는 배송 상태거나 회원 ID 헤더가 없으면 판매자 확인 전에 400·401이다")
 	void invalidPageOrHeader() throws Exception {
 		mockMvc.perform(get(BASE_URL).header("X-Member-Id", SELLER_MEMBER_ID).param("size", "101"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("한 번에 100개까지 조회할 수 있습니다."));
+		mockMvc.perform(get(BASE_URL).header("X-Member-Id", SELLER_MEMBER_ID).param("status", "LOST"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
 		mockMvc.perform(get(BASE_URL))
 			.andExpect(status().isUnauthorized());
 	}
