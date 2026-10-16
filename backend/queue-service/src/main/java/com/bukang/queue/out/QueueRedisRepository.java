@@ -3,6 +3,7 @@ package com.bukang.queue.out;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataAccessException;
@@ -22,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
  * 스케줄러가 승격할 대기열은 queue:waiting(Set)에 {raceId}:{raceCourseId}로 모은다.
  * 확인하고 넣는 일은 src/main/resources/redis/의 Lua 스크립트가 Redis 안에서 한 번에 한다.
  * 순번 조회는 읽기만 하므로 Lua 없이 명령을 하나씩 보낸다.
- * Redis에 연결하지 못하면 대기열 없이 통과시키지 않고 503으로 막는다.
+ * Redis에 연결하지 못하면 대기열 없이 통과시키지 않고 503으로 막는다. 승격(스케줄러)은 그 대기열만 건너뛴다.
  */
 @Slf4j
 @Repository
@@ -30,6 +31,8 @@ import lombok.extern.slf4j.Slf4j;
 public class QueueRedisRepository {
 	@SuppressWarnings("rawtypes")
 	private static final RedisScript<List> REGISTER = script("queue-register.lua", List.class);
+	@SuppressWarnings("rawtypes")
+	private static final RedisScript<List> PROMOTE = script("queue-promote.lua", List.class);
 
 	// 스케줄러가 승격할 대기열 목록 (값: {raceId}:{raceCourseId})
 	static final String QUEUES_KEY = "queue:waiting";
@@ -103,6 +106,43 @@ public class QueueRedisRepository {
 		}
 	}
 
+	/**
+	 * 스케줄러가 승격할 대기열 목록(queue:waiting)을 읽는다. 값은 {raceId}:{raceCourseId}이다.
+	 */
+	public Set<String> findQueueIds() {
+		Set<String> queueIds;
+		try {
+			queueIds = redisTemplate.opsForSet().members(QUEUES_KEY);
+		} catch (DataAccessException exception) {
+			log.error("승격할 대기열 목록을 Redis에서 읽지 못했습니다.", exception);
+			throw new QueueUnavailableException();
+		}
+		return queueIds == null ? Set.of() : queueIds;
+	}
+
+	/**
+	 * 대기열 하나를 승격한다. 끝 시각이 지난 active를 지우고, waiting 앞에서부터 size명을 active로 옮긴다.
+	 * 옮긴 회원의 active 끝 시각은 activeUntil이다. waiting과 active가 모두 비면 스케줄러 목록(queue:waiting)에서 뺀다.
+	 */
+	public Promotion promote(QueueId queue, LocalDateTime now, LocalDateTime activeUntil, int size) {
+		int raceId = queue.raceId();
+		int raceCourseId = queue.raceCourseId();
+		List<?> result;
+		try {
+			result = redisTemplate.execute(PROMOTE,
+				List.of(waitingKey(raceId, raceCourseId), activeKey(raceId, raceCourseId), QUEUES_KEY),
+				String.valueOf(epochMillis(now)),
+				String.valueOf(size),
+				String.valueOf(epochMillis(activeUntil)),
+				queueId(raceId, raceCourseId));
+		} catch (DataAccessException exception) {
+			log.error("대기열 승격을 Redis에서 처리하지 못했습니다. raceId={}, raceCourseId={}",
+				raceId, raceCourseId, exception);
+			throw new QueueUnavailableException();
+		}
+		return new Promotion((Long)result.get(0), (Long)result.get(1));
+	}
+
 	private static String queueKey(int raceId, int raceCourseId) {
 		return "race:" + raceId + ":racecourse:" + raceCourseId;
 	}
@@ -159,5 +199,28 @@ public class QueueRedisRepository {
 		public enum State {
 			WAITING, ACTIVE, NONE
 		}
+	}
+
+	/**
+	 * 스케줄러 목록(queue:waiting)에 든 대기열 하나 (대회·종목).
+	 */
+	public record QueueId(int raceId, int raceCourseId) {
+		// queueId()가 만든 값({raceId}:{raceCourseId})을 나눈다
+		public static QueueId parse(String value) {
+			String[] parts = value.split(":");
+			if (parts.length != 2) {
+				throw new IllegalArgumentException("대기열 값의 형식이 올바르지 않습니다: " + value);
+			}
+			return new QueueId(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+		}
+	}
+
+	/**
+	 * 승격 결과.
+	 *
+	 * @param expired 끝 시각이 지나 active에서 지운 인원
+	 * @param promoted waiting에서 active로 옮긴 인원
+	 */
+	public record Promotion(long expired, long promoted) {
 	}
 }

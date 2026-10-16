@@ -41,6 +41,17 @@ spring:
         # 구독한 토픽이 없으면 브로커에 자동 생성을 요청한다 (브로커도 자동 생성을 허용해야 동작)
         "[allow.auto.create.topics]": true
 
+# 대기열 승격 (QueuePromotionScheduler, config/QueueProperties)
+queue:
+  schedule:
+    # 승격 주기 (ms). 앞 실행이 끝난 뒤 이만큼 쉬고 다시 돈다
+    time: 5000
+    # 대기열(대회·종목)마다 한 번에 승격할 인원. 한 종목의 동시 active는 많아야 size × (활성 시간 ÷ 주기)명이다
+    size: 20
+  active:
+    # 활성 시간 (ms, 10분). 승격 시각 + 이 시간이 active 끝 시각이다
+    time: 600000
+
 # Swagger / OpenAPI V3 설정 (prod에서는 비활성화)
 springdoc:
   api-docs:
