@@ -103,6 +103,34 @@ describe('결제 화면', () => {
     await vi.waitFor(() => expect(timer()).toHaveTextContent(/05:00|04:5\d/))
   })
 
+  it('입장 끝이 결제 기한보다 늦으면 결제 기한 기준으로 남은 시간을 센다', async () => {
+    server.use(
+      orderMock.getFindById1MockHandler(orderResponse({ paymentDueAt: '2026-10-14T10:05:00' })),
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: true, admissionEndsAt: DUE_AT, remainingSeconds: 600 },
+      }),
+    )
+    renderCheckout()
+
+    await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K · 이달림')
+    await vi.waitFor(() => expect(timer()).toHaveTextContent(/05:00|04:5\d/))
+  })
+
+  it('결제 기한이 이미 지났으면 입장 확인이 새 시간을 줘도 시간 초과 화면을 보여 준다', async () => {
+    server.use(
+      orderMock.getFindById1MockHandler(orderResponse({ paymentDueAt: '2026-10-14T09:55:00' })),
+      orderMock.getFindAdmissionMockHandler({
+        status: 200,
+        data: { admitted: true, admissionEndsAt: DUE_AT, remainingSeconds: 600 },
+      }),
+    )
+    renderCheckout()
+
+    expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+  })
+
   it('잔액이 충분하면 예치금으로 결제하고 결제 완료 화면으로 간다', async () => {
     let paid = false
     server.use(

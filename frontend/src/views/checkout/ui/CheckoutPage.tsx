@@ -203,12 +203,17 @@ function OrderCheckout({ orderId }: { orderId: number }) {
   const [agreed, setAgreed] = useState(false)
   const [failure, setFailure] = useState<PayFailure | null>(null)
 
-  // 남은 시간은 대기열 입장 끝 시각까지 센다. 입장 상태를 묻는 중이거나 입장 중이 아니면(모름) 주문의 결제 기한을 쓴다.
+  // 남은 시간은 대기열 입장 끝 시각과 주문의 결제 기한 중 이른 쪽까지 센다.
+  // 결제 API는 입장을 다시 확인하지 않고 결제 기한만 보므로, 기한이 지난 주문을 새로고침해 입장 확인이 새 시간을 잡아도 기한을 넘기지 않는다.
+  // 입장 상태를 묻는 중이거나 입장 중이 아니면(모름) 주문의 결제 기한만 쓴다.
   const admission = useQueueAdmission(raceId, order.data?.items?.[0]?.raceCourseId, 'follow')
   const dueAt = order.data?.paymentDueAt
+  const dueDeadline = dueAt ? parseKstDateTime(dueAt).getTime() : null
   const admissionDeadline = admission.isFetching ? null : admission.deadline
   const remaining = useHoldCountdown(
-    admissionDeadline ?? (dueAt ? parseKstDateTime(dueAt).getTime() : null),
+    admissionDeadline !== null && dueDeadline !== null
+      ? Math.min(admissionDeadline, dueDeadline)
+      : (admissionDeadline ?? dueDeadline),
   )
 
   const pay = useMutation({
