@@ -11,7 +11,6 @@ final class CartApiExamples {
 			"data": {
 				"memberId": 1,
 				"items": [
-					{ "id": 2, "createDate": "2026-10-12T10:20:00", "raceCourseId": 3 },
 					{ "id": 1, "createDate": "2026-10-12T10:15:30", "raceCourseId": 1 }
 				]
 			}
@@ -44,9 +43,7 @@ final class CartApiExamples {
 			"message": "장바구니에서 뺐습니다.",
 			"data": {
 				"memberId": 1,
-				"items": [
-					{ "id": 2, "createDate": "2026-10-12T10:20:00", "raceCourseId": 3 }
-				]
+				"items": []
 			}
 		}
 		""";
