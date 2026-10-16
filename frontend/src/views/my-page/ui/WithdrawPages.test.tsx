@@ -1,0 +1,50 @@
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { WithdrawPage } from './WithdrawPages'
+
+const push = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, back: vi.fn(), replace: vi.fn() }),
+  usePathname: () => '/me/withdraw',
+}))
+
+beforeEach(() => push.mockClear())
+
+// 남은 일을 모두 마친 상태(시안 M31-C)에서 안내를 확인하고 탈퇴하기를 누른다.
+async function openConfirm() {
+  const user = userEvent.setup()
+  render(<WithdrawPage blocked={false} />)
+  await user.click(screen.getByRole('checkbox', { name: '안내를 모두 확인했어요' }))
+  await user.click(screen.getByRole('button', { name: '탈퇴하기' }))
+  return user
+}
+
+describe('WithdrawPage 최종 확인 창', () => {
+  it('남은 일이 있으면 탈퇴하기가 꺼져 있어 창이 뜨지 않는다', () => {
+    render(<WithdrawPage />)
+    expect(screen.getByRole('button', { name: '탈퇴하기' })).toBeDisabled()
+    expect(screen.queryByText('정말 탈퇴할까요?')).not.toBeInTheDocument()
+  })
+
+  it('탈퇴하기를 누르면 확인 창이 뜨고 아직 이동하지 않는다', async () => {
+    await openConfirm()
+    expect(await screen.findByText('정말 탈퇴할까요?')).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('그대로 두기를 누르면 창이 닫히고 이동하지 않는다', async () => {
+    const user = await openConfirm()
+    await user.click(await screen.findByRole('button', { name: '그대로 두기' }))
+    expect(screen.queryByText('정말 탈퇴할까요?')).not.toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('창에서 탈퇴하기를 누르면 완료 화면으로 간다', async () => {
+    const user = await openConfirm()
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: '탈퇴하기' }))
+    expect(push).toHaveBeenCalledWith('/me/withdraw/done')
+  })
+})
