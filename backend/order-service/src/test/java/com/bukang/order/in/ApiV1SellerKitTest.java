@@ -28,6 +28,7 @@ import com.bukang.order.app.OrderPayUseCase;
 import com.bukang.order.domain.Order;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.race.RaceCourseInfo;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubRefundEligibilityPortConfig;
@@ -52,6 +53,8 @@ class ApiV1SellerKitTest {
 	private static final String BASE_URL = "/api/v1/order/seller/kits";
 	private static final int COURSE_ID = 60;
 	private static final int RACE_ID = 600;
+	private static final int OTHER_COURSE_ID = 61;
+	private static final int OTHER_RACE_ID = 610;
 	private static final int BUYER_ID = 1;
 	// 판매자로 승인된 회원. 판매자 ID는 종목의 판매자(StubRaceCoursePort.SELLER_ID)다
 	private static final int SELLER_MEMBER_ID = 70;
@@ -155,6 +158,10 @@ class ApiV1SellerKitTest {
 		ship(OTHER_SELLER_MEMBER_ID, itemId, "CJ대한통운", "684912345678")
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"));
+		ship(SELLER_MEMBER_ID, itemId, "CJ대한통운", "684912345678").andExpect(status().isOk());
+		mockMvc.perform(post(BASE_URL + "/" + itemId + "/delivery").header("X-Member-Id", OTHER_SELLER_MEMBER_ID))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("ORDER_FORBIDDEN"));
 		mockMvc.perform(get(BASE_URL).header("X-Member-Id", OTHER_SELLER_MEMBER_ID))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.totalElements").value(0));
@@ -188,6 +195,31 @@ class ApiV1SellerKitTest {
 	}
 
 	@Test
+	@DisplayName("목록은 내 판매자 ID의 참가권만 페이지로 나눠 세고, 다른 판매자 대회의 참가권은 건수에도 넣지 않는다")
+	void pagesOnlyMyKits() throws Exception {
+		approveSellers();
+		LocalDate refundDeadline = LocalDate.now().minusDays(1);
+		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, refundDeadline));
+		raceCoursePort.put(otherSellerCourse(refundDeadline));
+		int firstOrderId = paidOrder(BUYER_ID, COURSE_ID);
+		int secondOrderId = paidOrder(BUYER_ID + 1, COURSE_ID);
+		paidOrder(BUYER_ID + 2, OTHER_COURSE_ID);
+
+		// 한 페이지에 다 들어가지 않아야 건수 쿼리가 따로 돈다
+		mockMvc.perform(get(BASE_URL).header("X-Member-Id", SELLER_MEMBER_ID).param("size", "1"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.kits.length()").value(1))
+			.andExpect(jsonPath("$.data.kits[0].orderItemId").value(itemIdOf(secondOrderId)))
+			.andExpect(jsonPath("$.data.totalElements").value(2))
+			.andExpect(jsonPath("$.data.totalPages").value(2));
+		mockMvc.perform(get(BASE_URL).header("X-Member-Id", SELLER_MEMBER_ID).param("size", "1").param("page", "1"))
+			.andExpect(jsonPath("$.data.kits[0].orderItemId").value(itemIdOf(firstOrderId)));
+		mockMvc.perform(get(BASE_URL).header("X-Member-Id", OTHER_SELLER_MEMBER_ID))
+			.andExpect(jsonPath("$.data.totalElements").value(1))
+			.andExpect(jsonPath("$.data.kits[0].raceId").value(OTHER_RACE_ID));
+	}
+
+	@Test
 	@DisplayName("페이지 크기가 100을 넘거나 회원 ID 헤더가 없으면 판매자 확인 전에 400·401이다")
 	void invalidPageOrHeader() throws Exception {
 		mockMvc.perform(get(BASE_URL).header("X-Member-Id", SELLER_MEMBER_ID).param("size", "101"))
@@ -195,6 +227,15 @@ class ApiV1SellerKitTest {
 			.andExpect(jsonPath("$.message").value("한 번에 100개까지 조회할 수 있습니다."));
 		mockMvc.perform(get(BASE_URL))
 			.andExpect(status().isUnauthorized());
+	}
+
+	// 다른 판매자(StubRaceCoursePort.SELLER_ID + 1)가 여는 종목
+	private RaceCourseInfo otherSellerCourse(LocalDate refundDeadline) {
+		RaceCourseInfo course = StubRaceCoursePort.openCourse(OTHER_COURSE_ID, OTHER_RACE_ID, 14, null, refundDeadline);
+		return new RaceCourseInfo(course.raceCourseId(), course.raceId(), course.raceDate(), course.applicationOpenAt(),
+			course.applicationCloseAt(), course.minAge(), course.maxAge(), StubRaceCoursePort.SELLER_ID + 1,
+			course.courseName(), course.price(), course.kitIncluded(), course.refundDeadline(),
+			course.scheduleChangedAt(), course.canceled(), course.tshirtSizeOption());
 	}
 
 	private void approveSellers() {
@@ -211,17 +252,21 @@ class ApiV1SellerKitTest {
 	}
 
 	private int paidOrder() throws Exception {
-		int participationId = apply();
-		OrderCreateResult result = transactionTemplate.execute(status -> orderCreateUseCase.create(BUYER_ID,
+		return paidOrder(BUYER_ID, COURSE_ID);
+	}
+
+	private int paidOrder(int buyerId, int courseId) throws Exception {
+		int participationId = apply(buyerId, courseId);
+		OrderCreateResult result = transactionTemplate.execute(status -> orderCreateUseCase.create(buyerId,
 			participationId, UUID.randomUUID().toString(), LocalDateTime.now()));
 		int orderId = result.order().getId();
-		transactionTemplate.execute(status -> orderPayUseCase.pay(BUYER_ID, orderId, LocalDateTime.now()));
+		transactionTemplate.execute(status -> orderPayUseCase.pay(buyerId, orderId, LocalDateTime.now()));
 		return orderId;
 	}
 
-	private int apply() throws Exception {
+	private int apply(int buyerId, int courseId) throws Exception {
 		String body = mockMvc.perform(post("/api/v1/order/participations")
-				.header("X-Member-Id", BUYER_ID)
+				.header("X-Member-Id", buyerId)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{ "raceCourseId": %d, "thirdPartyConsent": true,
@@ -230,7 +275,7 @@ class ApiV1SellerKitTest {
 							"emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
 						"shippingAddress": { "recipientName": "김러너", "recipientPhone": "010-1234-5678",
 							"zipcode": "04700", "address": "서울 성동구 왕십리로 00", "addressDetail": "101동 1001호" } } }
-					""".formatted(COURSE_ID)))
+					""".formatted(courseId)))
 			.andReturn().getResponse().getContentAsString();
 		return JsonPath.read(body, "$.data.id");
 	}

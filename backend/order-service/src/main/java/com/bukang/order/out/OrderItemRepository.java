@@ -59,6 +59,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 		""", countQuery = """
 		select count(i)
 		from OrderItem i
+			join Participation p on p.id = i.participationId
 		where i.sellerId = :sellerId
 			and i.kitDeliveryStatus is not null
 			and (i.status = com.bukang.order.domain.OrderItemStatus.PAID

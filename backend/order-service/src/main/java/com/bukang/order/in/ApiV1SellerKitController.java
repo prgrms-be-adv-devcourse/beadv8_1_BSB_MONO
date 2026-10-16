@@ -91,12 +91,18 @@ public class ApiV1SellerKitController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = SellerKitApiExamples.SUMMARY_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = SellerKitApiExamples.INVALID_MEMBER_ID))),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = SellerKitApiExamples.LOGIN_REQUIRED))),
 		@ApiResponse(responseCode = "403", description = "승인된 판매자가 아님",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = SellerKitApiExamples.NOT_SELLER)))
+				examples = @ExampleObject(value = SellerKitApiExamples.NOT_SELLER))),
+		@ApiResponse(responseCode = "503", description = "판매자 확인 또는 상품 서비스(종목 조회)를 쓸 수 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = SellerKitApiExamples.SELLER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<SellerKitSummaryDto>> summarize(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "7")
@@ -115,9 +121,11 @@ public class ApiV1SellerKitController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "발송 처리함",
 			content = @Content(examples = @ExampleObject(value = SellerKitApiExamples.SHIP_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "택배사·송장 번호 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = SellerKitApiExamples.INVALID_SHIPMENT))),
+		@ApiResponse(responseCode = "400", description = "택배사·송장 번호·회원 ID 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "송장 번호 없음", value = SellerKitApiExamples.INVALID_SHIPMENT),
+				@ExampleObject(name = "회원 ID가 0 이하", value = SellerKitApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = SellerKitApiExamples.LOGIN_REQUIRED))),
@@ -133,7 +141,10 @@ public class ApiV1SellerKitController {
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "환불 기한 전", value = SellerKitApiExamples.BEFORE_REFUND_DEADLINE),
 				@ExampleObject(name = "이미 발송함", value = SellerKitApiExamples.ALREADY_SHIPPED)
-			}))
+			})),
+		@ApiResponse(responseCode = "503", description = "판매자 확인 또는 상품 서비스(종목 조회)를 쓸 수 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = SellerKitApiExamples.SELLER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<OrderItemDto>> ship(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "7")
@@ -151,6 +162,9 @@ public class ApiV1SellerKitController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "배송 완료로 바꿈",
 			content = @Content(examples = @ExampleObject(value = SellerKitApiExamples.DELIVER_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = SellerKitApiExamples.INVALID_MEMBER_ID))),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = SellerKitApiExamples.LOGIN_REQUIRED))),
@@ -164,7 +178,10 @@ public class ApiV1SellerKitController {
 				examples = @ExampleObject(value = SellerKitApiExamples.ITEM_NOT_FOUND))),
 		@ApiResponse(responseCode = "409", description = "아직 발송 전이거나 이미 배송 완료",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = SellerKitApiExamples.NOT_SHIPPED_YET)))
+				examples = @ExampleObject(value = SellerKitApiExamples.NOT_SHIPPED_YET))),
+		@ApiResponse(responseCode = "503", description = "판매자 확인을 아직 쓸 수 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = SellerKitApiExamples.SELLER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<OrderItemDto>> completeDelivery(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "7")
