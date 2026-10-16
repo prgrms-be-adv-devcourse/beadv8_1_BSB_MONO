@@ -22,19 +22,21 @@ function renderPage() {
 }
 
 describe('RaceDetailPage 신청하기', () => {
-  it('로그인 전이면 로그인 화면으로 보내고, 로그인 뒤 갈 신청 화면 주소를 next로 넘긴다', () => {
+  it('로그인 전이면 로그인 화면으로 보내고, 로그인 뒤 갈 대기열 주소를 next로 넘긴다', () => {
     clearAccessToken()
     const href = renderPage().getAttribute('href') ?? ''
     const url = new URL(href, 'http://localhost')
     expect(url.pathname).toBe('/login')
     expect(url.searchParams.get('next')).toMatch(
-      new RegExp(`^/races/${RACE_DETAIL.id}/apply\\?option=`),
+      new RegExp(`^/races/${RACE_DETAIL.id}/queue\\?option=`),
     )
   })
 
-  it('로그인했으면 신청 화면으로 보낸다', () => {
+  it('로그인했으면 대기열(M05-Q1)로 보낸다', () => {
     const link = renderPage()
     act(() => setAccessToken('access-token'))
-    expect(link.getAttribute('href')).toMatch(new RegExp(`^/races/${RACE_DETAIL.id}/apply`))
+    expect(link.getAttribute('href')).toMatch(
+      new RegExp(`^/races/${RACE_DETAIL.id}/queue\\?option=`),
+    )
   })
 })

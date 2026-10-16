@@ -66,6 +66,15 @@ export const MemberJoinRequestDtoGender = {
   FEMALE: 'FEMALE',
 } as const;
 
+export type MemberJoinRequestDtoAgreedTermsItem = typeof MemberJoinRequestDtoAgreedTermsItem[keyof typeof MemberJoinRequestDtoAgreedTermsItem];
+
+
+export const MemberJoinRequestDtoAgreedTermsItem = {
+  SERVICE: 'SERVICE',
+  PRIVACY: 'PRIVACY',
+  MARKETING: 'MARKETING',
+} as const;
+
 /**
  * 회원가입 요청
  */
@@ -105,6 +114,8 @@ export interface MemberJoinRequestDto {
      * @nullable
      */
   gender?: MemberJoinRequestDtoGender;
+  /** 동의한 약관 종류 (SERVICE, PRIVACY는 필수). 동의하지 않은 선택 약관은 빼고 보낸다 */
+  agreedTerms: MemberJoinRequestDtoAgreedTermsItem[];
 }
 
 export interface MemberDto {
@@ -136,6 +147,14 @@ export interface TokenReissueResponseDto {
   accessToken?: string;
 }
 
+/**
+ * 이메일 사용 가능 여부 응답
+ */
+export interface EmailAvailabilityResponseDto {
+  /** 사용 가능하면 true, 이미 가입된 이메일이면 false */
+  available?: boolean;
+}
+
 export interface RsDataMemberDto {
   status?: number;
   message?: string;
@@ -153,4 +172,19 @@ export interface RsDataMemberLoginResponseDto {
   message?: string;
   data?: MemberLoginResponseDto;
 }
+
+export interface RsDataEmailAvailabilityResponseDto {
+  status?: number;
+  message?: string;
+  data?: EmailAvailabilityResponseDto;
+}
+
+export type CheckEmailAvailabilityParams = {
+/**
+ * 확인할 이메일
+ * @minLength 1
+ * @maxLength 255
+ */
+email: string;
+};
 

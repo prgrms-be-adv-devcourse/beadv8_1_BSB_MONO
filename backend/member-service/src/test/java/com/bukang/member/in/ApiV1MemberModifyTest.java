@@ -37,8 +37,10 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.bukang.common.shared.member.event.MemberModifiedEvent;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.domain.Member;
+import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.out.MemberRepository;
+import com.bukang.member.out.TermsAgreementRepository;
 
 // 게이트웨이가 토큰을 검사하고 넣어 주는 X-Member-Id 헤더를 테스트에서는 직접 넣는다
 // 수정 이벤트는 스프링 이벤트로 발행됐는지만 본다. Kafka로 나가는 건 MemberKafkaPublisherTest가 확인한다
@@ -65,6 +67,9 @@ class ApiV1MemberModifyTest {
 	@MockitoSpyBean
 	private MemberRepository memberRepository;
 
+	@Autowired
+	private TermsAgreementRepository termsAgreementRepository;
+
 	// 테스트 메서드마다 새로 기록한다. setUp의 가입 이벤트도 담기므로 수정 이벤트만 골라 센다
 	@Autowired
 	private ApplicationEvents applicationEvents;
@@ -80,6 +85,7 @@ class ApiV1MemberModifyTest {
 
 	@AfterEach
 	void tearDown() {
+		termsAgreementRepository.deleteAll();
 		memberRepository.deleteAll();
 	}
 
@@ -287,7 +293,8 @@ class ApiV1MemberModifyTest {
 
 	private int joinDirectly(String email, String nickname, String phone) {
 		return memberFacade.join(new MemberJoinRequestDto(
-			email, "password1234", NAME, nickname, phone, LocalDate.of(1995, 4, 12), null
+			email, "password1234", NAME, nickname, phone, LocalDate.of(1995, 4, 12), null,
+			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		)).getId();
 	}
 
