@@ -8,6 +8,67 @@
 import * as zod from 'zod';
 
 /**
+ * 회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. idempotencyKey를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
+ * @summary 예치금 전액 환급 신청
+ */
+export const requestWithdrawalBodyBankCodeMin = 0;
+export const requestWithdrawalBodyBankCodeMax = 10;
+
+export const requestWithdrawalBodyAccountNumberMin = 0;
+export const requestWithdrawalBodyAccountNumberMax = 255;
+
+export const requestWithdrawalBodyAccountHolderMin = 0;
+export const requestWithdrawalBodyAccountHolderMax = 50;
+
+export const requestWithdrawalBodyIdempotencyKeyMin = 0;
+export const requestWithdrawalBodyIdempotencyKeyMax = 64;
+
+
+
+export const RequestWithdrawalBody = zod.object({
+  "bankCode": zod.string().min(requestWithdrawalBodyBankCodeMin).max(requestWithdrawalBodyBankCodeMax).describe('은행 코드'),
+  "accountNumber": zod.string().min(requestWithdrawalBodyAccountNumberMin).max(requestWithdrawalBodyAccountNumberMax).describe('계좌번호'),
+  "accountHolder": zod.string().min(requestWithdrawalBodyAccountHolderMin).max(requestWithdrawalBodyAccountHolderMax).describe('예금주명'),
+  "idempotencyKey": zod.string().min(requestWithdrawalBodyIdempotencyKeyMin).max(requestWithdrawalBodyIdempotencyKeyMax).describe('환급 신청 고유 ID (멱등키)')
+}).describe('예치금 전액 환급 신청')
+
+export const RequestWithdrawalResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "withdrawnAmount": zod.int(),
+  "balance": zod.int()
+}).optional().describe('예치금 전액 환급 결과')
+})
+
+
+/**
+ * 프론트가 Toss 결제위젯 콜백으로 받은 paymentKey·orderId·amount로 PG 승인을 확정하고, 성공하면 예치금 지갑에 반영한다. orderId를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
+ * @summary 충전 승인 확정
+ */
+
+
+export const confirmWalletChargeBodyAmountMin = 0;
+
+
+
+export const ConfirmWalletChargeBody = zod.object({
+  "paymentKey": zod.string().min(1).describe('Toss 결제 키'),
+  "orderId": zod.string().min(1).describe('충전 요청 고유 ID (멱등키)'),
+  "amount": zod.int().min(confirmWalletChargeBodyAmountMin).describe('충전 요청 금액 (최소 10,000원)')
+}).describe('충전 승인 확정 요청')
+
+export const ConfirmWalletChargeResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "outcome": zod.enum(['COMPLETED', 'FAILED']),
+  "balance": zod.int()
+}).optional().describe('충전 승인 확정 결과. PG 승인이 거절돼도 200이고 outcome이 FAILED')
+})
+
+
+/**
  * 회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.
  * @summary 지갑 잔액 조회
  */
