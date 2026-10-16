@@ -321,6 +321,18 @@ export function SellerKitsPage() {
                   helper="여러 건을 고르면 줄마다 따로 넣어요"
                 />
               )}
+              {selected.length > 1 && (
+                // 줄은 표의 위에서부터 순서대로 주문에 붙는다. 한 번 보내면 되돌릴 수 없어서 짝을 미리 보여 준다.
+                <ul aria-label="발송 미리보기" className="flex flex-col gap-1 text-body-s">
+                  {selected.map((kit, i) => (
+                    <li key={kitId(kit)} className="flex gap-2 text-text-secondary">
+                      <span>{kit.orderNo}</span>
+                      <span aria-hidden>→</span>
+                      <span className="text-text-primary">{lines[i] ?? ''}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </>
           )}
           <p className="text-body-s text-text-tertiary">

@@ -82,6 +82,12 @@ describe('SellerKitsPage', () => {
     await userEvent.click(await screen.findByRole('checkbox', { name: 'OD-20261004-0101 고르기' }))
     await userEvent.click(screen.getByRole('checkbox', { name: 'OD-20261005-0125 고르기' }))
     await userEvent.type(screen.getByLabelText('송장 번호'), '1111{enter}2222')
+    // 줄은 표 순서대로 주문에 붙으므로, 보내기 전에 짝을 보여 준다
+    const pairs = within(screen.getByRole('list', { name: '발송 미리보기' })).getAllByRole(
+      'listitem',
+    )
+    expect(pairs[0]).toHaveTextContent('OD-20261004-0101→1111')
+    expect(pairs[1]).toHaveTextContent('OD-20261005-0125→2222')
     await userEvent.click(screen.getByRole('button', { name: '배송 중으로 바꾸기' }))
 
     expect(await screen.findByText('1건은 바꾸지 못했어요')).toBeInTheDocument()
