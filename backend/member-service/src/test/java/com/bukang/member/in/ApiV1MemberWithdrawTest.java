@@ -44,10 +44,12 @@ import com.bukang.member.app.MemberFacade;
 import com.bukang.member.domain.Gender;
 import com.bukang.member.domain.Member;
 import com.bukang.member.domain.MemberStatus;
+import com.bukang.member.domain.TermsType;
 import com.bukang.member.domain.exception.WithdrawCheckFailedException;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.RefreshTokenRepository;
+import com.bukang.member.out.TermsAgreementRepository;
 import com.bukang.member.out.cash.CashBalancePort;
 import com.bukang.member.out.cash.HttpCashBalanceAdapter;
 import com.bukang.member.out.order.ActiveTicketPort;
@@ -76,6 +78,9 @@ class ApiV1MemberWithdrawTest {
 	private MemberRepository memberRepository;
 
 	@Autowired
+	private TermsAgreementRepository termsAgreementRepository;
+
+	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@Autowired
@@ -100,6 +105,8 @@ class ApiV1MemberWithdrawTest {
 
 	@AfterEach
 	void tearDown() {
+		// 동의 기록이 회원을 참조하므로(FK) 먼저 지운다
+		termsAgreementRepository.deleteAll();
 		memberRepository.deleteAll();
 	}
 
@@ -277,7 +284,8 @@ class ApiV1MemberWithdrawTest {
 
 	private int join(String email, String nickname, String phone) {
 		return memberFacade.join(new MemberJoinRequestDto(
-			email, PASSWORD, "김러너", nickname, phone, LocalDate.of(1995, 4, 12), Gender.FEMALE
+			email, PASSWORD, "김러너", nickname, phone, LocalDate.of(1995, 4, 12), Gender.FEMALE,
+			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		)).getId();
 	}
 
