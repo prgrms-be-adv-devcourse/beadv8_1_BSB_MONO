@@ -110,7 +110,7 @@ describe('회원가입 단계', () => {
     await user.type(screen.getByLabelText('비밀번호'), 'password123')
     await user.type(screen.getByLabelText('비밀번호 확인'), 'password123')
     await user.click(screen.getByRole('button', { name: '다음' }))
-    expect(push).toHaveBeenCalledWith('/signup/profile')
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/signup/profile'))
 
     show('profile')
     await user.type(screen.getByLabelText('닉네임'), '달리는곰')
@@ -167,6 +167,7 @@ describe('회원가입 단계', () => {
       nickname: '달리는곰',
       phone: '010-1234-5678',
       birthDate: '1995-03-02',
+      agreedTerms: ['SERVICE', 'PRIVACY', 'MARKETING'],
     })
     expect(getAuthStatus()).toBe('authenticated')
   })
@@ -215,5 +216,120 @@ describe('회원가입 단계', () => {
     expect(screen.getByText(AUTH_ERRORS.emailTaken)).toBeInTheDocument()
     expect(screen.getByText(AUTH_ERRORS.passwordMismatch)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '다음' })).toBeDisabled()
+  })
+})
+
+describe('이메일 중복 확인 (PRO-201)', () => {
+  async function fillAccount(user: ReturnType<typeof userEvent.setup>, email: string) {
+    await user.type(screen.getByLabelText('이메일'), email)
+    await user.type(screen.getByLabelText('비밀번호'), 'password123')
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'password123')
+  }
+
+  it('이미 가입된 이메일이면 칸에 오류가 뜨고 다음 단계로 못 넘어간다', async () => {
+    const user = userEvent.setup()
+    renderSignup()
+    await agreeRequiredTerms(user)
+
+    await fillAccount(user, 'taken@crewrun.kr')
+    await user.click(screen.getByRole('button', { name: '다음' }))
+
+    expect(await screen.findByText(AUTH_ERRORS.emailTaken)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('이메일 칸을 벗어나면 다음을 누르기 전에 중복을 알려 준다', async () => {
+    const user = userEvent.setup()
+    renderSignup()
+    await agreeRequiredTerms(user)
+
+    await user.type(screen.getByLabelText('이메일'), 'taken@crewrun.kr')
+    await user.tab()
+
+    expect(await screen.findByText(AUTH_ERRORS.emailTaken)).toBeInTheDocument()
+  })
+
+  it('처음 쓰는 이메일이면 다음 단계로 넘어간다', async () => {
+    const user = userEvent.setup()
+    renderSignup()
+    await agreeRequiredTerms(user)
+
+    await fillAccount(user, 'runner@crewrun.kr')
+    await user.click(screen.getByRole('button', { name: '다음' }))
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/signup/profile'))
+    expect(screen.queryByText(AUTH_ERRORS.emailTaken)).not.toBeInTheDocument()
+  })
+
+  it('확인 요청이 실패하면 안내를 띄우고 넘어가지 않는다', async () => {
+    server.use(
+      http.get('*/api/v1/member/members/email-availability', () =>
+        HttpResponse.json(
+          { status: 500, code: 'INTERNAL_ERROR', message: '서버 오류', data: null },
+          { status: 500 },
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    renderSignup()
+    await agreeRequiredTerms(user)
+
+    await fillAccount(user, 'runner@crewrun.kr')
+    await user.click(screen.getByRole('button', { name: '다음' }))
+
+    expect(await screen.findByText(AUTH_ERRORS.emailCheckFailed)).toBeInTheDocument()
+    expect(push).not.toHaveBeenCalled()
+  })
+})
+
+describe('약관 동의 전송 (PRO-208)', () => {
+  async function submitWith(terms: SignupStepInitial['terms']) {
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <SignupStepProvider initialState={{ ...ACCOUNT_DONE, terms }}>
+          <SignupProfilePage />
+        </SignupStepProvider>
+      </QueryClientProvider>,
+    )
+    await fillProfile(user)
+    await user.click(screen.getByRole('button', { name: '가입 완료' }))
+  }
+
+  it('체크하지 않은 선택 약관은 빼고 보낸다', async () => {
+    let sent: { agreedTerms?: string[] } = {}
+    server.use(
+      http.post('*/api/v1/auth/join', async ({ request }) => {
+        sent = (await request.json()) as typeof sent
+        return HttpResponse.json({ status: 201, message: 'ok', data: null }, { status: 201 })
+      }),
+    )
+    await submitWith({ service: true, privacy: true, age: true, marketing: false })
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
+    expect(sent.agreedTerms).toEqual(['SERVICE', 'PRIVACY'])
+  })
+
+  it('필수 약관 미동의(400 MEMBER_REQUIRED_TERMS_NOT_AGREED)는 약관 안내를 보여 준다', async () => {
+    await submitWith({ service: true, privacy: false, age: true, marketing: false })
+
+    expect(await screen.findByText(AUTH_ERRORS.joinTermsRequired)).toBeInTheDocument()
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['INVALID_REQUEST', 400],
+    ['INTERNAL_ERROR', 500],
+  ])('%s 응답은 일반 가입 실패 안내를 보여 준다', async (code, status) => {
+    server.use(
+      http.post('*/api/v1/auth/join', () =>
+        HttpResponse.json({ status, code, message: '서버 내부 문구', data: null }, { status }),
+      ),
+    )
+    await submitWith(termChecks(true))
+
+    expect(await screen.findByText(AUTH_ERRORS.joinUnavailable)).toBeInTheDocument()
+    expect(screen.queryByText('서버 내부 문구')).not.toBeInTheDocument()
   })
 })

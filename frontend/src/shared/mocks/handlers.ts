@@ -94,6 +94,63 @@ const authHandlers = [
 ]
 
 /**
+ * 가입 목. 서버처럼 필수 약관(SERVICE, PRIVACY)이 빠지면 400 MEMBER_REQUIRED_TERMS_NOT_AGREED로 답한다.
+ * 이메일 중복 확인은 이메일에 "taken"이 들어 있으면 이미 가입된 것으로 본다 (그 밖에는 사용 가능).
+ * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ */
+const signupHandlers = [
+  http.post('*/api/v1/auth/join', async ({ request }) => {
+    const body = (await request.json()) as { agreedTerms?: unknown }
+    const agreed = Array.isArray(body.agreedTerms) ? body.agreedTerms : null
+    if (!agreed) {
+      return HttpResponse.json(
+        {
+          status: 400,
+          code: 'INVALID_REQUEST',
+          message: '동의한 약관 목록을 작성해주세요.',
+          data: null,
+        },
+        { status: 400 },
+      )
+    }
+    if (!agreed.includes('SERVICE') || !agreed.includes('PRIVACY')) {
+      return HttpResponse.json(
+        {
+          status: 400,
+          code: 'MEMBER_REQUIRED_TERMS_NOT_AGREED',
+          message: '필수 약관에 동의해야 가입할 수 있습니다.',
+          data: null,
+        },
+        { status: 400 },
+      )
+    }
+    return HttpResponse.json(
+      { status: 201, message: 'Member Joined Successfully', data: null },
+      { status: 201 },
+    )
+  }),
+  http.get('*/api/v1/member/members/email-availability', ({ request }) => {
+    const email = new URL(request.url).searchParams.get('email') ?? ''
+    if (!email.includes('@')) {
+      return HttpResponse.json(
+        {
+          status: 400,
+          code: 'INVALID_REQUEST',
+          message: '이메일 형식에 맞게 작성해주세요.',
+          data: null,
+        },
+        { status: 400 },
+      )
+    }
+    return HttpResponse.json({
+      status: 200,
+      message: '이메일 사용 가능 여부를 확인했습니다.',
+      data: { available: !email.includes('taken') },
+    })
+  }),
+]
+
+/**
  * 내 참가권 목. 생성된 주문 목록 예시는 결제 대기 · 기한 만료 주문뿐이라 참가권이 하나도 안 보인다.
  * 결제한 주문(주문 상세 예시와 같은 1번)을 맨 앞에 더한다. 생성된 핸들러보다 앞에 둔다.
  */
@@ -184,6 +241,7 @@ export const handlers = [
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
   ...authHandlers,
+  ...signupHandlers,
   ...fileUploadHandlers,
   myOrdersHandler,
   ...orderHandlers,
