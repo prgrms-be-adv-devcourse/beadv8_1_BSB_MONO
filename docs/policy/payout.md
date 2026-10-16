@@ -208,7 +208,7 @@
 - `payout`에 1차 / 최종 구분과 `advance_deduction_amount`(선지급 차감, 1차는 0)를 더한다 (Q24). 'ERD 맞추기' D9가 `payout_type`을 ENTRY / GOODS로 제안했으므로, 1차 / 최종 칸 이름은 **`payout_stage`** (FIRST / FINAL)로 한다. 유일 조건 (seller_id, race_id, payout_month, payout_stage).
 - `payout.status`에 `CANCELED`(대회 취소로 닫힘, PRO-34)를 더하고, 상태 변화는 `payout_status_history`에 남긴다.
 - `payout_item`은 원장 줄이다 (10/16, PRO-214). 칸은 4-6 표를 따른다.
-- `payout_recovery`: 판매자 × 대회, 사유(RACE_CANCELED / SCHEDULE_CHANGED), 금액, 상태(REQUESTED / COMPLETED), 완료 방식(DEPOSIT / OFFSET), 일정 변경이면 `order_item_id`(유일).
+- `payout_recovery`: 판매자 × 대회, 사유(RACE_CANCELED / SCHEDULE_CHANGED), 금액, 상태(REQUESTED / COMPLETED), 완료 방식(DEPOSIT / OFFSET), 일정 변경이면 `order_item_id`. 중복은 `recovery_key`(유일)로 막는다: 대회 취소는 대회당 1건(`R{대회ID}:RACE_CANCELED`), 일정 변경은 참가권당 1건(`O{주문 상품ID}:SCHEDULE_CHANGED`).
 
 ### 4-6. 정산 항목 = 원장 줄 (10/16, PRO-214)
 
@@ -248,7 +248,7 @@
 4. RECEIVABLE이 0이 되면 그 판매자 × 대회의 대기 중 회수를 **함께** 완료한다(상계로 끝난 건은 완료 방식 OFFSET).
 5. 최종 정산이 이미 만들어진 대회는 일정 변경 회수를 받지 않는다. 같은 참가권의 회수는 한 번뿐이다.
 
-**중복 방지**: (`order_item_id`, `record_type`) 유일, 참가권 없는 줄은 `bundle_key`(`P{정산ID}:{종류}[:C{코스}]` 또는 `R{회수ID}:{종류}`) 유일.
+**중복 방지**: (`order_item_id`, `record_type`) 유일, 참가권 없는 줄은 `bundle_key`(`P{정산ID}:{종류}[:C{코스}]` 또는 `R{회수ID}:{종류}`) 유일. 회수 자체는 `payout_recovery.recovery_key` 유일 (4-4).
 
 **코스**: 줄마다 `race_course_id`를 적어 코스별로 볼 수 있게 한다. 묶음(정산 내역)은 그대로 판매자 × 대회 × 월 × 단계다.
 
