@@ -1,5 +1,6 @@
 package com.bukang.member.in;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -96,7 +97,10 @@ class ApiV1MemberEmailAvailabilityTest {
 	@Test
 	@DisplayName("이메일이 255자를 넘으면 400 INVALID_REQUEST다")
 	void tooLongIsInvalidRequest() throws Exception {
-		String longEmail = "a".repeat(250) + "@b.com";
+		// 형식은 맞고 길이만 넘게 만든다. 형식 검사(@ 앞 64자, 도메인 칸 63자)에도 걸리면
+		// 두 오류 중 어느 문구가 먼저 나올지 정해지지 않아 테스트가 흔들린다
+		String longEmail = "a".repeat(64) + "@" + "b".repeat(63) + "." + "b".repeat(63) + "." + "c".repeat(59) + ".com";
+		assertThat(longEmail).hasSize(256);
 
 		mockMvc.perform(get(PATH).param("email", longEmail))
 			.andExpect(status().isBadRequest())
