@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,8 +20,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.bukang.member.app.MemberFacade;
+import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.out.MemberRepository;
+import com.bukang.member.out.TermsAgreementRepository;
 
 // 로그인 전에 부르는 API라 X-Member-Id 헤더를 넣지 않는다
 @SpringBootTest
@@ -39,8 +42,13 @@ class ApiV1MemberEmailAvailabilityTest {
 	@Autowired
 	private MemberRepository memberRepository;
 
+	@Autowired
+	private TermsAgreementRepository termsAgreementRepository;
+
+	// 동의 기록이 회원을 가리키므로(FK) 먼저 지운다
 	@AfterEach
 	void tearDown() {
+		termsAgreementRepository.deleteAll();
 		memberRepository.deleteAll();
 	}
 
@@ -58,7 +66,8 @@ class ApiV1MemberEmailAvailabilityTest {
 	@DisplayName("이미 가입된 이메일이면 409가 아니라 200에 available이 false다")
 	void unavailableWhenExists() throws Exception {
 		memberFacade.join(new MemberJoinRequestDto(
-			EMAIL, "password1234", "김러너", "러너1", "010-1234-5678", LocalDate.of(1995, 4, 12), null
+			EMAIL, "password1234", "김러너", "러너1", "010-1234-5678", LocalDate.of(1995, 4, 12), null,
+			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		));
 
 		mockMvc.perform(get(PATH).param("email", EMAIL))
