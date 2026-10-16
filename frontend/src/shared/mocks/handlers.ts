@@ -30,7 +30,15 @@ import {
   getRemoveItemResponseMock,
 } from '@/shared/api/generated/order/order.msw'
 import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw'
-import { getBukangProductAPIMock } from '@/shared/api/generated/product/product.msw'
+import {
+  getBukangProductAPIMock,
+  getFindMineMockHandler as getFindMyRacesMockHandler,
+  getFindRaceMockHandler,
+  getFindRaceResponseMock,
+  getSearchMockHandler,
+  getSearchResponseMock,
+  getSuggestMockHandler,
+} from '@/shared/api/generated/product/product.msw'
 
 import { fileUploadHandlers } from './file-upload'
 import {
@@ -186,6 +194,31 @@ export function resetMockOrderForTesting() {
  * 가짜 응답 모드에서 결제 화면을 볼 수 있게 주문 생성 · 결제 대기 주문 조회는 결제 대기 · 기한 10분 뒤로 돌려준다.
  * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
  */
+/**
+ * 명세 예시의 대회는 개인 예매 오픈이 2026-10-20이라, 그 전에는 가짜 응답 모드에서 신청 · 대기열 흐름을 볼 수 없다.
+ * 오픈이 아직 안 왔으면 어제 연 것으로 돌려준다(접수 마감 · 대회 날은 예시 그대로). 생성된 핸들러보다 앞에 둔다.
+ */
+function openedForMock<T extends { individualOpenAt?: string | null }>(race: T): T {
+  const openAt = race.individualOpenAt
+  if (!openAt || new Date(`${openAt}+09:00`).getTime() <= Date.now()) return race
+  return { ...race, individualOpenAt: kstMinutesFromNow(-24 * 60) }
+}
+
+const raceHandlers = [
+  // /races/:raceId가 /races/suggestions · /races/mine을 가로채지 않게 고정 경로를 먼저 둔다
+  getSuggestMockHandler(),
+  getFindMyRacesMockHandler(),
+  getFindRaceMockHandler(() => {
+    const example = getFindRaceResponseMock()
+    return { ...example, data: example.data && openedForMock(example.data) }
+  }),
+  getSearchMockHandler(() => {
+    const example = getSearchResponseMock()
+    const races = example.data?.races?.map(openedForMock)
+    return { ...example, data: example.data && { ...example.data, races } }
+  }),
+]
+
 const orderHandlers = [
   queueAdmissionHandler,
   getCreateMockHandler(() => {
@@ -239,6 +272,7 @@ export const handlers = [
   ...authHandlers,
   ...fileUploadHandlers,
   myOrdersHandler,
+  ...raceHandlers,
   ...orderHandlers,
   ...generatedHandlers,
 ]
