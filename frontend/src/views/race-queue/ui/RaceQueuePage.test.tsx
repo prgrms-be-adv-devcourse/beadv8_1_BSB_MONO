@@ -12,6 +12,7 @@ describe('RaceQueuePage', () => {
   it('입장 전이면 차례 기다리기(M05-Q1)를 값 없는 막대와 함께 보여 준다', () => {
     render(<RaceQueuePage raceId="1" optionId="2" />)
 
+    expect(screen.getByRole('heading', { name: '대기열' })).toBeInTheDocument()
     expect(screen.getByText('차례를 기다리고 있어요')).toBeInTheDocument()
     expect(screen.getByText(/차례가 되면 이 화면에서 바로 신청할 수 있어요\./)).toBeInTheDocument()
     expect(screen.getByText(/이 화면을 나가면 다시 줄을 서야 해요\./)).toBeInTheDocument()

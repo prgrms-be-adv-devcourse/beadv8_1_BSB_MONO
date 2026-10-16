@@ -32,7 +32,7 @@ export function RaceQueuePage({
 
   return (
     <>
-      <AppHeader type="sub" title="참가 신청" close backHref={raceHref} />
+      <AppHeader type="sub" title="대기열" close backHref={raceHref} />
       {admission?.admitted ? (
         <>
           <TimerBar
