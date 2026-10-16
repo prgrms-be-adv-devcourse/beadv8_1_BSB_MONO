@@ -9,11 +9,11 @@ import java.util.TreeMap;
 
 import org.springframework.stereotype.Service;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.HoldReleaseReason;
 import com.bukang.product.domain.HoldStatus;
 import com.bukang.product.domain.ParticipationHold;
 import com.bukang.product.domain.Race;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.exception.HoldFinishedException;
 import com.bukang.product.domain.exception.InvalidHoldException;
 import com.bukang.product.domain.exception.RaceCourseNotFoundException;

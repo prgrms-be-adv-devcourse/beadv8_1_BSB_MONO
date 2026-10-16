@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.bukang.common.shared.file.domain.FileRef;
 import com.bukang.common.shared.file.event.FileLinkRequestedEvent;
+import com.bukang.common.shared.race.event.RaceCourseChangedEvent;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
@@ -55,7 +56,11 @@ public class RaceRegisterUseCase {
 		List<FileLinkRequestedEvent.Ref> refs = new ArrayList<>();
 		imagesByCourse.forEach((course, images) ->
 			refs.add(FileLinkRequestedEvent.Ref.of(FileRef.of(course), RaceImageRequestDto.toItems(images))));
+		// 등록한 종목은 모두 대기열에 알린다 (종목마다 1건)
+		List<RaceCourseChangedEvent> courseChanges = race.getCourses().stream()
+			.map(RaceCourse::toChangedEvent)
+			.toList();
 		// 파일 소유자는 대회를 등록한 회원이다 (파일을 올린 회원과 같아야 연결된다)
-		return RaceSaveResult.of(race, List.of(), new FileLinkRequestedEvent(memberId, refs));
+		return RaceSaveResult.of(race, List.of(), new FileLinkRequestedEvent(memberId, refs), courseChanges);
 	}
 }

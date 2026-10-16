@@ -1,4 +1,4 @@
-package com.bukang.product.domain;
+package com.bukang.common.shared.race.domain;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
  * 상태는 판매자 화면용이다. 구매자가 예매할 수 있는지는 크루 예매 시작·개인 예매 오픈 시각으로 따로 본다.
  * 판매 중지는 판매자가 잠시 멈춘 상태라 다시 열 수 있고, 판매 종료는 대회일이 지나 완전히 끝난 상태다.
  * 대회 취소는 판매자가 판매 종료 전에 대회를 취소한 상태로, 되돌릴 수 없다.
+ * 상품 서비스가 바꾸고, 대기열 서비스도 대회 변경 메시지(RaceChangedEvent)로 받아 진입 판정에 쓴다.
  */
 @Getter
 @RequiredArgsConstructor

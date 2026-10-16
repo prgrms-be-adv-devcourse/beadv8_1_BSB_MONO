@@ -40,13 +40,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.bukang.common.global.json.JsonConverter;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.product.TestcontainersConfiguration;
 import com.bukang.product.app.ProductFacade;
 import com.bukang.product.domain.ProductMember;
 import com.bukang.product.domain.ProductSeller;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.out.ParticipationHoldRepository;
@@ -142,6 +142,14 @@ public abstract class ProductIntegrationTest {
 		ArgumentCaptor<String> payloads = ArgumentCaptor.forClass(String.class);
 		verify(kafka(), atLeast(0)).send(eq(topic), anyString(), payloads.capture());
 		return payloads.getAllValues();
+	}
+
+	// 이 테스트에서 토픽으로 보낸 메시지의 key (보낸 순서대로)
+	// 기록용 KafkaTemplate(spy)에 남은 send(토픽, key, 본문) 호출 중 이 토픽으로 보낸 호출의 key만 꺼낸다
+	protected List<String> sentKeys(String topic) {
+		ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
+		verify(kafka(), atLeast(0)).send(eq(topic), keys.capture(), anyString());
+		return keys.getAllValues();
 	}
 
 	protected void seedSeller(int memberId, int sellerId) {

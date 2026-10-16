@@ -15,7 +15,7 @@ import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
-import com.bukang.product.domain.RaceSaleStatus;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceSearchCondition;
 import com.bukang.product.dto.RaceSort;
