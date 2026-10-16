@@ -35,12 +35,15 @@ const cartWith = (items: { id: number; raceCourseId: number }[]) =>
     },
   })
 
-function renderCart(applications: Record<string, BookingApplication> = { '1': APPLICATION }) {
+function renderCart(
+  applications: Record<string, BookingApplication> = { '1': APPLICATION },
+  queueDialogOpen = false,
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
       <BookingFlowProvider initialState={{ applications }}>
-        <CartPage />
+        <CartPage queueDialogOpen={queueDialogOpen} />
       </BookingFlowProvider>
     </QueryClientProvider>,
   )
@@ -172,5 +175,34 @@ describe('장바구니', () => {
       await screen.findByText('신청서를 찾을 수 없어 결제할 수 없어요. 빼고 다시 담아 주세요.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '결제하기' })).toBeDisabled()
+  })
+})
+
+describe('CartPage 대기열 입장 전 결제 창 (M06-Q)', () => {
+  it('창 문구를 보여 주고 닫기를 누르면 창만 닫는다', async () => {
+    const user = userEvent.setup()
+    server.use(cartWith([{ id: 1, raceCourseId: 1 }]))
+    renderCart({ '1': APPLICATION }, true)
+
+    const dialog = await screen.findByRole('alertdialog', { name: '아직 결제할 차례가 아니에요' })
+    expect(dialog).toHaveTextContent('대기열에서 차례가 된 뒤 결제할 수 있어요.')
+    expect(dialog).toHaveTextContent('줄을 서서 차례를 기다려 주세요.')
+
+    await user.click(screen.getByRole('button', { name: '닫기' }))
+
+    await vi.waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('줄 서기를 누르면 담긴 대회 · 종목의 대기열로 간다', async () => {
+    const user = userEvent.setup()
+    server.use(cartWith([{ id: 1, raceCourseId: 1 }]))
+    renderCart({ '1': APPLICATION }, true)
+
+    // 대회 상세를 받아 줄에 대회 이름이 그려진 뒤 누른다
+    await screen.findByText(/2026 용감한 쿠키RUN in 서울/)
+    await user.click(screen.getByRole('button', { name: '줄 서기' }))
+
+    expect(push).toHaveBeenCalledWith('/races/1/queue?option=1')
   })
 })

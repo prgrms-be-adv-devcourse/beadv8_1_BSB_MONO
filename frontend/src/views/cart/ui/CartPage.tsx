@@ -21,6 +21,7 @@ import {
 } from '@/shared/ui'
 
 import { useCartLines, type CartLine } from '../model/use-cart-lines'
+import { QueueRequiredDialog } from './QueueRequiredDialog'
 
 type CheckoutResult = orderModel.CartCheckoutItemDto
 
@@ -29,11 +30,19 @@ const isOrdered = (r: CheckoutResult) => r.outcome === 'CREATED' || r.outcome ==
 
 // 피그마 V2 · M06 장바구니 (+ 비어 있음). 장바구니에는 대회 1개만 담긴다.
 // ?preview=empty 시안은 API를 부르지 않고 빈 화면을 보여 준다.
-export function CartPage({ empty = false }: { empty?: boolean }) {
+// ?preview=queue 시안은 대기열 입장 전 결제 창(M06-Q)을 연 채로 보여 준다.
+export function CartPage({
+  empty = false,
+  queueDialogOpen = false,
+}: {
+  empty?: boolean
+  /** 대기열 입장 전 결제 창(M06-Q)을 처음부터 열어 둔다 */
+  queueDialogOpen?: boolean
+}) {
   return (
     <>
       <AppHeader type="sub" title="장바구니" />
-      {empty ? <EmptyCart /> : <CartContent />}
+      {empty ? <EmptyCart /> : <CartContent initialQueueDialogOpen={queueDialogOpen} />}
     </>
   )
 }
@@ -55,8 +64,10 @@ function EmptyCart() {
   )
 }
 
-function CartContent() {
+function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boolean }) {
   const router = useRouter()
+  // 대기열 입장 전 결제 창(M06-Q). TODO(api): 결제가 403 ORDER_QUEUE_NOT_ADMITTED면 연다.
+  const [queueDialogOpen, setQueueDialogOpen] = useState(initialQueueDialogOpen)
   const queryClient = useQueryClient()
   const { lines, isError } = useCartLines()
   // 장바구니 결제 결과 (참가 신청 ID → 항목별 결과)
@@ -124,6 +135,13 @@ function CartContent() {
     checkout.mutate({ ids, key })
   }
 
+  // 장바구니에는 대회 1개만 담기므로 대회 · 종목을 아는 첫 줄의 대기열로 간다
+  const queued = lines.find((l) => l.race && l.option)
+  const queueHref =
+    queued?.race && queued.option
+      ? (`/races/${queued.race.id}/queue?option=${encodeURIComponent(queued.option.id)}` as const)
+      : ('/races' as const)
+
   const checkoutError =
     checkout.error instanceof ApiError ? checkout.error.serverMessage : undefined
 
@@ -179,6 +197,11 @@ function CartContent() {
             </Button>
           )
         }
+      />
+      <QueueRequiredDialog
+        open={queueDialogOpen}
+        onOpenChange={setQueueDialogOpen}
+        onQueue={() => router.push(queueHref)}
       />
     </>
   )
