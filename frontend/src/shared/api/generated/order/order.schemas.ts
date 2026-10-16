@@ -139,13 +139,13 @@ export interface CartItemAddRequestDto {
 }
 
 /**
- * 장바구니 결제 요청. 장바구니의 참가권마다 미리 작성한 참가 신청 ID를 보낸다
+ * 장바구니 결제 요청. 장바구니에 담은 참가권(한 종목)의 참가 신청 ID를 보낸다
  */
 export interface CartCheckoutRequestDto {
   /**
-     * 결제할 참가 신청 ID 목록 (최대 10개, 겹치지 않게)
+     * 결제할 참가 신청 ID 목록 (1개)
      * @minItems 0
-     * @maxItems 10
+     * @maxItems 1
      * @items.minimum 0
      */
   participationIds: number[];
