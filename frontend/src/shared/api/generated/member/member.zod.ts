@@ -66,6 +66,13 @@ export const ModifyMeResponse = zod.object({
 
 
 /**
+ * 남은 예치금과 끝나지 않은 참가권이 없을 때만 탈퇴한다. 기록은 남기고 개인정보는 비우며, 모든 기기의 재발급을 막는다. 다른 서비스 확인에 실패하면 탈퇴하지 않는다.
+ * @summary 회원 탈퇴
+ */
+export const WithdrawMeResponse = zod.unknown()
+
+
+/**
  * 쿠키의 Refresh Token을 검증하고 Redis에 저장된 지금 토큰이면 새 Access Token은 응답 본문으로, 새 Refresh Token은 쿠키로 내려준다(회전). 이미 쓴 토큰이 다시 오면 탈취로 보고 그 로그인을 끊는다. 단, 회전 직후 5초 안에 바로 전 토큰이 오면 지금 Refresh Token을 그대로 다시 내려준다(동시 요청·응답 유실 대비).
  * @summary 토큰 재발급
  */

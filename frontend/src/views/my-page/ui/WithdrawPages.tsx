@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { useWithdraw, withdrawFailure, type WithdrawFailure } from '@/features/auth'
 import { cn } from '@/shared/lib'
 import {
   Badge,
@@ -17,14 +18,38 @@ import {
   KeyValue,
 } from '@/shared/ui'
 
+// 탈퇴 실패 안내. 남은 예치금 · 참가권 문구는 시안 M31의 안내를 따른다.
+// 시안에 없는 문구: check-failed(다른 서비스 확인 실패), other(그 밖의 실패)
+const WITHDRAW_ERRORS: Record<WithdrawFailure, string> = {
+  'cash-left': '남은 예치금이 있어요. 돌려받기를 신청하면 환급이 끝난 뒤 탈퇴할 수 있어요.',
+  'ticket-left':
+    '끝나지 않은 참가권이 있어요. 참가권을 취소하거나 대회가 끝난 뒤 탈퇴할 수 있어요.',
+  'check-failed': '남은 예치금과 참가권을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.',
+  other: '지금은 탈퇴할 수 없어요. 잠시 후 다시 시도해 주세요.',
+}
+
 // 피그마 V2 · M31 회원 탈퇴 (남은 일이 있으면 탈퇴 버튼을 막는다)
 // 피그마 V2 · M31-C 회원 탈퇴 최종 확인 (탈퇴하기를 누르면 뜨는 창)
 // TODO(api): 남은 예치금 · 끝나지 않은 참가권을 확인한다 (blocked)
-// TODO(api): PRO-130 탈퇴 요청을 보낸다
+// 탈퇴 요청은 서버가 남은 예치금 · 참가권을 다시 확인한다. 막히면 code별 안내를 화면에 띄운다.
 export function WithdrawPage({ blocked = true }: { blocked?: boolean }) {
   const router = useRouter()
   const [checked, setChecked] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const withdraw = useWithdraw()
+  const [failure, setFailure] = useState<WithdrawFailure>()
+  const onWithdraw = () => {
+    // 요청 중 다시 누르면 DELETE가 두 번 가고, 두 번째의 404가 성공을 덮어쓴다
+    if (withdraw.isPending) return
+    setFailure(undefined)
+    withdraw.mutate(undefined, {
+      onSuccess: () => router.push('/me/withdraw/done'),
+      onError: (error) => {
+        setConfirmOpen(false)
+        setFailure(withdrawFailure(error))
+      },
+    })
+  }
 
   return (
     <>
@@ -78,11 +103,20 @@ export function WithdrawPage({ blocked = true }: { blocked?: boolean }) {
           disabled={blocked}
           label="안내를 모두 확인했어요"
         />
+        {failure && (
+          <p role="alert" className="text-caption text-text-danger">
+            {WITHDRAW_ERRORS[failure]}
+          </p>
+        )}
       </main>
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button size="l" disabled={blocked || !checked} onClick={() => setConfirmOpen(true)}>
+          <Button
+            size="l"
+            disabled={blocked || !checked || withdraw.isPending}
+            onClick={() => setConfirmOpen(true)}
+          >
             탈퇴하기
           </Button>
         }
@@ -101,7 +135,8 @@ export function WithdrawPage({ blocked = true }: { blocked?: boolean }) {
         }
         confirmLabel="탈퇴하기"
         cancelLabel="그대로 두기"
-        onConfirm={() => router.push('/me/withdraw/done')}
+        onConfirm={onWithdraw}
+        confirming={withdraw.isPending}
       />
     </>
   )

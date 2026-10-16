@@ -103,6 +103,16 @@ const authHandlers = [
 ]
 
 /**
+ * 탈퇴 목. 성공(200)이 기본이다. 실패(예치금·참가권이 남음, 확인 실패)는 테스트에서 server.use로 바꿔 끼운다.
+ * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
+ */
+const withdrawHandlers = [
+  http.delete('*/api/v1/member/members/me', () =>
+    HttpResponse.json({ status: 200, message: '탈퇴했습니다.', data: null }),
+  ),
+]
+
+/**
  * 가입 목. 서버처럼 필수 약관(SERVICE, PRIVACY)이 빠지면 400 MEMBER_REQUIRED_TERMS_NOT_AGREED로 답한다.
  * 이메일 중복 확인은 이메일에 "taken"이 들어 있으면 이미 가입된 것으로 본다 (그 밖에는 사용 가능).
  * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
@@ -327,6 +337,7 @@ export const handlers = [
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
   fileImageHandler,
   ...authHandlers,
+  ...withdrawHandlers,
   ...signupHandlers,
   ...fileUploadHandlers,
   myOrdersHandler,

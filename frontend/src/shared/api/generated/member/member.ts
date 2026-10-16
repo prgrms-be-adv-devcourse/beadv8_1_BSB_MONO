@@ -254,6 +254,81 @@ export const useModifyMe = <TError = RsData,
       return useMutation(getModifyMeMutationOptions(options), queryClient);
     }
 
+export const getWithdrawMeUrl = () => {
+
+
+
+
+  return `/api/v1/member/members/me`
+}
+
+/**
+ * 남은 예치금과 끝나지 않은 참가권이 없을 때만 탈퇴한다. 기록은 남기고 개인정보는 비우며, 모든 기기의 재발급을 막는다. 다른 서비스 확인에 실패하면 탈퇴하지 않는다.
+ * @summary 회원 탈퇴
+ */
+export const withdrawMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getWithdrawMeUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getWithdrawMeMutationKey = () => ['withdrawMe'] as const;
+
+export const getWithdrawMeMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawMe>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawMe>>, TError,void, TContext> => {
+
+const mutationKey = getWithdrawMeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawMe>>, void> = () => {
+
+
+          return  withdrawMe(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawMeMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawMe>>>
+
+    export type WithdrawMeMutationError = RsData
+
+
+    /**
+ * @summary 회원 탈퇴
+ */
+export const useWithdrawMe = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawMe>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawMe>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getWithdrawMeMutationOptions(options), queryClient);
+    }
+
 export const getReissueUrl = () => {
 
 
