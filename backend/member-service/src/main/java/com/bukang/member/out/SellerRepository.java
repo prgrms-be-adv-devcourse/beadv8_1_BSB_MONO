@@ -30,4 +30,10 @@ public interface SellerRepository extends JpaRepository<Seller, Integer> {
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select s from Seller s where s.id = :id")
 	Optional<Seller> findByIdForUpdate(@Param("id") int id);
+
+	// 탈퇴할 때 반려할 대기 중 신청. 잠가서 같은 신청을 동시에 승인하면 뒤 요청이 409가 되게 한다 (PRO-217)
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select s from Seller s where s.member.id = :memberId and s.status = :status")
+	List<Seller> findAllByMemberIdAndStatusForUpdate(@Param("memberId") int memberId,
+		@Param("status") SellerStatus status);
 }
