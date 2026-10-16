@@ -5,14 +5,13 @@ import Link from 'next/link'
 
 import { AppHeader } from '@/widgets/app-header'
 import { useAdmissionTimer } from '@/features/queue-admission'
-import { BottomCta, buttonClassName, EmptyState, ProgressBar, TimerBar } from '@/shared/ui'
-
-const WAITING_TITLE = '차례를 기다리고 있어요'
+import { BottomCta, buttonClassName, formatTimer, Icon, ProgressBar } from '@/shared/ui'
 
 // 피그마 V2 · M05-Q1 대기열 · 차례 기다리기 / M05-Q2 대기열 · 내 차례
 // 같은 주소에서 입장 여부에 따라 두 화면을 바꿔 그린다. 입장 여부는 대기열 API로 짧은 간격마다 다시 묻고,
 // 입장하면 남은 시간을 1초씩 줄여 간다. 0이 되면 입장 시간 만료 화면(M07-1)으로 간다.
 // 순번 · 예상 대기 시간은 API가 주지 않아 숫자를 그리지 않는다.
+// 상단 timer bar 띠는 이 화면에 없다(신청서 M05부터). 왼쪽 위 X는 대회 상세로 이동만 한다.
 export function RaceQueuePage({
   raceId,
   optionId,
@@ -40,22 +39,24 @@ export function RaceQueuePage({
       <AppHeader type="sub" title="대기열" close backHref={raceHref} />
       {remaining !== null ? (
         <>
-          <TimerBar
-            message="내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요"
-            remainingSeconds={remaining}
-          />
-          <main className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-6">
-            <EmptyState
-              icon="CircleAlert"
-              title="내 차례예요"
-              description={
-                <>
-                  남은 시간 안에 참가 신청과 결제를 마쳐 주세요.
-                  <br />
-                  시간이 지나면 다시 줄을 서야 해요.
-                </>
-              }
-            />
+          <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
+            <h1 className="text-center text-heading-l text-text-primary">
+              내 차례예요
+              <br />
+              지금 신청할 수 있어요
+            </h1>
+            <Icon name="CircleCheck" className="size-24 text-text-primary" aria-hidden />
+            <div role="timer" className="flex flex-col items-center gap-1 text-center">
+              <p className="text-label-m text-text-secondary">남은 시간</p>
+              <p className="font-display text-display-m text-text-primary tabular-nums">
+                {formatTimer(remaining)}
+              </p>
+            </div>
+            <p className="text-center text-body-s text-text-secondary">
+              남은 시간 안에 참가 신청과 결제를 마쳐 주세요.
+              <br />
+              시간이 지나면 다시 줄을 서야 해요.
+            </p>
           </main>
           <BottomCta
             className="sticky bottom-0 z-10"
@@ -67,33 +68,21 @@ export function RaceQueuePage({
           />
         </>
       ) : (
-        <>
-          <main className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-6">
-            <EmptyState
-              icon="CircleAlert"
-              title={WAITING_TITLE}
-              description={
-                <>
-                  차례가 되면 이 화면에서 바로 신청할 수 있어요.
-                  <br />이 화면을 나가면 다시 줄을 서야 해요.
-                </>
-              }
-            />
-            {/* 진행률이 아니라 기다리는 중이라는 표시라 값 없이 계속 움직인다 */}
-            <ProgressBar indeterminate aria-label={WAITING_TITLE} />
-          </main>
-          <BottomCta
-            className="sticky bottom-0 z-10"
-            primary={
-              <Link
-                href={raceHref}
-                className={buttonClassName({ size: 'l', variant: 'secondary' })}
-              >
-                대회로 돌아가기
-              </Link>
-            }
-          />
-        </>
+        <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
+          <h1 className="text-center text-heading-l text-text-primary">
+            지금 신청하는 분이 많아서
+            <br />
+            잠시 기다리고 있어요
+          </h1>
+          <Icon name="Users" className="size-24 text-text-primary" aria-hidden />
+          {/* 진행률이 아니라 기다리는 중이라는 표시라 값 없이 계속 움직인다 */}
+          <ProgressBar indeterminate aria-label="대기 중" className="w-70" />
+          <p className="text-center text-body-s text-text-secondary">
+            차례대로 들어가고 있어요. 잠시만 기다려 주세요.
+            <br />
+            화면을 나가면 다시 줄을 서야 해요.
+          </p>
+        </main>
       )}
     </>
   )

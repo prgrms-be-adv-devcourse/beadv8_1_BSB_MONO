@@ -44,14 +44,17 @@ describe('RaceQueuePage', () => {
     renderQueue()
 
     expect(screen.getByRole('heading', { name: '대기열' })).toBeInTheDocument()
-    expect(screen.getByText('차례를 기다리고 있어요')).toBeInTheDocument()
-    expect(screen.getByText(/차례가 되면 이 화면에서 바로 신청할 수 있어요\./)).toBeInTheDocument()
-    expect(screen.getByText(/이 화면을 나가면 다시 줄을 서야 해요\./)).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: /지금 신청하는 분이 많아서\s*잠시 기다리고 있어요/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/차례대로 들어가고 있어요\. 잠시만 기다려 주세요\./),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/화면을 나가면 다시 줄을 서야 해요\./)).toBeInTheDocument()
     expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow')
-    expect(screen.getByRole('link', { name: '대회로 돌아가기' })).toHaveAttribute(
-      'href',
-      '/races/1',
-    )
+    // 왼쪽 위 X는 대회 상세로 간다. 하단 버튼은 없다
+    expect(screen.getByRole('link', { name: '닫기' })).toHaveAttribute('href', '/races/1')
+    expect(screen.queryByRole('link', { name: '대회로 돌아가기' })).not.toBeInTheDocument()
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
   })
@@ -68,17 +71,17 @@ describe('RaceQueuePage', () => {
     renderQueue()
 
     await vi.waitFor(() => expect(asked).toBe(1))
-    expect(screen.getByText('차례를 기다리고 있어요')).toBeInTheDocument()
+    expect(screen.getByText(/지금 신청하는 분이 많아서/)).toBeInTheDocument()
 
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
     await vi.waitFor(() => expect(asked).toBe(2))
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
 
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
-    expect(await screen.findByRole('timer')).toHaveTextContent(
-      '내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요10:00',
-    )
-    expect(screen.getByText('내 차례예요')).toBeInTheDocument()
+    expect(await screen.findByRole('timer')).toHaveTextContent('남은 시간10:00')
+    expect(
+      screen.getByRole('heading', { name: /내 차례예요\s*지금 신청할 수 있어요/ }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '신청하러 가기' })).toHaveAttribute(
       'href',
@@ -108,8 +111,8 @@ describe('RaceQueuePage', () => {
   it('시안 미리보기는 API를 부르지 않고 시안의 남은 시간을 보여 준다', () => {
     renderQueue({ previewRemainingSeconds: 583 })
 
-    expect(screen.getByRole('timer')).toHaveTextContent(
-      '내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요09:43',
-    )
+    expect(screen.getByRole('timer')).toHaveTextContent('남은 시간09:43')
+    // 상단 띠는 신청서(M05)부터라 이 화면에는 없다
+    expect(screen.queryByText(/시간 안에 신청과 결제를 마쳐 주세요$/)).not.toBeInTheDocument()
   })
 })
