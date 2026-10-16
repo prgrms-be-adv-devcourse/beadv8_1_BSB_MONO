@@ -210,7 +210,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/member/members/email-availability")
 			.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, "AUTH_LOGIN_REQUIRED", "로그인이 필요합니다.");
 	}
 
 	@Test
