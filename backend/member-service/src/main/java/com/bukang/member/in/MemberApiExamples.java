@@ -71,7 +71,7 @@ final class MemberApiExamples {
 		""";
 
 	static final String MEMBER_NOT_FOUND = """
-		{ "status": 404, "message": "존재하지 않는 회원입니다.", "data": null }
+		{ "status": 404, "code": "MEMBER_NOT_FOUND", "message": "존재하지 않는 회원입니다.", "data": null }
 		""";
 
 	static final String WITHDRAW_ME_SUCCESS = """
