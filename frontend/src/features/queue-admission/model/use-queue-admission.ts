@@ -4,7 +4,7 @@ import type { Query } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
-import { orderApi, unwrapData, type orderModel } from '@/shared/api'
+import { ApiError, orderApi, unwrapData, type orderModel } from '@/shared/api'
 
 import { admissionExpiredHref } from '../lib/queue-error'
 
@@ -56,9 +56,9 @@ export function useQueueAdmission(
           ? {
               staleTime: 0,
               refetchOnMount: 'always' as const,
-              // 입장하면 멈춘다. 화면을 벗어나거나 탭이 숨겨지면 TanStack Query가 멈춘다.
+              // 입장하거나 오류로 끝나면 멈춘다. 화면을 벗어나거나 탭이 숨겨지면 TanStack Query가 멈춘다.
               refetchInterval: (q: AdmissionQuery) =>
-                isAdmittedNow(q) ? false : ADMISSION_POLL_MS,
+                isAdmittedNow(q) || q.state.status === 'error' ? false : ADMISSION_POLL_MS,
             }
           : {
               // 끝난 답만 다시 묻는다. 끝나지 않은 답은 대기열 화면에서 받은 끝 시각을 그대로 쓴다.
@@ -74,6 +74,10 @@ export function useQueueAdmission(
     deadline: ready ? deadlineOf(query.data, query.dataUpdatedAt) : null,
     /** 다시 묻는 중. 끝난 답을 새로 받는 동안 만료로 보지 않게 쓴다 */
     isFetching: query.isFetching,
+    /** 입장 확인이 오류로 끝남 (재시도까지 모두 실패) */
+    isError: query.isError,
+    /** 오류 응답의 HTTP 상태 (401 등). 응답을 못 받은 오류거나 오류가 아니면 undefined */
+    errorStatus: query.error instanceof ApiError ? query.error.status : undefined,
   }
 }
 
@@ -114,7 +118,8 @@ export function useAdmissionCountdown(deadline: number | null) {
 /**
  * 대기열 내 차례(M05-Q2) → 신청서(M05)의 남은 시간 띠.
  * 남은 시간이 0이 되면 입장 시간 만료 화면(M07-1)으로 보낸다.
- * @returns admitted: 입장 중인지 / remaining: 띠에 보여 줄 남은 초 (입장 중이 아니면 null)
+ * @returns admitted: 입장 중인지 / remaining: 띠에 보여 줄 남은 초 (입장 중이 아니면 null) /
+ * isError · errorStatus: 입장 확인이 오류로 끝났는지와 그 HTTP 상태
  */
 export function useAdmissionTimer(
   raceId: number | undefined,
@@ -122,7 +127,11 @@ export function useAdmissionTimer(
   mode: AdmissionMode,
 ) {
   const router = useRouter()
-  const { deadline, isFetching } = useQueueAdmission(raceId, raceCourseId, mode)
+  const { deadline, isFetching, isError, errorStatus } = useQueueAdmission(
+    raceId,
+    raceCourseId,
+    mode,
+  )
   const remaining = useAdmissionCountdown(deadline)
   // 끝난 답을 새로 받는 중이면 아직 만료로 보지 않는다 (다시 입장했을 수 있다).
   const expired = remaining === 0 && !isFetching
@@ -132,5 +141,5 @@ export function useAdmissionTimer(
   }, [expired, raceId, router])
 
   const live = remaining !== null && !(remaining === 0 && isFetching)
-  return { admitted: live, remaining: live ? remaining : null }
+  return { admitted: live, remaining: live ? remaining : null, isError, errorStatus }
 }

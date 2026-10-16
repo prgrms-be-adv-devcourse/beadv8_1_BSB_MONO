@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ADMISSION_POLL_MS } from '@/features/queue-admission'
@@ -114,5 +115,37 @@ describe('RaceQueuePage', () => {
     expect(screen.getByRole('timer')).toHaveTextContent('남은 시간09:43')
     // 상단 띠는 신청서(M05)부터라 이 화면에는 없다
     expect(screen.queryByText(/시간 안에 신청과 결제를 마쳐 주세요$/)).not.toBeInTheDocument()
+  })
+
+  it('입장 확인이 401이면 로그인 화면으로 보낸다', async () => {
+    server.use(
+      http.get('*/api/v1/order/queue/admission', () =>
+        HttpResponse.json(
+          { status: 401, message: '로그인이 필요해요', data: null },
+          { status: 401 },
+        ),
+      ),
+    )
+    renderQueue()
+
+    await vi.waitFor(() =>
+      expect(replace).toHaveBeenCalledWith(`/login?next=${encodeURIComponent('/races/1/queue')}`),
+    )
+  })
+
+  it('입장 확인이 500이면 다시 묻지 않는다', async () => {
+    let asked = 0
+    server.use(
+      http.get('*/api/v1/order/queue/admission', () => {
+        asked += 1
+        return HttpResponse.json({ status: 500, message: '서버 오류', data: null }, { status: 500 })
+      }),
+    )
+    renderQueue()
+
+    await vi.waitFor(() => expect(asked).toBe(1))
+    await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS * 3))
+    expect(asked).toBe(1)
+    expect(replace).not.toHaveBeenCalled()
   })
 })

@@ -2,8 +2,11 @@
 
 import type { Route } from 'next'
 import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { loginHref } from '@/features/auth'
 import { useAdmissionTimer } from '@/features/queue-admission'
 import { BottomCta, buttonClassName, formatTimer, Icon, ProgressBar } from '@/shared/ui'
 
@@ -33,6 +36,14 @@ export function RaceQueuePage({
     'wait',
   )
   const remaining = preview ? previewRemainingSeconds : timer.remaining
+
+  // 로그인이 필요하면(401) 로그인 화면으로 보낸다. 로그인 뒤 이 대기열로 돌아오게 지금 주소를 넘긴다.
+  const router = useRouter()
+  const pathname = usePathname()
+  const unauthorized = timer.errorStatus === 401
+  useEffect(() => {
+    if (unauthorized) router.replace(loginHref(`${pathname}${window.location.search}`))
+  }, [unauthorized, pathname, router])
 
   const raceHref = `/races/${raceId}` as Route
   const applyHref = `/races/${raceId}/apply?option=${encodeURIComponent(optionId)}` as const
