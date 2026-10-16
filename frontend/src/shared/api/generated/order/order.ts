@@ -39,7 +39,8 @@ import type {
   RsDataOrderDto,
   RsDataOrderPageDto,
   RsDataParticipantInfoDto,
-  RsDataParticipationDto
+  RsDataParticipationDto,
+  RsDataQueueAdmissionDto
 } from './order.schemas';
 
 import { customFetch } from '../../fetcher';
@@ -865,9 +866,9 @@ export const getFindAdmissionUrl = (params: FindAdmissionParams,) => {
  * 이 종목에 대기열로 입장 중인지와 입장 끝 시각, 남은 초를 돌려준다. 입장 끝 시각이 [결제하기]의 결제 기한이다. 타이머는 remainingSeconds로 센다(서버 시각 기준). 입장 중이 아니면 admitted=false이고 [결제하기]가 403이다. 대기열 API(PRO-182)가 나오기 전에는 가짜 대기열이 답한다: 결제 페이지를 처음 열 때 입장해 10분 뒤 끝나고, 끝난 뒤 이 API를 다시 부르면(페이지를 다시 열면) 다시 입장한다.
  * @summary 대기열 입장 상태 (결제 페이지 타이머)
  */
-export const findAdmission = async (params: FindAdmissionParams, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+export const findAdmission = async (params: FindAdmissionParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataQueueAdmissionDto> => {
 
-  return customFetch<unknown>(getFindAdmissionUrl(params),
+  return customFetch<RsDataQueueAdmissionDto>(getFindAdmissionUrl(params),
   {
     ...options,
     method: 'GET'

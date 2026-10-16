@@ -528,7 +528,15 @@ export const FindAdmissionQueryParams = zod.object({
   "raceCourseId": zod.int().gt(findAdmissionQueryRaceCourseIdExclusiveMin).describe('종목 ID')
 })
 
-export const FindAdmissionResponse = zod.unknown()
+export const FindAdmissionResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "admitted": zod.boolean(),
+  "admissionEndsAt": zod.iso.datetime({"offset":true}).nullish(),
+  "remainingSeconds": zod.int()
+}).optional()
+})
 
 
 /**

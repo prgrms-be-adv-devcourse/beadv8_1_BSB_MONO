@@ -130,6 +130,14 @@
           "$ref": "#/components/schemas/ParticipationDto"
         }
       }
+    },
+    "findAdmission": {
+      "200": {
+        "wrapper": "RsDataQueueAdmissionDto",
+        "data": {
+          "$ref": "#/components/schemas/QueueAdmissionDto"
+        }
+      }
     }
   },
   "schemas": {
@@ -567,6 +575,29 @@
         "totalPages": {
           "type": "integer",
           "format": "int32"
+        }
+      }
+    },
+    "QueueAdmissionDto": {
+      "type": "object",
+      "required": [
+        "admitted",
+        "remainingSeconds"
+      ],
+      "properties": {
+        "admitted": {
+          "type": "boolean"
+        },
+        "admissionEndsAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "remainingSeconds": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     }

@@ -373,6 +373,13 @@ export interface OrderPageDto {
   totalPages?: number;
 }
 
+export interface QueueAdmissionDto {
+  admitted: boolean;
+  /** @nullable */
+  admissionEndsAt?: string | null;
+  remainingSeconds: number;
+}
+
 export interface RsDataParticipationDto {
   status?: number;
   message?: string;
@@ -401,6 +408,12 @@ export interface RsDataCartCheckoutDto {
   status?: number;
   message?: string;
   data?: CartCheckoutDto;
+}
+
+export interface RsDataQueueAdmissionDto {
+  status?: number;
+  message?: string;
+  data?: QueueAdmissionDto;
 }
 
 export interface RsDataParticipantInfoDto {
