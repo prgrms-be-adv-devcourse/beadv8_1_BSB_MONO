@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.bukang.cash.app.CashFacade;
 import com.bukang.cash.dto.CashChargeConfirmRequestDto;
 import com.bukang.cash.dto.CashChargeResponseDto;
+import com.bukang.cash.dto.CashWithdrawalRequestDto;
+import com.bukang.cash.dto.CashWithdrawalResponseDto;
 import com.bukang.cash.dto.WalletBalanceResponseDto;
 import com.bukang.common.global.rsdata.RsData;
 
@@ -81,6 +83,34 @@ public class ApiV1CashController {
 	) {
 		CashChargeResponseDto response = cashFacade.confirmWalletCharge(
 			memberId, request.getPaymentKey(), request.getOrderId(), request.getAmount());
+		return ResponseEntity.ok(RsData.of(HttpStatus.OK, response.message(), response));
+	}
+
+	// 에러 응답은 GlobalExceptionHandler가 RsData(data: null) 형식으로 반환한다
+	@PostMapping("/withdrawals")
+	@Operation(summary = "예치금 전액 환급 신청", description = "회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. "
+		+ "idempotencyKey를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "환급 신청 완료",
+			content = @Content(examples = @ExampleObject(value = CashApiExamples.WITHDRAWAL_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "환급할 잔액 없음, 입력값 검증 실패 또는 요청 본문 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "환급할 잔액 없음", value = CashApiExamples.WALLET_BALANCE_EMPTY),
+				@ExampleObject(name = "입력값 검증 실패", value = CashApiExamples.WITHDRAWAL_INVALID_INPUT),
+				@ExampleObject(name = "요청 본문 형식 오류", value = CashApiExamples.INVALID_BODY)
+			})),
+		@ApiResponse(responseCode = "404", description = "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CashApiExamples.WALLET_NOT_FOUND)))
+	})
+	public ResponseEntity<RsData<CashWithdrawalResponseDto>> requestWithdrawal(
+		@Parameter(description = "환급할 회원 ID (게이트웨이가 Access Token에서 넣어준다)", example = "3")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Valid @RequestBody CashWithdrawalRequestDto request
+	) {
+		CashWithdrawalResponseDto response = cashFacade.requestWithdrawal(
+			memberId, request.getBankCode(), request.getAccountNumber(), request.getAccountHolder(),
+			request.getIdempotencyKey());
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, response.message(), response));
 	}
 }

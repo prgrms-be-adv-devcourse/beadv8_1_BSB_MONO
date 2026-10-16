@@ -46,7 +46,7 @@ public class WalletWithdrawal extends BaseIdAndTime {
 
 	@Column(nullable = false, unique = true, length = 64) // 중복 신청 방지
 	private String idempotencyKey;
-	private LocalDateTime completedAt;
+	private LocalDateTime completeDate;
 
 	public WalletWithdrawal(
 		Wallet wallet,
@@ -63,5 +63,10 @@ public class WalletWithdrawal extends BaseIdAndTime {
 		this.accountHolder = accountHolder;
 		this.idempotencyKey = idempotencyKey;
 		this.status = WithdrawalStatus.REQUESTED;
+	}
+
+	public void markCompleted(LocalDateTime completeDate) {
+		this.status = WithdrawalStatus.COMPLETED;
+		this.completeDate = completeDate;
 	}
 }
