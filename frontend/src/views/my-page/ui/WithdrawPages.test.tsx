@@ -99,3 +99,23 @@ describe('WithdrawPage 탈퇴 실패', () => {
     expect(getAuthStatus()).toBe('authenticated')
   })
 })
+
+describe('WithdrawPage 중복 요청', () => {
+  it('요청 중에 탈퇴하기를 다시 눌러도 요청은 한 번만 간다', async () => {
+    let calls = 0
+    server.use(
+      http.delete('*/api/v1/member/members/me', async () => {
+        calls += 1
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        return HttpResponse.json({ status: 200, message: '탈퇴했습니다.', data: null })
+      }),
+    )
+    const user = await openConfirm()
+    const dialog = await screen.findByRole('alertdialog')
+    const button = within(dialog).getByRole('button', { name: '탈퇴하기' })
+    await user.dblClick(button)
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/me/withdraw/done'))
+    expect(calls).toBe(1)
+  })
+})

@@ -39,6 +39,8 @@ export function WithdrawPage({ blocked = true }: { blocked?: boolean }) {
   const withdraw = useWithdraw()
   const [failure, setFailure] = useState<WithdrawFailure>()
   const onWithdraw = () => {
+    // 요청 중 다시 누르면 DELETE가 두 번 가고, 두 번째의 404가 성공을 덮어쓴다
+    if (withdraw.isPending) return
     setFailure(undefined)
     withdraw.mutate(undefined, {
       onSuccess: () => router.push('/me/withdraw/done'),
@@ -134,6 +136,7 @@ export function WithdrawPage({ blocked = true }: { blocked?: boolean }) {
         confirmLabel="탈퇴하기"
         cancelLabel="그대로 두기"
         onConfirm={onWithdraw}
+        confirming={withdraw.isPending}
       />
     </>
   )
