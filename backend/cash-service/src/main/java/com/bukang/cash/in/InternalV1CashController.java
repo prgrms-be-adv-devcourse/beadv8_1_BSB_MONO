@@ -10,12 +10,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.cash.app.CashFacade;
-import com.bukang.cash.dto.CashBalanceDto;
+import com.bukang.cash.dto.CashBalanceResponseDto;
 import com.bukang.cash.dto.CashCancelPaymentRequestDto;
-import com.bukang.cash.dto.CashPaymentDto;
 import com.bukang.cash.dto.CashPaymentRequestDto;
-import com.bukang.cash.dto.CashRefundDto;
+import com.bukang.cash.dto.CashPaymentResponseDto;
 import com.bukang.cash.dto.CashRefundRequestDto;
+import com.bukang.cash.dto.CashRefundResponseDto;
 import com.bukang.common.global.rsdata.RsData;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,11 +63,12 @@ public class InternalV1CashController {
 				@ExampleObject(name = "결제 회원 불일치", value = CashInternalApiExamples.PAYMENT_MEMBER_MISMATCH)
 			}))
 	})
-	public ResponseEntity<RsData<CashPaymentDto>> pay(
+	public ResponseEntity<RsData<CashPaymentResponseDto>> pay(
 		@Parameter(description = "주문 ID", example = "100") @PathVariable int orderId,
 		@Valid @RequestBody CashPaymentRequestDto request
 	) {
-		CashPaymentDto result = cashFacade.completeOrderPayment(orderId, request.getMemberId(), request.getAmount());
+		CashPaymentResponseDto result = cashFacade.completeOrderPayment(
+			orderId, request.getMemberId(), request.getAmount());
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, result.message(), result));
 	}
 
@@ -119,11 +120,11 @@ public class InternalV1CashController {
 				@ExampleObject(name = "결제 회원 불일치", value = CashInternalApiExamples.PAYMENT_MEMBER_MISMATCH)
 			}))
 	})
-	public ResponseEntity<RsData<CashRefundDto>> refund(
+	public ResponseEntity<RsData<CashRefundResponseDto>> refund(
 		@Parameter(description = "주문 ID", example = "100") @PathVariable int orderId,
 		@Valid @RequestBody CashRefundRequestDto request
 	) {
-		CashRefundDto result = cashFacade.refund(orderId, request.getMemberId());
+		CashRefundResponseDto result = cashFacade.refund(orderId, request.getMemberId());
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "환불했습니다.", result));
 	}
 
@@ -138,7 +139,7 @@ public class InternalV1CashController {
 				@ExampleObject(name = "지갑 없음", value = CashInternalApiExamples.BALANCE_NO_WALLET)
 			}))
 	})
-	public ResponseEntity<RsData<CashBalanceDto>> getBalance(
+	public ResponseEntity<RsData<CashBalanceResponseDto>> getBalance(
 		@Parameter(description = "회원 ID (= 지갑 ID)", example = "3") @PathVariable int memberId
 	) {
 		return ResponseEntity.ok()

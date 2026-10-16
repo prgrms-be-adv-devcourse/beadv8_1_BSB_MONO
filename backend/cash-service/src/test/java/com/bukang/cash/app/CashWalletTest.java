@@ -19,7 +19,7 @@ import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.LedgerType;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.domain.wallet.WalletLedger;
-import com.bukang.cash.dto.WalletBalanceDto;
+import com.bukang.cash.dto.WalletBalanceResponseDto;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
 import com.bukang.cash.out.WalletRepository;
@@ -82,7 +82,7 @@ class CashWalletTest {
 		entityManager.flush();
 		entityManager.clear();
 
-		WalletBalanceDto balance = cashFacade.getBalance(MEMBER_ID);
+		WalletBalanceResponseDto balance = cashFacade.getBalance(MEMBER_ID);
 
 		assertThat(balance.holderId()).isEqualTo(MEMBER_ID);
 		assertThat(balance.balance()).isEqualTo(10_000);

@@ -3,7 +3,6 @@
 import { useState } from 'react'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
-import { usePlaceHold, useReleaseHold } from '@/features/payout-hold'
 import { HOLD_REASON_ITEMS } from '@/entities/payout'
 import type { payoutModel } from '@/shared/api'
 import { cn } from '@/shared/lib'
@@ -24,7 +23,7 @@ type Settlement = {
 type RefundRequest = { at: string; member: string; amount: string }
 
 // TODO(api): 관리자 정산 목록 · 환급 API가 아직 없어(PRO-156 선행 작업) 목록은 시안 예시 값이다.
-// 지급보류 걸기 · 풀기만 API에 연결했다. payoutId · holdId도 예시 값이라 실제 정산과 맞지 않을 수 있다.
+// payoutId · holdId도 예시 값이라 실제 정산과 맞지 않아, 보류 걸기 · 풀기 버튼은 막아 둔다.
 const SETTLEMENTS: Settlement[] = [
   {
     payoutId: 1,
@@ -70,8 +69,6 @@ export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: bo
   const [selectedId, setSelectedId] = useState(SETTLEMENTS[0].id)
   const target = SETTLEMENTS.find((r) => r.id === selectedId) ?? SETTLEMENTS[0]
   const [reasonType, setReasonType] = useState<payoutModel.PayoutHoldReason>('RACE_CANCELED')
-  const placeHold = usePlaceHold()
-  const release = useReleaseHold()
 
   return (
     <ConsolePage
@@ -107,26 +104,12 @@ export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: bo
               key: 'action',
               header: '처리',
               // TODO(api): 지급 완료로 바꾸기 API가 아직 없다
-              render: (r) => {
-                const { holdId } = r
-                return (
-                  <button
-                    type="button"
-                    className={ACTION}
-                    disabled={holdId !== undefined && release.isPending}
-                    onClick={
-                      holdId !== undefined
-                        ? (e) => {
-                            e.stopPropagation()
-                            release.mutate({ holdId })
-                          }
-                        : undefined
-                    }
-                  >
-                    {r.action}
-                  </button>
-                )
-              },
+              // TODO(api): 관리자 목록 API가 생기면 실제 행에서만 켠다
+              render: (r) => (
+                <button type="button" className={ACTION} disabled>
+                  {r.action}
+                </button>
+              ),
             },
           ]}
         />
@@ -146,11 +129,8 @@ export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: bo
           <p className="text-caption text-text-tertiary">
             보류가 풀리면 다음 20일 묶음에 넣어 지급해요.
           </p>
-          <Button
-            variant="danger"
-            disabled={target.holdId !== undefined || placeHold.isPending}
-            onClick={() => placeHold.mutate({ payoutId: target.payoutId, data: { reasonType } })}
-          >
+          {/* TODO(api): 관리자 목록 API가 생기면 실제 행에서만 켠다 */}
+          <Button variant="danger" disabled>
             지급보류 걸기
           </Button>
         </ConsoleCard>

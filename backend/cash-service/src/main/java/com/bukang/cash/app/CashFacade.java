@@ -7,10 +7,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.wallet.Wallet;
-import com.bukang.cash.dto.CashBalanceDto;
-import com.bukang.cash.dto.CashPaymentDto;
-import com.bukang.cash.dto.CashRefundDto;
-import com.bukang.cash.dto.WalletBalanceDto;
+import com.bukang.cash.dto.CashBalanceResponseDto;
+import com.bukang.cash.dto.CashChargeResponseDto;
+import com.bukang.cash.dto.CashPaymentResponseDto;
+import com.bukang.cash.dto.CashRefundResponseDto;
+import com.bukang.cash.dto.WalletBalanceResponseDto;
 
 import lombok.RequiredArgsConstructor;
 
@@ -23,7 +24,7 @@ public class CashFacade {
 	private final CashCompleteOrderPaymentUseCase cashCompleteOrderPaymentUseCase;
 	private final CashCancelOrderPaymentUseCase cashCancelOrderPaymentUseCase;
 	private final CashRefundPaymentUseCase cashRefundPaymentUseCase;
-
+	private final CashChargeConfirmUseCase cashChargeConfirmUseCase;
 
 	@Transactional
 	public CashMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate,
@@ -37,17 +38,17 @@ public class CashFacade {
 	}
 
 	@Transactional(readOnly = true)
-	public WalletBalanceDto getBalance(int holderId) {
-		return WalletBalanceDto.from(cashSupport.findWalletByHolderId(holderId));
+	public WalletBalanceResponseDto getBalance(int holderId) {
+		return WalletBalanceResponseDto.from(cashSupport.findWalletByHolderId(holderId));
 	}
 
 	@Transactional(readOnly = true)
-	public CashBalanceDto getBalanceOrZero(int memberId) {
-		return new CashBalanceDto(cashSupport.findBalanceOrZero(memberId));
+	public CashBalanceResponseDto getBalanceOrZero(int memberId) {
+		return new CashBalanceResponseDto(cashSupport.findBalanceOrZero(memberId));
 	}
 
 	@Transactional
-	public CashPaymentDto completeOrderPayment(int orderId, int customerId, int salePrice) {
+	public CashPaymentResponseDto completeOrderPayment(int orderId, int customerId, int salePrice) {
 		return cashCompleteOrderPaymentUseCase.completeOrderPayment(orderId, customerId, salePrice);
 	}
 
@@ -57,8 +58,12 @@ public class CashFacade {
 	}
 
 	@Transactional
-	public CashRefundDto refund(int orderId, int customerId) {
+	public CashRefundResponseDto refund(int orderId, int customerId) {
 		return cashRefundPaymentUseCase.refund(orderId, customerId);
 	}
 
+	@Transactional
+	public CashChargeResponseDto confirmWalletCharge(int customerId, String paymentKey, String orderId, int amount) {
+		return cashChargeConfirmUseCase.confirmWalletCharge(customerId, paymentKey, orderId, amount);
+	}
 }
