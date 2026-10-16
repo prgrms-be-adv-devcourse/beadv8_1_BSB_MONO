@@ -83,6 +83,7 @@ public class PayoutGroupCreator {
 
 		Payout payout = Payout.finalStage(group.sellerId(), group.raceId(), group.raceName(), YearMonth.from(raceDate),
 			advanceDeduction, now, businessDayCalendar);
+
 		group.entries().forEach(entry ->
 			payout.addItem(entry.orderItemId(), entry.price(), TwoStagePayoutCalculator.FEE_RATE, targetDate));
 

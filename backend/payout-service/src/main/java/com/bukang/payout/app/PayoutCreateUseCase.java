@@ -1,6 +1,7 @@
 package com.bukang.payout.app;
 
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 
 import java.time.LocalDate;
@@ -35,7 +36,8 @@ import lombok.extern.slf4j.Slf4j;
  * 한 실행에서 1차(환불 마감일 다음 날)를 먼저, 최종(대회 다음 날)을 나중에 만든다. 놓친 날을 따라잡을 때
  * 같은 대회의 1차와 최종이 한 실행에 함께 오면, 최종이 1차 지급액을 선지급 차감으로 읽을 수 있어야 하기 때문이다
  * 판매자가 정산 계좌를 등록하지 않았으면 만들 때 '정산 계좌 미등록'으로 보류한다 (payout.md 1장 지급보류 2번, PRO-27)
- * 대회 이름은 이때 상품 서비스에 물어 정산 내역에 저장한다 (판매자 조회 때 상품 서비스를 부르지 않는다)
+ * 대상 대회는 상품 서비스에 먼저 묻는다 (1차는 환불 마감일, 최종은 대회일 기준). 대회 이름도 이때 받아 정산 내역에 저장한다
+ * 판매 값은 그다음 주문 서비스에 묻는다 (1차는 판매 집계, 최종은 참가권 목록) (PRO-214)
  *
  * 묶음(판매자 × 대회)마다 트랜잭션을 따로 연다 (PRO-60). 하루치를 트랜잭션 하나로 만들면 한 묶음의 실패로
  * 그날 모든 판매자의 정산 내역이 롤백되고, 배치는 지난 날을 다시 보지 않아 다시 만들어지지 않는다
@@ -45,7 +47,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class PayoutCreateUseCase {
-	private static final String UNKNOWN_RACE_NAME = "알 수 없는 대회 (ID %d)";
 	// 되돌아보기 기간: 어제 대상일부터 7일치. 일주일 안의 장애는 저절로 따라잡는다 (PRO-61)
 	private static final int LOOKBACK_DAYS = 7;
 
@@ -90,14 +91,15 @@ public class PayoutCreateUseCase {
 				continue;
 			}
 			YearMonth payoutMonth = YearMonth.from(race.refundDeadline());
-			summaries.forEach(summary -> createFirstGroup(summary, payoutMonth, race.refundDeadline(), counts, now));
+			summaries.forEach(summary -> createFirstGroup(summary, race.raceName(), payoutMonth, race.refundDeadline(),
+				counts, now));
 		}
 		return counts;
 	}
 
 	// 1차 묶음 하나를 만든다. 이미 만든 묶음은 건너뛰고, 실패하면 이 묶음만 실패로 남긴다
-	private void createFirstGroup(SoldSummary summary, YearMonth payoutMonth, LocalDate refundDeadline,
-		Counts counts, LocalDateTime now) {
+	private void createFirstGroup(SoldSummary summary, String raceName, YearMonth payoutMonth,
+		LocalDate refundDeadline, Counts counts, LocalDateTime now) {
 		SellerRace key = new SellerRace(summary.sellerId(), summary.raceId());
 		try {
 			if (payoutRepository.existsBySellerIdAndRaceIdAndPayoutMonthAndPayoutStage(
@@ -105,7 +107,7 @@ public class PayoutCreateUseCase {
 				counts.skipped++;
 				return;
 			}
-			payoutGroupCreator.createFirst(new FirstGroup(key.sellerId(), key.raceId(), raceNameOf(key.raceId()),
+			payoutGroupCreator.createFirst(new FirstGroup(key.sellerId(), key.raceId(), raceName,
 				sellerAccountPort.hasPayoutAccount(key.sellerId()), summary.priceSum(), summary.ticketCount()),
 				refundDeadline, now);
 			counts.created++;
@@ -116,31 +118,34 @@ public class PayoutCreateUseCase {
 		}
 	}
 
-	// 최종: 대회일이 되돌아보기 기간 안인 대회의 판매 내역으로 만든다. 정산 월은 대회일의 달이다
+	// 최종: 상품 서비스에서 대회일이 되돌아보기 기간 안인 대회를 받고, 그 대회의 판매 내역(참가권 목록)으로 만든다
+	// 정산 월 · 대상일은 상품 서비스의 대회일로 정한다 (주문 상품에 복사된 대회일이 아니라 일정 변경을 따라간다)
 	private Counts createFinalPayouts(LocalDate fromRaceDate, LocalDate toRaceDate, LocalDateTime now) {
+		Map<Integer, RaceSchedule> races = racePort.findRacesByRaceDate(fromRaceDate, toRaceDate).stream()
+			.collect(toMap(RaceSchedule::raceId, race -> race));
 		Map<SellerRace, List<SoldEntry>> bySellerAndRace = soldEntryPort.findSoldEntries(fromRaceDate, toRaceDate)
 			.stream()
 			.collect(groupingBy(entry -> new SellerRace(entry.sellerId(), entry.raceId())));
 
 		Counts counts = new Counts();
 		bySellerAndRace.forEach((key, entries) -> {
-			LocalDate raceDate;
+			RaceSchedule race = races.get(key.raceId());
 			try {
-				raceDate = raceDateOf(key, entries);
+				checkRaceDate(key, entries, race);
 			} catch (RuntimeException exception) {
 				counts.fail(key, entries, exception);
 				return;
 			}
-			createGroup(key, entries, PayoutStage.FINAL, YearMonth.from(raceDate), counts,
-				group -> payoutGroupCreator.createFinal(group, raceDate, now));
+			createGroup(key, entries, race.raceName(), PayoutStage.FINAL, YearMonth.from(race.raceDate()), counts,
+				group -> payoutGroupCreator.createFinal(group, race.raceDate(), now));
 		});
 		return counts;
 	}
 
 	// 묶음 하나를 만든다. 이 묶음만 실패로 남기고 다음 묶음을 계속 만든다
 	// 실패한 묶음의 정산 내역 · 항목 · 보류는 함께 롤백된다
-	private void createGroup(SellerRace key, List<SoldEntry> entries, PayoutStage stage, YearMonth payoutMonth,
-		Counts counts, Consumer<PayoutGroup> creator) {
+	private void createGroup(SellerRace key, List<SoldEntry> entries, String raceName, PayoutStage stage,
+		YearMonth payoutMonth, Counts counts, Consumer<PayoutGroup> creator) {
 		try {
 			// 정산 월은 실행일이 아니라 환불 마감일 · 대회일로 정한다. 실행일로 정하면 월말 대회를 다음 달 실행이
 			// 다시 볼 때 정산 월이 달라져 아래 중복 확인을 통과하고, 같은 참가권이 두 번 지급된다
@@ -151,7 +156,7 @@ public class PayoutCreateUseCase {
 				counts.skipped++;
 				return;
 			}
-			creator.accept(new PayoutGroup(key.sellerId(), key.raceId(), raceNameOf(key.raceId()),
+			creator.accept(new PayoutGroup(key.sellerId(), key.raceId(), raceName,
 				sellerAccountPort.hasPayoutAccount(key.sellerId()), entries));
 			counts.created++;
 		} catch (RuntimeException exception) {
@@ -159,22 +164,18 @@ public class PayoutCreateUseCase {
 		}
 	}
 
-	// 한 대회는 대회일이 하나다. 참가권마다 다르면 주문 쪽 데이터가 어긋난 것이므로, 어느 날로 정산할지 고르지 않고 실패로 남긴다
-	private LocalDate raceDateOf(SellerRace key, List<SoldEntry> entries) {
-		Set<LocalDate> raceDates = entries.stream().map(SoldEntry::raceDate).collect(toSet());
-		if (raceDates.size() != 1) {
+	// 상품 서비스가 이 기간의 대회로 돌려주지 않았거나, 참가권에 복사된 대회일이 상품의 대회일과 다르면
+	// 주문 쪽 데이터가 어긋난 것이므로 어느 날로 정산할지 고르지 않고 실패로 남긴다 (일정 변경 반영은 PRO-115)
+	private void checkRaceDate(SellerRace key, List<SoldEntry> entries, RaceSchedule race) {
+		if (race == null) {
 			throw new IllegalStateException(
-				"한 대회의 참가권 대회일이 서로 다릅니다. raceId=%d, raceDates=%s".formatted(key.raceId(), raceDates));
+				"상품 서비스가 이 기간의 대회로 돌려주지 않은 대회의 참가권입니다. raceId=%d".formatted(key.raceId()));
 		}
-		return raceDates.iterator().next();
-	}
-
-	// 이름은 보여 주기용이라, 상품 서비스에 대회가 없어도 정산(돈)은 막지 않는다. 대신 경고를 남겨 데이터를 맞추게 한다
-	private String raceNameOf(int raceId) {
-		return racePort.findRaceName(raceId).orElseGet(() -> {
-			log.warn("상품 서비스에서 대회를 찾지 못해 임시 이름으로 정산 내역을 만듭니다. raceId={}", raceId);
-			return UNKNOWN_RACE_NAME.formatted(raceId);
-		});
+		Set<LocalDate> raceDates = entries.stream().map(SoldEntry::raceDate).collect(toSet());
+		if (!raceDates.equals(Set.of(race.raceDate()))) {
+			throw new IllegalStateException("참가권의 대회일이 상품의 대회일과 다릅니다. raceId=%d, 상품=%s, 참가권=%s"
+				.formatted(key.raceId(), race.raceDate(), raceDates));
+		}
 	}
 
 	// 정산 내역 하나로 묶이는 판매자 × 대회

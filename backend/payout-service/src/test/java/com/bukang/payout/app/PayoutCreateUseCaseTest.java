@@ -43,10 +43,12 @@ class PayoutCreateUseCaseTest {
 	private static final LocalDate TARGET_DATE = LocalDate.of(2026, 9, 26);
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 26, 3, 0);
 
-	// 상품 서비스에 대회 10, 20만 있다
+	// 상품 서비스에 대회 10, 20, 40, 50만 있다 (30은 상품 서비스가 모르는 대회)
 	private static final IntFunction<Optional<String>> RACE_NAMES = raceId -> switch (raceId) {
 		case 10 -> Optional.of("2026 한강 나이트런");
 		case 20 -> Optional.of("2026 가을 하프마라톤");
+		case 40 -> Optional.of("2026 가을 5K");
+		case 50 -> Optional.of("2026 가을 트레일런");
 		default -> Optional.empty();
 	};
 
@@ -86,7 +88,7 @@ class PayoutCreateUseCaseTest {
 			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
 				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
 		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntriesReturning(entries),
-			sellerAccountPort, new StubRacePort(RACE_NAMES, schedules), summariesOf(entries));
+			sellerAccountPort, new StubRacePort(RACE_NAMES, schedules, entries), summariesOf(entries));
 	}
 
 	// 주문 서비스처럼, 대회의 참가권을 판매자별로 묶어 가격 합과 장수를 돌려주는 가짜 포트 (1차 정산용)
@@ -108,7 +110,7 @@ class PayoutCreateUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("정산 내역을 만들 때 상품 서비스에서 받은 대회 이름을 저장하고, 대회를 못 찾아도 정산은 만든다")
+	@DisplayName("정산 내역에 상품 서비스에서 받은 대회 이름을 저장하고, 상품 서비스가 모르는 대회는 정산하지 않는다")
 	void savesRaceName() {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
 			new SoldEntry(100, 1, 10, RACE_DATE, 50_000L),
@@ -118,8 +120,8 @@ class PayoutCreateUseCaseTest {
 		useCase.run(TARGET_DATE, NOW);
 
 		assertThat(payoutOf(1).getRaceName()).isEqualTo("2026 한강 나이트런");
-		assertThat(payoutOf(3).getRaceName()).isEqualTo("알 수 없는 대회 (ID 30)");
-		assertThat(payoutOf(3).getStatus()).isEqualTo(PayoutStatus.CALCULATED);
+		// 대상 대회는 상품 서비스가 정한다 (PRO-214). 모르는 대회의 참가권은 실패로 남기고 정산하지 않는다
+		assertThat(payoutRepository.findAll()).extracting(Payout::getSellerId).containsExactly(1);
 	}
 
 	private Payout payoutOf(int sellerId) {
@@ -258,7 +260,7 @@ class PayoutCreateUseCaseTest {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
 			new SoldEntry(100, 1, 10, LocalDate.of(2026, 9, 22), 50_000L),
 			new SoldEntry(200, 2, 20, LocalDate.of(2026, 9, 23), 30_000L),
-			new SoldEntry(300, 3, 30, LocalDate.of(2026, 9, 29), 40_000L),
+			new SoldEntry(300, 3, 50, LocalDate.of(2026, 9, 29), 40_000L),
 			new SoldEntry(400, 4, 40, LocalDate.of(2026, 9, 30), 20_000L)
 		));
 
@@ -294,7 +296,7 @@ class PayoutCreateUseCaseTest {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
 			new SoldEntry(100, 1, 10, raceDate, 50_000L),
 			new SoldEntry(101, 1, 10, raceDate, 50_000L)
-		), sellerId -> true, List.of(new RaceSchedule(10, raceDate, refundDeadline)));
+		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, refundDeadline)));
 
 		// 9/30(마감일 당일) 실행은 아직 1차를 만들지 않는다
 		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
@@ -325,7 +327,7 @@ class PayoutCreateUseCaseTest {
 		// 2장 중 1장은 마감 전에 환불되어 주문 서비스가 돌려주지 않는다
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
 			new SoldEntry(100, 1, 10, raceDate, 50_000L)
-		), sellerId -> true, List.of(new RaceSchedule(10, raceDate, LocalDate.of(2026, 9, 30))));
+		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 30))));
 
 		useCase.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
 
@@ -333,13 +335,13 @@ class PayoutCreateUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("1차는 같은 날 열리는 다른 대회의 참가권을 섞지 않는다 (판매 내역은 대회일로 묻고 대회 ID로 거른다)")
+	@DisplayName("1차는 같은 날 열리는 다른 대회의 참가권을 섞지 않는다 (판매 집계는 대회 ID로 묻는다)")
 	void firstPayoutOnlyForScheduledRace() {
 		LocalDate raceDate = LocalDate.of(2026, 10, 10);
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
 			new SoldEntry(100, 1, 10, raceDate, 50_000L),
 			new SoldEntry(200, 1, 20, raceDate, 30_000L)
-		), sellerId -> true, List.of(new RaceSchedule(10, raceDate, LocalDate.of(2026, 9, 30))));
+		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 30))));
 
 		useCase.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
 
@@ -355,7 +357,7 @@ class PayoutCreateUseCaseTest {
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
 			new SoldEntry(100, 1, 10, sameDay, 50_000L),
 			new SoldEntry(101, 1, 10, sameDay, 50_000L)
-		), sellerId -> true, List.of(new RaceSchedule(10, sameDay, sameDay)));
+		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", sameDay, sameDay)));
 
 		// 마감일과 대회일이 같아 한 실행에서 1차를 먼저, 최종을 나중에 만든다
 		useCase.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
@@ -377,7 +379,8 @@ class PayoutCreateUseCaseTest {
 	void holdsFinalWhenFirstIsHeld() {
 		LocalDate raceDate = LocalDate.of(2026, 9, 30);
 		List<SoldEntry> entries = List.of(new SoldEntry(100, 1, 10, raceDate, 50_000L));
-		List<RaceSchedule> schedules = List.of(new RaceSchedule(10, raceDate, LocalDate.of(2026, 9, 20)));
+		List<RaceSchedule> schedules =
+			List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 20)));
 
 		// 1차를 만들 때는 계좌가 없어 자동 보류가 걸렸다
 		useCaseSelling(entries, sellerId -> false, schedules)
@@ -402,7 +405,7 @@ class PayoutCreateUseCaseTest {
 		LocalDate raceDate = LocalDate.of(2026, 10, 10);
 		PayoutCreateUseCase useCase = useCaseSelling(List.of(
 			new SoldEntry(100, 1, 10, raceDate, 50_000L)
-		), sellerId -> true, List.of(new RaceSchedule(10, raceDate, LocalDate.of(2026, 9, 28))));
+		), sellerId -> true, List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 28))));
 
 		useCase.run(LocalDate.of(2026, 9, 30), LocalDateTime.of(2026, 9, 30, 3, 0));
 		useCase.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));

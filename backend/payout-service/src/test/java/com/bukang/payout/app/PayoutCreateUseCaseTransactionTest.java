@@ -77,7 +77,7 @@ class PayoutCreateUseCaseTransactionTest {
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
 		SoldEntryPort soldEntryPort = (from, to) -> entries;
 		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntryPort, sellerAccountPort,
-			new StubRacePort(RACE_NAMES, List.of()), raceId -> List.of());
+			new StubRacePort(RACE_NAMES, List.of(), entries), raceId -> List.of());
 	}
 
 	@Test
