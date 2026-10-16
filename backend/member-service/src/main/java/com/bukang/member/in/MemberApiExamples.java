@@ -66,6 +66,29 @@ final class MemberApiExamples {
 		{ "status": 404, "message": "존재하지 않는 회원입니다.", "data": null }
 		""";
 
+	static final String WITHDRAW_ME_SUCCESS = """
+		{ "status": 200, "message": "탈퇴했습니다.", "data": null }
+		""";
+
+	static final String WITHDRAW_ME_NOT_FOUND = """
+		{ "status": 404, "code": "MEMBER_NOT_FOUND", "message": "존재하지 않는 회원입니다.", "data": null }
+		""";
+
+	static final String WITHDRAW_CASH_LEFT = """
+		{ "status": 409, "code": "MEMBER_WITHDRAW_CASH_LEFT",
+			"message": "남은 예치금이 있어 탈퇴할 수 없습니다. 예치금을 모두 사용하거나 출금한 뒤 탈퇴해주세요.", "data": null }
+		""";
+
+	static final String WITHDRAW_TICKET_LEFT = """
+		{ "status": 409, "code": "MEMBER_WITHDRAW_TICKET_LEFT",
+			"message": "끝나지 않은 참가권이 있어 탈퇴할 수 없습니다. 대회가 끝나거나 참가권을 취소한 뒤 탈퇴해주세요.", "data": null }
+		""";
+
+	static final String WITHDRAW_CHECK_FAILED = """
+		{ "status": 503, "code": "MEMBER_WITHDRAW_CHECK_FAILED",
+			"message": "예치금을 확인하지 못했습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
+		""";
+
 	private MemberApiExamples() {
 	}
 }

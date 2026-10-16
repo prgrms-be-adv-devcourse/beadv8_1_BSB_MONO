@@ -19,7 +19,8 @@ public class CustomUserDetailService implements UserDetailsService {
 	// "가입되지 않은 이메일"인지 "비밀번호가 틀렸는지"가 외부에 드러나지 않는다
 	@Override
 	public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-		Member member = memberRepository.findByEmail(email)
+		// 탈퇴한 회원은 이메일이 비어 찾히지 않지만, 상태로도 한 번 더 막는다 (BE-022)
+		Member member = memberRepository.findActiveByEmail(email)
 			.orElseThrow(() -> new UsernameNotFoundException("존재하지 않는 회원입니다."));
 
 		return new CustomUserDetails(member);

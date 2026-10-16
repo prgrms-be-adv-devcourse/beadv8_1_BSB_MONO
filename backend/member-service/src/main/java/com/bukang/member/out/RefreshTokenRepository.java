@@ -80,6 +80,14 @@ public class RefreshTokenRepository {
 	}
 
 	/**
+	 * 회원 탈퇴: 그 회원의 Refresh Token 기록을 family와 상관없이 지운다 (BE-022 결정 6).
+	 * 회원당 키가 하나라 키를 지우면 모든 기기의 재발급이 막힌다.
+	 */
+	public void deleteAll(long memberId) {
+		redisTemplate.delete(key(memberId));
+	}
+
+	/**
 	 * 회전할 새 토큰의 만료를 30일 상한에서 자르려고 family 최종 만료를 읽는다.
 	 * family마다 한 번 정해지고 바뀌지 않으므로 판정(rotate)과 따로 읽어도 된다.
 	 */

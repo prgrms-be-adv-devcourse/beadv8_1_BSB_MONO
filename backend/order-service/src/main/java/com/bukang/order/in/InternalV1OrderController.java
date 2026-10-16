@@ -7,12 +7,15 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.order.app.ActiveTicketQueryUseCase;
 import com.bukang.order.app.SoldEntryQueryUseCase;
+import com.bukang.order.dto.ActiveTicketCountDto;
 import com.bukang.order.dto.SoldEntryDto;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,12 +32,13 @@ import lombok.RequiredArgsConstructor;
  * 다른 서비스가 동기 호출로 부르는 내부 API. /internal/** 은 게이트웨이에 노출하지 않는다 (file-service와 같은 방식)
  * 회원이 아니라 서비스가 부르므로 회원 ID 헤더를 받지 않는다
  */
-@Tag(name = "OrderInternal", description = "정산용 판매 내역 조회 API (서비스 간 내부 호출 전용)")
+@Tag(name = "OrderInternal", description = "정산용 판매 내역, 탈퇴 확인용 참가권 수 조회 API (서비스 간 내부 호출 전용)")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/internal/v1/order")
 public class InternalV1OrderController {
 	private final SoldEntryQueryUseCase soldEntryQueryUseCase;
+	private final ActiveTicketQueryUseCase activeTicketQueryUseCase;
 
 	@GetMapping("/sold-entries")
 	@Operation(summary = "정산용 판매 내역 조회",
@@ -63,5 +67,25 @@ public class InternalV1OrderController {
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "판매 내역을 조회했습니다.", soldEntryQueryUseCase.findSoldEntries(from, to)));
+	}
+
+	// 회원 서비스가 탈퇴 전에 끝나지 않은 참가권이 있는지 묻는다 (BE-022)
+	@GetMapping("/members/{memberId}/active-tickets/count")
+	@Operation(summary = "끝나지 않은 참가권 수 조회",
+		description = "회원 탈퇴 확인용. 회원이 산 참가권 중 결제 완료이고 취소·환불되지 않았으며, "
+			+ "대회 날짜(주문 때 복사한 날짜)가 오늘 이후(오늘 포함)인 것의 수를 돌려준다. "
+			+ "결제 대기·기한 만료 주문은 아직 참가권이 아니라 세지 않는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공 (없으면 0)",
+			content = @Content(examples = {
+				@ExampleObject(name = "참가권 있음", value = OrderInternalApiExamples.ACTIVE_TICKETS_SUCCESS),
+				@ExampleObject(name = "참가권 없음", value = OrderInternalApiExamples.ACTIVE_TICKETS_NONE)
+			}))
+	})
+	public ResponseEntity<RsData<ActiveTicketCountDto>> countActiveTickets(
+		@Parameter(description = "회원 ID", example = "3") @PathVariable int memberId
+	) {
+		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "끝나지 않은 참가권 수를 조회했습니다.",
+			activeTicketQueryUseCase.countActiveTickets(memberId, LocalDate.now())));
 	}
 }
