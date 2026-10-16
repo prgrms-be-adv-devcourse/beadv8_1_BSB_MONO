@@ -1,8 +1,10 @@
 package com.bukang.member.dto;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import com.bukang.member.domain.Gender;
+import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.validation.NicknameWidth;
 import com.bukang.member.dto.validation.PasswordBytes;
 
@@ -61,4 +63,11 @@ public class MemberJoinRequestDto {
 
 	@Schema(description = "성별 (선택)", example = "FEMALE", nullable = true)
 	private final Gender gender;
+
+	// 동의한 약관 종류. 필수 약관이 빠졌는지는 MemberJoinUseCase에서 확인한다 (BE-021)
+	// 모르는 종류가 오면 JSON을 읽다 실패해 400 INVALID_REQUEST가 된다
+	@Schema(description = "동의한 약관 종류 (SERVICE, PRIVACY는 필수). 동의하지 않은 선택 약관은 빼고 보낸다",
+		example = "[\"SERVICE\", \"PRIVACY\", \"MARKETING\"]")
+	@NotNull(message = "동의한 약관 목록을 작성해주세요.")
+	private final List<TermsType> agreedTerms;
 }

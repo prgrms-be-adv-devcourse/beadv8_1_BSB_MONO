@@ -15,7 +15,8 @@ import com.bukang.member.out.MemberRepository;
 
 import lombok.RequiredArgsConstructor;
 
-// 내 정보(이름·생년월일·휴대폰·닉네임) 수정 (BE-012). 수정 이벤트는 PRO-171에서 붙인다
+// 내 정보(이름·생년월일·휴대폰·닉네임) 수정 (BE-012)
+// 4칸 중 하나라도 바뀌어 저장했을 때만 수정 이벤트를 발행하고, 커밋 뒤 Kafka로 나간다 (BE-015)
 @Service
 @RequiredArgsConstructor
 public class MemberModifyUseCase {
@@ -46,12 +47,16 @@ public class MemberModifyUseCase {
 		if (!member.modify(name, nickname, phone, phoneHash, birthDate)) {
 			return member;
 		}
+		Member saved;
 		try {
 			// 유니크 제약 위반을 여기서 잡으려고 바로 반영한다 (가입과 같은 이유)
-			return memberRepository.saveAndFlush(member);
+			saved = memberRepository.saveAndFlush(member);
 		} catch (DataIntegrityViolationException exception) {
 			// 같은 닉네임·휴대폰으로 동시에 바꾸면 둘 다 위의 중복 검사를 통과하고, 늦은 쪽이 DB 유니크 제약에 걸린다
 			throw MemberDuplicateExceptions.from(exception);
 		}
+		// flush로 수정 시각이 채워진 뒤에 발행해야 이벤트에 새 수정 시각이 담긴다
+		saved.publishModifiedEvent();
+		return saved;
 	}
 }

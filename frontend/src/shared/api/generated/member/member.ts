@@ -25,10 +25,12 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CheckEmailAvailabilityParams,
   MemberJoinRequestDto,
   MemberLoginRequestDto,
   MemberModifyRequestDto,
   RsData,
+  RsDataEmailAvailabilityResponseDto,
   RsDataMemberDto,
   RsDataMemberLoginResponseDto,
   RsDataTokenReissueResponseDto
@@ -570,7 +572,7 @@ export const getJoinUrl = () => {
 }
 
 /**
- * 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다.
+ * 필수 약관 동의를 확인하고 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다. 지금 버전의 약관마다 동의 여부를 기록한다.
  * @summary 회원가입
  */
 export const join = async (memberJoinRequestDto: MemberJoinRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
@@ -649,4 +651,113 @@ export const useJoin = <TError = RsData,
       > => {
       return useMutation(getJoinMutationOptions(options), queryClient);
     }
+
+export const getCheckEmailAvailabilityUrl = (params: CheckEmailAvailabilityParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/member/members/email-availability?${stringifiedParams}` : `/api/v1/member/members/email-availability`
+}
+
+/**
+ * 이메일이 아직 가입되지 않았으면 available=true, 이미 가입됐으면 false를 돌려준다. 로그인 없이 부를 수 있다. 탈퇴한 회원의 이메일은 비워지므로 다시 쓸 수 있다.
+ * @summary 이메일 사용 가능 여부 확인
+ */
+export const checkEmailAvailability = async (params: CheckEmailAvailabilityParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataEmailAvailabilityResponseDto> => {
+
+  return customFetch<RsDataEmailAvailabilityResponseDto>(getCheckEmailAvailabilityUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getCheckEmailAvailabilityQueryKey = (params?: CheckEmailAvailabilityParams,) => {
+    return [
+    `/api/v1/member/members/email-availability`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getCheckEmailAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(params: CheckEmailAvailabilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCheckEmailAvailabilityQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof checkEmailAvailability>>> = ({ signal }) => checkEmailAvailability(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type CheckEmailAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof checkEmailAvailability>>>
+export type CheckEmailAvailabilityQueryError = RsData
+
+
+export function useCheckEmailAvailability<TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(
+ params: CheckEmailAvailabilityParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof checkEmailAvailability>>,
+          TError,
+          Awaited<ReturnType<typeof checkEmailAvailability>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCheckEmailAvailability<TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(
+ params: CheckEmailAvailabilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof checkEmailAvailability>>,
+          TError,
+          Awaited<ReturnType<typeof checkEmailAvailability>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCheckEmailAvailability<TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(
+ params: CheckEmailAvailabilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 이메일 사용 가능 여부 확인
+ */
+
+export function useCheckEmailAvailability<TData = Awaited<ReturnType<typeof checkEmailAvailability>>, TError = RsData>(
+ params: CheckEmailAvailabilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof checkEmailAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getCheckEmailAvailabilityQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 

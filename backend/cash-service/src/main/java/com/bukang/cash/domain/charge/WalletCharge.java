@@ -33,7 +33,6 @@ public class WalletCharge extends BaseIdAndTime {
 	@Column(nullable = false, length = 30)
 	private String pgProvider;
 
-	// 암호문을 저장한다. PG 승인 전에는 비어 있다
 	@Column(length = 255)
 	private String pgPaymentKey;
 	@Column(nullable = false, unique = true, length = 64) // 중복 충전 방지
@@ -42,7 +41,7 @@ public class WalletCharge extends BaseIdAndTime {
 	@Enumerated(STRING)
 	@Column(nullable = false, length = 20)
 	private ChargeStatus status;
-	private LocalDateTime chargedAt;
+	private LocalDateTime chargeDate;
 
 	public WalletCharge(Wallet wallet, int amount, String pgProvider, String idempotencyKey) {
 		this.wallet = wallet;
@@ -50,5 +49,14 @@ public class WalletCharge extends BaseIdAndTime {
 		this.pgProvider = pgProvider;
 		this.idempotencyKey = idempotencyKey;
 		this.status = ChargeStatus.REQUESTED;
+	}
+	public void markCompleted(String pgPaymentKey, LocalDateTime chargeDate) {
+		this.pgPaymentKey = pgPaymentKey;
+		this.status = ChargeStatus.COMPLETED;
+		this.chargeDate = chargeDate;
+	}
+
+	public void markFailed() {
+		this.status = ChargeStatus.FAILED;
 	}
 }

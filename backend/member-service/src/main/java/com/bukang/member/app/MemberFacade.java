@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.bukang.member.domain.Member;
 import com.bukang.member.domain.exception.MemberNotFoundException;
 import com.bukang.member.dto.AuthTokens;
+import com.bukang.member.dto.EmailAvailabilityResponseDto;
 import com.bukang.member.dto.MemberDto;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.dto.MemberLoginRequestDto;
@@ -38,8 +39,13 @@ public class MemberFacade {
 			memberJoinDto.getNickname(),
 			memberJoinDto.getPhone(),
 			memberJoinDto.getBirthDate(),
-			memberJoinDto.getGender()
+			memberJoinDto.getGender(),
+			memberJoinDto.getAgreedTerms()
 		).toDto();
+	}
+
+	public EmailAvailabilityResponseDto checkEmailAvailability(String email) {
+		return new EmailAvailabilityResponseDto(!memberRepository.existsByEmail(email));
 	}
 
 	public MemberDto findMe(int memberId) {

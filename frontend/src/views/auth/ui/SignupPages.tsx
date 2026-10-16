@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
-import { useLogin } from '@/features/auth'
+import { checkEmailAvailable, useLogin } from '@/features/auth'
 import { memberApi } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import {
@@ -59,6 +59,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
     subscribe,
     getValues,
     trigger,
+    setError,
     formState: { errors, isValid },
   } = useForm<SignupAccountValues>({
     resolver: zodResolver(signupAccountSchema),
@@ -79,9 +80,29 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
   const revalidateConfirm = () => {
     if (getValues('passwordConfirm')) void trigger('passwordConfirm')
   }
-  // TODO(api): 이메일 중복 확인 API가 백엔드에 없다. 지금은 마지막 단계의 가입 요청이 409로 알려 준다.
-  // 생기면 여기서 확인하고 중복이면 email 칸에 AUTH_ERRORS.emailTaken을 띄운다.
-  const onNext = handleSubmit(() => router.push('/signup/profile'))
+  // 이메일 중복 확인. 칸을 벗어날 때 먼저 알려 주고, "다음"에서도 한 번 더 확인해 중복이면 못 넘어가게 한다.
+  // quiet: 칸을 벗어날 때처럼 미리 알려 주는 확인. 형식이 맞는 이메일만 묻고, 서버에 닿지 못해도 오류를 띄우지 않는다.
+  // "다음"에서는 확인 요청이 실패해도 칸 오류로 알리고 넘어가지 않는다.
+  const [emailCheckFailed, setEmailCheckFailed] = useState(false)
+  const checkEmail = async (quiet = false): Promise<boolean> => {
+    setEmailCheckFailed(false)
+    const email = getValues('email').trim()
+    if (quiet && !signupAccountSchema.shape.email.safeParse(email).success) return false
+    try {
+      const available = await checkEmailAvailable(email)
+      if (!available && getValues('email').trim() === email) {
+        setError('email', { type: 'taken', message: AUTH_ERRORS.emailTaken })
+      }
+      return available
+    } catch {
+      // setError는 폼을 "유효하지 않음"으로 만들어 버튼이 막히므로, 확인 실패는 따로 들고 있는다.
+      if (!quiet) setEmailCheckFailed(true)
+      return false
+    }
+  }
+  const onNext = handleSubmit(async () => {
+    if (await checkEmail()) router.push('/signup/profile')
+  })
   // 약관 시트를 동의 없이 닫았다면 "다음"이 시트를 다시 연다. 동의해야 다음 단계로 간다.
   const onNextClick = termsAgreed || invalid ? onNext : () => setTermsOpen(true)
 
@@ -103,8 +124,12 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
           type="email"
           autoComplete="email"
           placeholder="이메일을 입력해 주세요"
-          error={errors.email?.message ?? (invalid ? AUTH_ERRORS.emailTaken : undefined)}
-          {...register('email')}
+          error={
+            errors.email?.message ??
+            (emailCheckFailed ? AUTH_ERRORS.emailCheckFailed : undefined) ??
+            (invalid ? AUTH_ERRORS.emailTaken : undefined)
+          }
+          {...register('email', { onBlur: () => void checkEmail(true) })}
         />
         <TextField
           label="비밀번호"
@@ -207,6 +232,7 @@ export function SignupProfilePage() {
 function SignupProfileForm() {
   const router = useRouter()
   const account = useSignupStep((s) => s.account)
+  const terms = useSignupStep((s) => s.terms)
   const profile = useSignupStep((s) => s.profile)
   const setProfile = useSignupStep((s) => s.setProfile)
   const join = memberApi.useJoin()
@@ -235,7 +261,7 @@ function SignupProfileForm() {
   // 가입 API는 토큰을 주지 않는다. 로그인만 실패하면 가입은 됐으므로 로그인 화면으로 보낸다.
   const onSubmit = handleSubmit((values) => {
     setFormError(undefined)
-    const body = toJoinRequest(account, values)
+    const body = toJoinRequest(account, values, terms)
     join.mutate(
       { data: body },
       {

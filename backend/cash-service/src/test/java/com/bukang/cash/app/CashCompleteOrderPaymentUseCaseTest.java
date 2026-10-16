@@ -37,7 +37,7 @@ import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.LedgerType;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.domain.wallet.WalletLedger;
-import com.bukang.cash.dto.CashPaymentDto;
+import com.bukang.cash.dto.CashPaymentResponseDto;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
@@ -82,9 +82,9 @@ class CashCompleteOrderPaymentUseCaseTest {
 		createCustomerWallet(10_000);
 		createHoldingWallet();
 
-		CashPaymentDto result = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+		CashPaymentResponseDto result = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
 
-		assertThat(result.outcome()).isEqualTo(CashPaymentDto.Outcome.PAID);
+		assertThat(result.outcome()).isEqualTo(CashPaymentResponseDto.Outcome.PAID);
 		assertThat(result.shortage()).isZero();
 		assertBalance(CUSTOMER_ID, 7_000);
 		assertBalance(cashWalletProperties.holdingMemberId(), 3_000);
@@ -103,9 +103,9 @@ class CashCompleteOrderPaymentUseCaseTest {
 		createCustomerWallet(10_000);
 		createHoldingWallet();
 
-		CashPaymentDto result = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+		CashPaymentResponseDto result = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
 
-		assertThat(result.outcome()).isEqualTo(CashPaymentDto.Outcome.INSUFFICIENT_BALANCE);
+		assertThat(result.outcome()).isEqualTo(CashPaymentResponseDto.Outcome.INSUFFICIENT_BALANCE);
 		assertThat(result.shortage()).isEqualTo(5_000);
 		assertBalance(CUSTOMER_ID, 10_000);
 		assertBalance(cashWalletProperties.holdingMemberId(), 0);
@@ -124,8 +124,8 @@ class CashCompleteOrderPaymentUseCaseTest {
 		createCustomerWallet(10_000);
 		createHoldingWallet();
 
-		CashPaymentDto first = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
-		assertThat(first.outcome()).isEqualTo(CashPaymentDto.Outcome.INSUFFICIENT_BALANCE);
+		CashPaymentResponseDto first = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+		assertThat(first.outcome()).isEqualTo(CashPaymentResponseDto.Outcome.INSUFFICIENT_BALANCE);
 		int paymentIdAfterFailure = paymentRepository.findByOrderId(orderId).orElseThrow().getId();
 
 		// 충전 흐름(WalletCharge)은 범위 밖이라, 충전이 끝난 상태를 지갑에 직접 적립해 흉내낸다
@@ -135,9 +135,9 @@ class CashCompleteOrderPaymentUseCaseTest {
 				wallet.credit(10_000, LedgerType.충전__PG결제_토스페이먼츠, LedgerRefType.WalletCharge, 2));
 		});
 
-		CashPaymentDto second = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+		CashPaymentResponseDto second = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
 
-		assertThat(second.outcome()).isEqualTo(CashPaymentDto.Outcome.PAID);
+		assertThat(second.outcome()).isEqualTo(CashPaymentResponseDto.Outcome.PAID);
 		assertThat(paymentRepository.count()).isEqualTo(1);
 		Payment payment = paymentRepository.findByOrderId(orderId).orElseThrow();
 		assertThat(payment.getId()).isEqualTo(paymentIdAfterFailure);
@@ -156,9 +156,9 @@ class CashCompleteOrderPaymentUseCaseTest {
 		createHoldingWallet();
 
 		cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
-		CashPaymentDto second = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+		CashPaymentResponseDto second = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
 
-		assertThat(second.outcome()).isEqualTo(CashPaymentDto.Outcome.PAID);
+		assertThat(second.outcome()).isEqualTo(CashPaymentResponseDto.Outcome.PAID);
 		assertBalance(CUSTOMER_ID, 7_000);
 		assertBalance(cashWalletProperties.holdingMemberId(), 3_000);
 		assertThat(countLedgersForOrder(orderId)).isEqualTo(2);
@@ -227,7 +227,7 @@ class CashCompleteOrderPaymentUseCaseTest {
 			cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount));
 
 		long paidCount = results.stream().filter(result -> result.dto() != null
-			&& result.dto().outcome() == CashPaymentDto.Outcome.PAID).count();
+			&& result.dto().outcome() == CashPaymentResponseDto.Outcome.PAID).count();
 		long errorCount = results.stream().filter(result -> result.error() != null).count();
 
 		printAttemptSummary("P7", results);
@@ -253,9 +253,9 @@ class CashCompleteOrderPaymentUseCaseTest {
 			cashFacade.completeOrderPayment(baseOrderId + i + 1, CUSTOMER_ID, amount));
 
 		long paidCount = results.stream().filter(result -> result.dto() != null
-			&& result.dto().outcome() == CashPaymentDto.Outcome.PAID).count();
+			&& result.dto().outcome() == CashPaymentResponseDto.Outcome.PAID).count();
 		long insufficientCount = results.stream().filter(result -> result.dto() != null
-			&& result.dto().outcome() == CashPaymentDto.Outcome.INSUFFICIENT_BALANCE).count();
+			&& result.dto().outcome() == CashPaymentResponseDto.Outcome.INSUFFICIENT_BALANCE).count();
 		long errorCount = results.stream().filter(result -> result.error() != null).count();
 		int finalBalance = walletRepository.findById(CUSTOMER_ID).orElseThrow().getBalance();
 
@@ -311,13 +311,13 @@ class CashCompleteOrderPaymentUseCaseTest {
 		assertLedgerConsistency(CUSTOMER_ID, cashWalletProperties.holdingMemberId());
 	}
 
-	private List<AttemptResult> runConcurrently(int threadCount, IntFunction<Callable<CashPaymentDto>> taskFactory)
+	private List<AttemptResult> runConcurrently(int threadCount, IntFunction<Callable<CashPaymentResponseDto>> taskFactory)
 		throws InterruptedException {
 		ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 		CountDownLatch startSignal = new CountDownLatch(1);
-		List<Future<CashPaymentDto>> futures = new ArrayList<>();
+		List<Future<CashPaymentResponseDto>> futures = new ArrayList<>();
 		for (int i = 0; i < threadCount; i++) {
-			Callable<CashPaymentDto> task = taskFactory.apply(i);
+			Callable<CashPaymentResponseDto> task = taskFactory.apply(i);
 			futures.add(executor.submit(() -> {
 				startSignal.await();
 				return task.call();
@@ -326,7 +326,7 @@ class CashCompleteOrderPaymentUseCaseTest {
 		startSignal.countDown();
 
 		List<AttemptResult> results = new ArrayList<>();
-		for (Future<CashPaymentDto> future : futures) {
+		for (Future<CashPaymentResponseDto> future : futures) {
 			try {
 				results.add(new AttemptResult(future.get(), null));
 			} catch (ExecutionException e) {
@@ -408,6 +408,6 @@ class CashCompleteOrderPaymentUseCaseTest {
 		});
 	}
 
-	private record AttemptResult(CashPaymentDto dto, Throwable error) {
+	private record AttemptResult(CashPaymentResponseDto dto, Throwable error) {
 	}
 }

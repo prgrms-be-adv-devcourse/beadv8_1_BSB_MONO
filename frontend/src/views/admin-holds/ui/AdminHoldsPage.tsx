@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
-import { usePlaceHold, useReleaseHold } from '@/features/payout-hold'
+import { usePlaceHold } from '@/features/payout-hold'
 import { HOLD_REASON_ITEMS } from '@/entities/payout'
 import type { payoutModel } from '@/shared/api'
 import { cn } from '@/shared/lib'
@@ -33,7 +33,7 @@ type Hold = {
 }
 
 // TODO(api): 관리자 지급보류 목록 API가 아직 없어(PRO-156 선행 작업) 목록은 시안 예시 값이다.
-// 보류 걸기 · 풀기만 API에 연결했다. holdId도 예시 값이라 실제 보류와 맞지 않을 수 있다.
+// holdId도 예시 값이라 실제 보류와 맞지 않아, 예시 행의 보류 해제 버튼은 막아 둔다.
 const HOLDS: Hold[] = [
   {
     holdId: 1,
@@ -76,7 +76,6 @@ function parsePayoutId(text: string): number | null {
 export function AdminHoldsPage() {
   const [selectedId, setSelectedId] = useState('HD-20261025-0C13')
   const hold = HOLDS.find((h) => h.id === selectedId) ?? HOLDS[1]
-  const release = useReleaseHold()
   const placeHold = usePlaceHold()
   const [payoutIdText, setPayoutIdText] = useState('')
   const [reasonType, setReasonType] = useState<payoutModel.PayoutHoldReason>('RACE_CANCELED')
@@ -156,12 +155,8 @@ export function AdminHoldsPage() {
           </p>
           <KeyValue label="보류 금액" value={hold.amount} />
           <KeyValue label="사유" value={hold.reason} />
-          <Button
-            variant="secondary"
-            className="w-full"
-            disabled={hold.status === '해제' || release.isPending}
-            onClick={() => release.mutate({ holdId: hold.holdId })}
-          >
+          {/* TODO(api): 관리자 목록 API가 생기면 실제 행에서만 켠다 */}
+          <Button variant="secondary" className="w-full" disabled>
             보류 해제
           </Button>
           <p className="text-caption text-text-tertiary">

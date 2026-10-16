@@ -125,7 +125,7 @@ export const LoginResponse = zod.object({
 
 
 /**
- * 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다.
+ * 필수 약관 동의를 확인하고 이메일, 닉네임, 휴대폰 번호 중복을 검사한 뒤 회원을 생성한다. 지금 버전의 약관마다 동의 여부를 기록한다.
  * @summary 회원가입
  */
 
@@ -148,7 +148,29 @@ export const JoinBody = zod.object({
   "nickname": zod.string().min(1).regex(joinBodyNicknameRegExp).describe('닉네임 (한글 2~8자, 영문 4~16자, 한글·영문·숫자만)'),
   "phone": zod.string().min(1).regex(joinBodyPhoneRegExp).describe('휴대폰 번호 (하이픈 생략 가능)'),
   "birthDate": zod.iso.date().describe('생년월일'),
-  "gender": zod.union([zod.literal('MALE'),zod.literal('FEMALE'),zod.literal(null)]).nullish().describe('성별 (선택)')
+  "gender": zod.union([zod.literal('MALE'),zod.literal('FEMALE'),zod.literal(null)]).nullish().describe('성별 (선택)'),
+  "agreedTerms": zod.array(zod.enum(['SERVICE', 'PRIVACY', 'MARKETING'])).describe('동의한 약관 종류 (SERVICE, PRIVACY는 필수). 동의하지 않은 선택 약관은 빼고 보낸다')
 }).describe('회원가입 요청')
 
 export const JoinResponse = zod.void()
+
+
+/**
+ * 이메일이 아직 가입되지 않았으면 available=true, 이미 가입됐으면 false를 돌려준다. 로그인 없이 부를 수 있다. 탈퇴한 회원의 이메일은 비워지므로 다시 쓸 수 있다.
+ * @summary 이메일 사용 가능 여부 확인
+ */
+export const checkEmailAvailabilityQueryEmailMax = 255;
+
+
+
+export const CheckEmailAvailabilityQueryParams = zod.object({
+  "email": zod.email().min(1).max(checkEmailAvailabilityQueryEmailMax).describe('확인할 이메일')
+})
+
+export const CheckEmailAvailabilityResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "available": zod.boolean().optional().describe('사용 가능하면 true, 이미 가입된 이메일이면 false')
+}).optional().describe('이메일 사용 가능 여부 응답')
+})

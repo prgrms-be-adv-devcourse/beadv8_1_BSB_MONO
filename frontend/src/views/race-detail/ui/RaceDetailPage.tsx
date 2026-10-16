@@ -54,7 +54,8 @@ export function RaceDetailPage({
       race.options.find((o) => !o.soldOut)?.id ??
       '',
   )
-  const applyHref = `/races/${race.id}/apply?option=${optionId}` as const
+  // 신청은 대기열(M05-Q1)을 거친다. 차례가 되면 대기열 화면에서 신청 화면(M05)으로 간다
+  const queueHref = `/races/${race.id}/queue?option=${optionId}` as const
   const posterLabel = race.options.map((o) => o.name).join(' · ')
   const [anchor, setAnchor] = useState<Anchor>('options')
   const [infoTab, setInfoTab] = useState<'detail' | 'faq'>('detail')
@@ -264,9 +265,9 @@ export function RaceDetailPage({
               {race.options.length === 0 ? '신청할 수 있는 종목이 없어요' : '정원이 모두 찼어요'}
             </Button>
           ) : (
-            // 로그인 전이면 로그인(M03)으로 보내고, 로그인 뒤 신청 화면으로 이어 간다
+            // 로그인 전이면 로그인(M03)으로 보내고, 로그인 뒤 대기열로 이어 간다
             <Link
-              href={authStatus === 'anonymous' ? loginHref(applyHref) : applyHref}
+              href={authStatus === 'anonymous' ? loginHref(queueHref) : queueHref}
               className={buttonClassName({ size: 'l' })}
             >
               신청하기

@@ -6,6 +6,7 @@ import {
   type SignupAccountValues,
   type SignupProfileValues,
 } from './schemas'
+import { agreedTermTypes, type SignupTermChecks } from './signup-terms'
 
 /** 화면의 "1995.03.02"를 API의 "1995-03-02"로 바꾼다. */
 export function toIsoDate(birth: string): string {
@@ -14,11 +15,12 @@ export function toIsoDate(birth: string): string {
 
 /**
  * 가입 단계 입력을 가입 요청(POST /api/v1/auth/join) 본문으로 바꾼다.
- * 약관 동의는 가입 API에 받을 칸이 없어 보내지 않는다. 성별은 선택이라 비워 둔다.
+ * 약관은 동의한 종류만 agreedTerms로 보낸다("만 14세 이상"은 약관이 아니라 보내지 않는다). 성별은 선택이라 비워 둔다.
  */
 export function toJoinRequest(
   account: SignupAccountValues,
   profile: SignupProfileValues,
+  terms: SignupTermChecks,
 ): memberModel.MemberJoinRequestDto {
   const { email, password } = signupAccountSchema.parse(account)
   return {
@@ -28,6 +30,7 @@ export function toJoinRequest(
     nickname: profile.nickname.trim(),
     phone: profile.phone.trim(),
     birthDate: toIsoDate(profile.birth),
+    agreedTerms: agreedTermTypes(terms),
   }
 }
 
@@ -36,7 +39,9 @@ export type JoinErrorTarget = keyof SignupProfileValues | 'form'
 
 /**
  * 가입 실패 응답을 화면 문구로 바꾼다.
- * 이메일 중복 확인 API가 없어 이메일 중복도 가입 요청의 409(MEMBER_DUPLICATE_EMAIL)로 안다.
+ * 이메일 중복은 계정 단계의 중복 확인 API가 먼저 막지만, 그 사이에 가입된 경우를 위해 409도 처리한다.
+ * INVALID_REQUEST(칸이 없거나 모르는 값)와 INTERNAL_ERROR(시행 중인 약관이 없을 때 등)는
+ * 사용자가 고칠 수 없으므로 서버 문구 대신 일반 안내를 보인다.
  */
 export function joinErrorMessage(error: unknown): { target: JoinErrorTarget; message: string } {
   if (!(error instanceof ApiError)) return { target: 'form', message: AUTH_ERRORS.joinUnavailable }
@@ -48,6 +53,11 @@ export function joinErrorMessage(error: unknown): { target: JoinErrorTarget; mes
       return { target: 'nickname', message }
     case 'MEMBER_DUPLICATE_PHONE':
       return { target: 'phone', message }
+    case 'MEMBER_REQUIRED_TERMS_NOT_AGREED':
+      return { target: 'form', message: AUTH_ERRORS.joinTermsRequired }
+    case 'INVALID_REQUEST':
+    case 'INTERNAL_ERROR':
+      return { target: 'form', message: AUTH_ERRORS.joinUnavailable }
     case 'MEMBER_UNDER_AGE':
       return { target: 'birth', message: AUTH_ERRORS.birthUnder14 }
     default:
