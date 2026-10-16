@@ -1,6 +1,7 @@
 package com.bukang.order.in;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -37,6 +38,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @RequestMapping("/internal/v1/order")
 public class InternalV1OrderController {
+	// 대회일은 한국 날짜라, 서버 시간대(UTC 등)와 상관없이 한국 기준 "오늘"로 센다
+	private static final ZoneId RACE_ZONE = ZoneId.of("Asia/Seoul");
+
 	private final SoldEntryQueryUseCase soldEntryQueryUseCase;
 	private final ActiveTicketQueryUseCase activeTicketQueryUseCase;
 
@@ -86,6 +90,6 @@ public class InternalV1OrderController {
 		@Parameter(description = "회원 ID", example = "3") @PathVariable int memberId
 	) {
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "끝나지 않은 참가권 수를 조회했습니다.",
-			activeTicketQueryUseCase.countActiveTickets(memberId, LocalDate.now())));
+			activeTicketQueryUseCase.countActiveTickets(memberId, LocalDate.now(RACE_ZONE))));
 	}
 }
