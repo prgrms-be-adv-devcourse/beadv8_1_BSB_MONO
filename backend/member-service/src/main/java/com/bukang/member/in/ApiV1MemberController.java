@@ -1,5 +1,6 @@
 package com.bukang.member.in;
 
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -49,7 +50,7 @@ public class ApiV1MemberController {
 				examples = @ExampleObject(value = MemberApiExamples.EMAIL_AVAILABILITY_INVALID_INPUT)))
 	})
 	public ResponseEntity<RsData<EmailAvailabilityResponseDto>> checkEmailAvailability(
-		@Valid @ModelAttribute EmailAvailabilityRequestDto emailAvailabilityRequestDto
+		@Valid @ModelAttribute @ParameterObject EmailAvailabilityRequestDto emailAvailabilityRequestDto
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "이메일 사용 가능 여부를 확인했습니다.",

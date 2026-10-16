@@ -26,3 +26,8 @@ logging:
   level:
     com.bukang: debug
     org.hibernate.SQL: debug
+
+# 계좌번호·pgPaymentKey 암호화 키 (test 전용 값)
+crypto:
+  password: n+86ZkalYKdULzFVMlZsrsLFcZuIOQLgP9kYjeVUoxI=
+  salt: b4deee42e7e94cbe
