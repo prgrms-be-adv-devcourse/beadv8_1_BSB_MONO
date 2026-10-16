@@ -4,40 +4,45 @@ import type { Route } from 'next'
 import Link from 'next/link'
 
 import { AppHeader } from '@/widgets/app-header'
+import { useAdmissionTimer } from '@/features/queue-admission'
 import { BottomCta, buttonClassName, EmptyState, ProgressBar, TimerBar } from '@/shared/ui'
-
-import type { QueueAdmission } from '../model/admission'
 
 const WAITING_TITLE = '차례를 기다리고 있어요'
 
 // 피그마 V2 · M05-Q1 대기열 · 차례 기다리기 / M05-Q2 대기열 · 내 차례
-// 같은 주소에서 입장 여부(admission.admitted)에 따라 두 화면을 바꿔 그린다.
+// 같은 주소에서 입장 여부에 따라 두 화면을 바꿔 그린다. 입장 여부는 대기열 API로 짧은 간격마다 다시 묻고,
+// 입장하면 남은 시간을 1초씩 줄여 간다. 0이 되면 입장 시간 만료 화면(M07-1)으로 간다.
 // 순번 · 예상 대기 시간은 API가 주지 않아 숫자를 그리지 않는다.
-// TODO(api): 입장 여부를 GET /api/v1/order/queue/admission 으로 다시 물어 admission을 채우고, 남은 초를 줄여 간다.
 export function RaceQueuePage({
   raceId,
   optionId,
-  admission,
+  previewRemainingSeconds,
 }: {
   raceId: string
-  /** 줄을 선 종목. 신청 화면(M05)으로 넘길 때 쓴다 */
-  optionId?: string
-  /** 입장 확인 결과. 아직 모르면 기다리는 화면을 보여 준다 */
-  admission?: QueueAdmission
+  /** 줄을 선 종목. 입장 여부를 묻고, 신청 화면(M05)으로 넘길 때 쓴다 */
+  optionId: string
+  /** 시안 미리보기(?preview=admitted). 있으면 API를 부르지 않고 이 남은 초로 내 차례를 보여 준다 */
+  previewRemainingSeconds?: number
 }) {
+  const preview = previewRemainingSeconds !== undefined
+  const timer = useAdmissionTimer(
+    preview ? undefined : Number(raceId),
+    preview ? undefined : Number(optionId),
+    'wait',
+  )
+  const remaining = preview ? previewRemainingSeconds : timer.remaining
+
   const raceHref = `/races/${raceId}` as Route
-  const applyHref = optionId
-    ? (`/races/${raceId}/apply?option=${encodeURIComponent(optionId)}` as const)
-    : (`/races/${raceId}/apply` as const)
+  const applyHref = `/races/${raceId}/apply?option=${encodeURIComponent(optionId)}` as const
 
   return (
     <>
       <AppHeader type="sub" title="대기열" close backHref={raceHref} />
-      {admission?.admitted ? (
+      {remaining !== null ? (
         <>
           <TimerBar
             message="내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요"
-            remainingSeconds={admission.remainingSeconds}
+            remainingSeconds={remaining}
           />
           <main className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-6">
             <EmptyState
