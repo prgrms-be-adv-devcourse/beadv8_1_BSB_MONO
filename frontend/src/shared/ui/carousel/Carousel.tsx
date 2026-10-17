@@ -186,7 +186,7 @@ export function Carousel({ label, children, autoPlayMs = 5000, className }: Caro
             role="group"
             aria-roledescription="slide"
             aria-label={`${i + 1} / ${count}`}
-            // 시안 420/480 폭. 트랙 안쪽 폭(전체의 87.5%)을 꽉 채우고, 양옆에 이전·다음 장이 살짝 보인다.
+            // 시안 420/480 비율(600 기둥에서는 525). 트랙 안쪽 폭(전체의 87.5%)을 꽉 채우고, 양옆에 이전·다음 장이 살짝 보인다.
             className="relative w-full shrink-0 snap-center"
           >
             {slide}
