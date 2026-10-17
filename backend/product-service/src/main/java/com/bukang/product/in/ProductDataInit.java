@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
@@ -148,10 +149,11 @@ public class ProductDataInit {
 		LocalDateTime raceDate = individualOpenAt.toLocalDate().plusWeeks(4).atTime(8, 0);
 		LocalDateTime applicationCloseAt = raceDate.toLocalDate().minusDays(5).atTime(18, 0);
 		// 크루 예매 없이 개인 예매만 한다 (크루 예매 일시 null). 크루 최소 인원은 크루 예매가 없어도 5 이상이어야 한다
-		RaceSaveDto saved = productFacade.registerRace(SELLER_MEMBER_ID, new RaceSaveRequestDto(
-			title, "대기열 복제본 확인용 더미 대회", location, regionSido, regionSigungu, raceDate,
-			null, null, individualOpenAt, applicationCloseAt, applicationCloseAt.toLocalDate(),
-			"환불 기한까지 취소하면 전액 환불됩니다.", 5, null, List.of(course)));
+		// 중복 방지 키는 매번 새로 만든다 (같은 대회를 두 번 만들지 않는 일은 위의 이름 검사가 한다)
+		RaceSaveDto saved = productFacade.registerRace(SELLER_MEMBER_ID, UUID.randomUUID().toString(),
+			new RaceSaveRequestDto(title, "대기열 복제본 확인용 더미 대회", location, regionSido, regionSigungu, raceDate,
+				null, null, individualOpenAt, applicationCloseAt, applicationCloseAt.toLocalDate(),
+				"환불 기한까지 취소하면 전액 환불됩니다.", 5, null, List.of(course))).race();
 		log.info("더미 대회 생성: raceId={}, title={}, individualOpenAt={}", saved.getRaceId(), title, individualOpenAt);
 	}
 

@@ -41,8 +41,8 @@ class ProductFacadeRaceCourseChangedTest extends ProductIntegrationTest {
 	@DisplayName("registerRace: 종목 2개(10K·하프)로 대회를 등록하면 queuing.racecourse.changed로 종목마다 1건씩 2건을 보낸다. "
 		+ "key는 둘 다 대회 ID이고, 본문은 종목 ID·대회 ID·종목 행의 수정 일시·deleted=false 4개 칸만 담는다")
 	void publishCourseChangedOnRegister() {
-		RaceSaveDto saved = productFacade.registerRace(SELLER_MEMBER_ID,
-			scheduledRace().course(tenK(), half()).build());
+		RaceSaveDto saved = productFacade.registerRace(SELLER_MEMBER_ID, newIdempotencyKey(),
+			scheduledRace().course(tenK(), half()).build()).race();
 
 		String raceKey = String.valueOf(saved.getRaceId());
 		assertThat(raceCourseChangedKeys()).containsExactly(raceKey, raceKey);

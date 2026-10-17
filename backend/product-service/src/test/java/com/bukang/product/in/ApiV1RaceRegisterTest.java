@@ -83,7 +83,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 		RaceSaveRequestDto request = upcomingRace().build();
 		LocalDateTime individualOpenAt = request.getIndividualOpenAt();
 
-		MvcResult result = postJson(RACES_PATH, SELLER_MEMBER_ID, request)
+		MvcResult result = postRace(SELLER_MEMBER_ID, request)
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.status").value(201))
 			// 예: "대회를 등록했습니다. 10월 16일 0시부터 판매 중으로 표시되고, 개인 예매는 10월 16일 14:30에 열립니다."
@@ -118,7 +118,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 			.course(course().quota(30, 70))
 			.build();
 
-		MvcResult result = postJson(RACES_PATH, SELLER_MEMBER_ID, request)
+		MvcResult result = postRace(SELLER_MEMBER_ID, request)
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.message").value(REGISTER_MESSAGE.formatted(crewSaleStartAt.format(MESSAGE_DATE),
 				"크루 예매는 %s, 개인 예매는 %s".formatted(crewSaleStartAt.format(MESSAGE_DATE_TIME),
@@ -353,7 +353,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	@Test
 	@DisplayName("X-Member-Id 헤더 없이 등록하면 401이고 아무것도 저장하지 않는다")
 	void rejectWithoutMemberHeader() throws Exception {
-		expectError(postJson(RACES_PATH, null, upcomingRace().build()), HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
+		expectError(postRace(null, upcomingRace().build()), HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
 		assertNothingSaved();
 	}
 
@@ -362,6 +362,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	void rejectNonNumericMemberHeader() throws Exception {
 		ResultActions result = mockMvc.perform(post(RACES_PATH)
 			.header("X-Member-Id", "abc")
+			.header("Idempotency-Key", newIdempotencyKey())
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(jsonConverter.toJson(upcomingRace().build())));
 
@@ -372,7 +373,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	@Test
 	@DisplayName("판매자가 아닌 회원 9999가 등록하면 403이고 아무것도 저장하지 않는다")
 	void rejectNotSeller() throws Exception {
-		expectError(postJson(RACES_PATH, NOT_SELLER_MEMBER_ID, upcomingRace().build()), HttpStatus.FORBIDDEN,
+		expectError(postRace(NOT_SELLER_MEMBER_ID, upcomingRace().build()), HttpStatus.FORBIDDEN,
 			"승인된 판매자만 대회를 등록·수정할 수 있습니다.");
 		assertNothingSaved();
 	}
@@ -386,7 +387,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 		productSellerRepository.save(new ProductSeller(PENDING_SELLER_ID, member, SellerType.INDIVIDUAL, null, null,
 			"박러너", SellerStatus.PENDING, now, null));
 
-		expectError(postJson(RACES_PATH, PENDING_SELLER_MEMBER_ID, upcomingRace().build()), HttpStatus.FORBIDDEN,
+		expectError(postRace(PENDING_SELLER_MEMBER_ID, upcomingRace().build()), HttpStatus.FORBIDDEN,
 			"승인된 판매자만 대회를 등록·수정할 수 있습니다.");
 		assertNothingSaved();
 	}
@@ -673,13 +674,14 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 	private ResultActions postRaw(String content) throws Exception {
 		return mockMvc.perform(post(RACES_PATH)
 			.header("X-Member-Id", SELLER_MEMBER_ID)
+			.header("Idempotency-Key", newIdempotencyKey())
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(content));
 	}
 
 	// 400과 메시지를 확인하고, 거절된 요청이 아무것도 남기지 않았는지 본다
 	private void assertRejected(RaceSaveRequestDto request, String message) throws Exception {
-		expectError(postJson(RACES_PATH, SELLER_MEMBER_ID, request), HttpStatus.BAD_REQUEST, message);
+		expectError(postRace(SELLER_MEMBER_ID, request), HttpStatus.BAD_REQUEST, message);
 		assertNothingSaved();
 	}
 

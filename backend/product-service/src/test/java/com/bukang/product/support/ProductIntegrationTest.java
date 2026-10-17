@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -167,7 +168,7 @@ public abstract class ProductIntegrationTest {
 	}
 
 	protected RegisteredRace register(int memberId, RaceSaveRequestDto request) throws Exception {
-		MvcResult result = postJson("/api/v1/product/races", memberId, request)
+		MvcResult result = postRace(memberId, request)
 			.andExpect(status().isCreated())
 			.andReturn();
 		String body = result.getResponse().getContentAsString();
@@ -269,6 +270,18 @@ public abstract class ProductIntegrationTest {
 		return mockMvc.perform(withMember(post(path), memberId)
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(jsonConverter.toJson(body)));
+	}
+
+	// 대회 등록 요청. 등록 중복 방지 키(Idempotency-Key)는 요청마다 새로 만든다
+	protected ResultActions postRace(Integer memberId, Object body) throws Exception {
+		return mockMvc.perform(withMember(post("/api/v1/product/races"), memberId)
+			.header("Idempotency-Key", newIdempotencyKey())
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(jsonConverter.toJson(body)));
+	}
+
+	protected static String newIdempotencyKey() {
+		return UUID.randomUUID().toString();
 	}
 
 	protected ResultActions putJson(String path, Integer memberId, Object body) throws Exception {

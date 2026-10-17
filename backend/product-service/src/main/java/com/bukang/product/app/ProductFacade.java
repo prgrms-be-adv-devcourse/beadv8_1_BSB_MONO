@@ -68,15 +68,33 @@ public class ProductFacade {
 	// NOT_SUPPORTED: 이 메서드는 트랜잭션 없이 실행한다 (클래스에 붙은 readOnly 트랜잭션을 쓰지 않는다)
 	// transactionTemplate.execute(): 넘긴 람다만 새 트랜잭션으로 실행하고, execute()가 값을 돌려주기 전에 커밋한다
 	// 그래서 다음 줄로 넘어온 시점에는 저장이 이미 커밋되어 있고, 저장이 실패하면 예외가 나서 다음 줄로 오지 않는다
+	// 같은 판매자가 같은 Idempotency-Key로 다시 보내면(두 번 클릭, 응답을 못 받은 재시도) 새로 만들지 않고 처음 대회를 돌려준다
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	public RaceSaveDto registerRace(int memberId, RaceSaveRequestDto request) {
-		RaceSaveResult result = transactionTemplate.execute(status ->
-			raceRegisterUseCase.register(memberId, request, LocalDateTime.now()));
+	public RaceRegisterResult registerRace(int memberId, String idempotencyKey, RaceSaveRequestDto request) {
+		Optional<RaceSaveDto> registered = findRegisteredRace(memberId, idempotencyKey);
+		if (registered.isPresent()) {
+			return RaceRegisterResult.existing(registered.get());
+		}
+		RaceSaveResult result;
+		try {
+			result = transactionTemplate.execute(status ->
+				raceRegisterUseCase.register(memberId, idempotencyKey, request, LocalDateTime.now()));
+		} catch (DataIntegrityViolationException exception) {
+			// 같은 키로 거의 동시에 보내 늦은 쪽이 유니크 제약(uk_race_idempotency)에 걸렸다
+			// 늦은 쪽 트랜잭션은 롤백되었으므로, 먼저 등록된 대회를 새 트랜잭션에서 읽어 돌려준다 (자리 확보 holdSeat와 같은 방식)
+			// 읽어도 없으면 키가 아닌 다른 제약에 걸린 것이라 그대로 던진다
+			RaceSaveDto first = findRegisteredRace(memberId, idempotencyKey).orElseThrow(() -> exception);
+			return RaceRegisterResult.existing(first);
+		}
 		indexRaceCourses(result);
 		publishFileLink(result);
 		publishRaceChanged(result);
 		publishRaceCourseChanged(result);
-		return result.dto();
+		return RaceRegisterResult.created(result.dto());
+	}
+
+	private Optional<RaceSaveDto> findRegisteredRace(int memberId, String idempotencyKey) {
+		return transactionTemplate.execute(status -> raceRegisterUseCase.findRegistered(memberId, idempotencyKey));
 	}
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
