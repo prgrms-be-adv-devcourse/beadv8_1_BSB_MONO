@@ -91,7 +91,7 @@ export function RaceDetailPage({
                 alt=""
                 fill
                 priority
-                sizes="480px"
+                sizes="600px"
                 className="object-cover"
               />
             ) : (
