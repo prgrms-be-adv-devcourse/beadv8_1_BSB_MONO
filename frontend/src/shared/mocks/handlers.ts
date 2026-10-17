@@ -32,12 +32,10 @@ import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw
 import {
   getBukangProductAPIMock,
   getFindMineMockHandler as getFindMyRacesMockHandler,
-  getFindRaceMockHandler,
-  getFindRaceResponseMock,
   getSearchMockHandler,
-  getSearchResponseMock,
   getSuggestMockHandler,
 } from '@/shared/api/generated/product/product.msw'
+import type { SearchParams } from '@/shared/api/generated/product/product.schemas'
 
 import { fileUploadHandlers } from './file-upload'
 import {
@@ -45,6 +43,7 @@ import {
   issueMockRefreshCookie,
   MOCK_REFRESH_COOKIE_NAME,
 } from './mock-session'
+import { findMockRace, getMockRaces, mockImageOfCourse, searchMockRaces } from './races'
 import { resetMockKitsForTesting, sellerKitHandlers } from './seller-kits'
 import { payFromMockWallet, walletHandlers } from './wallet'
 
@@ -58,11 +57,13 @@ function pathParamCount(handler: RequestHandler): number {
  * 명세 예시의 이미지 주소는 실제로 없는 S3 주소라(next/image 허용 호스트도 아니다) 목에서는 public/mock 이미지로 바꾼다.
  * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
  */
-const fileImageHandler = getFindByRefMockHandler(() => {
+const fileImageHandler = getFindByRefMockHandler(({ request }) => {
   const example = getFindByRefResponseMock()
+  const refId = Number(new URL(request.url).searchParams.get('refId'))
+  const image = mockImageOfCourse(refId) ?? '/mock/races/cookierun.png'
   return {
     ...example,
-    data: example.data?.map((file) => ({ ...file, url: '/mock/races/cookierun.png' })),
+    data: example.data?.map((file) => ({ ...file, url: image })),
   }
 })
 
@@ -269,7 +270,11 @@ export function resetMockOrderForTesting() {
  * 명세 예시의 대회는 개인 예매 오픈이 2026-10-20이라, 그 전에는 가짜 응답 모드에서 신청 · 대기열 흐름을 볼 수 없다.
  * 오픈이 아직 안 왔으면 어제 연 것으로 돌려준다(접수 마감 · 대회 날은 예시 그대로). 생성된 핸들러보다 앞에 둔다.
  */
-function openedForMock<T extends { individualOpenAt?: string | null }>(race: T): T {
+function openedForMock<T extends { individualOpenAt?: string | null; saleStatus?: string }>(
+  race: T,
+): T {
+  // 판매 예정 대회(오픈 예정 카드를 보여 주려고 일부러 둔 것)는 그대로 둔다
+  if (race.saleStatus === 'SCHEDULED') return race
   const openAt = race.individualOpenAt
   if (!openAt || new Date(`${openAt}+09:00`).getTime() <= Date.now()) return race
   return { ...race, individualOpenAt: kstMinutesFromNow(-24 * 60) }
@@ -277,16 +282,67 @@ function openedForMock<T extends { individualOpenAt?: string | null }>(race: T):
 
 const raceHandlers = [
   // /races/:raceId가 /races/suggestions · /races/mine을 가로채지 않게 고정 경로를 먼저 둔다
-  getSuggestMockHandler(),
-  getFindMyRacesMockHandler(),
-  getFindRaceMockHandler(() => {
-    const example = getFindRaceResponseMock()
-    return { ...example, data: example.data && openedForMock(example.data) }
+  getSuggestMockHandler(({ request }) => {
+    const keyword = (new URL(request.url).searchParams.get('keyword') ?? '').trim().toLowerCase()
+    const races = getMockRaces().filter((race) =>
+      (race.detail.title ?? '').toLowerCase().includes(keyword),
+    )
+    return {
+      status: 200,
+      message: '연관검색어를 조회했습니다.',
+      data: {
+        races: races
+          .slice(0, 5)
+          .map(({ detail }) => ({ raceId: detail.raceId, title: detail.title })),
+        courses: races
+          .flatMap(({ detail }) =>
+            (detail.courses ?? []).map((course) => ({
+              raceCourseId: course.raceCourseId,
+              raceId: detail.raceId,
+              label: `${detail.title} ${course.name}`,
+            })),
+          )
+          .slice(0, 5),
+      },
+    }
   }),
-  getSearchMockHandler(() => {
-    const example = getSearchResponseMock()
-    const races = example.data?.races?.map(openedForMock)
-    return { ...example, data: example.data && { ...example.data, races } }
+  getFindMyRacesMockHandler(),
+  // 가짜 대회 목록(races.ts)에 있는 대회만 열린다. 없는 번호는 진짜 서버처럼 404, 숫자가 아니면 400
+  http.get('*/api/v1/product/races/:raceId', ({ params }) => {
+    const raceId = Number(params.raceId)
+    if (!Number.isInteger(raceId) || raceId <= 0) {
+      return HttpResponse.json(
+        { status: 400, code: 'INVALID_REQUEST', message: '잘못된 요청입니다.', data: null },
+        { status: 400 },
+      )
+    }
+    const race = findMockRace(raceId)
+    if (!race) {
+      return HttpResponse.json(
+        { status: 404, code: 'RACE_NOT_FOUND', message: '대회를 찾을 수 없습니다.', data: null },
+        { status: 404 },
+      )
+    }
+    return HttpResponse.json({
+      status: 200,
+      message: '대회를 조회했습니다.',
+      data: openedForMock(race.detail),
+    })
+  }),
+  getSearchMockHandler(({ request }) => {
+    const query = new URL(request.url).searchParams
+    const sort = query.get('sort') as SearchParams['sort']
+    const result = searchMockRaces({
+      keyword: query.get('keyword') ?? undefined,
+      sort: sort ?? undefined,
+      page: query.has('page') ? Number(query.get('page')) : undefined,
+      size: query.has('size') ? Number(query.get('size')) : undefined,
+    })
+    return {
+      status: 200,
+      message: '대회 목록을 조회했습니다.',
+      data: { ...result, races: result.races?.map(openedForMock) },
+    }
   }),
 ]
 
