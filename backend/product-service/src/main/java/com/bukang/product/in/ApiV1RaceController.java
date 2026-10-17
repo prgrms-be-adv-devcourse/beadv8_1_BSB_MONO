@@ -45,6 +45,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 
@@ -81,7 +82,7 @@ public class ApiV1RaceController {
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.REGISTER_EXISTING))),
 		@ApiResponse(responseCode = "400",
 			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·키트 금액·티셔츠 사이즈 오류, "
-				+ "판매 시작일이 이틀 뒤보다 빠름, 이미지 용도·개수 오류, 같은 파일 중복, 회원 ID 형식 오류 "
+				+ "판매 시작일이 이틀 뒤보다 빠름, 이미지 용도·개수 오류, 같은 파일 중복, 회원 ID 형식 오류·0 이하 "
 				+ "또는 Idempotency-Key 헤더 없음·길이 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = RaceApiExamples.REGISTER_INVALID_INPUT),
@@ -93,6 +94,7 @@ public class ApiV1RaceController {
 				@ExampleObject(name = "대표 이미지 없음", value = RaceApiExamples.THUMBNAIL_REQUIRED),
 				@ExampleObject(name = "같은 파일 중복", value = RaceApiExamples.DUPLICATE_FILE),
 				@ExampleObject(name = "회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID),
 				@ExampleObject(name = "Idempotency-Key 헤더 없음", value = RaceApiExamples.MISSING_IDEMPOTENCY_KEY),
 				@ExampleObject(name = "Idempotency-Key 길이 오류", value = RaceApiExamples.INVALID_IDEMPOTENCY_KEY)
 			})),
@@ -105,7 +107,7 @@ public class ApiV1RaceController {
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> register(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "중복 등록 방지 키. 같은 [등록하기] 재시도에는 같은 값을 보낸다 (예: UUID)",
 			example = "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43")
 		@RequestHeader(IdempotencyKeyHeader.NAME)
@@ -153,7 +155,7 @@ public class ApiV1RaceController {
 		@ApiResponse(responseCode = "400",
 			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·키트 금액·티셔츠 사이즈 오류, "
 				+ "판매 시작 전 바뀐 판매 시작일이 이틀 뒤보다 빠름, 이미지 용도·개수 오류, 같은 파일 중복, "
-				+ "이 대회의 종목이 아닌 종목 ID 또는 대회 ID·회원 ID 형식 오류",
+				+ "이 대회의 종목이 아닌 종목 ID, 대회 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = RaceApiExamples.REGISTER_INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = RaceApiExamples.INVALID_BODY),
@@ -164,7 +166,8 @@ public class ApiV1RaceController {
 				@ExampleObject(name = "대표 이미지 없음", value = RaceApiExamples.THUMBNAIL_REQUIRED),
 				@ExampleObject(name = "같은 파일 중복", value = RaceApiExamples.DUPLICATE_FILE),
 				@ExampleObject(name = "이 대회의 종목이 아님", value = RaceApiExamples.COURSE_NOT_IN_RACE),
-				@ExampleObject(name = "대회 ID·회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "대회 ID·회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -198,7 +201,7 @@ public class ApiV1RaceController {
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> update(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId,
 		@Valid @RequestBody RaceSaveRequestDto request
@@ -216,9 +219,11 @@ public class ApiV1RaceController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "취소 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.CANCEL_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "대회 ID·회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.LOGIN_REQUIRED))),
@@ -239,7 +244,7 @@ public class ApiV1RaceController {
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> cancel(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId
 	) {
@@ -350,9 +355,11 @@ public class ApiV1RaceController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.MINE_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.LOGIN_REQUIRED))),
@@ -362,7 +369,7 @@ public class ApiV1RaceController {
 	})
 	public ResponseEntity<RsData<List<SellerRaceDto>>> findMine(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "내 대회 목록을 조회했습니다.", productFacade.findMyRaces(memberId)));
@@ -378,9 +385,11 @@ public class ApiV1RaceController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.DETAIL_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "대회 ID·회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "404", description = "없는 대회 또는 다른 판매자의 취소된 대회",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND)))
@@ -388,7 +397,8 @@ public class ApiV1RaceController {
 	public ResponseEntity<RsData<RaceDetailDto>> findRace(
 		@Parameter(description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 취소된 대회는 등록한 판매자만 본다)",
 			example = "9001")
-		@RequestHeader(name = "X-Member-Id", required = false) Integer memberId,
+		@RequestHeader(name = MemberIdHeader.NAME, required = false)
+		@Positive(message = MemberIdHeader.INVALID_MESSAGE) Integer memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId
 	) {

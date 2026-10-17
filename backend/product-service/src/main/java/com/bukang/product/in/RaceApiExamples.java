@@ -87,6 +87,10 @@ final class RaceApiExamples {
 		{ "status": 400, "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
 		""";
 
+	static final String INVALID_MEMBER_ID = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		""";
+
 	static final String MISSING_IDEMPOTENCY_KEY = """
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.", "data": null }
 		""";
