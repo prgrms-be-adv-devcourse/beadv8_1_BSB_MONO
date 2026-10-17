@@ -52,7 +52,8 @@ class ProductFacadeRaceChangedTest extends ProductIntegrationTest {
 	@DisplayName("registerRace: 대회를 등록하면 queuing.race.changed로 대회 ID를 key로 1건을 보내고, "
 		+ "판매 예정(SCHEDULED)·개인 예매 오픈(이틀 뒤)·접수 마감(10일 뒤)·대회 행의 수정 일시 5개 칸만 담는다")
 	void publishRaceChangedOnRegister() {
-		RaceSaveDto saved = productFacade.registerRace(SELLER_MEMBER_ID, scheduledRace().build());
+		RaceSaveDto saved = productFacade.registerRace(SELLER_MEMBER_ID, newIdempotencyKey(), scheduledRace().build())
+			.race();
 
 		// queuing.race.changed로 보낸 메시지는 1건이고, 그 key는 등록된 대회 ID다
 		assertThat(raceChangedKeys()).containsExactly(String.valueOf(saved.getRaceId()));

@@ -27,6 +27,9 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 	// 같은 이름의 대회가 있는지 (개발용 더미 대회를 한 번만 만들 때 ProductDataInit이 쓴다)
 	boolean existsByTitle(String title);
 
+	// 같은 판매자가 같은 Idempotency-Key로 등록한 대회 (uk_race_idempotency와 같은 기준)
+	Optional<Race> findBySellerAndIdempotencyKey(ProductSeller seller, String idempotencyKey);
+
 	// 대회 행을 잠그고 읽는다 (SELECT … FOR UPDATE). 수정·취소가 쓴다
 	// 같은 대회에서 겹치면 차례로 처리되어, 나중 요청이 최신 상태(예: 방금 취소됨)를 보고 막힌다
 	// 잠그지 않고 읽으면 옛 상태로 판단해, 취소된 대회를 수정할 수 있다
