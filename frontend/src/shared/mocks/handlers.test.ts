@@ -1,23 +1,149 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { customFetch } from '@/shared/api'
 
 import { MOCK_LOGGED_IN_COOKIE } from './mock-session'
 
+type RaceRow = {
+  raceId: number
+  title: string
+  minPrice: number
+  raceDate: string
+  applicationCloseAt: string
+  saleStatus: string
+  regionSido: string
+}
+type RacePage = {
+  data: { races: RaceRow[]; page: number; size: number; totalElements: number; totalPages: number }
+}
+const searchRaces = (query = '') =>
+  customFetch<RacePage>(`http://localhost/api/v1/product/races${query}`)
+const idsOf = (body: RacePage) => body.data.races.map((race) => race.raceId)
+
 // 생성된 목이 등록됐는지 확인한다 (API_MOCKING=on 개발 서버도 같은 handlers를 쓴다)
 describe('생성된 MSW 핸들러', () => {
-  it('GET /api/v1/product/races가 명세 예시로 응답한다', async () => {
-    const body = await customFetch<{ data: { races: { title: string }[] } }>(
-      'http://localhost/api/v1/product/races?sort=DEADLINE',
-    )
-    expect(body.data.races[0]?.title).toBe('2026 용감한 쿠키RUN in 서울')
-  })
-
   it('/races/suggestions가 /races/:raceId 핸들러에 가로채이지 않는다', async () => {
     const body = await customFetch<{ message: string }>(
       'http://localhost/api/v1/product/races/suggestions?keyword=서울',
     )
     expect(body.message).toBe('연관검색어를 조회했습니다.')
+  })
+
+  it('연관검색어는 검색어가 이름에 든 대회만 돌려준다', async () => {
+    const body = await customFetch<{ data: { races: { title: string }[] } }>(
+      'http://localhost/api/v1/product/races/suggestions?keyword=제주',
+    )
+    expect(body.data.races.map((race) => race.title)).toEqual(['제주 감귤 트레일런'])
+  })
+})
+
+describe('대회 목록 목', () => {
+  // 대회 날짜가 "지금"에서 며칠 뒤라 시계를 세워 둔다 (10/16 낮 12시)
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-16T12:00:00+09:00') })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('대회 8개를 마감 임박순으로 돌려준다 (마감된 대회는 맨 뒤)', async () => {
+    const body = await searchRaces()
+
+    expect(body.data.totalElements).toBe(8)
+    expect(idsOf(body)).toEqual([4, 2, 5, 1, 3, 7, 6, 10])
+  })
+
+  it('접수 중 · 마감 임박 · 마감 · 오픈 예정이 섞여 있다', async () => {
+    const { data } = await searchRaces()
+    const now = Date.now()
+    const closeMs = (race: RaceRow) => new Date(`${race.applicationCloseAt}+09:00`).getTime()
+    const closingSoon = data.races.filter(
+      (r) => closeMs(r) > now && closeMs(r) - now < 3 * 86_400_000,
+    )
+    const closed = data.races.filter((r) => closeMs(r) <= now)
+
+    expect(closingSoon.map((r) => r.raceId)).toEqual([4, 2])
+    expect(closed.map((r) => r.raceId)).toEqual([10])
+    expect(data.races.filter((r) => r.saleStatus === 'SCHEDULED').map((r) => r.raceId)).toEqual([7])
+  })
+
+  it('RACE_DATE는 대회일이 빠른 순이다', async () => {
+    const body = await searchRaces('?sort=RACE_DATE')
+
+    expect(idsOf(body)).toEqual([10, 2, 1, 5, 3, 7, 4, 6])
+  })
+
+  it('LATEST는 최근에 등록한 대회부터 돌려준다', async () => {
+    const body = await searchRaces('?sort=LATEST')
+
+    expect(idsOf(body)).toEqual([7, 6, 5, 3, 1, 2, 4, 10])
+  })
+
+  it('PRICE는 최저 참가비가 낮은 순이다', async () => {
+    const prices = (await searchRaces('?sort=PRICE')).data.races.map((race) => race.minPrice)
+
+    expect(prices).toEqual([...prices].sort((a, b) => a - b))
+    expect(prices[0]).toBe(25000)
+  })
+
+  it('keyword는 이름이나 지역에 든 대회만 남긴다', async () => {
+    expect(idsOf(await searchRaces(`?keyword=${encodeURIComponent('쿠키')}`))).toEqual([1])
+    const busan = await searchRaces(`?keyword=${encodeURIComponent('부산')}`)
+    expect(idsOf(busan)).toEqual([5])
+    expect(busan.data.totalElements).toBe(1)
+    expect(idsOf(await searchRaces(`?keyword=${encodeURIComponent('없는대회')}`))).toEqual([])
+  })
+
+  it('page · size로 자르고 totalElements · totalPages를 계산한다', async () => {
+    const first = await searchRaces('?size=3&page=0')
+    const last = await searchRaces('?size=3&page=2')
+
+    expect(idsOf(first)).toEqual([4, 2, 5])
+    expect(first.data).toMatchObject({ page: 0, size: 3, totalElements: 8, totalPages: 3 })
+    expect(idsOf(last)).toEqual([6, 10])
+    expect((await searchRaces('?size=3&page=5')).data.races).toEqual([])
+  })
+
+  it('오픈 예정 대회는 오픈 시각을 앞당기지 않는다', async () => {
+    const { data } = await searchRaces()
+    const upcoming = data.races.find((race) => race.raceId === 7) as RaceRow & {
+      individualOpenAt: string
+    }
+
+    expect(new Date(`${upcoming.individualOpenAt}+09:00`).getTime()).toBeGreaterThan(Date.now())
+  })
+})
+
+describe('대회 상세 목', () => {
+  it('목록의 모든 대회가 상세로 열리고 종목이 있다', async () => {
+    for (const raceId of [1, 2, 3, 4, 5, 6, 7, 10]) {
+      const body = await customFetch<{
+        data: { raceId: number; courses: { raceCourseId: number }[] }
+      }>(`http://localhost/api/v1/product/races/${raceId}`)
+
+      expect(body.data.raceId).toBe(raceId)
+      expect(body.data.courses.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('없는 대회는 404, 숫자가 아니면 400이다', async () => {
+    const missing = await fetch('http://localhost/api/v1/product/races/999')
+    const invalid = await fetch('http://localhost/api/v1/product/races/abc')
+
+    expect(missing.status).toBe(404)
+    expect(invalid.status).toBe(400)
+  })
+
+  it('종목 이미지는 대회마다 다른 파일이다', async () => {
+    const urlOf = async (courseId: number) =>
+      (
+        await customFetch<{ data: { url: string }[] }>(
+          `http://localhost/api/v1/file/files?refType=RaceCourse&refId=${courseId}`,
+        )
+      ).data[0]?.url
+
+    expect(await urlOf(1)).toBe('/mock/races/cookierun.png')
+    expect(await urlOf(11)).toBe('/mock/races/youth10k.png')
   })
 })
 
@@ -74,5 +200,24 @@ describe('인증 목', () => {
     expect(logout.headers.get('set-cookie')).toMatch(
       /^mockRefreshToken=; Max-Age=0;.*Path=\/api\/v1\/auth/,
     )
+  })
+})
+
+// 가짜 응답 모드에서 차례 기다리기(M05-Q1) → 내 차례(M05-Q2)를 볼 수 있게 대기열 순서를 흉내 내는지 확인한다.
+describe('대기열 입장 목', () => {
+  const ask = async () =>
+    (
+      await customFetch<{ data: { admitted: boolean; remainingSeconds: number } }>(
+        'http://localhost/api/v1/order/queue/admission?raceId=1&raceCourseId=1',
+      )
+    ).data
+
+  it('두 번은 기다리는 중으로 답하고, 세 번째에 입장해 10분 남았다고 답한다', async () => {
+    expect((await ask()).admitted).toBe(false)
+    expect((await ask()).admitted).toBe(false)
+    const admitted = await ask()
+    expect(admitted.admitted).toBe(true)
+    expect(admitted.remainingSeconds).toBeGreaterThan(590)
+    expect(admitted.remainingSeconds).toBeLessThanOrEqual(600)
   })
 })

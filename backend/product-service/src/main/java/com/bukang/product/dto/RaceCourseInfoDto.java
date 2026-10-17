@@ -4,10 +4,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.CourseStatus;
 import com.bukang.product.domain.Race;
 import com.bukang.product.domain.RaceCourse;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.TshirtSize;
 
 import lombok.AllArgsConstructor;

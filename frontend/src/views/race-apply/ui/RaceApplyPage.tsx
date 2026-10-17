@@ -10,6 +10,11 @@ import { Controller, useForm } from 'react-hook-form'
 import { AppHeader } from '@/widgets/app-header'
 import { useBookingFlow, type BookingParticipant } from '@/features/booking'
 import {
+  admissionExpiredHref,
+  isQueueNotAdmitted,
+  useAdmissionTimer,
+} from '@/features/queue-admission'
+import {
   raceDetailQueryOptions,
   RaceTicketCard,
   type RaceDetail,
@@ -33,6 +38,7 @@ import {
   Skeleton,
   Stepper,
   TextField,
+  TimerBar,
 } from '@/shared/ui'
 
 import {
@@ -49,7 +55,7 @@ const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 /** 신청서를 저장한 뒤 어디로 갈지 */
 type NextStep = 'cart' | 'checkout'
 
-/** 장바구니에 다른 대회가 담겨 있을 때 바꿀지 묻는 확인 창(M05-1)의 내용 */
+/** 장바구니에 다른 종목이 담겨 있을 때 바꿀지 묻는 확인 창(M05-1)의 내용 */
 type ReplaceCart = {
   /** 빼야 할 장바구니 항목 */
   cartItemIds: number[]
@@ -60,11 +66,35 @@ type ReplaceCart = {
 // 피그마 V2 · M05 참가 신청 · 참가자 정보 (+ M05-1 장바구니 바꾸기 확인)
 // 종목은 page.tsx에서 정원이 남은 종목 중에 골라 넘긴다 (상품 API의 대회 상세 courses).
 // 입력 칸은 이번에 입력해 둔 값(결제에서 돌아온 경우) → 지난 신청 값 → 회원 정보 순으로 채운다.
-export function RaceApplyPage({ race, option }: { race: RaceDetail; option: RaceOption }) {
+// 대기열에서 내 차례(M05-Q2)로 들어오면 남은 시간 띠가 결제(M07)까지 따라간다.
+// 남은 시간은 대기열 화면에서 받은 입장 끝 시각을 이어 쓰고, 0이 되면 입장 시간 만료 화면(M07-1)으로 간다.
+export function RaceApplyPage({
+  race,
+  option,
+  previewRemainingSeconds,
+}: {
+  race: RaceDetail
+  option: RaceOption
+  /** 시안 미리보기(?preview=admitted). 있으면 API를 부르지 않고 이 남은 초로 띠를 붙인다 */
+  previewRemainingSeconds?: number
+}) {
   const defaults = useParticipantDefaults(option)
+  const preview = previewRemainingSeconds !== undefined
+  const timer = useAdmissionTimer(
+    preview ? undefined : Number(race.id),
+    preview ? undefined : Number(option.id),
+    'follow',
+  )
+  const remaining = preview ? previewRemainingSeconds : timer.remaining
   return (
     <>
       <AppHeader type="sub" title="참가 신청" />
+      {remaining !== null && (
+        <TimerBar
+          message="내 차례예요. 시간 안에 신청과 결제를 마쳐 주세요"
+          remainingSeconds={remaining}
+        />
+      )}
       {defaults ? (
         <ParticipantForm race={race} option={option} defaults={defaults} />
       ) : (
@@ -146,19 +176,30 @@ function ParticipantForm({
       if (next === 'checkout') {
         return { orderId: await createOrder(participation.id ?? 0), replace: null }
       }
-      // 장바구니에는 대회 1개만 담을 수 있다. 다른 대회가 담겨 있으면 담기 전에 바꿀지 묻는다.
-      const others = await otherRaceItems()
-      if (others.length > 0) {
-        const label = await cartLabel(others[0])
-        return { orderId: null, replace: { cartItemIds: others.map((i) => i.id ?? 0), label } }
+      // 장바구니에는 한 종목만 담을 수 있다. 다른 종목(같은 대회의 다른 종목 포함)이 담겨 있으면
+      // 담기 전에 바꿀지 묻는다. 같은 종목이면 묻지 않는다(참가자 정보는 위에서 이미 고쳤다).
+      const pending = await replaceIfOtherCourse(false)
+      if (pending) return { orderId: null, replace: pending }
+      try {
+        await addToCart()
+      } catch (error) {
+        // 미리 확인한 뒤 다른 종목이 담긴 경우(다른 탭 · 동시 요청)도 같은 확인 창으로 묻는다.
+        if (error instanceof ApiError && error.code === 'ORDER_CART_ONE_COURSE_ONLY') {
+          const conflict = await replaceIfOtherCourse(true)
+          if (conflict) return { orderId: null, replace: conflict }
+        }
+        throw error
       }
-      await addToCart()
       return { orderId: null, replace: null }
     },
     onSuccess: ({ orderId, replace: pending }) => {
       if (orderId !== null) router.push(`/checkout?orderId=${orderId}`)
       else if (pending) setReplace(pending)
       else router.push('/cart')
+    },
+    // 바로 결제가 대기열 입장 전(입장 시간이 끝남)이라 막히면 입장 시간 만료 화면(M07-1)으로 간다.
+    onError: (error) => {
+      if (isQueueNotAdmitted(error)) router.replace(admissionExpiredHref(Number(race.id)))
     },
   })
 
@@ -173,7 +214,7 @@ function ParticipantForm({
     return order.id ?? 0
   }
 
-  // 확인 창에서 바꾸기를 누르면 담아 둔 다른 대회를 빼고 이 대회를 담는다.
+  // 확인 창에서 바꾸기를 누르면 담아 둔 다른 종목을 빼고 이 종목을 담는다.
   const replaceCart = useMutation({
     mutationFn: async (cartItemIds: number[]) => {
       for (const id of cartItemIds) await orderApi.removeItem(id)
@@ -188,15 +229,29 @@ function ParticipantForm({
     await queryClient.invalidateQueries({ queryKey: orderApi.getFindCartQueryKey() })
   }
 
-  async function otherRaceItems() {
-    const cart = unwrapData(await queryClient.fetchQuery(orderApi.getFindCartQueryOptions()))
-    const thisRace = new Set(race.options.map((o) => o.id))
-    return (cart.items ?? []).filter((item) => !thisRace.has(String(item.raceCourseId)))
+  /**
+   * 장바구니에 이 종목과 다른 항목이 있으면 확인 창 내용을, 없으면 null을 돌려준다.
+   * fresh면 캐시를 쓰지 않고 장바구니를 새로 불러온다(서버가 409를 준 뒤).
+   */
+  async function replaceIfOtherCourse(fresh: boolean): Promise<ReplaceCart | null> {
+    const options = orderApi.getFindCartQueryOptions()
+    const cart = unwrapData(
+      await queryClient.fetchQuery(fresh ? { ...options, staleTime: 0 } : options),
+    )
+    const others = (cart.items ?? []).filter((item) => String(item.raceCourseId) !== option.id)
+    if (others.length === 0) return null
+    const label = await cartLabel(others[0])
+    return { cartItemIds: others.map((i) => i.id ?? 0), label }
   }
 
-  /** 담아 둔 항목의 대회 · 종목 이름. 이 기기에서 저장한 참가 신청이 있어야 대회를 알 수 있다. */
+  /**
+   * 담아 둔 항목의 대회 · 종목 이름. 같은 대회의 종목이면 이 대회에서 찾고,
+   * 다른 대회는 이 기기에서 저장한 참가 신청이 있어야 알 수 있다.
+   */
   async function cartLabel(item: { raceCourseId?: number }) {
     const courseId = String(item.raceCourseId)
+    const sameRace = race.options.find((o) => o.id === courseId)
+    if (sameRace) return `${race.title} · ${sameRace.name}`
     const application = applications[courseId]
     if (!application) return undefined
     try {
@@ -224,7 +279,7 @@ function ParticipantForm({
 
   const submit = (next: NextStep) => handleSubmit((values) => save.mutate({ values, next }))
   // 409(이미 신청함 · 접수 기간 아님) · 400(나이 제한 밖 · 키트 배송 주소 없음)은 서버 문구를 그대로 보여 준다.
-  const failure = save.error ?? replaceCart.error
+  const failure = (isQueueNotAdmitted(save.error) ? null : save.error) ?? replaceCart.error
   const saveError = failure
     ? ((failure instanceof ApiError ? failure.serverMessage : undefined) ??
       PARTICIPANT_ERRORS.unavailable)
@@ -389,14 +444,14 @@ function ParticipantForm({
       <Dialog
         open={replace !== null}
         onOpenChange={(open) => !open && setReplace(null)}
-        title="장바구니의 대회를 바꿀까요?"
+        title="장바구니를 바꿀까요?"
         body={
           <>
-            장바구니에는 대회 1개만 담을 수 있어요.
+            장바구니에는 종목 1개만 담을 수 있어요.
             <br />
-            {replace?.label
-              ? `담아 둔 「${replace.label}」를 빼고 이 대회를 담아요.`
-              : '담아 둔 대회를 빼고 이 대회를 담아요.'}
+            {replace?.label ? `담아 둔 「${replace.label}」를 빼고` : '담아 둔 대회를 빼고'}
+            <br />
+            {`「${race.title} · ${option.name}」를 담아요.`}
           </>
         }
         confirmLabel="바꾸기"

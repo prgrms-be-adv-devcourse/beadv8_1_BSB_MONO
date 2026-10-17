@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   typedRoutes: true,
 
+  // 브라우저 코드는 API_MOCKING을 읽지 못한다. 충전이 가짜 응답 모드에서 토스 결제창을 건너뛰도록 같은 값을 내려 준다.
+  env: { NEXT_PUBLIC_API_MOCKING: env.API_MOCKING },
+
   images: clientEnv.NEXT_PUBLIC_IMAGE_CDN_URL
     ? { loader: 'custom', loaderFile: './src/shared/lib/image/cdn-loader.ts' }
     : {

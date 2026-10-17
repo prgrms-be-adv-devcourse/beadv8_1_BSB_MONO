@@ -19,12 +19,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.CourseStatus;
 import com.bukang.product.domain.HoldReleaseReason;
 import com.bukang.product.domain.HoldStatus;
 import com.bukang.product.domain.ParticipationHold;
 import com.bukang.product.domain.RaceCourse;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.support.ProductIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 

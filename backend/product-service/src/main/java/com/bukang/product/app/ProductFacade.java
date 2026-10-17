@@ -63,18 +63,38 @@ public class ProductFacade {
 		return productSyncSellerUseCase.syncSeller(event);
 	}
 
-	// 대회 저장(등록·수정)은 DB에 커밋한 뒤에 검색 색인과 파일 연결 메시지 발행을 한다
+	// 대회 저장(등록·수정)은 DB에 커밋한 뒤에 검색 색인과 파일 연결·대회 변경·종목 변경 메시지 발행을 한다
 	// 롤백된 저장을 색인하거나, 롤백된 대회에 파일을 연결하지 않기 위해서다
 	// NOT_SUPPORTED: 이 메서드는 트랜잭션 없이 실행한다 (클래스에 붙은 readOnly 트랜잭션을 쓰지 않는다)
 	// transactionTemplate.execute(): 넘긴 람다만 새 트랜잭션으로 실행하고, execute()가 값을 돌려주기 전에 커밋한다
 	// 그래서 다음 줄로 넘어온 시점에는 저장이 이미 커밋되어 있고, 저장이 실패하면 예외가 나서 다음 줄로 오지 않는다
+	// 같은 판매자가 같은 Idempotency-Key로 다시 보내면(두 번 클릭, 응답을 못 받은 재시도) 새로 만들지 않고 처음 대회를 돌려준다
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
-	public RaceSaveDto registerRace(int memberId, RaceSaveRequestDto request) {
-		RaceSaveResult result = transactionTemplate.execute(status ->
-			raceRegisterUseCase.register(memberId, request, LocalDateTime.now()));
+	public RaceRegisterResult registerRace(int memberId, String idempotencyKey, RaceSaveRequestDto request) {
+		Optional<RaceSaveDto> registered = findRegisteredRace(memberId, idempotencyKey);
+		if (registered.isPresent()) {
+			return RaceRegisterResult.existing(registered.get());
+		}
+		RaceSaveResult result;
+		try {
+			result = transactionTemplate.execute(status ->
+				raceRegisterUseCase.register(memberId, idempotencyKey, request, LocalDateTime.now()));
+		} catch (DataIntegrityViolationException exception) {
+			// 같은 키로 거의 동시에 보내 늦은 쪽이 유니크 제약(uk_race_idempotency)에 걸렸다
+			// 늦은 쪽 트랜잭션은 롤백되었으므로, 먼저 등록된 대회를 새 트랜잭션에서 읽어 돌려준다 (자리 확보 holdSeat와 같은 방식)
+			// 읽어도 없으면 키가 아닌 다른 제약에 걸린 것이라 그대로 던진다
+			RaceSaveDto first = findRegisteredRace(memberId, idempotencyKey).orElseThrow(() -> exception);
+			return RaceRegisterResult.existing(first);
+		}
 		indexRaceCourses(result);
 		publishFileLink(result);
-		return result.dto();
+		publishRaceChanged(result);
+		publishRaceCourseChanged(result);
+		return RaceRegisterResult.created(result.dto());
+	}
+
+	private Optional<RaceSaveDto> findRegisteredRace(int memberId, String idempotencyKey) {
+		return transactionTemplate.execute(status -> raceRegisterUseCase.findRegistered(memberId, idempotencyKey));
 	}
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -83,16 +103,19 @@ public class ProductFacade {
 			raceUpdateUseCase.update(memberId, raceId, request));
 		indexRaceCourses(result);
 		publishFileLink(result);
+		publishRaceChanged(result);
+		publishRaceCourseChanged(result);
 		return result.dto();
 	}
 
-	// 판매자가 대회를 취소한다. 커밋한 뒤 검색 문서를 다시 색인하고(공개 목록에서 빠짐), 주문 서비스에 취소를 알린다
+	// 판매자가 대회를 취소한다. 커밋한 뒤 검색 문서를 다시 색인하고(공개 목록에서 빠짐), 주문·대기열 서비스에 취소를 알린다
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public RaceSaveDto cancelRace(int memberId, int raceId) {
 		RaceCancelResult result = transactionTemplate.execute(status ->
 			raceCancelUseCase.cancel(memberId, raceId, LocalDateTime.now()));
 		indexRaceCourses(result.saved());
 		publish(KafkaTopics.ORDER_RACE_CANCEL, String.valueOf(raceId), result.cancelEvent(), "대회 취소");
+		publishRaceChanged(result.saved());
 		return result.saved().dto();
 	}
 
@@ -145,11 +168,13 @@ public class ProductFacade {
 		return raceQueryUseCase.findCourseInfo(raceCourseId);
 	}
 
-	// 시각이 지난 대회의 판매 상태를 바꾸고(커밋), 바뀐 대회의 검색 문서를 다시 색인한다. 바꾼 종목 문서 수를 돌려준다
+	// 시각이 지난 대회의 판매 상태를 바꾸고(커밋), 바뀐 대회의 검색 문서를 다시 색인하고 대기열에 대회 변경 메시지를 보낸다
+	// 바꾼 종목 문서 수를 돌려준다
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public int refreshSaleStatuses() {
-		List<RaceCourseDocument> documents = transactionTemplate.execute(status ->
+		RaceSaleStatusResult result = transactionTemplate.execute(status ->
 			raceSaleStatusUseCase.refresh(LocalDateTime.now()));
+		List<RaceCourseDocument> documents = result.documents();
 		if (!documents.isEmpty()) {
 			try {
 				raceCourseDocumentRepository.saveAll(documents);
@@ -158,6 +183,8 @@ public class ProductFacade {
 					documents.size(), exception);
 			}
 		}
+		result.raceChanges().forEach(event ->
+			publish(KafkaTopics.RACE_CHANGED, String.valueOf(event.raceId()), event, "대회 변경"));
 		return documents.size();
 	}
 
@@ -179,6 +206,21 @@ public class ProductFacade {
 	// 연결되지 않은 파일은 하루 뒤 file-service 정리 배치가 지우므로, 보내지 못했으면 그 전에 로그의 메시지를 다시 보내야 한다
 	private void publishFileLink(RaceSaveResult result) {
 		publish(KafkaTopics.RACE_FILE_LINK_REQUESTED, String.valueOf(result.raceId()), result.fileLink(), "파일 연결");
+	}
+
+	// 대기열 서비스에 대회 변경 메시지를 보낸다 (queuing.race.changed). 대회 칸이 바뀌지 않은 수정이면 보내지 않는다
+	// 보내지 못하면 대기열 복제본이 옛 일정·상태로 남으므로 로그의 메시지를 다시 보내야 한다
+	private void publishRaceChanged(RaceSaveResult result) {
+		if (result.raceChanged() != null) {
+			publish(KafkaTopics.RACE_CHANGED, String.valueOf(result.raceId()), result.raceChanged(), "대회 변경");
+		}
+	}
+
+	// 대기열 서비스에 종목 변경 메시지를 종목마다 1건씩 보낸다 (queuing.racecourse.changed). 보낼 종목이 없으면 보내지 않는다
+	// 보내지 못하면 대기열 복제본에 새 종목이 없거나 뺀 종목이 남으므로 로그의 메시지를 다시 보내야 한다
+	private void publishRaceCourseChanged(RaceSaveResult result) {
+		result.courseChanges().forEach(event ->
+			publish(KafkaTopics.RACE_COURSE_CHANGED, String.valueOf(result.raceId()), event, "종목 변경"));
 	}
 
 	// 커밋한 뒤 Kafka 메시지를 보낸다. 같은 대회의 메시지가 순서대로 처리되도록 대회 ID를 key로 보낸다 (같은 key는 같은 파티션)

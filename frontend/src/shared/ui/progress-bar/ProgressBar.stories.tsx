@@ -28,6 +28,11 @@ export const Playground: Story = {}
 /** 100일 때만 초록으로 바뀐다. */
 export const Complete: Story = { args: { value: 100, valueText: '8/8명' } }
 
+/** 값 없이 계속 움직인다(대기열 차례 기다리기). */
+export const Indeterminate: Story = {
+  args: { indeterminate: true, label: undefined, valueText: undefined },
+}
+
 export const Small: Story = { args: { size: 's', label: undefined, valueText: undefined } }
 
 export const OnHero: Story = {

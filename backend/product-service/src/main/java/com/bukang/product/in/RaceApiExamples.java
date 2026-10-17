@@ -17,6 +17,19 @@ final class RaceApiExamples {
 		}
 		""";
 
+	static final String REGISTER_EXISTING = """
+		{
+			"status": 200,
+			"message": "이미 처리한 대회 등록 요청입니다.",
+			"data": {
+				"raceId": 1,
+				"saleStatus": "SCHEDULED",
+				"saleOpenDate": "2026-10-20",
+				"courseIds": [1]
+			}
+		}
+		""";
+
 	static final String UPDATE_SUCCESS = """
 		{
 			"status": 200,
@@ -72,6 +85,18 @@ final class RaceApiExamples {
 
 	static final String INVALID_VALUE_TYPE = """
 		{ "status": 400, "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String INVALID_MEMBER_ID = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String MISSING_IDEMPOTENCY_KEY = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.", "data": null }
+		""";
+
+	static final String INVALID_IDEMPOTENCY_KEY = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "Idempotency-Key는 1~64자로 보내주세요.", "data": null }
 		""";
 
 	static final String LOGIN_REQUIRED = """
@@ -303,7 +328,7 @@ final class RaceApiExamples {
 		""";
 
 	static final String PAGE_SIZE_EXCEEDED = """
-		{ "status": 400, "message": "한 번에 100개까지 조회할 수 있습니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "한 번에 100개까지 조회할 수 있습니다.", "data": null }
 		""";
 
 	static final String PAGE_TOO_LARGE = """
@@ -311,11 +336,11 @@ final class RaceApiExamples {
 		""";
 
 	static final String PRICE_NEGATIVE = """
-		{ "status": 400, "message": "참가비 범위는 0원 이상이어야 합니다.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "참가비 범위는 0원 이상이어야 합니다.", "data": null }
 		""";
 
 	static final String KEYWORD_BLANK = """
-		{ "status": 400, "message": "검색어를 작성해주세요.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "검색어를 작성해주세요.", "data": null }
 		""";
 
 	static final String KEYWORD_MISSING = """

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -43,8 +44,12 @@ import io.jsonwebtoken.security.Keys;
 @ActiveProfiles("test")
 class GatewayAuthenticationTest {
 
-	private static final List<String> SERVICES = List.of("member", "cash", "payout", "file", "order", "product");
+	private static final List<String> SERVICES =
+		List.of("member", "cash", "payout", "file", "order", "product", "queue");
 	private static final String MEMBER_ID_HEADER = "X-Member-Id";
+	private static final String LOGIN_REQUIRED = "AUTH_LOGIN_REQUIRED";
+	private static final String TOKEN_EXPIRED = "AUTH_TOKEN_EXPIRED";
+	private static final String INVALID_TOKEN = "AUTH_INVALID_TOKEN";
 	// 가짜 서버가 받은 X-Member-Id 헤더 값 (없으면 "없음")
 	private static final List<String> RECEIVED_MEMBER_IDS = new CopyOnWriteArrayList<>();
 	private static HttpServer stub;
@@ -114,7 +119,7 @@ class GatewayAuthenticationTest {
 	void rejectsRequestWithoutToken() throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/order/orders"));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	@Test
@@ -122,17 +127,25 @@ class GatewayAuthenticationTest {
 	void rejectsSpoofedMemberIdWithoutToken() throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/order/orders").header(MEMBER_ID_HEADER, "999"));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
+	}
+
+	@Test
+	@DisplayName("JWT 형식이 아닌 토큰이면 401과 AUTH_INVALID_TOKEN으로 응답한다")
+	void rejectsMalformedToken() throws Exception {
+		HttpResponse<String> response = send(request("/api/v1/order/orders")
+			.header("Authorization", "Bearer not-a-jwt"));
+
+		assertUnauthorized(response, INVALID_TOKEN, "유효하지 않은 토큰입니다.");
 	}
 
 	@ParameterizedTest(name = "Authorization: {0}")
-	@DisplayName("Bearer 형식이 아니거나 서명이 다른 토큰이면 401로 응답한다")
-	@ValueSource(strings = {"Bearer not-a-jwt", "Basic abc", "Bearer "})
-	void rejectsMalformedToken(String authorization) throws Exception {
+	@DisplayName("Bearer 형식이 아니거나 토큰이 비어 있으면 토큰이 없는 것으로 보고 AUTH_LOGIN_REQUIRED로 응답한다")
+	@ValueSource(strings = {"Basic abc", "Bearer "})
+	void rejectsNonBearerAuthorizationAsMissingToken(String authorization) throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/order/orders").header("Authorization", authorization));
 
-		assertThat(response.statusCode()).isEqualTo(401);
-		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	@Test
@@ -145,7 +158,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/order/orders")
 			.header("Authorization", "Bearer " + otherProvider.issueAccessToken(42L)));
 
-		assertUnauthorized(response, "유효하지 않은 토큰입니다.");
+		assertUnauthorized(response, INVALID_TOKEN, "유효하지 않은 토큰입니다.");
 	}
 
 	@Test
@@ -158,7 +171,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/order/orders")
 			.header("Authorization", "Bearer " + pastProvider.issueAccessToken(42L)));
 
-		assertUnauthorized(response, "만료된 토큰입니다.");
+		assertUnauthorized(response, TOKEN_EXPIRED, "만료된 토큰입니다.");
 	}
 
 	@Test
@@ -167,7 +180,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/order/orders")
 			.header("Authorization", "Bearer " + refreshToken(42L)));
 
-		assertUnauthorized(response, "유효하지 않은 토큰입니다.");
+		assertUnauthorized(response, INVALID_TOKEN, "유효하지 않은 토큰입니다.");
 	}
 
 	@ParameterizedTest(name = "{0}")
@@ -183,12 +196,31 @@ class GatewayAuthenticationTest {
 	}
 
 	@Test
+	@DisplayName("이메일 중복 확인 GET은 로그인 없이 통과하고, 클라이언트가 보낸 X-Member-Id는 지운다")
+	void passesEmailAvailabilityWithoutToken() throws Exception {
+		HttpResponse<String> response = send(request("/api/v1/member/members/email-availability?email=a@b.com")
+			.header(MEMBER_ID_HEADER, "999"));
+
+		assertThat(response.statusCode()).isEqualTo(200);
+		assertThat(RECEIVED_MEMBER_IDS).containsExactly("없음");
+	}
+
+	@Test
+	@DisplayName("이메일 중복 확인 주소라도 GET이 아니면 토큰이 필요하다")
+	void requiresTokenForEmailAvailabilityNonGet() throws Exception {
+		HttpResponse<String> response = send(request("/api/v1/member/members/email-availability")
+			.POST(HttpRequest.BodyPublishers.noBody()));
+
+		assertUnauthorized(response, "AUTH_LOGIN_REQUIRED", "로그인이 필요합니다.");
+	}
+
+	@Test
 	@DisplayName("공개 주소와 앞부분만 같은 주소는 토큰이 필요하다")
 	void requiresTokenForPathOnlyStartingWithPublicPath() throws Exception {
 		HttpResponse<String> response = send(request("/api/v1/auth/login-history")
 			.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	@Test
@@ -230,7 +262,7 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/product/races")
 			.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
 	}
 
 	@ParameterizedTest(name = "{0}")
@@ -249,7 +281,76 @@ class GatewayAuthenticationTest {
 		HttpResponse<String> response = send(request("/api/v1/file/files")
 			.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertUnauthorized(response, "로그인이 필요합니다.");
+		assertUnauthorized(response, LOGIN_REQUIRED, "로그인이 필요합니다.");
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@DisplayName("경로에 ..·. 칸, 인코딩된 .·/·\\·%, ;가 있으면 토큰 검사 전에 400으로 거절하고 서비스로 넘기지 않는다")
+	@ValueSource(strings = {
+		"/api/v1/file/files/../../../../internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/%2e%2e/%2e%2e/%2e%2e/%2e%2e/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/%2E%2E/%2E%2E/%2E%2E/%2E%2E/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/.%2e/.%2e/.%2e/.%2e/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/..%2f..%2f..%2f..%2finternal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/..%2F..%2F..%2F..%2Finternal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/./x",
+		"/api/v1/file/files/..;/..;/..;/..;/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/x;y",
+		"/api/v1/file/files/..%5c..%5c..%5c..%5cinternal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/..%5C..%5C..%5C..%5Cinternal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/%252e%252e/%252e%252e/%252e%252e/%252e%252e/internal/v1/file/refs/RACE/1/files",
+		"/api/v1/file/files/%252E%252E/x"
+	})
+	void rejectsTraversalPathWithoutToken(String path) throws Exception {
+		HttpRequest.Builder builder = request(path);
+		// HttpClient가 경로를 정리하거나 다시 인코딩하지 않고 그대로 보내는지 먼저 확인한다
+		assertThat(builder.build().uri().getRawPath()).isEqualTo(path);
+
+		HttpResponse<String> response = send(builder);
+
+		assertBadRequestPath(response);
+	}
+
+	@Test
+	@DisplayName("유효한 토큰이 있어도 경로에 .. 칸이 있으면 400으로 거절한다")
+	void rejectsTraversalPathWithValidToken() throws Exception {
+		String path = "/api/v1/order/orders/../../member/members";
+		HttpRequest.Builder builder = request(path)
+			.header("Authorization", "Bearer " + jwtProvider.issueAccessToken(42L));
+		assertThat(builder.build().uri().getRawPath()).isEqualTo(path);
+
+		HttpResponse<String> response = send(builder);
+
+		assertBadRequestPath(response);
+	}
+
+	@Test
+	@DisplayName("CORS 사전 요청(OPTIONS)도 경로에 .. 칸이 있으면 400으로 거절한다")
+	void rejectsTraversalPathForPreflight() throws Exception {
+		String path = "/api/v1/file/files/../../../../internal/v1/file/refs/RACE/1/files";
+		HttpResponse<String> response = send(request(path)
+			.method("OPTIONS", HttpRequest.BodyPublishers.noBody()));
+
+		assertBadRequestPath(response);
+	}
+
+	// HttpClient(URI)는 역슬래시를 보낼 수 없으므로 소켓으로 요청 줄을 직접 써서 보낸다
+	// 지금은 Netty가 필터보다 먼저 빈 본문 400으로 막으므로 본문은 보지 않고, 서비스로 넘어가지 않는지만 본다
+	@Test
+	@DisplayName("경로에 역슬래시가 있으면 400으로 거절한다")
+	void rejectsBackslashPath() throws Exception {
+		String path = "/api/v1/file/files/..\\..\\..\\..\\internal/v1/file/refs/RACE/1/files";
+		String response;
+		try (Socket socket = new Socket("localhost", gatewayPort)) {
+			OutputStream out = socket.getOutputStream();
+			out.write(("GET " + path + " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+				.getBytes(StandardCharsets.UTF_8));
+			out.flush();
+			response = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+		}
+
+		assertThat(response).startsWith("HTTP/1.1 400");
+		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
 	}
 
 	// 게이트웨이는 Refresh Token을 발급하지 않으므로, 발급 규칙(jti·familyId 등)에 기대지 않고 type만 REFRESH인 토큰을 직접 서명한다
@@ -264,11 +365,21 @@ class GatewayAuthenticationTest {
 			.compact();
 	}
 
-	private void assertUnauthorized(HttpResponse<String> response, String message) {
+	private void assertUnauthorized(HttpResponse<String> response, String code, String message) {
 		assertThat(response.statusCode()).isEqualTo(401);
 		assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
 			contentType -> assertThat(contentType).startsWith("application/json"));
-		assertThat(response.body()).isEqualTo("{\"status\":401,\"message\":\"" + message + "\",\"data\":null}");
+		assertThat(response.body())
+			.isEqualTo("{\"status\":401,\"code\":\"" + code + "\",\"message\":\"" + message + "\",\"data\":null}");
+		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
+	}
+
+	private void assertBadRequestPath(HttpResponse<String> response) {
+		assertThat(response.statusCode()).isEqualTo(400);
+		assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
+			contentType -> assertThat(contentType).startsWith("application/json"));
+		assertThat(response.body())
+			.isEqualTo("{\"status\":400,\"code\":\"AUTH_INVALID_PATH\",\"message\":\"잘못된 요청 경로입니다.\",\"data\":null}");
 		assertThat(RECEIVED_MEMBER_IDS).isEmpty();
 	}
 

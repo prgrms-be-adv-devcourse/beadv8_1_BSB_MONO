@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.bukang.member.domain.Member;
 import com.bukang.member.domain.exception.MemberNotFoundException;
 import com.bukang.member.dto.AuthTokens;
+import com.bukang.member.dto.EmailAvailabilityResponseDto;
 import com.bukang.member.dto.MemberDto;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.dto.MemberLoginRequestDto;
@@ -23,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 public class MemberFacade {
 	private final MemberJoinUseCase memberJoinUseCase;
 	private final MemberModifyUseCase memberModifyUseCase;
+	private final MemberWithdrawUseCase memberWithdrawUseCase;
 	private final MemberRepository memberRepository;
 	private final AuthenticationManager authenticationManager;
 	private final TokenIssueUseCase tokenIssueUseCase;
@@ -38,12 +40,18 @@ public class MemberFacade {
 			memberJoinDto.getNickname(),
 			memberJoinDto.getPhone(),
 			memberJoinDto.getBirthDate(),
-			memberJoinDto.getGender()
+			memberJoinDto.getGender(),
+			memberJoinDto.getAgreedTerms()
 		).toDto();
 	}
 
+	public EmailAvailabilityResponseDto checkEmailAvailability(String email) {
+		return new EmailAvailabilityResponseDto(!memberRepository.existsByEmail(email));
+	}
+
 	public MemberDto findMe(int memberId) {
-		return memberRepository.findById(memberId)
+		// 탈퇴한 회원은 없는 회원으로 본다 (BE-022)
+		return memberRepository.findActiveById(memberId)
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."))
 			.toDto();
 	}
@@ -59,6 +67,19 @@ public class MemberFacade {
 		).toDto();
 	}
 
+	@Transactional
+	public void withdrawMe(int memberId) {
+		memberWithdrawUseCase.withdraw(memberId);
+	}
+
+	// 관리자 역할을 준다. 관리자 지정 API는 없고 개발용 기본 데이터(MemberDataInit)에서만 부른다
+	@Transactional
+	public void grantAdmin(String email) {
+		memberRepository.findByEmail(email)
+			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."))
+			.grantAdmin();
+	}
+
 	public boolean existsByEmail(String email) {
 		return memberRepository.existsByEmail(email);
 	}
@@ -72,7 +93,7 @@ public class MemberFacade {
 			)
 		);
 
-		Member member = memberRepository.findByEmail(memberLoginRequestDto.getEmail())
+		Member member = memberRepository.findActiveByEmail(memberLoginRequestDto.getEmail())
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
 
 		return new MemberLoginResult(member.toDto(), tokenIssueUseCase.issue(member.getId()));

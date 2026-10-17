@@ -7,12 +7,23 @@ spring:
 
   jpa:
     hibernate:
+      # 표는 Flyway가 만들고 바꾼다. Hibernate는 엔티티와 표가 맞는지만 확인한다 (BE-024)
       ddl-auto: validate
     properties:
       hibernate:
         show_sql: false
         format_sql: false
     open-in-view: false
+
+  # 표 변경은 Flyway SQL(db/migration)로만 한다 (BE-024)
+  # 모든 서비스가 같은 스키마를 쓰므로, 기록 표는 member 전용 이름으로 둔다 (다른 서비스가 Flyway를 붙여도 섞이지 않게)
+  # 기준선을 0번으로 둬 V1(create table if not exists)은 항상 돈다. 다른 서비스 표만 있는 DB에서도 member 표가 생긴다
+  # SQL 번호는 날짜·시각이라 머지 순서와 다를 수 있어 out-of-order를 켠다
+  flyway:
+    table: flyway_schema_history_member
+    baseline-on-migrate: true
+    baseline-version: 0
+    out-of-order: true
 
   kafka:
     bootstrap-servers:
@@ -38,6 +49,14 @@ springdoc:
 # JWT 서명 키 (openssl rand -base64 64 로 생성한 값을 환경변수로 주입)
 jwt:
   secret: ${JWT_SECRET}
+
+# 회원 탈퇴 확인용 내부 API. compose.yml의 앱 컨테이너끼리는 컨테이너 이름으로 접속한다
+member:
+  clients:
+    cash:
+      base-url: http://bukang-cash-service:8081
+    order:
+      base-url: http://bukang-order-service:8084
 
 # 민감 정보 변환 정보
 crypto:

@@ -1,39 +1,36 @@
+'use client'
+
+import { useQuery } from '@tanstack/react-query'
+import type { Route } from 'next'
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 
 import { ConsoleCard, ConsoleLoading, ConsoleOffline, ConsolePage } from '@/widgets/console-page'
-import { cn } from '@/shared/lib'
+import { formatMonthDay, formatWeekday } from '@/entities/payout'
+import { myRacesQueryOptions, toSellerRaceRow } from '@/entities/race'
+import { shippableCount, useSellerKitSummary } from '@/entities/seller-kit'
+import { ApiError, payoutApi, unwrapData } from '@/shared/api'
+import { cn, formatNumber } from '@/shared/lib'
 import {
+  Alert,
   Badge,
   buttonClassName,
   DataTable,
+  EmptyState,
   FOCUS_RING,
   ProgressBar,
+  Skeleton,
   StatTile,
   type BadgeTone,
 } from '@/shared/ui'
 
-// TODO(api): 판매자 대시보드 API로 바꾼다. 지금은 시안 예시 값.
-const RACES = [
-  {
-    title: '2026 용감한 쿠키RUN in 서울',
-    period: '접수 10/14~10/31 · 대회 11/1',
-    applied: 2410,
-    capacity: 3000,
-  },
-  {
-    title: '2026 춘천 나이트런',
-    period: '접수 10/5~11/5 · 대회 12/6',
-    applied: 1500,
-    capacity: 5000,
-  },
-]
+function errorText(error: unknown) {
+  return (error instanceof ApiError && error.serverMessage) || '잠시 뒤 다시 시도해 주세요.'
+}
 
+// TODO(api): 처리할 일 API가 없다. 키트 배송 대기만 키트 건수 API로 채우고, 나머지는 시안 예시 값이다.
+// (위 "처리할 일" 숫자 타일도 예시 값)
 const TODOS = [
-  {
-    title: '배송 대기 키트',
-    description: '환불 기한이 지난 주문 · 송장 번호를 넣으면 배송 중으로 바뀌어요',
-    count: '12건',
-  },
   { title: '접수 마감 임박', description: '쿠키RUN · 10/31 18:00 접수 마감', count: 'D-7' },
   { title: '지급보류 알림', description: 'HD-20261027-01A2 · 정산 계좌 미등록', count: '1건' },
 ]
@@ -48,6 +45,7 @@ type Order = {
   paidAt: string
 }
 
+// TODO(api): 최근 주문 API가 없다. 지금은 시안 예시 값.
 const ORDERS: Order[] = [
   {
     id: 'R-20261019-0907',
@@ -108,13 +106,80 @@ export function SellerDashboardPage({ state }: { state?: 'loading' | 'offline' }
   )
 }
 
+const TODO_ROW = 'flex items-center gap-3 border-b border-border-default py-3 last:border-b-0'
+
+// 처리할 일 한 줄. href가 있으면 그 화면으로 가는 링크
+function TodoRow({
+  href,
+  title,
+  description,
+  count,
+}: {
+  href?: Route
+  title: string
+  description: string
+  count: ReactNode
+}) {
+  const body = (
+    <>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="text-label-l">{title}</p>
+        <p className="text-body-s text-text-secondary">{description}</p>
+      </div>
+      {count}
+    </>
+  )
+  return href ? (
+    <Link href={href} className={cn(TODO_ROW, 'rounded-sm', FOCUS_RING)}>
+      {body}
+    </Link>
+  ) : (
+    <div className={TODO_ROW}>{body}</div>
+  )
+}
+
 function DashboardBody() {
+  const summary = payoutApi.useSummary({ query: { select: unwrapData } })
+  const races = useQuery({
+    ...myRacesQueryOptions(),
+    select: (list) => list.map(toSellerRaceRow),
+  })
+  const onSale = races.data?.filter((r) => r.saleStatus === 'ON_SALE')
+  const kits = useSellerKitSummary()
+
   return (
     <>
       <div className="flex gap-4">
-        <StatTile label="다음 정산일" value="11/20" unit="(금)" />
-        <StatTile tone="accent" className="flex-2" label="정산 예정액" value="₩1,920,000" />
-        <StatTile label="판매 중 대회" value="2" unit="개" />
+        {summary.data ? (
+          <>
+            <StatTile
+              label="다음 정산일"
+              value={formatMonthDay(summary.data.nextPayDate)}
+              unit={`(${formatWeekday(summary.data.nextPayDate)})`}
+            />
+            <StatTile
+              tone="accent"
+              className="flex-2"
+              label="정산 예정액"
+              value={`₩${formatNumber(summary.data.scheduledPayoutAmount)}`}
+            />
+          </>
+        ) : summary.isError ? (
+          <Alert
+            tone="danger"
+            className="flex-3"
+            title="정산 요약을 불러오지 못했어요"
+            description={errorText(summary.error)}
+          />
+        ) : (
+          <Skeleton className="h-24 flex-3" />
+        )}
+        {onSale ? (
+          <StatTile label="판매 중 대회" value={String(onSale.length)} unit="개" />
+        ) : (
+          <Skeleton className="h-24 flex-1" />
+        )}
+        {/* TODO(api): 처리할 일 건수 API가 없다. 예시 값 */}
         <StatTile label="처리할 일" value="5" unit="건" />
       </div>
 
@@ -128,34 +193,59 @@ function DashboardBody() {
           }
           className="min-w-130 flex-1"
         >
-          {RACES.map((race) => (
-            <div key={race.title} className="flex flex-col gap-3 rounded-md bg-bg-subtle p-5">
-              <div className="flex items-center gap-2">
-                <p className="text-label-l">{race.title}</p>
-                <Badge tone="brand">판매 중</Badge>
+          {races.isError ? (
+            <Alert
+              tone="danger"
+              title="대회 목록을 불러오지 못했어요"
+              description={errorText(races.error)}
+            />
+          ) : !onSale ? (
+            <Skeleton className="h-40 w-full" />
+          ) : onSale.length === 0 ? (
+            <EmptyState
+              title="판매 중인 대회가 없어요"
+              description="대회를 등록하면 여기에서 접수 현황을 볼 수 있어요"
+            />
+          ) : (
+            onSale.map((race) => (
+              <div key={race.id} className="flex flex-col gap-3 rounded-md bg-bg-subtle p-5">
+                <div className="flex items-center gap-2">
+                  <p className="text-label-l">{race.title}</p>
+                  <Badge tone={race.badge.tone}>{race.badge.label}</Badge>
+                </div>
+                <p className="text-body-s text-text-secondary">{race.period}</p>
+                <ProgressBar
+                  label="접수율"
+                  value={race.capacity > 0 ? Math.round((race.sold / race.capacity) * 100) : 0}
+                  valueText={`${formatNumber(race.sold)}/${formatNumber(race.capacity)}명`}
+                />
               </div>
-              <p className="text-body-s text-text-secondary">{race.period}</p>
-              <ProgressBar
-                label="접수율"
-                value={Math.round((race.applied / race.capacity) * 100)}
-                valueText={`${race.applied.toLocaleString('ko-KR')}/${race.capacity.toLocaleString('ko-KR')}명`}
-              />
-            </div>
-          ))}
+            ))
+          )}
         </ConsoleCard>
 
         <ConsoleCard title="처리할 일" className="w-100 shrink-0 gap-0">
+          <TodoRow
+            href="/seller/kits"
+            title="배송 대기 키트"
+            description="환불 기한이 지난 주문 · 송장 번호를 넣으면 배송 중으로 바뀌어요"
+            count={
+              kits.data ? (
+                <Badge tone="warning">{shippableCount(kits.data)}건</Badge>
+              ) : kits.isError ? (
+                <Badge tone="neutral">-</Badge>
+              ) : (
+                <Skeleton className="h-6 w-10" />
+              )
+            }
+          />
           {TODOS.map((todo) => (
-            <div
+            <TodoRow
               key={todo.title}
-              className="flex items-center gap-3 border-b border-border-default py-3 last:border-b-0"
-            >
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <p className="text-label-l">{todo.title}</p>
-                <p className="text-body-s text-text-secondary">{todo.description}</p>
-              </div>
-              <Badge tone="warning">{todo.count}</Badge>
-            </div>
+              title={todo.title}
+              description={todo.description}
+              count={<Badge tone="warning">{todo.count}</Badge>}
+            />
           ))}
         </ConsoleCard>
       </div>

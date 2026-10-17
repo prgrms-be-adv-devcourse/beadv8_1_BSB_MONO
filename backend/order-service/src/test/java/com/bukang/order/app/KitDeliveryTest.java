@@ -173,10 +173,11 @@ class KitDeliveryTest {
 		createOrder(MEMBER_ID + 4, OPEN_COURSE_ID);
 		ship(shippingItemId);
 
-		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, null))
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, null, 0, 20).getKits())
 			.extracting(SellerKitDto::getOrderItemId)
 			.containsExactly(beforeDeadlineItemId, itemIdOf(preparingOrderId), shippingItemId);
-		List<SellerKitDto> preparing = kitDeliveryUseCase.findKits(SELLER_ID, RACE_ID, KitDeliveryStatus.PREPARING);
+		List<SellerKitDto> preparing =
+			kitDeliveryUseCase.findKits(SELLER_ID, RACE_ID, KitDeliveryStatus.PREPARING, 0, 20).getKits();
 		assertThat(preparing).extracting(SellerKitDto::getOrderItemId)
 			.containsExactly(beforeDeadlineItemId, itemIdOf(preparingOrderId));
 		SellerKitDto row = preparing.get(1);
@@ -184,8 +185,8 @@ class KitDeliveryTest {
 		assertThat(row.getParticipantName()).isEqualTo("김러너");
 		assertThat(row.getTshirtSize()).isEqualTo("L");
 		assertThat(row.getShippingAddress().getAddress()).isEqualTo("서울 성동구 왕십리로 00");
-		assertThat(kitDeliveryUseCase.findKits(OTHER_SELLER_ID, null, null)).isEmpty();
-		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, RACE_ID + 1, null)).isEmpty();
+		assertThat(kitDeliveryUseCase.findKits(OTHER_SELLER_ID, null, null, 0, 20).getKits()).isEmpty();
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, RACE_ID + 1, null, 0, 20).getKits()).isEmpty();
 
 		SellerKitSummaryDto summary = kitDeliveryUseCase.summarize(SELLER_ID, null, LocalDateTime.now());
 		assertThat(summary.getPreparing()).isEqualTo(2);
@@ -235,7 +236,7 @@ class KitDeliveryTest {
 				.header("X-Member-Id", MEMBER_ID))
 			.andExpect(status().isOk());
 
-		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, KitDeliveryStatus.SHIPPING))
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, KitDeliveryStatus.SHIPPING, 0, 20).getKits())
 			.extracting(SellerKitDto::getOrderItemId, SellerKitDto::getOrderItemStatus)
 			.containsExactly(tuple(itemId, OrderItemStatus.CANCELED));
 		assertThat(kitDeliveryUseCase.summarize(SELLER_ID, null, LocalDateTime.now()).getShipping()).isEqualTo(1);

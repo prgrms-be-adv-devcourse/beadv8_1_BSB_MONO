@@ -201,7 +201,7 @@
 
   <div class="panel">
     <h2>요청 미리보기</h2>
-    <p class="hint">[등록]·[수정]은 이 본문을 X-Member-Id 헤더와 함께 보냅니다. 등록 때 courseId는 무시됩니다.</p>
+    <p class="hint">[등록]·[수정]은 이 본문을 X-Member-Id 헤더와 함께 보냅니다. [등록]은 누를 때마다 새 Idempotency-Key 헤더도 붙입니다. 등록 때 courseId는 무시됩니다.</p>
     <div class="actions">
       <button type="button" class="secondary" data-copy="preview">JSON 복사</button>
       <span class="hint" data-copy-message="preview"></span>
@@ -314,11 +314,15 @@
       return text === '' ? '' : `?${text}`;
     }
 
-    // product-service(이 페이지와 같은 주소) 호출. memberId가 있으면 X-Member-Id 헤더를 붙인다
-    async function callApi(title, method, path, { memberId, body, query } = {}) {
+    // product-service(이 페이지와 같은 주소) 호출. memberId가 있으면 X-Member-Id 헤더를,
+    // idempotencyKey가 있으면 Idempotency-Key 헤더(대회 등록 중복 방지 키)를 붙인다
+    async function callApi(title, method, path, { memberId, idempotencyKey, body, query } = {}) {
       const headers = {};
       if (memberId) {
         headers['X-Member-Id'] = memberId;
+      }
+      if (idempotencyKey) {
+        headers['Idempotency-Key'] = idempotencyKey;
       }
       if (body !== undefined) {
         headers['Content-Type'] = 'application/json';
@@ -840,8 +844,10 @@
       return raceId;
     }
 
+    // 테스트 페이지라 [등록]을 누를 때마다 새 키를 만든다 (누를 때마다 새 대회가 등록된다)
     async function registerRace() {
-      const result = await callApi('대회 등록', 'POST', RACES_PATH, { memberId: memberIdValue(), body: buildRequest() });
+      const result = await callApi('대회 등록', 'POST', RACES_PATH,
+        { memberId: memberIdValue(), idempotencyKey: crypto.randomUUID(), body: buildRequest() });
       if (showResult($('actionResult'), result)) {
         applySaveResult(result.body.data);
       }

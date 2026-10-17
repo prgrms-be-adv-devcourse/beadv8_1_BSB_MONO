@@ -139,16 +139,34 @@ export interface CartItemAddRequestDto {
 }
 
 /**
- * 장바구니 결제 요청. 장바구니의 참가권마다 미리 작성한 참가 신청 ID를 보낸다
+ * 장바구니 결제 요청. 장바구니에 담은 참가권(한 종목)의 참가 신청 ID를 보낸다
  */
 export interface CartCheckoutRequestDto {
   /**
-     * 결제할 참가 신청 ID 목록 (최대 10개, 겹치지 않게)
+     * 결제할 참가 신청 ID 목록 (1개)
      * @minItems 0
-     * @maxItems 10
+     * @maxItems 1
      * @items.minimum 0
      */
   participationIds: number[];
+}
+
+/**
+ * 키트 발송 요청. 택배사와 송장 번호를 넣으면 배송 중이 된다
+ */
+export interface KitShipmentRequestDto {
+  /**
+     * 택배사 (30자 이하)
+     * @minLength 1
+     * @maxLength 30
+     */
+  carrier: string;
+  /**
+     * 송장 번호 (50자 이하)
+     * @minLength 1
+     * @maxLength 50
+     */
+  trackingNumber: string;
 }
 
 /**
@@ -237,6 +255,18 @@ export const OrderItemDtoStatus = {
 } as const;
 
 /**
+ * @nullable
+ */
+export type OrderItemDtoKitDeliveryStatus = typeof OrderItemDtoKitDeliveryStatus[keyof typeof OrderItemDtoKitDeliveryStatus] | null;
+
+
+export const OrderItemDtoKitDeliveryStatus = {
+  PREPARING: 'PREPARING',
+  SHIPPING: 'SHIPPING',
+  DELIVERED: 'DELIVERED',
+} as const;
+
+/**
  * 주문 상품
  */
 export interface OrderItemDto {
@@ -249,6 +279,16 @@ export interface OrderItemDto {
   quantity?: number;
   amount?: number;
   status?: OrderItemDtoStatus;
+  /** @nullable */
+  kitDeliveryStatus?: OrderItemDtoKitDeliveryStatus;
+  /** @nullable */
+  kitCarrier?: string | null;
+  /** @nullable */
+  kitTrackingNumber?: string | null;
+  /** @nullable */
+  kitShippedAt?: string | null;
+  /** @nullable */
+  kitDeliveredAt?: string | null;
 }
 
 export type OrderDtoStatus = typeof OrderDtoStatus[keyof typeof OrderDtoStatus];
@@ -373,6 +413,77 @@ export interface OrderPageDto {
   totalPages?: number;
 }
 
+export interface QueueAdmissionDto {
+  admitted: boolean;
+  /** @nullable */
+  admissionEndsAt?: string | null;
+  remainingSeconds: number;
+}
+
+export type SellerKitDtoOrderItemStatus = typeof SellerKitDtoOrderItemStatus[keyof typeof SellerKitDtoOrderItemStatus];
+
+
+export const SellerKitDtoOrderItemStatus = {
+  ORDERED: 'ORDERED',
+  PAID: 'PAID',
+  CANCELED: 'CANCELED',
+} as const;
+
+export type SellerKitDtoKitDeliveryStatus = typeof SellerKitDtoKitDeliveryStatus[keyof typeof SellerKitDtoKitDeliveryStatus];
+
+
+export const SellerKitDtoKitDeliveryStatus = {
+  PREPARING: 'PREPARING',
+  SHIPPING: 'SHIPPING',
+  DELIVERED: 'DELIVERED',
+} as const;
+
+/**
+ * 판매자 키트 배송 목록의 한 줄
+ */
+export interface SellerKitDto {
+  orderItemId?: number;
+  orderNo?: string;
+  orderItemStatus?: SellerKitDtoOrderItemStatus;
+  raceId?: number;
+  raceCourseId?: number;
+  courseName?: string;
+  participantName?: string;
+  /** @nullable */
+  tshirtSize?: string | null;
+  shippingAddress?: ShippingAddressDto;
+  kitDeliveryStatus?: SellerKitDtoKitDeliveryStatus;
+  /** @nullable */
+  kitCarrier?: string | null;
+  /** @nullable */
+  kitTrackingNumber?: string | null;
+  /** @nullable */
+  kitShippedAt?: string | null;
+  /** @nullable */
+  kitDeliveredAt?: string | null;
+}
+
+/**
+ * 판매자 키트 주문 목록 한 페이지
+ */
+export interface SellerKitPageDto {
+  kits?: SellerKitDto[];
+  page?: number;
+  size?: number;
+  totalElements?: number;
+  totalPages?: number;
+}
+
+/**
+ * 키트 배송 건수
+ */
+export interface SellerKitSummaryDto {
+  preparing?: number;
+  shipping?: number;
+  delivered?: number;
+  beforeRefundDeadline?: number;
+}
+
 export interface RsDataParticipationDto {
   status?: number;
   message?: string;
@@ -403,6 +514,12 @@ export interface RsDataCartCheckoutDto {
   data?: CartCheckoutDto;
 }
 
+export interface RsDataQueueAdmissionDto {
+  status?: number;
+  message?: string;
+  data?: QueueAdmissionDto;
+}
+
 export interface RsDataParticipantInfoDto {
   status?: number;
   message?: string;
@@ -413,6 +530,24 @@ export interface RsDataCartDto {
   status?: number;
   message?: string;
   data?: CartDto;
+}
+
+export interface RsDataSellerKitPageDto {
+  status?: number;
+  message?: string;
+  data?: SellerKitPageDto;
+}
+
+export interface RsDataSellerKitSummaryDto {
+  status?: number;
+  message?: string;
+  data?: SellerKitSummaryDto;
+}
+
+export interface RsDataOrderItemDto {
+  status?: number;
+  message?: string;
+  data?: OrderItemDto;
 }
 
 export type FindMineParams = {
@@ -448,5 +583,43 @@ raceId: number;
  * @exclusiveMinimum 0
  */
 raceCourseId: number;
+};
+
+export type FindKitsParams = {
+/**
+ * 대회 ID (생략하면 모든 대회)
+ */
+raceId?: number;
+/**
+ * 배송 상태 (PREPARING 배송 준비 / SHIPPING 배송 중 / DELIVERED 배송 완료, 생략 가능)
+ */
+status?: FindKitsStatus;
+/**
+ * 페이지 번호 (0부터)
+ * @minimum 0
+ */
+page?: number;
+/**
+ * 페이지 크기 (1~100)
+ * @minimum 1
+ * @maximum 100
+ */
+size?: number;
+};
+
+export type FindKitsStatus = typeof FindKitsStatus[keyof typeof FindKitsStatus];
+
+
+export const FindKitsStatus = {
+  PREPARING: 'PREPARING',
+  SHIPPING: 'SHIPPING',
+  DELIVERED: 'DELIVERED',
+} as const;
+
+export type SummarizeParams = {
+/**
+ * 대회 ID (생략하면 모든 대회)
+ */
+raceId?: number;
 };
 

@@ -15,12 +15,12 @@ import org.springframework.data.elasticsearch.annotations.InnerField;
 import org.springframework.data.elasticsearch.annotations.MultiField;
 import org.springframework.data.elasticsearch.annotations.Setting;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.CourseStatus;
 import com.bukang.product.domain.CourseSurface;
 import com.bukang.product.domain.CourseType;
 import com.bukang.product.domain.Race;
 import com.bukang.product.domain.RaceCourse;
-import com.bukang.product.domain.RaceSaleStatus;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;

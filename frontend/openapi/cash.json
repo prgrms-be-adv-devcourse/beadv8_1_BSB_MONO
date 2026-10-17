@@ -7,15 +7,234 @@
   },
   "tags": [
     {
-      "name": "CashInternal",
-      "description": "주문 결제, 결제 취소(환원), 환불 API (서비스 간 내부 호출 전용)"
-    },
-    {
       "name": "Cash",
       "description": "예치금 지갑 잔액 조회 API"
     }
   ],
   "paths": {
+    "/api/v1/cash/withdrawals": {
+      "post": {
+        "tags": [
+          "Cash"
+        ],
+        "summary": "예치금 전액 환급 신청",
+        "description": "회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. idempotencyKey를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.",
+        "operationId": "requestWithdrawal",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "환급할 회원 ID (게이트웨이가 Access Token에서 넣어준다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 3
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashWithdrawalRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "환급 신청 완료",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "환급 신청이 완료되었습니다.",
+                  "data": {
+                    "withdrawnAmount": 50000,
+                    "balance": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "환급할 잔액 없음, 입력값 검증 실패 또는 요청 본문 형식 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "환급할 잔액 없음": {
+                    "description": "환급할 잔액 없음",
+                    "value": {
+                      "status": 400,
+                      "message": "환급할 잔액이 없습니다.",
+                      "data": null
+                    }
+                  },
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "은행 코드를 작성해주세요.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 지갑입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cash/charges/confirm": {
+      "post": {
+        "tags": [
+          "Cash"
+        ],
+        "summary": "충전 승인 확정",
+        "description": "프론트가 Toss 결제위젯 콜백으로 받은 paymentKey·orderId·amount로 PG 승인을 확정하고, 성공하면 예치금 지갑에 반영한다. orderId를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.",
+        "operationId": "confirmWalletCharge",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "충전할 회원 ID (게이트웨이가 Access Token에서 넣어준다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 3
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashChargeConfirmRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "충전 확정 처리됨 (성공 또는 PG 승인 거절)",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "충전 성공": {
+                    "description": "충전 성공",
+                    "value": {
+                      "status": 200,
+                      "message": "충전했습니다.",
+                      "data": {
+                        "outcome": "COMPLETED",
+                        "balance": 60000
+                      }
+                    }
+                  },
+                  "PG 승인 거절": {
+                    "description": "PG 승인 거절",
+                    "value": {
+                      "status": 200,
+                      "message": "충전에 실패했습니다.",
+                      "data": {
+                        "outcome": "FAILED",
+                        "balance": 50000
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "최소 충전 금액 미만, 입력값 검증 실패 또는 요청 본문 형식 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "최소 충전 금액 미만": {
+                    "description": "최소 충전 금액 미만",
+                    "value": {
+                      "status": 400,
+                      "message": "최소 충전 금액은 10,000원입니다.",
+                      "data": null
+                    }
+                  },
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "message": "paymentKey를 작성해주세요.",
+                      "data": null
+                    }
+                  },
+                  "요청 본문 형식 오류": {
+                    "description": "요청 본문 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 본문 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 지갑입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/cash/wallets/{holderId}/balance": {
       "get": {
         "tags": [
@@ -89,6 +308,76 @@
           },
           "data": {}
         }
+      },
+      "CashWithdrawalRequestDto": {
+        "type": "object",
+        "description": "예치금 전액 환급 신청",
+        "properties": {
+          "bankCode": {
+            "type": "string",
+            "description": "은행 코드",
+            "example": "004",
+            "maxLength": 10,
+            "minLength": 0
+          },
+          "accountNumber": {
+            "type": "string",
+            "description": "계좌번호",
+            "example": "110123456789",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "accountHolder": {
+            "type": "string",
+            "description": "예금주명",
+            "example": "홍길동",
+            "maxLength": 50,
+            "minLength": 0
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "환급 신청 고유 ID (멱등키)",
+            "example": "withdrawal-1697000000000",
+            "maxLength": 64,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "accountHolder",
+          "accountNumber",
+          "bankCode",
+          "idempotencyKey"
+        ]
+      },
+      "CashChargeConfirmRequestDto": {
+        "type": "object",
+        "description": "충전 승인 확정 요청",
+        "properties": {
+          "paymentKey": {
+            "type": "string",
+            "description": "Toss 결제 키",
+            "example": "5EnNZRJGvaBd3GirPNB6s",
+            "minLength": 1
+          },
+          "orderId": {
+            "type": "string",
+            "description": "충전 요청 고유 ID (멱등키)",
+            "example": "charge-1697000000000",
+            "minLength": 1
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "충전 요청 금액 (최소 10,000원)",
+            "example": 10000,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "amount",
+          "orderId",
+          "paymentKey"
+        ]
       }
     }
   }

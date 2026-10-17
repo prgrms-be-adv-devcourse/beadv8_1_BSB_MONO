@@ -18,15 +18,25 @@ import com.bukang.common.global.rsdata.RsData;
  */
 @RestControllerAdvice
 public class ProductExceptionHandler {
-	// 쓰는 요청 헤더는 회원 ID 헤더(X-Member-Id)뿐이다. 게이트웨이가 토큰을 확인해 넣어 준다
+	// 입력값 오류 코드는 common GlobalExceptionHandler와 같은 값을 쓴다
+	private static final String INVALID_REQUEST = "INVALID_REQUEST";
+
+	// 회원 ID 헤더가 없으면 로그인이 안 된 것이고, 그 밖의 헤더(대회 등록 중복 방지 키)가 없으면 잘못된 요청이다
 	@ExceptionHandler(MissingRequestHeaderException.class)
 	public ResponseEntity<RsData<Void>> missingRequestHeaderException(MissingRequestHeaderException exception) {
+		if (MemberIdHeader.NAME.equalsIgnoreCase(exception.getHeaderName())) {
+			return ResponseEntity
+				.status(HttpStatus.UNAUTHORIZED)
+				.body(RsData.of(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.", null));
+		}
 		return ResponseEntity
-			.status(HttpStatus.UNAUTHORIZED)
-			.body(RsData.of(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.", null));
+			.status(HttpStatus.BAD_REQUEST)
+			.body(RsData.of(HttpStatus.BAD_REQUEST, INVALID_REQUEST,
+				"필수 요청 헤더(%s)가 없습니다.".formatted(exception.getHeaderName()), null));
 	}
 
-	// 컨트롤러 파라미터에 직접 붙인 검증(예: 페이지 크기 @Max) 실패. 첫 번째 오류 메시지를 응답한다
+	// 컨트롤러 파라미터에 직접 붙인 검증(예: 페이지 크기 @Max, 회원 ID @Positive, 중복 방지 키 @Size) 실패. 첫 번째 오류 메시지를 응답한다
+	// 이런 검증이 있는 메서드는 @Valid 요청 본문 오류도 이 예외로 오므로, 공통 처리(MethodArgumentNotValidException)와 같은 코드를 붙인다
 	@ExceptionHandler(HandlerMethodValidationException.class)
 	public ResponseEntity<RsData<Void>> handlerMethodValidationException(HandlerMethodValidationException exception) {
 		String message = exception.getAllErrors().stream()
@@ -35,7 +45,7 @@ public class ProductExceptionHandler {
 			.orElse("요청 값이 올바르지 않습니다.");
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
-			.body(RsData.of(HttpStatus.BAD_REQUEST, message, null));
+			.body(RsData.of(HttpStatus.BAD_REQUEST, INVALID_REQUEST, message, null));
 	}
 
 	// 필수 쿼리 파라미터 누락. 어떤 값이 빠졌는지 알 수 있게 이름을 넣는다
