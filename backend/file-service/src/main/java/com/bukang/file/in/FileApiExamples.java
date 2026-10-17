@@ -128,6 +128,10 @@ final class FileApiExamples {
 		{ "status": 400, "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
 		""";
 
+	static final String INVALID_MEMBER_ID = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		""";
+
 	static final String NOT_UPLOADED = """
 		{ "status": 400, "message": "업로드된 파일이 없습니다. 업로드 URL로 파일을 먼저 올려주세요.", "data": null }
 		""";
