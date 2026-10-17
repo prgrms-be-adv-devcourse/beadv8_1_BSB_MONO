@@ -18,7 +18,7 @@ import com.bukang.common.global.rsdata.RsData;
  *
  * 주문 서비스에는 아직 이 API가 없다 (사이클 4 리팩토링에서 만든다). 응답 모양을 가정하고 먼저 둔다
  * 지금은 FakeRaceAdapter가 1차 대상 대회를 하나도 돌려주지 않아 이 어댑터가 불리지 않는다
- * 응답이 비거나 실패하면 예외를 던진다. 배치는 그 묶음을 실패로 남기고 되돌아보기(7일)로 따라잡는다
+ * 응답이 비거나 실패하면 예외를 던진다. 배치는 그 정산 내역을 실패로 남기고 되돌아보기(7일)로 따라잡는다
  */
 @Component
 public class OrderSoldSummaryAdapter implements SoldSummaryPort {
