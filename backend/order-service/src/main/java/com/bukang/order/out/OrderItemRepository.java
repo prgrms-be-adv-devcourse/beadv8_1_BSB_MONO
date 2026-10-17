@@ -14,6 +14,7 @@ import com.bukang.order.domain.KitDeliveryStatus;
 import com.bukang.order.domain.OrderItem;
 import com.bukang.order.dto.SellerKitDto;
 import com.bukang.order.dto.SoldEntryDto;
+import com.bukang.order.dto.SoldSummaryDto;
 
 public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 	/**
@@ -28,6 +29,20 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 		order by i.id
 		""")
 	List<SoldEntryDto> findSoldEntries(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+	/**
+	 * 대회의 결제 완료(PAID) 주문 상품을 판매자 × 코스로 묶어 결제 금액 합과 장수를 센다 (1차 정산용 판매 집계, PRO-231)
+	 * 취소(CANCELED)·결제 전(ORDERED)은 빠진다. 금액은 findSoldEntries의 price와 같은 칸(amount)을 더한다
+	 */
+	@Query("""
+		select new com.bukang.order.dto.SoldSummaryDto(i.sellerId, i.raceId, i.raceCourseId, sum(i.amount), count(i))
+		from OrderItem i
+		where i.raceId = :raceId
+			and i.status = com.bukang.order.domain.OrderItemStatus.PAID
+		group by i.sellerId, i.raceId, i.raceCourseId
+		order by i.sellerId, i.raceCourseId
+		""")
+	List<SoldSummaryDto> summarizeSold(@Param("raceId") int raceId);
 
 	/**
 	 * 회원의 끝나지 않은 참가권 수 (회원 탈퇴 확인용, BE-022)
