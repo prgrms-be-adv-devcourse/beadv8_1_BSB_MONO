@@ -49,7 +49,8 @@ public class InternalV1OrderController {
 	@Operation(summary = "정산용 판매 내역 조회",
 		description = "정산 서비스가 정산 대상일 배치에서 부른다. from ~ to(양 끝 포함, 최대 31일)에 열린 대회의 주문 상품 중 "
 			+ "결제 완료이고 취소되지 않은 참가권을 주문 상품 ID 순으로 돌려준다. 정산 배치는 놓친 날을 따라잡으려고 7일치를 묻는다. "
-			+ "필드는 정산 서비스의 SoldEntry와 같고, raceDate는 주문 때 복사한 대회 날짜, price는 1장 값(키트 포함)이다.")
+			+ "필드는 정산 서비스의 SoldEntry와 같고, raceCourseId는 참가권의 코스, raceDate는 주문 때 복사한 대회 날짜, "
+			+ "price는 1장 값(키트 포함)이다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공 (없으면 빈 목록)",
 			content = @Content(examples = {
