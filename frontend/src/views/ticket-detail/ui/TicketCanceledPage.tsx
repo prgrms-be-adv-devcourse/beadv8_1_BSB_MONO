@@ -21,7 +21,7 @@ export function TicketCanceledPage({ ticketId }: { ticketId: string }) {
   return (
     <>
       <AppHeader type="sub" title="취소 완료" close backHref="/tickets" />
-      <main className="flex flex-1 flex-col gap-5 px-4 pt-6 pb-8">
+      <main className="flex flex-1 flex-col justify-center-safe gap-6 px-4 pt-6 pb-8">
         {viewState || !ticket || !order ? (
           <TicketStateView state={viewState ?? 'loading'} />
         ) : (
