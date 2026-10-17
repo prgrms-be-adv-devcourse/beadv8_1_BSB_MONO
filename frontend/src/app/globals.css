@@ -337,7 +337,7 @@
     --layout-content-max-width: 1200px;
     --layout-header-height: 56px;
     --layout-form-max-width: none;
-    --layout-app-max-width: 480px;
+    --layout-app-max-width: 600px;
   }
 
   /* Typography·Layout 컬렉션의 Tablet 모드 */
@@ -403,7 +403,7 @@
   }
 
   /*
-   * 회원 화면은 PC에서도 가운데 480 기둥 안에 모바일 UI를 그린다(피그마 Header 설명의 App 방식).
+   * 회원 화면은 PC에서도 가운데 600 기둥(--layout-app-max-width) 안에 모바일 UI를 그린다(피그마 Header 설명의 App 방식).
    * 기둥 안에서는 화면 폭과 상관없이 Typography·Layout 컬렉션의 Mobile 모드 값을 쓴다.
    */
   .app-mobile {

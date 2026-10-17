@@ -68,7 +68,7 @@ export function BibCard({
               src={image}
               alt=""
               fill
-              sizes="480px"
+              sizes="600px"
               className="object-cover"
               style={{ objectPosition: imagePosition }}
             />

@@ -28,7 +28,7 @@ type SubProps = {
 
 export type AppHeaderProps = (MainProps | SubProps) & { className?: string }
 
-// 피그마 Header Device=Mobile. 회원 화면은 PC에서도 480 기둥 안에서 이 모양을 쓴다.
+// 피그마 Header Device=Mobile. 회원 화면은 PC에서도 600 기둥 안에서 이 모양을 쓴다.
 export function AppHeader(props: AppHeaderProps) {
   const base = cn(
     'sticky top-0 z-10 flex h-(--layout-header-height) shrink-0 items-center gap-1 border-b border-border-default bg-bg-surface',
