@@ -16,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.queue.app.QueueFacade;
 import com.bukang.queue.domain.QueueRace;

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.queue.support.QueueIntegrationTest;
 import com.jayway.jsonpath.JsonPath;
 
