@@ -4,7 +4,7 @@ import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.bukang.member.in.MemberIdHeader;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.Operation;

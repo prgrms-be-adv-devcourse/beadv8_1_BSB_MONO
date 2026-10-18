@@ -58,6 +58,10 @@ final class PayoutApiExamples {
 		{ "status": 400, "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
 		""";
 
+	static final String INVALID_MEMBER_ID = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		""";
+
 	static final String LOGIN_REQUIRED = """
 		{ "status": 401, "message": "로그인이 필요합니다.", "data": null }
 		""";

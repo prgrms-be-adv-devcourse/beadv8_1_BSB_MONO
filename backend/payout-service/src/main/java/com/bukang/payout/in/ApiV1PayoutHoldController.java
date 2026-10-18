@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.payout.app.PayoutHoldUseCase;
 import com.bukang.payout.dto.PayoutHoldDto;
 import com.bukang.payout.dto.PayoutHoldRequestDto;
@@ -27,6 +28,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -53,12 +55,14 @@ public class ApiV1PayoutHoldController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "보류 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutApiExamples.HOLD_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "입력값 검증 실패, 요청 본문 형식 오류 또는 정산 내역 ID·회원 ID 형식 오류",
+		@ApiResponse(responseCode = "400",
+			description = "입력값 검증 실패, 요청 본문 형식 오류, 정산 내역 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "보류 사유 없음", value = PayoutApiExamples.REASON_TYPE_REQUIRED),
 				@ExampleObject(name = "사유 상세 500자 초과", value = PayoutApiExamples.REASON_TOO_LONG),
 				@ExampleObject(name = "요청 본문 형식 오류 (없는 사유 값 포함)", value = PayoutApiExamples.INVALID_BODY),
-				@ExampleObject(name = "정산 내역 ID·회원 ID 형식 오류", value = PayoutApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "정산 내역 ID·회원 ID 형식 오류", value = PayoutApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = PayoutApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -76,7 +80,7 @@ public class ApiV1PayoutHoldController {
 	})
 	public ResponseEntity<RsData<PayoutHoldDto>> hold(
 		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "정산 내역 ID", example = "1")
 		@PathVariable int payoutId,
 		@Valid @RequestBody PayoutHoldRequestDto request
@@ -95,9 +99,11 @@ public class ApiV1PayoutHoldController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "해제 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutApiExamples.RELEASE_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "지급보류 ID·회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "지급보류 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "지급보류 ID·회원 ID 형식 오류", value = PayoutApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = PayoutApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = PayoutApiExamples.LOGIN_REQUIRED))),
@@ -113,7 +119,7 @@ public class ApiV1PayoutHoldController {
 	})
 	public ResponseEntity<RsData<PayoutHoldDto>> release(
 		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "지급보류 ID (보류 걸기 응답의 id)", example = "1")
 		@PathVariable int holdId
 	) {

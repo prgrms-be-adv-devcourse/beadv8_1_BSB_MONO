@@ -17,6 +17,7 @@ import com.bukang.cash.dto.CashWithdrawalRequestDto;
 import com.bukang.cash.dto.CashWithdrawalResponseDto;
 import com.bukang.cash.dto.WalletBalanceResponseDto;
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

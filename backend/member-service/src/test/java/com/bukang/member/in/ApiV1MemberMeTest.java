@@ -17,6 +17,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;

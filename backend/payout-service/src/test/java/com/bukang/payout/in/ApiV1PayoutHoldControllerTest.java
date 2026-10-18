@@ -231,6 +231,7 @@ class ApiV1PayoutHoldControllerTest {
 
 		hold(payout.getId(), "{}")
 			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
 			.andExpect(jsonPath("$.message").value("보류 사유를 선택해주세요."))
 			.andDo(document("payout-hold-create-bad-request", ERROR_RESPONSE));
 		hold(payout.getId(), """
@@ -238,6 +239,27 @@ class ApiV1PayoutHoldControllerTest {
 			""")
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("요청 본문 형식이 올바르지 않습니다."));
+		assertThat(statusOf(payout)).isEqualTo(PayoutStatus.CALCULATED);
+	}
+
+	@Test
+	@DisplayName("회원 ID가 0 이하면 400이고, 정산 내역은 그대로다")
+	void invalidMemberId() throws Exception {
+		Payout payout = savePayout();
+
+		mockMvc.perform(post("/api/v1/payout/payouts/{payoutId}/holds", payout.getId())
+				.header("X-Member-Id", 0)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"reasonType": "ACCOUNT_NOT_REGISTERED"}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."));
+		mockMvc.perform(post("/api/v1/payout/holds/{holdId}/release", 1)
+				.header("X-Member-Id", -1))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."));
 		assertThat(statusOf(payout)).isEqualTo(PayoutStatus.CALCULATED);
 	}
 

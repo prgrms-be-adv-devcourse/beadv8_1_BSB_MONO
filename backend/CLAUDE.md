@@ -72,7 +72,8 @@ backend/
 │   │   ├── file/domain/       FileType·FileKind (파일 용도·종류), FileRef (파일 연결 대상, 엔티티로만 만듦)
 │   │   └── member/
 │   │       ├── domain/        BaseMember, ReplicaMember (공개 필드만)
-│   │       └── event/         MemberJoinedEvent
+│   │       ├── event/         MemberJoinedEvent
+│   │       └── web/           MemberIdHeader (게이트웨이가 넘겨주는 회원 ID 헤더 이름·오류 문구)
 │   └── standard/              프레임워크와 무관한 인터페이스
 │       ├── modeltype/         HasModelTypeCode
 │       └── resulttype/        ResultType
@@ -115,12 +116,12 @@ backend/
 │   └── ProductApplication     (뼈대만 있음)
 └── queue-service/   com.bukang.queue
     ├── QueueApplication       (뼈대만 있음)
-    └── in/                    MemberIdHeader, QueueExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
+    └── in/                    QueueExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
 ```
 
 - 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).
 - 다른 서비스는 파일을 파일 ID로만 참조한다. 대상(대회 등)을 저장할 때 `/internal/v1/file/refs/{refType}/{refId}/files`를 동기 호출해 연결하고, `/internal/**`은 게이트웨이에 노출하지 않는다.
-- 회원 ID는 `X-Member-Id` 헤더로 받는다. 게이트웨이의 `auth/JwtAuthenticationFilter`가 클라이언트가 보낸 이 헤더를 지우고, Access Token을 검사해 토큰 속 회원 ID로 다시 넣는다.
+- 회원 ID는 `X-Member-Id` 헤더로 받는다. 헤더 이름과 오류 문구는 common의 `shared/member/web/MemberIdHeader`를 쓴다. 게이트웨이의 `auth/JwtAuthenticationFilter`가 클라이언트가 보낸 이 헤더를 지우고, Access Token을 검사해 토큰 속 회원 ID로 다시 넣는다.
   토큰 없이 통과하는 주소는 `gateway`의 `application.yaml` `gateway.auth.public-paths`에 있다. 로그인 전에 쓰는 API를 추가하면 여기에도 추가한다(빠뜨리면 401로 막힌다).
   서비스는 이 헤더를 그대로 믿으므로, `compose.yml`은 서비스 포트를 호스트에 열지 않는다. 서비스를 직접 부르며 확인할 때는 `bootRun`(dev)으로 띄운 서비스 포트(예: 8084)로 부른다.
 - 대상에 붙지 않은 파일(PENDING·UPLOADED·DELETED)은 마지막으로 바뀐 뒤 1일이 지나면 Spring Batch 정리 배치가 DB 행을 지우고 커밋한 뒤 S3 객체를 지운다.

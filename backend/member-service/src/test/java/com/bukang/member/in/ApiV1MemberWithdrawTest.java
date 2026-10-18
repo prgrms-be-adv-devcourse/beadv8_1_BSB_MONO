@@ -40,6 +40,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.common.shared.member.event.MemberModifiedEvent;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
