@@ -364,4 +364,21 @@ class ApiV1PayoutSellerControllerTest {
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
 			.andDo(document("payout-seller-unauthorized", ERROR_RESPONSE));
 	}
+
+	@Test
+	@DisplayName("네 조회 API 모두 회원 ID가 0 이하면 400")
+	void invalidMemberId() throws Exception {
+		String[] paths = {
+			"/summary",
+			"/payouts?fromMonth=2025-11&toMonth=2026-10",
+			"/payout-items?from=2026-09-01&to=2026-09-30",
+			"/holds?from=2026-09-15&to=2026-10-14"
+		};
+		for (String path : paths) {
+			mockMvc.perform(get(URL + path).header("X-Member-Id", 0))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+				.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."));
+		}
+	}
 }

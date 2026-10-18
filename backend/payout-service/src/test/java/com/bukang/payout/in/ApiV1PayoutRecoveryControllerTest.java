@@ -129,4 +129,18 @@ class ApiV1PayoutRecoveryControllerTest {
 			.andExpect(jsonPath("$.message").value("이미 완료된 회수입니다."))
 			.andDo(document("payout-recovery-complete-conflict", ERROR_RESPONSE));
 	}
+
+	@Test
+	@DisplayName("회원 ID가 0 이하면 400이고, 회수는 그대로다")
+	void invalidMemberId() throws Exception {
+		PayoutRecovery recovery = saveRecovery();
+
+		mockMvc.perform(post("/api/v1/payout/recoveries/{recoveryId}/complete", recovery.getId())
+				.header("X-Member-Id", 0))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."));
+		assertThat(payoutRecoveryRepository.findById(recovery.getId()).orElseThrow().getStatus())
+			.isEqualTo(PayoutRecoveryStatus.REQUESTED);
+	}
 }

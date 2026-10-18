@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.payout.app.PayoutSellerQueryUseCase;
 import com.bukang.payout.domain.PayoutItemPaging;
 import com.bukang.payout.dto.PageDto;
@@ -31,6 +32,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -55,16 +57,18 @@ public class ApiV1PayoutSellerController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutSellerApiExamples.SUMMARY_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutSellerApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "회원 ID 형식 오류", value = PayoutSellerApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = PayoutSellerApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED)))
 	})
 	public ResponseEntity<RsData<PayoutSummaryDto>> summary(
 		@Parameter(description = "판매자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id") int memberId
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId
 	) {
 		PayoutSummaryDto summary = payoutSellerQueryUseCase.summary(memberId, LocalDate.now(ZONE));
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "정산 요약을 조회했습니다.", summary));
@@ -77,12 +81,14 @@ public class ApiV1PayoutSellerController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutSellerApiExamples.PAYOUTS_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "기간 한도 초과, 시작이 끝보다 늦음, 기간 없음 또는 값 형식 오류",
+		@ApiResponse(responseCode = "400",
+			description = "기간 한도 초과, 시작이 끝보다 늦음, 기간 없음, 값 형식 오류 또는 회원 ID가 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "12개월 초과", value = PayoutSellerApiExamples.PAYOUT_PERIOD_TOO_LONG),
 				@ExampleObject(name = "시작이 끝보다 늦음", value = PayoutSellerApiExamples.PERIOD_REVERSED),
 				@ExampleObject(name = "기간 없음", value = PayoutSellerApiExamples.MISSING_PARAMETER),
-				@ExampleObject(name = "기간·회원 ID 형식 오류", value = PayoutSellerApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "기간·회원 ID 형식 오류", value = PayoutSellerApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = PayoutSellerApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -90,7 +96,7 @@ public class ApiV1PayoutSellerController {
 	})
 	public ResponseEntity<RsData<List<PayoutDto>>> payouts(
 		@Parameter(description = "판매자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "조회 시작 정산 월 (yyyy-MM)", example = "2025-11")
 		@RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth fromMonth,
 		@Parameter(description = "조회 끝 정산 월 (yyyy-MM, 포함)", example = "2026-10")
@@ -108,14 +114,16 @@ public class ApiV1PayoutSellerController {
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutSellerApiExamples.ITEMS_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "기간 한도 초과, 시작이 끝보다 늦음, 페이지 번호·크기 범위 오류, 기간 없음 또는 값 형식 오류",
+			description = "기간 한도 초과, 시작이 끝보다 늦음, 페이지 번호·크기 범위 오류, 기간 없음, 값 형식 오류 "
+				+ "또는 회원 ID가 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "1개월 초과", value = PayoutSellerApiExamples.DETAIL_PERIOD_TOO_LONG),
 				@ExampleObject(name = "시작이 끝보다 늦음", value = PayoutSellerApiExamples.PERIOD_REVERSED),
 				@ExampleObject(name = "페이지 번호 음수", value = PayoutSellerApiExamples.INVALID_PAGE),
 				@ExampleObject(name = "페이지 크기 범위 밖", value = PayoutSellerApiExamples.INVALID_PAGE_SIZE),
 				@ExampleObject(name = "기간 없음", value = PayoutSellerApiExamples.MISSING_PARAMETER),
-				@ExampleObject(name = "기간·회원 ID 형식 오류", value = PayoutSellerApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "기간·회원 ID 형식 오류", value = PayoutSellerApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = PayoutSellerApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -123,7 +131,7 @@ public class ApiV1PayoutSellerController {
 	})
 	public ResponseEntity<RsData<PageDto<PayoutItemDto>>> items(
 		@Parameter(description = "판매자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "조회 시작 정산 대상일 (yyyy-MM-dd)", example = "2026-09-01")
 		@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
 		@Parameter(description = "조회 끝 정산 대상일 (yyyy-MM-dd, 포함)", example = "2026-09-30")
@@ -144,12 +152,14 @@ public class ApiV1PayoutSellerController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutSellerApiExamples.HOLDS_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "기간 한도 초과, 시작이 끝보다 늦음, 기간 없음 또는 값 형식 오류",
+		@ApiResponse(responseCode = "400",
+			description = "기간 한도 초과, 시작이 끝보다 늦음, 기간 없음, 값 형식 오류 또는 회원 ID가 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "1개월 초과", value = PayoutSellerApiExamples.DETAIL_PERIOD_TOO_LONG),
 				@ExampleObject(name = "시작이 끝보다 늦음", value = PayoutSellerApiExamples.PERIOD_REVERSED),
 				@ExampleObject(name = "기간 없음", value = PayoutSellerApiExamples.MISSING_PARAMETER),
-				@ExampleObject(name = "기간·회원 ID 형식 오류", value = PayoutSellerApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "기간·회원 ID 형식 오류", value = PayoutSellerApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = PayoutSellerApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -157,7 +167,7 @@ public class ApiV1PayoutSellerController {
 	})
 	public ResponseEntity<RsData<List<SellerPayoutHoldDto>>> holds(
 		@Parameter(description = "판매자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "조회 시작 보류일 (yyyy-MM-dd)", example = "2026-09-15")
 		@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
 		@Parameter(description = "조회 끝 보류일 (yyyy-MM-dd, 포함)", example = "2026-10-14")
