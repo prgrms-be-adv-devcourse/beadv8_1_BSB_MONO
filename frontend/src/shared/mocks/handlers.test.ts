@@ -142,8 +142,8 @@ describe('대회 상세 목', () => {
         )
       ).data[0]?.url
 
-    expect(await urlOf(1)).toBe('/mock/races/cookierun.png')
-    expect(await urlOf(11)).toBe('/mock/races/youth10k.png')
+    expect(await urlOf(1)).toBe('/mock/races/seoul-forest-autumn-run.webp')
+    expect(await urlOf(11)).toBe('/mock/races/olympic-park-youth-10k.webp')
   })
 })
 

@@ -9,7 +9,10 @@ describe('fetchRaceDetail', () => {
   it('상품 API의 대회와 파일 API의 종목 이미지를 합친다', async () => {
     const race = await fetchRaceDetail('1')
     expect(race?.title).toBe('2026 용감한 쿠키RUN in 서울')
-    expect(race?.options[0]).toMatchObject({ id: '1', image: '/mock/races/cookierun.png' })
+    expect(race?.options[0]).toMatchObject({
+      id: '1',
+      image: '/mock/races/seoul-forest-autumn-run.webp',
+    })
   })
 
   it('없는 대회(404)면 null', async () => {

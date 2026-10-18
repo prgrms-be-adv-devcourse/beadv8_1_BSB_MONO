@@ -85,7 +85,7 @@ const RACE_SEEDS: RaceSeed[] = [
       applicationCloseAt: '2026-10-31T18:00:00',
     },
     registeredDaysAgo: 6,
-    image: '/mock/races/cookierun.png',
+    image: '/mock/races/seoul-forest-autumn-run.webp',
     courses: [
       { id: 1, name: '10K', type: 'KM_10', price: 45000, quota: 600, remaining: 580 },
       { id: 2, name: '5K', type: 'KM_5', price: 35000, quota: 500, remaining: 410 },
@@ -102,7 +102,7 @@ const RACE_SEEDS: RaceSeed[] = [
     closeInDays: 2,
     openInDays: -8,
     registeredDaysAgo: 12,
-    image: '/mock/races/youth10k.png',
+    image: '/mock/races/olympic-park-youth-10k.webp',
     courses: [{ id: 11, name: '10K', type: 'KM_10', price: 40000, quota: 1000, remaining: 37 }],
   },
   {
@@ -116,7 +116,7 @@ const RACE_SEEDS: RaceSeed[] = [
     closeInDays: 18,
     openInDays: -3,
     registeredDaysAgo: 4,
-    image: '/mock/races/daligi.png',
+    image: '/mock/races/seoul-half-marathon.webp',
     courses: [
       { id: 21, name: '10K', type: 'KM_10', price: 50000, quota: 2000, remaining: 1480 },
       { id: 22, name: '하프', type: 'HALF', price: 60000, quota: 1500, remaining: 902 },
@@ -134,7 +134,7 @@ const RACE_SEEDS: RaceSeed[] = [
     closeHour: 23,
     openInDays: -10,
     registeredDaysAgo: 15,
-    image: '/mock/races/jtbc.png',
+    image: '/mock/races/seoul-city-marathon.webp',
     courses: [
       { id: 31, name: '풀', type: 'FULL', price: 90000, quota: 3000, remaining: 0 },
       { id: 32, name: '하프', type: 'HALF', price: 70000, quota: 3000, remaining: 214 },
@@ -152,7 +152,7 @@ const RACE_SEEDS: RaceSeed[] = [
     closeInDays: 11,
     openInDays: -4,
     registeredDaysAgo: 3,
-    image: '/mock/races/hyrox.png',
+    image: '/mock/races/busan-beach-run.webp',
     courses: [
       { id: 41, name: '5K', type: 'KM_5', price: 30000, quota: 800, remaining: 640 },
       { id: 42, name: '10K', type: 'KM_10', price: 38000, quota: 800, remaining: 505 },
@@ -169,7 +169,7 @@ const RACE_SEEDS: RaceSeed[] = [
     closeInDays: 30,
     openInDays: -1,
     registeredDaysAgo: 1,
-    image: '/mock/races/hyrox.png',
+    image: '/mock/races/jeju-trail-run.webp',
     courses: [
       { id: 51, name: '10K', type: 'KM_10', price: 48000, quota: 400, remaining: 372, trail: true },
       { id: 52, name: '하프', type: 'HALF', price: 62000, quota: 300, remaining: 261, trail: true },
@@ -186,7 +186,7 @@ const RACE_SEEDS: RaceSeed[] = [
     closeInDays: 20,
     openInDays: 5,
     registeredDaysAgo: 0,
-    image: '/mock/races/daligi.png',
+    image: '/mock/races/daegu-lake-family-run.webp',
     courses: [
       { id: 61, name: '5K', type: 'KM_5', price: 30000, quota: 700, remaining: 700 },
       { id: 62, name: '10K', type: 'KM_10', price: 38000, quota: 700, remaining: 700 },
@@ -203,7 +203,7 @@ const RACE_SEEDS: RaceSeed[] = [
     closeInDays: -1,
     openInDays: -20,
     registeredDaysAgo: 25,
-    image: '/mock/races/daligi.png',
+    image: '/mock/races/hangang-night-run.webp',
     courses: [
       { id: 101, name: '5K', type: 'KM_5', price: 25000, quota: 500, remaining: 0 },
       { id: 102, name: '10K', type: 'KM_10', price: 32000, quota: 500, remaining: 0 },
