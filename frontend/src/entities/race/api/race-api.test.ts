@@ -11,7 +11,7 @@ describe('fetchRaceDetail', () => {
     expect(race?.title).toBe('2026 용감한 쿠키RUN in 서울')
     expect(race?.options[0]).toMatchObject({
       id: '1',
-      image: '/mock/races/seoul-forest-autumn-run.webp',
+      image: '/mock/races/cookierun.webp',
     })
   })
 

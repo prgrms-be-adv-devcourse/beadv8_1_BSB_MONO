@@ -33,7 +33,7 @@ describe('생성된 MSW 핸들러', () => {
     const body = await customFetch<{ data: { races: { title: string }[] } }>(
       'http://localhost/api/v1/product/races/suggestions?keyword=제주',
     )
-    expect(body.data.races.map((race) => race.title)).toEqual(['제주 감귤 트레일런'])
+    expect(body.data.races.map((race) => race.title)).toEqual(['제주감귤국제마라톤'])
   })
 })
 
@@ -83,7 +83,7 @@ describe('대회 목록 목', () => {
     const prices = (await searchRaces('?sort=PRICE')).data.races.map((race) => race.minPrice)
 
     expect(prices).toEqual([...prices].sort((a, b) => a - b))
-    expect(prices[0]).toBe(25000)
+    expect(prices[0]).toBe(30000)
   })
 
   it('keyword는 이름이나 지역에 든 대회만 남긴다', async () => {
@@ -142,8 +142,8 @@ describe('대회 상세 목', () => {
         )
       ).data[0]?.url
 
-    expect(await urlOf(1)).toBe('/mock/races/seoul-forest-autumn-run.webp')
-    expect(await urlOf(11)).toBe('/mock/races/olympic-park-youth-10k.webp')
+    expect(await urlOf(1)).toBe('/mock/races/cookierun.webp')
+    expect(await urlOf(11)).toBe('/mock/races/youth10k.webp')
   })
 })
 
