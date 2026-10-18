@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -133,6 +134,53 @@ class CashChargeConfirmUseCaseTest {
 		WalletCharge charge = walletChargeRepository.findByIdempotencyKey("order_1").orElseThrow();
 		assertThat(charge.getStatus()).isEqualTo(ChargeStatus.FAILED);
 		assertThat(walletLedgerRepository.findAll()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("PRO-200: ALREADY_PROCESSED_PAYMENT로 거절돼도 재조회해서 실제로 승인된 거래면 COMPLETED로 반영한다")
+	void recoversAsCompletedWhenAlreadyProcessedButActuallyDone() {
+		createCustomerWallet(0);
+		given(paymentClient.approve(anyString(), anyString(), anyInt()))
+			.willThrow(new PaymentApprovalFailedException("이미 처리가 끝난 결제 입니다.", "ALREADY_PROCESSED_PAYMENT"));
+		given(paymentClient.findCompletedByOrderId("order_1"))
+			.willReturn(Optional.of(new PaymentApprovalResult(10_000, "toss_key_1")));
+
+		CashChargeResponseDto response = cashFacade.confirmWalletCharge(CUSTOMER_ID, "pay_1", "order_1", 10_000);
+
+		assertThat(response.outcome()).isEqualTo(CashChargeResponseDto.Outcome.COMPLETED);
+		assertBalance(CUSTOMER_ID, 10_000);
+		WalletCharge charge = walletChargeRepository.findByIdempotencyKey("order_1").orElseThrow();
+		assertThat(charge.getStatus()).isEqualTo(ChargeStatus.COMPLETED);
+		assertThat(charge.getPgPaymentKey()).isEqualTo("toss_key_1");
+	}
+
+	@Test
+	@DisplayName("PRO-200: ALREADY_PROCESSED_PAYMENT로 거절됐는데 재조회해도 승인된 게 아니면 기존처럼 FAILED로 남는다")
+	void staysFailedWhenAlreadyProcessedButRecheckStillNotDone() {
+		createCustomerWallet(0);
+		given(paymentClient.approve(anyString(), anyString(), anyInt()))
+			.willThrow(new PaymentApprovalFailedException("이미 처리가 끝난 결제 입니다.", "ALREADY_PROCESSED_PAYMENT"));
+		given(paymentClient.findCompletedByOrderId("order_1")).willReturn(Optional.empty());
+
+		CashChargeResponseDto response = cashFacade.confirmWalletCharge(CUSTOMER_ID, "pay_1", "order_1", 10_000);
+
+		assertThat(response.outcome()).isEqualTo(CashChargeResponseDto.Outcome.FAILED);
+		assertBalance(CUSTOMER_ID, 0);
+		WalletCharge charge = walletChargeRepository.findByIdempotencyKey("order_1").orElseThrow();
+		assertThat(charge.getStatus()).isEqualTo(ChargeStatus.FAILED);
+	}
+
+	@Test
+	@DisplayName("PRO-200: ALREADY_PROCESSED_PAYMENT가 아닌 다른 거절 코드는 재조회 없이 바로 FAILED로 남는다")
+	void doesNotRecheckForOtherRejectionCodes() {
+		createCustomerWallet(0);
+		given(paymentClient.approve(anyString(), anyString(), anyInt()))
+			.willThrow(new PaymentApprovalFailedException("카드 한도를 초과했습니다.", "EXCEED_MAX_DAILY_PAYMENT_COUNT"));
+
+		CashChargeResponseDto response = cashFacade.confirmWalletCharge(CUSTOMER_ID, "pay_1", "order_1", 10_000);
+
+		assertThat(response.outcome()).isEqualTo(CashChargeResponseDto.Outcome.FAILED);
+		verify(paymentClient, never()).findCompletedByOrderId(anyString());
 	}
 
 	@Test
