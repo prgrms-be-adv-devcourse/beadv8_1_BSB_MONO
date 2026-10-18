@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.file.app.FileFacade;
 import com.bukang.file.dto.FileDto;
 import com.bukang.file.dto.FileUploadDto;

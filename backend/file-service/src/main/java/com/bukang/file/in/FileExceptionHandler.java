@@ -11,6 +11,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 
 /**
  * 파일 서비스 전용 요청 예외 처리
