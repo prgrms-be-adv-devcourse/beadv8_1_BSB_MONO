@@ -60,7 +60,7 @@ function pathParamCount(handler: RequestHandler): number {
 const fileImageHandler = getFindByRefMockHandler(({ request }) => {
   const example = getFindByRefResponseMock()
   const refId = Number(new URL(request.url).searchParams.get('refId'))
-  const image = mockImageOfCourse(refId) ?? '/mock/races/cookierun.png'
+  const image = mockImageOfCourse(refId) ?? '/mock/races/cookierun.webp'
   return {
     ...example,
     data: example.data?.map((file) => ({ ...file, url: image })),
@@ -184,7 +184,7 @@ const myOrdersHandler = getFindMineMockHandler(() => {
     status: 'PAID' as const,
     totalAmount: 50000,
     paymentDueAt: '2026-10-12T10:10:00',
-    itemName: '2026 서울 하프 마라톤 10K',
+    itemName: '2026 서울마라톤 10K',
     itemCount: 1,
   }
   return { ...example, data: { ...example.data, orders: [paid, ...(example.data?.orders ?? [])] } }
