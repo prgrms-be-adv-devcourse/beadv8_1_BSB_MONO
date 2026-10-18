@@ -17,8 +17,6 @@ public final class KafkaTopics {
 	// 종목이 바뀌었다 (등록한 종목, 수정 때 바뀐·새·뺀 종목). 대기열 서비스가 종목 복제본에 저장한다
 	public static final String RACE_COURSE_CHANGED = "queuing.racecourse.changed";
 
-	// 캐시 회원 복제본을 처음 저장한 뒤 지갑을 만든다 (cash → cash)
-	public static final String CASH_MEMBER_CREATED = "cash.member.created";
 	// 대회·종목을 저장한 뒤 이미지 연결을 요청한다 (product → file)
 	public static final String RACE_FILE_LINK_REQUESTED = "race.filelink.requested";
 	// 대기열 활성 시간이 끝나 임시 확보한 자리를 해제한다 (order → product)
