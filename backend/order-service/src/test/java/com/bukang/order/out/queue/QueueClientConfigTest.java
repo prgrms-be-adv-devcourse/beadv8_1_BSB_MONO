@@ -37,13 +37,13 @@ class QueueClientConfigTest {
 	}
 
 	@Test
-	@DisplayName("운영(prod) 설정은 실제 대기열을 컨테이너 이름으로 부른다")
-	void prodProfileUsesHttp() throws Exception {
+	@DisplayName("운영(prod) 설정은 프론트가 대기열에 등록하기 전까지 가짜를 쓰고, 실제 대기열 주소는 컨테이너 이름으로 둔다")
+	void prodProfileUsesFakeUntilFrontendRegisters() throws Exception {
 		List<PropertySource<?>> prod = new YamlPropertySourceLoader()
 			.load("prod", new ClassPathResource("application-prod.yaml"));
 
 		assertThat(prod).anySatisfy(source -> {
-			assertThat(source.getProperty("order.clients.queue.mode")).isEqualTo("http");
+			assertThat(source.getProperty("order.clients.queue.mode")).isEqualTo("fake");
 			assertThat(source.getProperty("order.clients.queue.base-url")).isEqualTo("http://bukang-queue-service:8086");
 		});
 	}
