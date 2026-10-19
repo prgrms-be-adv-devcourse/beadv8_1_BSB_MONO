@@ -60,6 +60,7 @@ member:
 
 # 민감 정보 변환 정보
 crypto:
+  enabled: true # common global/crypto의 암호화 빈(TextEncryptor, EncryptedStringConverter)을 켠다
   password: ${CRYPTO_PASSWORD}
   salt: ${CRYPTO_SALT}
   hmac-secret: ${CRYPTO_HMAC_KEY}

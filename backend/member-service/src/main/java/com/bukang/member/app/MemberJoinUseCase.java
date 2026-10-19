@@ -8,7 +8,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.bukang.member.config.crypto.BlindIndexGenerator;
+import com.bukang.common.global.crypto.BlindIndexGenerator;
 import com.bukang.member.domain.Gender;
 import com.bukang.member.domain.Member;
 import com.bukang.member.domain.Terms;

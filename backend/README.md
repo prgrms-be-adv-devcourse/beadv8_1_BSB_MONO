@@ -159,7 +159,7 @@ presigned URL은 만료 전까지 여러 번 쓸 수 있어서, 확인을 마친
 
 ## 민감정보 암호화
 
-복호화가 필요한 개인정보(현재 휴대폰 번호)는 DB에 **AES-256-GCM 암호문**으로 저장합니다.
+복호화가 필요한 민감정보(회원 휴대폰 번호, cash-service의 계좌번호·PG 결제 키)는 DB에 **AES-256-GCM 암호문**으로 저장합니다.
 그 값으로 조회하거나 중복을 검사해야 하면 **HMAC-SHA256 해시(블라인드 인덱스)**를 별도 컬럼에 함께 저장합니다.
 비밀번호는 복호화할 필요가 없으므로 이 방식이 아니라 `PasswordEncoder`(BCrypt)로 해시합니다.
 
@@ -168,7 +168,7 @@ presigned URL은 만료 전까지 여러 번 쓸 수 있어서, 확인을 마친
 | `phone` | AES 암호문 (같은 값도 매번 다른 암호문) | 꺼내서 보여 주거나 발송할 때 (복호화) |
 | `phone_hash` | HMAC 해시 (같은 값이면 항상 같은 해시, unique) | 조회, 중복 검사 (`WHERE phone_hash = ?`) |
 
-### 구성 요소 (`member-service`의 `config/crypto`)
+### 구성 요소 (`common`의 `global/crypto`)
 
 | 클래스 | 역할 |
 |---|---|
@@ -176,6 +176,14 @@ presigned URL은 만료 전까지 여러 번 쓸 수 있어서, 확인을 마친
 | `Base64TextEncryptor` | 암호화 결과(바이트)를 Base64 문자열로 바꿔 DB 컬럼에 저장할 수 있게 함 |
 | `EncryptedStringConverter` | JPA `AttributeConverter`. DB에 저장할 때 암호화하고, 조회할 때 복호화 |
 | `BlindIndexGenerator` | `crypto.hmac-secret`으로 조회용 해시 생성. 필드별 메서드에서 정규화 후 해시 (`generatePhone`은 숫자만 남김) |
+
+모든 서비스가 common을 스캔하므로, yaml에 `crypto.enabled: true`를 넣은 서비스에서만 `TextEncryptor`·`EncryptedStringConverter`가,
+`crypto.hmac-secret`을 설정한 서비스에서만 `BlindIndexGenerator`가 빈으로 등록됩니다.
+지금은 member-service(휴대폰 번호)와 cash-service(계좌번호, PG 결제 키. 블라인드 인덱스는 쓰지 않음)가 켜 두었습니다.
+
+- `crypto.password` 유무로 켜지 않는 이유: compose는 모든 앱 컨테이너에 같은 `.env`를 넣고, Spring은 환경 변수 `CRYPTO_PASSWORD`를
+  `crypto.password`로 읽습니다. 그래서 키 유무로 정하면 켜지 않은 서비스에서도 빈이 만들어집니다.
+- 다른 서비스에서 쓰려면 그 서비스의 `application-dev/test/prod.yaml`에 `crypto.enabled: true`와 아래 키 설정을 넣습니다.
 
 ### 키 설정
 
