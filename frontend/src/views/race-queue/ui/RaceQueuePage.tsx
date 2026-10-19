@@ -64,7 +64,40 @@ export function RaceQueuePage({
   return (
     <>
       <AppHeader type="sub" title="대기열" close backHref={raceHref} />
-      {remaining !== null ? (
+      {queue.failed && remaining === null ? (
+        <>
+          <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
+            <h1 className="text-center text-heading-l text-text-primary">
+              대기열에서 자리를 잃었어요
+              <br />
+              다시 줄을 서 주세요
+            </h1>
+            <Icon
+              name="Users"
+              className="size-24 text-text-primary"
+              strokeWidth={BIG_ICON_STROKE}
+              aria-hidden
+            />
+            <p className="text-center text-body-s text-text-secondary">
+              대기열이 다시 시작되어 순서가 사라졌어요.
+              <br />
+              다시 줄을 서면 처음부터 기다려요.
+            </p>
+          </main>
+          <BottomCta
+            className="sticky bottom-0 z-10"
+            primary={
+              <button
+                type="button"
+                onClick={queue.retry}
+                className={buttonClassName({ size: 'l' })}
+              >
+                다시 줄 서기
+              </button>
+            }
+          />
+        </>
+      ) : remaining !== null ? (
         <>
           <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
             <h1 className="text-center text-heading-l text-text-primary">

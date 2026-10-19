@@ -161,6 +161,31 @@ describe('RaceQueuePage', () => {
     expect(registered).toBe(2)
   })
 
+  it('다시 등록해도 계속 404면 안내와 다시 줄 서기 버튼을 보여 주고, 누르면 다시 등록한다', async () => {
+    let registered = 0
+    let lostForever = true
+    server.use(
+      http.post('*/api/v1/queue', () => {
+        registered += 1
+        return HttpResponse.json(queueStatus(1))
+      }),
+      http.get('*/api/v1/queue/races/:raceId/racecourses/:raceCourseId', () =>
+        lostForever ? queueFailure(404) : HttpResponse.json(queueStatus(1)),
+      ),
+    )
+    renderQueue()
+
+    expect(await screen.findByText(/대기열에서 자리를 잃었어요/)).toBeInTheDocument()
+    // 처음 등록 1번 + 다시 등록 2번
+    expect(registered).toBe(3)
+
+    lostForever = false
+    await act(async () => screen.getByRole('button', { name: '다시 줄 서기' }).click())
+    await vi.waitFor(() => expect(registered).toBe(4))
+    expect(await screen.findByText(/내 앞에 1명이 있어요/)).toBeInTheDocument()
+    expect(screen.queryByText(/대기열에서 자리를 잃었어요/)).not.toBeInTheDocument()
+  })
+
   it('대기열 등록이 실패하면(503) 줄서기를 건너뛰고 입장 확인 결과를 따른다', async () => {
     mockQueue([], queueFailure(503))
     server.use(orderMock.getFindAdmissionMockHandler({ status: 200, data: admitted(600) }))
