@@ -24,13 +24,16 @@ services:
   # 서비스를 직접 부르며 확인하려면 컨테이너 대신 bootRun(dev 프로파일)으로 띄운다
 
   # 입구: 80 포트 하나만 열고 /api는 gateway, 나머지는 web으로 넘긴다 (설정: docker/nginx/default.conf)
+  # 운영(EC2)은 compose.prod.yml이 443과 Let's Encrypt 인증서를 덧붙인다
   nginx:
     image: nginx:1.28-alpine
     container_name: bukang-nginx
     profiles: [ app ]
     ports:
       - "80:80"
+    # default.conf가 같은 폴더의 upstreams.conf·routes.conf를 include하므로 폴더째 붙인다
     volumes:
+      - ./docker/nginx:/etc/nginx/crewrun:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     # Nginx는 시작할 때 upstream 이름(bukang-gateway, bukang-web)을 찾으므로 두 컨테이너가 먼저 떠 있어야 한다
     depends_on:

@@ -1,0 +1,17 @@
+# 운영: 인증서를 받기 전에 쓰는 설정 (start-https.sh가 인증서가 없을 때 고른다)
+# 443 블록이 없어서 인증서 파일이 없어도 Nginx가 뜬다. certbot이 80으로 소유 확인을 받을 수 있게 하는 것이 목적이다
+# ${DOMAIN}만 start-https.sh가 .env 값으로 바꾼다. $host 같은 Nginx 변수는 그대로 남는다
+include /etc/nginx/crewrun/upstreams.conf;
+
+server {
+	listen 80;
+	server_name ${DOMAIN};
+
+	# Let's Encrypt가 http://도메인/.well-known/acme-challenge/<토큰> 으로 확인하러 온다. certbot이 이 폴더에 토큰 파일을 쓴다
+	location /.well-known/acme-challenge/ {
+		root /var/www/certbot;
+	}
+
+	# 발급을 기다리는 동안에도 사이트는 HTTP로 열어 둔다
+	include /etc/nginx/crewrun/routes.conf;
+}
