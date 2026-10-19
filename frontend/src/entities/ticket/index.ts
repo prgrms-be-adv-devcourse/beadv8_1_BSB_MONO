@@ -1,4 +1,5 @@
 export {
+  myTicketCountQueryOptions,
   myTicketsQueryOptions,
   orderQueryOptions,
   participationQueryOptions,

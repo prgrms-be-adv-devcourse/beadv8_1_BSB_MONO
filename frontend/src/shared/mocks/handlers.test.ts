@@ -279,3 +279,223 @@ describe('가짜 로그인 표시 쿠키', () => {
     expect(cookies.some((c) => /^mockLoggedIn=; Max-Age=0/.test(c))).toBe(true)
   })
 })
+
+// 방금 가입한 회원은 프로필만 있고 참가권 · 예치금 · 알림이 비어 있고, 시연용 기존 회원(runner1)은 예시 데이터를 보는지 확인한다.
+// 가짜 API는 서버 메모리가 아니라 쿠키로 둘을 가른다(mock-member.ts).
+describe('방금 가입한 회원과 시연용 기존 회원', () => {
+  const JOIN = {
+    email: 'newbie@example.com',
+    password: 'password1234',
+    name: '박새내',
+    nickname: '새내기',
+    phone: '010-2222-3333',
+    birthDate: '2000-01-02',
+    agreedTerms: ['SERVICE', 'PRIVACY'],
+  }
+  const json = (path: string, body: unknown, cookie?: string) =>
+    fetch(`http://localhost${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+      body: JSON.stringify(body),
+    })
+  const get = (path: string, cookie?: string) =>
+    fetch(`http://localhost${path}`, { headers: cookie ? { Cookie: cookie } : {} }).then(
+      (response) => response.json() as Promise<{ data: Record<string, unknown> & unknown[] }>,
+    )
+  const pair = (response: Response, name: string) =>
+    response.headers
+      .getSetCookie()
+      .find((c) => c.startsWith(`${name}=`))
+      ?.split(';')[0]
+
+  /** 가입 → 같은 이메일로 로그인해서 받은 방금 가입한 회원의 쿠키 */
+  async function signUpAndLogin() {
+    const joined = await json('/api/v1/auth/join', JOIN)
+    const login = await json(
+      '/api/v1/auth/login',
+      { email: JOIN.email, password: JOIN.password },
+      pair(joined, 'mockJoined'),
+    )
+    return { joined, login, cookie: pair(login, 'mockMember') ?? '' }
+  }
+
+  it('가입하면 프로필을 쿠키에 담고, 같은 이메일로 로그인하면 방금 가입한 회원이 된다', async () => {
+    const { joined, login, cookie } = await signUpAndLogin()
+
+    expect(pair(joined, 'mockJoined')).toBeDefined()
+    expect(cookie).toMatch(/^mockMember=/)
+    const body = (await login.json()) as { data: { member: { nickname: string; email: string } } }
+    expect(body.data.member).toMatchObject({ nickname: '새내기', email: JOIN.email })
+  })
+
+  it('방금 가입한 회원은 가입 때 넣은 정보를 보고, 참가권 · 예치금 · 알림이 비어 있다', async () => {
+    const { cookie } = await signUpAndLogin()
+
+    const me = await get('/api/v1/member/members/me', cookie)
+    expect(me.data).toMatchObject({
+      email: JOIN.email,
+      name: '박새내',
+      nickname: '새내기',
+      phone: '010-2222-3333',
+      birthDate: '2000-01-02',
+    })
+    const orders = await get('/api/v1/order/orders?page=0&size=100', cookie)
+    expect(orders.data.orders).toEqual([])
+    const balance = await get('/api/v1/cash/wallets/2/balance', cookie)
+    expect(balance.data.balance).toBe(0)
+    const notices = await get('/api/v1/notification/notifications', cookie)
+    expect(notices.data).toEqual([])
+  })
+
+  it('시연용 기존 회원(쿠키 없음, runner1 로그인)은 예시 데이터를 본다', async () => {
+    const me = await get('/api/v1/member/members/me')
+    expect(me.data).toMatchObject({ email: 'runner1@crewrun.com', nickname: '러너1' })
+    const orders = await get('/api/v1/order/orders?page=0&size=100')
+    expect((orders.data.orders as unknown[]).length).toBeGreaterThan(0)
+    const balance = await get('/api/v1/cash/wallets/1/balance')
+    expect(balance.data.balance).toBe(5000)
+    const notices = await get('/api/v1/notification/notifications')
+    expect(notices.data).toHaveLength(4)
+
+    // 방금 가입한 회원의 쿠키가 남아 있어도 runner1로 로그인하면 지운다
+    const { joined } = await signUpAndLogin()
+    const login = await json(
+      '/api/v1/auth/login',
+      { email: 'runner1@crewrun.com', password: 'password1' },
+      pair(joined, 'mockJoined'),
+    )
+    expect(login.headers.getSetCookie().some((c) => /^mockMember=; Max-Age=0/.test(c))).toBe(true)
+  })
+
+  it('로그아웃하면 방금 가입한 회원 쿠키도 지운다', async () => {
+    const logout = await json('/api/v1/auth/logout', {})
+    expect(logout.headers.getSetCookie().some((c) => /^mockMember=; Max-Age=0/.test(c))).toBe(true)
+  })
+
+  it('방금 가입한 회원은 정보를 고치면 다음 조회부터 고친 값이 보인다', async () => {
+    const { cookie } = await signUpAndLogin()
+    const modified = await fetch('http://localhost/api/v1/member/members/me', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ nickname: '새내기2' }),
+    })
+    const next = pair(modified, 'mockMember') ?? ''
+    expect(((await modified.json()) as { data: { nickname: string } }).data.nickname).toBe(
+      '새내기2',
+    )
+    expect((await get('/api/v1/member/members/me', next)).data.nickname).toBe('새내기2')
+  })
+})
+
+// 코드리뷰 재현: 새 회원끼리 잔액을 함께 쓰거나, 정보를 고친 뒤 다시 로그인하면 고친 값이 사라지던 경우.
+// 브라우저 쿠키 저장소를 흉내 내는 jar를 브라우저마다 하나씩 둔다.
+describe('새 회원 쿠키 저장소가 둘일 때', () => {
+  function browser() {
+    const jar = new Map<string, string>()
+    const cookie = () => [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
+    const absorb = (response: Response) => {
+      for (const line of response.headers.getSetCookie()) {
+        const [pair, ...attributes] = line.split(';')
+        const [name, value] = pair.split('=')
+        if (attributes.some((a) => a.trim() === 'Max-Age=0')) jar.delete(name)
+        else jar.set(name, value)
+      }
+      return response
+    }
+    const call = async (
+      method: string,
+      path: string,
+      body?: unknown,
+      headers: Record<string, string> = {},
+    ) =>
+      absorb(
+        await fetch(`http://localhost${path}`, {
+          method,
+          headers: { 'Content-Type': 'application/json', Cookie: cookie(), ...headers },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        }),
+      )
+    const data = async (
+      method: string,
+      path: string,
+      body?: unknown,
+      headers?: Record<string, string>,
+    ) =>
+      (
+        (await call(method, path, body, headers)).json() as Promise<{
+          data: Record<string, unknown>
+        }>
+      ).then((json) => json.data)
+    return { call, data }
+  }
+  const join = (email: string, nickname: string) => ({
+    email,
+    password: 'password1234',
+    name: '박새내',
+    nickname,
+    phone: '010-2222-3333',
+    birthDate: '2000-01-02',
+    agreedTerms: ['SERVICE', 'PRIVACY'],
+  })
+  async function signUp(b: ReturnType<typeof browser>, email: string, nickname: string) {
+    await b.call('POST', '/api/v1/auth/join', join(email, nickname))
+    await b.call('POST', '/api/v1/auth/login', { email, password: 'password1234' })
+  }
+
+  it('한 새 회원이 충전해도 다른 새 회원의 잔액은 0원이다', async () => {
+    const a = browser()
+    const b = browser()
+    await signUp(a, 'a@example.com', '에이')
+    expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(0)
+
+    const charge = await a.data('POST', '/api/v1/cash/charges/confirm', {
+      paymentKey: 'pk',
+      orderId: 'order-a',
+      amount: 50_000,
+    })
+    expect(charge.balance).toBe(50_000)
+    expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(50_000)
+
+    await signUp(b, 'b@example.com', '비')
+    expect((await b.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(0)
+    // 시연용 기존 회원(쿠키 없음)의 잔액에도 영향이 없다
+    expect((await browser().data('GET', '/api/v1/cash/wallets/1/balance')).balance).toBe(5000)
+  })
+
+  it('새 회원의 결제와 환급은 자기 잔액만 줄인다', async () => {
+    const a = browser()
+    await signUp(a, 'c@example.com', '씨')
+    await a.call('POST', '/api/v1/cash/charges/confirm', {
+      paymentKey: 'pk',
+      orderId: 'order-c',
+      amount: 60_000,
+    })
+    const pay = await a.call('POST', '/api/v1/order/orders/1/payment')
+    expect(pay.status).toBe(200)
+    expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(10_000)
+
+    const refund = await a.data(
+      'POST',
+      '/api/v1/cash/withdrawals',
+      {},
+      { 'Idempotency-Key': 'k-c' },
+    )
+    expect(refund.withdrawnAmount).toBe(10_000)
+    expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(0)
+  })
+
+  it('정보를 고친 뒤 로그아웃하고 다시 로그인해도 고친 값이 남는다', async () => {
+    const a = browser()
+    await signUp(a, 'd@example.com', 'original')
+    const edited = await a.data('PUT', '/api/v1/member/members/me', { nickname: 'edited' })
+    expect(edited.nickname).toBe('edited')
+
+    await a.call('POST', '/api/v1/auth/logout')
+    const login = await a.data('POST', '/api/v1/auth/login', {
+      email: 'd@example.com',
+      password: 'password1234',
+    })
+    expect((login.member as { nickname: string }).nickname).toBe('edited')
+    expect((await a.data('GET', '/api/v1/member/members/me')).nickname).toBe('edited')
+  })
+})

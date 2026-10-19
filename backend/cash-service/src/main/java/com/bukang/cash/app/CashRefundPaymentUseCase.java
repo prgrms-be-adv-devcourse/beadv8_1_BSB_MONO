@@ -37,8 +37,11 @@ public class CashRefundPaymentUseCase {
 		}
 
 		// 이미 환원·환불됐으면 그대로 끝 (멱등) — 환원과 환불이 동시에 와도 한쪽만 반영된다
+		// 단, CANCELED는 COMPLETED를 거친 적 없이(잔액 부족 등으로 FAILED됐다가) 취소된 경우도
+		// 있어서, 그때는 실제로 돈이 움직인 적이 없으므로 0원을 돌려줘야 한다 (PRO-170)
 		if (payment.getStatus() == PaymentStatus.CANCELED || payment.getStatus() == PaymentStatus.REFUNDED) {
-			return new CashRefundResponseDto(payment.getAmount());
+			int actualAmount = payment.wasCompleted() ? payment.getAmount() : 0;
+			return new CashRefundResponseDto(actualAmount);
 		}
 
 		if (payment.getStatus() != PaymentStatus.COMPLETED) {

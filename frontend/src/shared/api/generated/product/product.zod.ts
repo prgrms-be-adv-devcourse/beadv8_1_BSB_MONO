@@ -235,6 +235,14 @@ export const SearchResponse = zod.object({
  * 승인된 판매자가 대회와 종목을 판매 예정(SCHEDULED)으로 등록하고, 등록하면 바로 공개된다. 판매 시작일(saleOpenDate)은 크루 예매 시작·개인 예매 오픈 중 이른 날짜로 채우고, 오늘로부터 이틀 뒤부터 정할 수 있다. 판매 시작일 0시에 상태 배치(5분마다)가 판매 중으로 바꾸고, 이때부터 판매 시작 뒤 수정 규칙이 걸린다. 판매 상태는 판매자 화면용이고, 구매자는 크루 예매 시작·개인 예매 오픈 시각부터 예매할 수 있다. 이미지는 종목마다 받고(대표 이미지 1장 필수), 등록이 커밋된 뒤 file-service에 연결을 요청한다. 파일이 없거나 본인이 올린 파일이 아니어서 연결에 실패하면 응답에는 나오지 않고 file-service 로그에 남는다.
  * @summary 대회 등록
  */
+export const registerHeaderIdempotencyKeyMax = 64;
+
+
+
+export const RegisterHeader = zod.object({
+  "Idempotency-Key": zod.string().min(1).max(registerHeaderIdempotencyKeyMax).describe('중복 등록 방지 키. 같은 [등록하기] 재시도에는 같은 값을 보낸다 (예: UUID)')
+})
+
 export const registerBodyTitleMin = 0;
 export const registerBodyTitleMax = 200;
 

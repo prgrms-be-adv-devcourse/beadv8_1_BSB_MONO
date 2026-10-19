@@ -18,7 +18,7 @@
           "Cash"
         ],
         "summary": "예치금 전액 환급 신청",
-        "description": "회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. idempotencyKey를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.",
+        "description": "회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. Idempotency-Key 헤더를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.",
         "operationId": "requestWithdrawal",
         "parameters": [
           {
@@ -32,6 +32,18 @@
               "exclusiveMinimum": 0
             },
             "example": 3
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "중복 환급 방지 키. 같은 [환급 신청] 재시도에는 같은 값을 보낸다 (예: UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "example": "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43"
           }
         ],
         "requestBody": {
@@ -333,20 +345,12 @@
             "example": "홍길동",
             "maxLength": 50,
             "minLength": 0
-          },
-          "idempotencyKey": {
-            "type": "string",
-            "description": "환급 신청 고유 ID (멱등키)",
-            "example": "withdrawal-1697000000000",
-            "maxLength": 64,
-            "minLength": 0
           }
         },
         "required": [
           "accountHolder",
           "accountNumber",
-          "bankCode",
-          "idempotencyKey"
+          "bankCode"
         ]
       },
       "CashChargeConfirmRequestDto": {

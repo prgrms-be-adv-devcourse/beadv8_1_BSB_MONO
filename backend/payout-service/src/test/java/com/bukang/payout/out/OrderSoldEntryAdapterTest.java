@@ -57,10 +57,29 @@ class OrderSoldEntryAdapterTest {
 		List<SoldEntry> entries = adapter.findSoldEntries(LocalDate.of(2026, 9, 22), LocalDate.of(2026, 9, 28));
 
 		assertThat(entries).containsExactly(
-			new SoldEntry(1, 3, 5, LocalDate.of(2026, 9, 22), 60_000L),
-			new SoldEntry(4, 3, 7, LocalDate.of(2026, 9, 28), 55_000L)
+			new SoldEntry(1, 3, 5, null, LocalDate.of(2026, 9, 22), 60_000L),
+			new SoldEntry(4, 3, 7, null, LocalDate.of(2026, 9, 28), 55_000L)
 		);
 		server.verify();
+	}
+
+	@Test
+	@DisplayName("주문 서비스가 raceCourseId를 보내면 SoldEntry의 코스로 옮긴다 (PRO-231부터 보냄)")
+	void mapsRaceCourseId() {
+		server.expect(requestTo(URL))
+			.andRespond(withSuccess("""
+				{
+					"status": 200,
+					"message": "판매 내역을 조회했습니다.",
+					"data": [
+						{ "orderItemId": 1, "sellerId": 3, "raceId": 5, "raceCourseId": 11, "raceDate": "2026-09-22",
+							"price": 60000 }
+					]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		assertThat(adapter.findSoldEntries(LocalDate.of(2026, 9, 22), LocalDate.of(2026, 9, 28)))
+			.containsExactly(new SoldEntry(1, 3, 5, 11, LocalDate.of(2026, 9, 22), 60_000L));
 	}
 
 	@Test
