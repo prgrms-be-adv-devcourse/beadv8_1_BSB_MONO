@@ -7,13 +7,15 @@ import { useEffect } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { loginHref } from '@/features/auth'
-import { useAdmissionTimer } from '@/features/queue-admission'
+import { useAdmissionTimer, useQueuePosition } from '@/features/queue-admission'
 import { BottomCta, buttonClassName, formatTimer, Icon, ProgressBar } from '@/shared/ui'
 
 // 피그마 V2 · M05-Q1 대기열 · 차례 기다리기 / M05-Q2 대기열 · 내 차례
-// 같은 주소에서 입장 여부에 따라 두 화면을 바꿔 그린다. 입장 여부는 대기열 API로 짧은 간격마다 다시 묻고,
-// 입장하면 남은 시간을 1초씩 줄여 간다. 0이 되면 입장 시간 만료 화면(M07-1)으로 간다.
-// 순번 · 예상 대기 시간은 API가 주지 않아 숫자를 그리지 않는다.
+// 같은 주소에서 입장 여부에 따라 두 화면을 바꿔 그린다.
+// 들어오면 대기열에 등록하고(useQueuePosition) 차례가 올 때까지 순번을 짧은 간격마다 다시 묻는다.
+// 차례가 오면 주문 서비스에 입장 확인을 묻고, 입장하면 버튼을 누르지 않아도 신청서(M05)로 넘어간다.
+// 남은 시간은 신청서에서 1초씩 줄여 가고, 0이 되면 입장 시간 만료 화면(M07-1)으로 간다.
+// 예상 대기 시간은 API가 주지 않아 그리지 않는다. 내 앞 인원은 순번을 받으면 작게 보여 준다.
 // 상단 timer bar 띠는 이 화면에 없다(신청서 M05부터). 왼쪽 위 X는 대회 상세로 이동만 한다.
 // 96px 그림도 시안처럼 선을 2px로 둔다. 아이콘은 24 격자라 96px에서는 0.5가 2px이다.
 const BIG_ICON_STROKE = 0.5
@@ -30,17 +32,22 @@ export function RaceQueuePage({
   previewRemainingSeconds?: number
 }) {
   const preview = previewRemainingSeconds !== undefined
+  const queue = useQueuePosition(
+    preview ? undefined : Number(raceId),
+    preview ? undefined : Number(optionId),
+  )
   const timer = useAdmissionTimer(
     preview ? undefined : Number(raceId),
     preview ? undefined : Number(optionId),
     'wait',
+    queue.canEnter,
   )
   const remaining = preview ? previewRemainingSeconds : timer.remaining
 
   // 로그인이 필요하면(401) 로그인 화면으로 보낸다. 로그인 뒤 이 대기열로 돌아오게 지금 주소를 넘긴다.
   const router = useRouter()
   const pathname = usePathname()
-  const unauthorized = timer.errorStatus === 401
+  const unauthorized = timer.errorStatus === 401 || queue.unauthorized
   useEffect(() => {
     if (unauthorized) router.replace(loginHref(`${pathname}${window.location.search}`))
   }, [unauthorized, pathname, router])
@@ -48,10 +55,49 @@ export function RaceQueuePage({
   const raceHref = `/races/${raceId}` as Route
   const applyHref = `/races/${raceId}/apply?option=${encodeURIComponent(optionId)}` as const
 
+  // 차례가 오면 신청서로 자동으로 넘어간다 (시안 미리보기는 머문다)
+  const admitted = remaining !== null
+  useEffect(() => {
+    if (admitted && !preview) router.replace(applyHref)
+  }, [admitted, preview, applyHref, router])
+
   return (
     <>
       <AppHeader type="sub" title="대기열" close backHref={raceHref} />
-      {remaining !== null ? (
+      {queue.failed && remaining === null ? (
+        <>
+          <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
+            <h1 className="text-center text-heading-l text-text-primary">
+              대기열에서 자리를 잃었어요
+              <br />
+              다시 줄을 서 주세요
+            </h1>
+            <Icon
+              name="Users"
+              className="size-24 text-text-primary"
+              strokeWidth={BIG_ICON_STROKE}
+              aria-hidden
+            />
+            <p className="text-center text-body-s text-text-secondary">
+              대기열이 다시 시작되어 순서가 사라졌어요.
+              <br />
+              다시 줄을 서면 처음부터 기다려요.
+            </p>
+          </main>
+          <BottomCta
+            className="sticky bottom-0 z-10"
+            primary={
+              <button
+                type="button"
+                onClick={queue.retry}
+                className={buttonClassName({ size: 'l' })}
+              >
+                다시 줄 서기
+              </button>
+            }
+          />
+        </>
+      ) : remaining !== null ? (
         <>
           <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
             <h1 className="text-center text-heading-l text-text-primary">
@@ -102,7 +148,10 @@ export function RaceQueuePage({
           {/* 진행률이 아니라 기다리는 중이라는 표시라 값 없이 계속 움직인다 */}
           <ProgressBar indeterminate aria-label="대기 중" className="w-70" />
           <p className="text-center text-body-s text-text-secondary">
-            차례대로 들어가고 있어요. 잠시만 기다려 주세요.
+            {queue.ahead === undefined
+              ? '차례대로 들어가고 있어요.'
+              : `내 앞에 ${queue.ahead}명이 있어요.`}{' '}
+            잠시만 기다려 주세요.
             <br />
             화면을 나가면 다시 줄을 서야 해요.
           </p>

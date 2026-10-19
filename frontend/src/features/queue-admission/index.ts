@@ -9,3 +9,4 @@ export {
   useQueueAdmission,
   type AdmissionMode,
 } from './model/use-queue-admission'
+export { useQueuePosition } from './model/use-queue-position'

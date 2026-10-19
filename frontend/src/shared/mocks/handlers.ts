@@ -206,12 +206,20 @@ const MOCK_ADMISSION_MS = 10 * 60 * 1000
 /** (대회, 종목)마다 입장 여부를 물은 횟수와 입장 끝 시각 */
 const mockQueue = new Map<string, { asked: number; endsAt?: number }>()
 
+/** 대기열 줄서기 목: 등록한 뒤 순번을 묻는 횟수 (처음 순번의 앞 인원만큼 줄어들고, 그다음에 입장 가능) */
+const MOCK_QUEUE_AHEAD = 2
+const MOCK_QUEUE_TOTAL = 10
+
+/** (대회, 종목)마다 등록한 줄. polls는 순번을 물은 횟수, entered는 입장 가능이 된 뒤 */
+const mockQueuePosition = new Map<string, { polls: number; entered: boolean }>()
+
 /** 테스트 사이에 키트 발송 · 배송 완료 상태가 넘어가지 않게 처음으로 돌린다. */
 export { resetMockKitsForTesting }
 
 /** 테스트 사이에 대기열 순서가 넘어가지 않게 처음(아무도 줄 서지 않음)으로 돌린다. */
 export function resetMockQueueForTesting() {
   mockQueue.clear()
+  mockQueuePosition.clear()
 }
 
 /**
@@ -227,7 +235,9 @@ const queueAdmissionHandler = getFindAdmissionMockHandler(({ request }) => {
   const current = saved && !expired ? saved : { asked: 0 }
   mockQueue.set(key, current)
   if (current.endsAt === undefined) {
-    if (current.asked < MOCK_QUEUE_WAITING_ANSWERS) {
+    // 대기열에서 차례가 온 사람은 기다리지 않고 바로 입장한다. 줄을 서지 않고 물으면 처음 두 번은 기다리는 중이다.
+    const myTurn = mockQueuePosition.get(key)?.entered === true
+    if (!myTurn && current.asked < MOCK_QUEUE_WAITING_ANSWERS) {
       current.asked += 1
       return {
         status: 200,
@@ -247,6 +257,55 @@ const queueAdmissionHandler = getFindAdmissionMockHandler(({ request }) => {
     },
   }
 })
+
+const queueKey = (raceId: unknown, raceCourseId: unknown) => `${raceId}:${raceCourseId}`
+
+const queueStatus = (ahead: number, canEnter: boolean) => ({
+  myRank: canEnter ? 0 : ahead + 1,
+  ahead: canEnter ? 0 : ahead,
+  total: canEnter ? 0 : MOCK_QUEUE_TOTAL,
+  canEnter,
+})
+
+const queueError = (status: number, message: string) =>
+  HttpResponse.json({ status, message, data: null }, { status })
+
+/**
+ * 대기열(queue-service) 줄서기 목. 등록하면 앞에 MOCK_QUEUE_AHEAD명이 있고, 순번을 물을 때마다 한 명씩 줄다가
+ * 그다음 물을 때 입장 가능(canEnter)이 된다. 입장 시간이 남아 있을 때 다시 등록하면 진짜처럼 409(이미 입장)다.
+ * 줄을 서지 않고 순번을 물으면 404다.
+ */
+const queueHandlers = [
+  http.post('*/api/v1/queue', async ({ request }) => {
+    const body = (await request.json()) as { raceId?: number; raceCourseId?: number }
+    const key = queueKey(body.raceId, body.raceCourseId)
+    const admission = mockQueue.get(key)
+    const admitted = admission?.endsAt !== undefined && admission.endsAt > Date.now()
+    if (admitted && mockQueuePosition.get(key)?.entered) {
+      return queueError(409, '이미 입장한 회원입니다.')
+    }
+    mockQueuePosition.set(key, { polls: 0, entered: false })
+    mockQueue.delete(key)
+    return HttpResponse.json({
+      status: 200,
+      message: '대기열에 등록했습니다.',
+      data: queueStatus(MOCK_QUEUE_AHEAD, false),
+    })
+  }),
+  http.get('*/api/v1/queue/races/:raceId/racecourses/:raceCourseId', ({ params }) => {
+    const key = queueKey(params.raceId, params.raceCourseId)
+    const position = mockQueuePosition.get(key)
+    if (!position) return queueError(404, '대기열에 없는 회원입니다.')
+    position.polls += 1
+    const ahead = MOCK_QUEUE_AHEAD - position.polls
+    position.entered = position.entered || ahead < 0
+    return HttpResponse.json({
+      status: 200,
+      message: '대기열 상태를 조회했습니다.',
+      data: queueStatus(Math.max(ahead, 0), position.entered),
+    })
+  }),
+]
 
 /**
  * 명세 예시는 주문 생성 · 장바구니 주문 · 결제 · 조회가 모두 주문 1이다. 그런데 결제 화면은 주문 1이 결제 대기여야 하고,
@@ -416,6 +475,7 @@ export const handlers = [
   ...fileUploadHandlers,
   myOrdersHandler,
   ...raceHandlers,
+  ...queueHandlers,
   ...orderHandlers,
   ...walletHandlers,
   ...sellerKitHandlers,
