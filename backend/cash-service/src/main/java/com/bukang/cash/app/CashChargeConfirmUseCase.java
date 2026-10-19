@@ -1,6 +1,7 @@
 package com.bukang.cash.app;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -29,6 +30,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CashChargeConfirmUseCase {
 	private static final int MINIMUM_AMOUNT = 10_000;
+	// Toss가 confirm을 거절하면서 "이미 처리가 끝난 결제"라고 알리는 코드 (PRO-200)
+	// 타임아웃 뒤 재시도에서만 받을 수 있다 — 먼저 보낸 요청이 Toss 쪽에서는 실제로 승인됐을 수 있다는 뜻이다
+	private static final String ALREADY_PROCESSED_PAYMENT = "ALREADY_PROCESSED_PAYMENT";
 
 	private final CashSupport cashSupport;
 	private final WalletChargeRepository walletChargeRepository;
@@ -37,10 +41,10 @@ public class CashChargeConfirmUseCase {
 	private final TransactionTemplate transactionTemplate;
 
 	public CashChargeResponseDto confirmWalletCharge(int customerId, String paymentKey, String orderId, int amount) {
-		CashChargeResponseDto existing = transactionTemplate.execute(
-			status -> findExistingLocked(customerId, orderId));
-		if (existing != null) {
-			return existing;
+		CashChargeResponseDto existingCompleted = transactionTemplate.execute(
+			status -> findExistingCompletedLocked(customerId, orderId));
+		if (existingCompleted != null) {
+			return existingCompleted;
 		}
 
 		if (amount < MINIMUM_AMOUNT) {
@@ -50,7 +54,13 @@ public class CashChargeConfirmUseCase {
 		PaymentApprovalResult result;
 		try {
 			result = paymentClient.approve(paymentKey, orderId, amount);
-		} catch (PaymentApprovalFailedException e) {
+		} catch (PaymentApprovalFailedException failure) {
+			Optional<PaymentApprovalResult> actuallyCompleted = recoverIfAlreadyProcessed(failure, orderId);
+			if (actuallyCompleted.isPresent()) {
+				PaymentApprovalResult recovered = actuallyCompleted.get();
+				return transactionTemplate.execute(
+					status -> recordCompletedLocked(customerId, orderId, amount, recovered));
+			}
 			return transactionTemplate.execute(status -> recordFailedLocked(customerId, orderId, amount));
 		}
 
@@ -65,11 +75,28 @@ public class CashChargeConfirmUseCase {
 		}
 	}
 
-	// 지갑을 잠그고, 이 orderId로 이미 끝난(성공·실패) 충전이 있으면 그 결과를 돌려준다 (Toss를 부르기 전 조기 반환)
-	private CashChargeResponseDto findExistingLocked(int customerId, String orderId) {
+	// Toss가 "이미 처리된 결제"라고 거절했을 때만, 실제로 승인까지 끝났는지 재조회해서 확인한다
+	private Optional<PaymentApprovalResult> recoverIfAlreadyProcessed(
+		PaymentApprovalFailedException failure, String orderId
+	) {
+		if (!ALREADY_PROCESSED_PAYMENT.equals(failure.getPgCode())) {
+			return Optional.empty();
+		}
+		return paymentClient.findCompletedByOrderId(orderId);
+	}
+
+	// 지갑을 잠그고, 이 orderId로 이미 COMPLETED인 충전이 있으면 그 결과를 돌려준다 (Toss를 부르기 전 조기 반환).
+	// FAILED는 조기 반환하지 않는다 — 연결 실패(타임아웃)처럼 Toss 쪽 실제 결과를 모르는 채로 실패 처리됐을
+	// 수 있어서, Toss를 다시 불러봐야 진짜 상태를 알 수 있다. 다시 불렀을 때 실제로 이미 처리된 거였다면
+	// ALREADY_PROCESSED_PAYMENT로 거절되고, recoverIfAlreadyProcessed가 재조회로 COMPLETED까지 복구한다
+	// (PR 리뷰 지적). 다른 회원 소유인지 확인하는 멱등키 검증은 상태와 상관없이 여기서 그대로 한다
+	private CashChargeResponseDto findExistingCompletedLocked(int customerId, String orderId) {
 		Wallet customerWallet = cashSupport.lockWallet(customerId);
 		WalletCharge existing = findMatchingCharge(customerWallet, orderId);
-		return existing == null ? null : toDto(existing, customerWallet.getBalance());
+		if (existing == null || existing.getStatus() != ChargeStatus.COMPLETED) {
+			return null;
+		}
+		return toDto(existing, customerWallet.getBalance());
 	}
 
 	// 지갑을 다시 잠그고(짧은 트랜잭션), 그사이 같은 orderId로 먼저 끝난 요청이 없으면 FAILED로 기록한다
