@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -40,13 +41,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.bukang.common.global.json.JsonConverter;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.product.TestcontainersConfiguration;
 import com.bukang.product.app.ProductFacade;
 import com.bukang.product.domain.ProductMember;
 import com.bukang.product.domain.ProductSeller;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.out.ParticipationHoldRepository;
@@ -144,6 +145,14 @@ public abstract class ProductIntegrationTest {
 		return payloads.getAllValues();
 	}
 
+	// 이 테스트에서 토픽으로 보낸 메시지의 key (보낸 순서대로)
+	// 기록용 KafkaTemplate(spy)에 남은 send(토픽, key, 본문) 호출 중 이 토픽으로 보낸 호출의 key만 꺼낸다
+	protected List<String> sentKeys(String topic) {
+		ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
+		verify(kafka(), atLeast(0)).send(eq(topic), keys.capture(), anyString());
+		return keys.getAllValues();
+	}
+
 	protected void seedSeller(int memberId, int sellerId) {
 		LocalDateTime now = LocalDateTime.now();
 		ProductMember member = productMemberRepository.save(new ProductMember(memberId, now, now, "러너" + memberId));
@@ -159,7 +168,7 @@ public abstract class ProductIntegrationTest {
 	}
 
 	protected RegisteredRace register(int memberId, RaceSaveRequestDto request) throws Exception {
-		MvcResult result = postJson("/api/v1/product/races", memberId, request)
+		MvcResult result = postRace(memberId, request)
 			.andExpect(status().isCreated())
 			.andReturn();
 		String body = result.getResponse().getContentAsString();
@@ -261,6 +270,18 @@ public abstract class ProductIntegrationTest {
 		return mockMvc.perform(withMember(post(path), memberId)
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(jsonConverter.toJson(body)));
+	}
+
+	// 대회 등록 요청. 등록 중복 방지 키(Idempotency-Key)는 요청마다 새로 만든다
+	protected ResultActions postRace(Integer memberId, Object body) throws Exception {
+		return mockMvc.perform(withMember(post("/api/v1/product/races"), memberId)
+			.header("Idempotency-Key", newIdempotencyKey())
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(jsonConverter.toJson(body)));
+	}
+
+	protected static String newIdempotencyKey() {
+		return UUID.randomUUID().toString();
 	}
 
 	protected ResultActions putJson(String path, Integer memberId, Object body) throws Exception {

@@ -38,6 +38,8 @@ import lombok.NoArgsConstructor;
 	indexes = @Index(name = "idx_member_seller_member", columnList = "member_id, status")
 )
 public class Seller extends BaseEntity {
+	public static final String WITHDRAWN_REJECT_REASON = "회원 탈퇴";
+
 	@Id
 	@GeneratedValue(strategy = IDENTITY)
 	@Column(name = "seller_id")
@@ -118,6 +120,18 @@ public class Seller extends BaseEntity {
 		review(adminId, now);
 		this.status = SellerStatus.REJECTED;
 		this.rejectReason = reason;
+		publishChangedEvent();
+	}
+
+	// 신청자가 탈퇴하면 대기 중 신청을 반려한다. 심사한 관리자는 없어 reviewedBy는 비워 둔다 (PRO-217)
+	// 반려 이벤트로 다른 서비스 사본도 반려 상태가 된다
+	public void rejectByWithdrawal(LocalDateTime now) {
+		if (status != SellerStatus.PENDING) {
+			throw new SellerAlreadyReviewedException("이미 심사한 판매자 신청입니다.");
+		}
+		this.reviewedAt = now;
+		this.status = SellerStatus.REJECTED;
+		this.rejectReason = WITHDRAWN_REJECT_REASON;
 		publishChangedEvent();
 	}
 

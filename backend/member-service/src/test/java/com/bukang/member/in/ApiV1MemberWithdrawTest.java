@@ -40,15 +40,23 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.common.shared.member.event.MemberModifiedEvent;
+import com.bukang.common.shared.member.web.MemberIdHeader;
+import com.bukang.common.shared.seller.domain.SellerStatus;
+import com.bukang.common.shared.seller.domain.SellerType;
+import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.member.app.MemberFacade;
+import com.bukang.member.app.SellerFacade;
 import com.bukang.member.domain.Gender;
 import com.bukang.member.domain.Member;
 import com.bukang.member.domain.MemberStatus;
+import com.bukang.member.domain.Seller;
 import com.bukang.member.domain.TermsType;
 import com.bukang.member.domain.exception.WithdrawCheckFailedException;
 import com.bukang.member.dto.MemberJoinRequestDto;
+import com.bukang.member.dto.SellerApplyRequestDto;
 import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.RefreshTokenRepository;
+import com.bukang.member.out.SellerRepository;
 import com.bukang.member.out.TermsAgreementRepository;
 import com.bukang.member.out.cash.CashBalancePort;
 import com.bukang.member.out.cash.HttpCashBalanceAdapter;
@@ -81,6 +89,12 @@ class ApiV1MemberWithdrawTest {
 	private TermsAgreementRepository termsAgreementRepository;
 
 	@Autowired
+	private SellerFacade sellerFacade;
+
+	@Autowired
+	private SellerRepository sellerRepository;
+
+	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@Autowired
@@ -105,7 +119,8 @@ class ApiV1MemberWithdrawTest {
 
 	@AfterEach
 	void tearDown() {
-		// 동의 기록이 회원을 참조하므로(FK) 먼저 지운다
+		// 판매자 신청·동의 기록이 회원을 참조하므로(FK) 먼저 지운다
+		sellerRepository.deleteAll();
 		termsAgreementRepository.deleteAll();
 		memberRepository.deleteAll();
 	}
@@ -276,6 +291,24 @@ class ApiV1MemberWithdrawTest {
 		assertThat(member.getGender()).isEqualTo(Gender.FEMALE);
 		verify(refreshTokenRepository, never()).deleteAll(anyLong());
 		assertThat(modifiedEvents()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("탈퇴하면 대기 중 판매자 신청을 \"회원 탈퇴\" 사유로 반려하고 반려 이벤트를 보낸다")
+	void withdrawRejectsPendingSellerApplication() throws Exception {
+		int sellerId = sellerFacade.apply(memberId,
+			new SellerApplyRequestDto(SellerType.BUSINESS, "크루런 스포츠", "123-45-67890", "김러너")).getId();
+
+		withdraw(memberId).andExpect(status().isOk());
+
+		Seller seller = sellerRepository.findById(sellerId).orElseThrow();
+		assertThat(seller.getStatus()).isEqualTo(SellerStatus.REJECTED);
+		assertThat(seller.getRejectReason()).isEqualTo(Seller.WITHDRAWN_REJECT_REASON);
+		assertThat(seller.getReviewedAt()).isNotNull();
+		assertThat(seller.getReviewedBy()).isNull();
+		assertThat(applicationEvents.stream(SellerChangedEvent.class))
+			.extracting(SellerChangedEvent::status)
+			.containsExactly(SellerStatus.PENDING, SellerStatus.REJECTED);
 	}
 
 	private List<MemberModifiedEvent> modifiedEvents() {

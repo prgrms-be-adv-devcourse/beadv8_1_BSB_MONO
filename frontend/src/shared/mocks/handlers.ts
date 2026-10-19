@@ -32,19 +32,20 @@ import { getBukangPayoutAPIMock } from '@/shared/api/generated/payout/payout.msw
 import {
   getBukangProductAPIMock,
   getFindMineMockHandler as getFindMyRacesMockHandler,
-  getFindRaceMockHandler,
-  getFindRaceResponseMock,
   getSearchMockHandler,
-  getSearchResponseMock,
   getSuggestMockHandler,
 } from '@/shared/api/generated/product/product.msw'
+import type { SearchParams } from '@/shared/api/generated/product/product.schemas'
 
 import { fileUploadHandlers } from './file-upload'
 import {
+  clearMockLoginMarkCookie,
   clearMockRefreshCookie,
+  issueMockLoginMarkCookie,
   issueMockRefreshCookie,
   MOCK_REFRESH_COOKIE_NAME,
 } from './mock-session'
+import { findMockRace, getMockRaces, mockImageOfCourse, searchMockRaces } from './races'
 import { resetMockKitsForTesting, sellerKitHandlers } from './seller-kits'
 import { payFromMockWallet, walletHandlers } from './wallet'
 
@@ -58,11 +59,13 @@ function pathParamCount(handler: RequestHandler): number {
  * 명세 예시의 이미지 주소는 실제로 없는 S3 주소라(next/image 허용 호스트도 아니다) 목에서는 public/mock 이미지로 바꾼다.
  * 생성된 핸들러보다 앞에 둬서 먼저 걸리게 한다.
  */
-const fileImageHandler = getFindByRefMockHandler(() => {
+const fileImageHandler = getFindByRefMockHandler(({ request }) => {
   const example = getFindByRefResponseMock()
+  const refId = Number(new URL(request.url).searchParams.get('refId'))
+  const image = mockImageOfCourse(refId) ?? '/mock/races/cookierun.webp'
   return {
     ...example,
-    data: example.data?.map((file) => ({ ...file, url: '/mock/races/cookierun.png' })),
+    data: example.data?.map((file) => ({ ...file, url: image })),
   }
 })
 
@@ -72,10 +75,17 @@ const fileImageHandler = getFindByRefMockHandler(() => {
  * 재발급은 요청 쿠키에 그 값이 있을 때만 성공하고(쿠키도 새로 바꿔 준다) 없으면 401.
  * 그래서 로그인하지 않고 새로고침하면 로그아웃 상태로 보인다.
  */
+/** 로그인 · 재발급 · 로그아웃이 심고 지우는 쿠키 묶음. Refresh Token 쿠키를 먼저 둔다. */
+function withCookies(...values: string[]) {
+  const headers = new Headers()
+  for (const value of values) headers.append('Set-Cookie', value)
+  return headers
+}
+
 const authHandlers = [
   http.post('*/api/v1/auth/login', () =>
     HttpResponse.json(getLoginResponseMock(), {
-      headers: { 'Set-Cookie': issueMockRefreshCookie() },
+      headers: withCookies(issueMockRefreshCookie(), issueMockLoginMarkCookie()),
     }),
   ),
   http.post('*/api/v1/auth/reissue', ({ cookies }) => {
@@ -94,12 +104,15 @@ const authHandlers = [
           accessToken: `${example.data?.accessToken}.${crypto.randomUUID()}`,
         },
       },
-      { headers: { 'Set-Cookie': issueMockRefreshCookie() } },
+      { headers: withCookies(issueMockRefreshCookie(), issueMockLoginMarkCookie()) },
     )
   }),
   http.post(
     '*/api/v1/auth/logout',
-    () => new HttpResponse(null, { headers: { 'Set-Cookie': clearMockRefreshCookie() } }),
+    () =>
+      new HttpResponse(null, {
+        headers: withCookies(clearMockRefreshCookie(), clearMockLoginMarkCookie()),
+      }),
   ),
 ]
 
@@ -183,7 +196,7 @@ const myOrdersHandler = getFindMineMockHandler(() => {
     status: 'PAID' as const,
     totalAmount: 50000,
     paymentDueAt: '2026-10-12T10:10:00',
-    itemName: '2026 서울 하프 마라톤 10K',
+    itemName: '2026 서울마라톤 10K',
     itemCount: 1,
   }
   return { ...example, data: { ...example.data, orders: [paid, ...(example.data?.orders ?? [])] } }
@@ -205,12 +218,20 @@ const MOCK_ADMISSION_MS = 10 * 60 * 1000
 /** (대회, 종목)마다 입장 여부를 물은 횟수와 입장 끝 시각 */
 const mockQueue = new Map<string, { asked: number; endsAt?: number }>()
 
+/** 대기열 줄서기 목: 등록한 뒤 순번을 묻는 횟수 (처음 순번의 앞 인원만큼 줄어들고, 그다음에 입장 가능) */
+const MOCK_QUEUE_AHEAD = 2
+const MOCK_QUEUE_TOTAL = 10
+
+/** (대회, 종목)마다 등록한 줄. polls는 순번을 물은 횟수, entered는 입장 가능이 된 뒤 */
+const mockQueuePosition = new Map<string, { polls: number; entered: boolean }>()
+
 /** 테스트 사이에 키트 발송 · 배송 완료 상태가 넘어가지 않게 처음으로 돌린다. */
 export { resetMockKitsForTesting }
 
 /** 테스트 사이에 대기열 순서가 넘어가지 않게 처음(아무도 줄 서지 않음)으로 돌린다. */
 export function resetMockQueueForTesting() {
   mockQueue.clear()
+  mockQueuePosition.clear()
 }
 
 /**
@@ -226,7 +247,9 @@ const queueAdmissionHandler = getFindAdmissionMockHandler(({ request }) => {
   const current = saved && !expired ? saved : { asked: 0 }
   mockQueue.set(key, current)
   if (current.endsAt === undefined) {
-    if (current.asked < MOCK_QUEUE_WAITING_ANSWERS) {
+    // 대기열에서 차례가 온 사람은 기다리지 않고 바로 입장한다. 줄을 서지 않고 물으면 처음 두 번은 기다리는 중이다.
+    const myTurn = mockQueuePosition.get(key)?.entered === true
+    if (!myTurn && current.asked < MOCK_QUEUE_WAITING_ANSWERS) {
       current.asked += 1
       return {
         status: 200,
@@ -246,6 +269,55 @@ const queueAdmissionHandler = getFindAdmissionMockHandler(({ request }) => {
     },
   }
 })
+
+const queueKey = (raceId: unknown, raceCourseId: unknown) => `${raceId}:${raceCourseId}`
+
+const queueStatus = (ahead: number, canEnter: boolean) => ({
+  myRank: canEnter ? 0 : ahead + 1,
+  ahead: canEnter ? 0 : ahead,
+  total: canEnter ? 0 : MOCK_QUEUE_TOTAL,
+  canEnter,
+})
+
+const queueError = (status: number, message: string) =>
+  HttpResponse.json({ status, message, data: null }, { status })
+
+/**
+ * 대기열(queue-service) 줄서기 목. 등록하면 앞에 MOCK_QUEUE_AHEAD명이 있고, 순번을 물을 때마다 한 명씩 줄다가
+ * 그다음 물을 때 입장 가능(canEnter)이 된다. 입장 시간이 남아 있을 때 다시 등록하면 진짜처럼 409(이미 입장)다.
+ * 줄을 서지 않고 순번을 물으면 404다.
+ */
+const queueHandlers = [
+  http.post('*/api/v1/queue', async ({ request }) => {
+    const body = (await request.json()) as { raceId?: number; raceCourseId?: number }
+    const key = queueKey(body.raceId, body.raceCourseId)
+    const admission = mockQueue.get(key)
+    const admitted = admission?.endsAt !== undefined && admission.endsAt > Date.now()
+    if (admitted && mockQueuePosition.get(key)?.entered) {
+      return queueError(409, '이미 입장한 회원입니다.')
+    }
+    mockQueuePosition.set(key, { polls: 0, entered: false })
+    mockQueue.delete(key)
+    return HttpResponse.json({
+      status: 200,
+      message: '대기열에 등록했습니다.',
+      data: queueStatus(MOCK_QUEUE_AHEAD, false),
+    })
+  }),
+  http.get('*/api/v1/queue/races/:raceId/racecourses/:raceCourseId', ({ params }) => {
+    const key = queueKey(params.raceId, params.raceCourseId)
+    const position = mockQueuePosition.get(key)
+    if (!position) return queueError(404, '대기열에 없는 회원입니다.')
+    position.polls += 1
+    const ahead = MOCK_QUEUE_AHEAD - position.polls
+    position.entered = position.entered || ahead < 0
+    return HttpResponse.json({
+      status: 200,
+      message: '대기열 상태를 조회했습니다.',
+      data: queueStatus(Math.max(ahead, 0), position.entered),
+    })
+  }),
+]
 
 /**
  * 명세 예시는 주문 생성 · 장바구니 주문 · 결제 · 조회가 모두 주문 1이다. 그런데 결제 화면은 주문 1이 결제 대기여야 하고,
@@ -269,7 +341,11 @@ export function resetMockOrderForTesting() {
  * 명세 예시의 대회는 개인 예매 오픈이 2026-10-20이라, 그 전에는 가짜 응답 모드에서 신청 · 대기열 흐름을 볼 수 없다.
  * 오픈이 아직 안 왔으면 어제 연 것으로 돌려준다(접수 마감 · 대회 날은 예시 그대로). 생성된 핸들러보다 앞에 둔다.
  */
-function openedForMock<T extends { individualOpenAt?: string | null }>(race: T): T {
+function openedForMock<T extends { individualOpenAt?: string | null; saleStatus?: string }>(
+  race: T,
+): T {
+  // 판매 예정 대회(오픈 예정 카드를 보여 주려고 일부러 둔 것)는 그대로 둔다
+  if (race.saleStatus === 'SCHEDULED') return race
   const openAt = race.individualOpenAt
   if (!openAt || new Date(`${openAt}+09:00`).getTime() <= Date.now()) return race
   return { ...race, individualOpenAt: kstMinutesFromNow(-24 * 60) }
@@ -277,16 +353,67 @@ function openedForMock<T extends { individualOpenAt?: string | null }>(race: T):
 
 const raceHandlers = [
   // /races/:raceId가 /races/suggestions · /races/mine을 가로채지 않게 고정 경로를 먼저 둔다
-  getSuggestMockHandler(),
-  getFindMyRacesMockHandler(),
-  getFindRaceMockHandler(() => {
-    const example = getFindRaceResponseMock()
-    return { ...example, data: example.data && openedForMock(example.data) }
+  getSuggestMockHandler(({ request }) => {
+    const keyword = (new URL(request.url).searchParams.get('keyword') ?? '').trim().toLowerCase()
+    const races = getMockRaces().filter((race) =>
+      (race.detail.title ?? '').toLowerCase().includes(keyword),
+    )
+    return {
+      status: 200,
+      message: '연관검색어를 조회했습니다.',
+      data: {
+        races: races
+          .slice(0, 5)
+          .map(({ detail }) => ({ raceId: detail.raceId, title: detail.title })),
+        courses: races
+          .flatMap(({ detail }) =>
+            (detail.courses ?? []).map((course) => ({
+              raceCourseId: course.raceCourseId,
+              raceId: detail.raceId,
+              label: `${detail.title} ${course.name}`,
+            })),
+          )
+          .slice(0, 5),
+      },
+    }
   }),
-  getSearchMockHandler(() => {
-    const example = getSearchResponseMock()
-    const races = example.data?.races?.map(openedForMock)
-    return { ...example, data: example.data && { ...example.data, races } }
+  getFindMyRacesMockHandler(),
+  // 가짜 대회 목록(races.ts)에 있는 대회만 열린다. 없는 번호는 진짜 서버처럼 404, 숫자가 아니면 400
+  http.get('*/api/v1/product/races/:raceId', ({ params }) => {
+    const raceId = Number(params.raceId)
+    if (!Number.isInteger(raceId) || raceId <= 0) {
+      return HttpResponse.json(
+        { status: 400, code: 'INVALID_REQUEST', message: '잘못된 요청입니다.', data: null },
+        { status: 400 },
+      )
+    }
+    const race = findMockRace(raceId)
+    if (!race) {
+      return HttpResponse.json(
+        { status: 404, code: 'RACE_NOT_FOUND', message: '대회를 찾을 수 없습니다.', data: null },
+        { status: 404 },
+      )
+    }
+    return HttpResponse.json({
+      status: 200,
+      message: '대회를 조회했습니다.',
+      data: openedForMock(race.detail),
+    })
+  }),
+  getSearchMockHandler(({ request }) => {
+    const query = new URL(request.url).searchParams
+    const sort = query.get('sort') as SearchParams['sort']
+    const result = searchMockRaces({
+      keyword: query.get('keyword') ?? undefined,
+      sort: sort ?? undefined,
+      page: query.has('page') ? Number(query.get('page')) : undefined,
+      size: query.has('size') ? Number(query.get('size')) : undefined,
+    })
+    return {
+      status: 200,
+      message: '대회 목록을 조회했습니다.',
+      data: { ...result, races: result.races?.map(openedForMock) },
+    }
   }),
 ]
 
@@ -360,6 +487,7 @@ export const handlers = [
   ...fileUploadHandlers,
   myOrdersHandler,
   ...raceHandlers,
+  ...queueHandlers,
   ...orderHandlers,
   ...walletHandlers,
   ...sellerKitHandlers,

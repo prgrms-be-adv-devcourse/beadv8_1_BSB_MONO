@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.payout.app.PayoutRecoveryUseCase;
 import com.bukang.payout.dto.PayoutRecoveryDto;
 
@@ -23,6 +24,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -46,9 +48,11 @@ public class ApiV1PayoutRecoveryController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "완료 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutRecoveryApiExamples.COMPLETE_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "회수 ID·회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "회수 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "회수 ID·회원 ID 형식 오류", value = PayoutApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = PayoutApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = PayoutApiExamples.LOGIN_REQUIRED))),
@@ -61,7 +65,7 @@ public class ApiV1PayoutRecoveryController {
 	})
 	public ResponseEntity<RsData<PayoutRecoveryDto>> complete(
 		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "회수 ID", example = "1")
 		@PathVariable int recoveryId
 	) {

@@ -51,6 +51,11 @@ src/
 - 폴더는 필요할 때 만든다. 빈 층에 미리 슬라이스를 만들지 않는다.
 - 슬라이스 안 세그먼트: `ui/`, `model/`(상태·훅), `api/`, `lib/`.
 
+## 레이아웃
+
+- 회원 화면 기둥 폭은 600px(`--layout-app-max-width`). 값을 직접 쓰지 말고 `max-w-(--layout-app-max-width)`처럼 토큰을 쓴다.
+- 마이 · 알림 · 내 참가권의 본문 위 여백은 `pt-(--layout-content-start)`(화면 높이의 10%, 16~96px). 가운데 정렬 대신 시작 위치만 고정한다.
+
 ## API
 
 - 코드에서는 항상 상대 경로 `/api/...`로 부른다. 모든 호출은 `shared/api`의 `customFetch`를 지난다.

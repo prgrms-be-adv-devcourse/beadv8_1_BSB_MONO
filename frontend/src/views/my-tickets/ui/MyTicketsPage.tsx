@@ -5,8 +5,10 @@ import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
+import { useAuthStatus } from '@/features/auth'
 import { TICKET_STATUS } from '@/entities/ticket'
 import { useMyBalance } from '@/entities/wallet'
+import { memberApi, unwrapData } from '@/shared/api'
 import { cn, formatWon } from '@/shared/lib'
 import {
   Alert,
@@ -25,7 +27,7 @@ export type MyTicketsState = 'loading' | 'empty'
 
 // 피그마 V2 · M15 내 참가 대회 (+ 로딩, 없음)
 // state는 시안 미리보기(?preview=loading|empty)용. 없으면 주문 API로 불러온다.
-// TODO(api): 닉네임 · 이름은 회원 정보 API로 바꾼다
+// 닉네임 · 이름은 내 정보 조회(GET /api/v1/member/members/me)로 불러온다.
 export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
   const cards = useTicketCards()
@@ -35,23 +37,28 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
   const tickets = tab === 'upcoming' ? upcoming : past
   const failed = state === undefined && cards.isError
   const wallet = useMyBalance()
+  const me = memberApi.useFindMe({
+    // 로그인 확인(재발급)이 끝난 뒤에만 부른다 (마이페이지와 같은 방식)
+    query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated' },
+  })
+  const member = me.data
 
   return (
     <>
       <AppHeader />
-      <main className="flex flex-1 flex-col gap-6 px-4 py-6">
+      <main className="flex flex-1 flex-col gap-6 px-4 pt-(--layout-content-start) pb-6">
         <div className="flex items-center gap-3">
           <div className="size-12 shrink-0 rounded-full bg-bg-subtle" />
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            {loading ? (
+            {loading || (state === undefined && me.isPending) ? (
               <>
                 <Skeleton className="h-4 w-48" />
                 <Skeleton className="w-32" />
               </>
             ) : (
               <>
-                <p className="text-heading-m">달리는곰</p>
-                <p className="text-body-s text-text-secondary">김러너</p>
+                <p className="text-heading-m">{member?.nickname ?? '-'}</p>
+                <p className="text-body-s text-text-secondary">{member?.name ?? '-'}</p>
               </>
             )}
           </div>

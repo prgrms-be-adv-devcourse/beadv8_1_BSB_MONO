@@ -1,0 +1,425 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Bukang Queue API",
+    "description": "크루 중심 마라톤 대회 예매·커머스 플랫폼 대기열 API (backend/queue-service의 ApiV1QueueController에서 옮겨 적음)",
+    "version": "v1"
+  },
+  "tags": [
+    {
+      "name": "Queue",
+      "description": "대기열 등록, 순번 조회 API"
+    }
+  ],
+  "paths": {
+    "/api/v1/queue": {
+      "post": {
+        "tags": [
+          "Queue"
+        ],
+        "summary": "대기열 등록",
+        "description": "대회·종목의 대기열에 회원을 줄 세우고 순번을 돌려준다. 이미 줄에 있으면 처음 순번을 그대로 돌려준다. 이미 입장(active)한 회원은 409다.",
+        "operationId": "register",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "요청한 회원 ID (게이트웨이가 넣어 준다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueueRegisterRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "등록 성공 (이미 줄에 있으면 처음 순번)",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "등록 성공": {
+                    "value": {
+                      "status": 200,
+                      "message": "대기열에 등록했습니다.",
+                      "data": {
+                        "myRank": 3,
+                        "ahead": 2,
+                        "total": 10,
+                        "canEnter": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "입력값 검증 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "입력값 검증 실패": {
+                    "description": "입력값 검증 실패",
+                    "value": {
+                      "status": 400,
+                      "message": "대회 ID는 0보다 커야 합니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "회원 ID 헤더 없음": {
+                    "description": "회원 ID 헤더 없음",
+                    "value": {
+                      "status": 401,
+                      "message": "로그인이 필요합니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접수 기간이 아니거나 이 대회의 종목이 아님",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "접수 기간이 아니거나 이 대회의 종목이 아님": {
+                    "description": "접수 기간이 아니거나 이 대회의 종목이 아님",
+                    "value": {
+                      "status": 403,
+                      "message": "지금은 대기열에 들어갈 수 없습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없는 대회 또는 없는 종목",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "없는 대회 또는 없는 종목": {
+                    "description": "없는 대회 또는 없는 종목",
+                    "value": {
+                      "status": 404,
+                      "message": "존재하지 않는 대회입니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이미 입장(active)한 회원",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "이미 입장(active)한 회원": {
+                    "description": "이미 입장(active)한 회원",
+                    "value": {
+                      "status": 409,
+                      "message": "이미 입장한 회원입니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "대기열(Redis) 연결 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "대기열(Redis) 연결 실패": {
+                    "description": "대기열(Redis) 연결 실패",
+                    "value": {
+                      "status": 503,
+                      "message": "대기열에 연결하지 못했습니다. 잠시 뒤 다시 시도해주세요.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/queue/races/{raceId}/racecourses/{raceCourseId}": {
+      "get": {
+        "tags": [
+          "Queue"
+        ],
+        "summary": "대기열 순번 조회",
+        "description": "대기 화면이 몇 초마다 불러 내 순번과 입장 여부를 확인한다. 입장(active)했으면 canEnter=true다. 줄에도 입장 상태에도 없으면 404다.",
+        "operationId": "getStatus",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "요청한 회원 ID (게이트웨이가 넣어 준다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 1
+          },
+          {
+            "name": "raceId",
+            "in": "path",
+            "description": "대회 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 1
+          },
+          {
+            "name": "raceCourseId",
+            "in": "path",
+            "description": "종목 ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공 (기다리는 중 또는 입장 가능)",
+            "content": {
+              "application/json": {
+                "examples": {
+                  "기다리는 중": {
+                    "value": {
+                      "status": 200,
+                      "message": "대기열 상태를 조회했습니다.",
+                      "data": {
+                        "myRank": 3,
+                        "ahead": 2,
+                        "total": 10,
+                        "canEnter": false
+                      }
+                    }
+                  },
+                  "입장 가능": {
+                    "value": {
+                      "status": 200,
+                      "message": "대기열 상태를 조회했습니다.",
+                      "data": {
+                        "myRank": 0,
+                        "ahead": 0,
+                        "total": 0,
+                        "canEnter": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "대회·종목 ID 또는 회원 ID 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "대회·종목 ID 또는 회원 ID 오류": {
+                    "description": "대회·종목 ID 또는 회원 ID 오류",
+                    "value": {
+                      "status": 400,
+                      "message": "대회 ID는 0보다 커야 합니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "회원 ID 헤더 없음": {
+                    "description": "회원 ID 헤더 없음",
+                    "value": {
+                      "status": 401,
+                      "message": "로그인이 필요합니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "줄에도 없고 입장한 상태도 아닌 회원",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "줄에도 없고 입장한 상태도 아닌 회원": {
+                    "description": "줄에도 없고 입장한 상태도 아닌 회원",
+                    "value": {
+                      "status": 404,
+                      "message": "대기열에 없는 회원입니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "대기열(Redis) 연결 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "대기열(Redis) 연결 실패": {
+                    "description": "대기열(Redis) 연결 실패",
+                    "value": {
+                      "status": 503,
+                      "message": "대기열에 연결하지 못했습니다. 잠시 뒤 다시 시도해주세요.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RsData": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      },
+      "QueueRegisterRequestDto": {
+        "type": "object",
+        "description": "대기열 등록 요청",
+        "properties": {
+          "raceId": {
+            "type": "integer",
+            "format": "int32",
+            "description": "대회 ID",
+            "example": 1,
+            "exclusiveMinimum": 0
+          },
+          "raceCourseId": {
+            "type": "integer",
+            "format": "int32",
+            "description": "종목 ID",
+            "example": 1,
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "raceId",
+          "raceCourseId"
+        ]
+      },
+      "QueueStatusDto": {
+        "type": "object",
+        "description": "대기열 상태. 등록과 순번 조회가 같은 모양이다",
+        "properties": {
+          "myRank": {
+            "type": "integer",
+            "format": "int64",
+            "description": "내 순번 (1부터)"
+          },
+          "ahead": {
+            "type": "integer",
+            "format": "int64",
+            "description": "내 앞에서 기다리는 인원"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "줄 전체 인원"
+          },
+          "canEnter": {
+            "type": "boolean",
+            "description": "입장할 수 있는지 (active로 승격됐는지)"
+          }
+        }
+      }
+    }
+  }
+}

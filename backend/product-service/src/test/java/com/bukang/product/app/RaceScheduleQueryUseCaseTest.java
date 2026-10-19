@@ -1,11 +1,11 @@
 package com.bukang.product.app;
 
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.CANCELED;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.CLOSED;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.ON_SALE;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.SCHEDULED;
+import static com.bukang.common.shared.race.domain.RaceSaleStatus.STOPPED;
 import static com.bukang.product.app.RaceScheduleQueryUseCase.PAYOUT_TARGET_STATUSES;
-import static com.bukang.product.domain.RaceSaleStatus.CANCELED;
-import static com.bukang.product.domain.RaceSaleStatus.CLOSED;
-import static com.bukang.product.domain.RaceSaleStatus.ON_SALE;
-import static com.bukang.product.domain.RaceSaleStatus.SCHEDULED;
-import static com.bukang.product.domain.RaceSaleStatus.STOPPED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;

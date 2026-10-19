@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -23,11 +24,13 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.app.SellerFacade;
+import com.bukang.member.domain.Member;
 import com.bukang.member.domain.Seller;
 import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;
@@ -243,6 +246,24 @@ class ApiV1SellerTest {
 		mockMvc.perform(get(MY_SELLER).header(MemberIdHeader.NAME, memberId))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("SELLER_NOT_FOUND"));
+	}
+
+	@Test
+	@DisplayName("탈퇴한 회원이 남은 토큰으로 판매자 신청하면 404 MEMBER_NOT_FOUND이고 신청이 생기지 않는다")
+	void withdrawnMemberCannotApply() throws Exception {
+		markWithdrawn(memberId);
+
+		apply(memberId, "BUSINESS", "크루런 스포츠", "1234567890", "김러너")
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+		assertThat(sellerRepository.count()).isZero();
+	}
+
+	// 탈퇴 API는 cash·order 확인이 필요해, 엔티티의 탈퇴 처리만 직접 한다
+	private void markWithdrawn(int id) {
+		Member member = memberRepository.findById(id).orElseThrow();
+		member.withdraw(LocalDateTime.now());
+		memberRepository.saveAndFlush(member);
 	}
 
 	private int join(String email, String nickname, String phone) {

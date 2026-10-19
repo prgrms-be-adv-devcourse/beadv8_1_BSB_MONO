@@ -13,8 +13,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import com.bukang.common.global.crypto.EncryptedStringConverter;
 import com.bukang.common.shared.member.domain.BaseMember;
-import com.bukang.member.config.crypto.EncryptedStringConverter;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;

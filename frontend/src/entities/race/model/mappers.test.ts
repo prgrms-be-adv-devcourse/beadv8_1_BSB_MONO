@@ -31,6 +31,13 @@ describe('대회 응답 → 화면 모양', () => {
     })
   })
 
+  it('목록 응답에 imageUrl이 있을 때만 카드 이미지가 붙는다', () => {
+    expect(toRaceListItem(summary).image).toBeUndefined()
+    expect(toRaceListItem({ ...summary, imageUrl: '/mock/races/a.png' }).image).toBe(
+      '/mock/races/a.png',
+    )
+  })
+
   it('곧 마감 카드는 종목마다 한 장이고 종목을 골라 둔다', () => {
     expect(toClosingSoonCards(summary)).toEqual([
       expect.objectContaining({ id: '1', option: '1', title: '2026 용감한 쿠키RUN in 서울 (10K)' }),

@@ -19,7 +19,7 @@ services:
   # (bootRun 시 Spring Boot가 compose를 띄울 때 앱 컨테이너가 포트를 선점하지 않도록)
   # 실행: docker compose --profile app up -d --build
   # 요청 흐름: 브라우저 → nginx(80) → /api는 gateway(8000) → 각 서비스 / 나머지는 web(Next.js, 3000)
-  # 서비스 6개(member~product)는 호스트에 포트를 열지 않는다. 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿으므로,
+  # 서비스 7개(member~queue)는 호스트에 포트를 열지 않는다. 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿으므로,
   # 게이트웨이를 건너뛰고 서비스 포트로 직접 오면 헤더를 위조할 수 있기 때문이다. 컨테이너끼리는 이름(bukang-order-service:8084)으로 통한다
   # 서비스를 직접 부르며 확인하려면 컨테이너 대신 bootRun(dev 프로파일)으로 띄운다
 
@@ -97,6 +97,8 @@ services:
       order-service:
         condition: service_healthy
       product-service:
+        condition: service_healthy
+      queue-service:
         condition: service_healthy
 
   member-service:
@@ -253,6 +255,30 @@ services:
       bukang-kafka:
         condition: service_healthy
       bukang-elasticsearch:
+        condition: service_healthy
+
+  queue-service:
+    build:
+      context: .
+      args:
+        MODULE: queue-service
+    image: bukang-queue-service:latest
+    container_name: bukang-queue-service
+    profiles: [ app ]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8086" ]
+    depends_on:
+      bukang-db:
+        condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
+      bukang-redis:
         condition: service_healthy
 
   bukang-db:

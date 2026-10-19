@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.common.shared.member.event.MemberModifiedEvent;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.domain.Member;
 import com.bukang.member.domain.TermsType;

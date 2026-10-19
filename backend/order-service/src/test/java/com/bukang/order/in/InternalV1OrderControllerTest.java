@@ -29,7 +29,9 @@ import com.bukang.order.domain.OrderItem;
 import com.bukang.order.domain.OrderItemStatus;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.QueueAdmissionRepository;
 import com.bukang.order.out.race.RaceCourseInfo;
+import com.bukang.order.support.QueueEntry;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -69,6 +71,9 @@ class InternalV1OrderControllerTest {
 	private ParticipationRepository participationRepository;
 
 	@Autowired
+	private QueueAdmissionRepository queueAdmissionRepository;
+
+	@Autowired
 	private StubRaceCoursePort raceCoursePort;
 
 	@Autowired
@@ -93,6 +98,7 @@ class InternalV1OrderControllerTest {
 	void tearDown() {
 		orderRepository.deleteAll();
 		participationRepository.deleteAll();
+		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
 		walletPort.clear();
@@ -347,6 +353,7 @@ class InternalV1OrderControllerTest {
 
 	// 신청서 → [결제하기]까지만 한 결제 대기 주문 ID
 	private int createdOrder(int memberId, int raceCourseId) throws Exception {
+		QueueEntry.enter(mockMvc, memberId, raceCourseId);
 		int participationId = read(mockMvc.perform(post("/api/v1/order/participations")
 			.header("X-Member-Id", memberId)
 			.contentType(MediaType.APPLICATION_JSON)

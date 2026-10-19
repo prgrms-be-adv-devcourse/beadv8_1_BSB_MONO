@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -24,11 +25,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.member.app.MemberFacade;
 import com.bukang.member.app.SellerFacade;
+import com.bukang.member.domain.Member;
 import com.bukang.member.domain.Seller;
 import com.bukang.member.domain.TermsType;
 import com.bukang.member.dto.MemberJoinRequestDto;
@@ -230,6 +233,19 @@ class ApiV1AdminSellerTest {
 	}
 
 	// reason이 null이면 본문 없이 보낸다 (승인)
+	@Test
+	@DisplayName("탈퇴한 관리자가 남은 토큰으로 관리자 API를 부르면 404 MEMBER_NOT_FOUND이고 심사되지 않는다")
+	void withdrawnAdminCannotReview() throws Exception {
+		Member admin = memberRepository.findById(adminId).orElseThrow();
+		admin.withdraw(LocalDateTime.now());
+		memberRepository.saveAndFlush(admin);
+
+		mockMvc.perform(post(ADMIN_SELLERS + "/" + sellerId + "/approval").header(MemberIdHeader.NAME, adminId))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+		assertThat(sellerRepository.findById(sellerId).orElseThrow().getStatus()).isEqualTo(SellerStatus.PENDING);
+	}
+
 	private ResultActions review(int id, String action, String reason) throws Exception {
 		MockHttpServletRequestBuilder request = post(ADMIN_SELLERS + "/" + id + "/" + action)
 			.header(MemberIdHeader.NAME, adminId);

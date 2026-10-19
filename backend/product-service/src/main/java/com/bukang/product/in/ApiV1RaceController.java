@@ -20,7 +20,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.global.web.IdempotencyKeyHeader;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.product.app.ProductFacade;
+import com.bukang.product.app.RaceRegisterResult;
 import com.bukang.product.domain.CourseSurface;
 import com.bukang.product.domain.CourseType;
 import com.bukang.product.dto.RaceDetailDto;
@@ -44,6 +47,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 
 // 게이트웨이가 경로 앞부분을 자르지 않으므로(StripPrefix 금지, PRO-17) 서비스 이름(/product)부터 쓴다
@@ -56,6 +61,8 @@ public class ApiV1RaceController {
 	private static final DateTimeFormatter MESSAGE_DATE = DateTimeFormatter.ofPattern("M월 d일");
 	private static final DateTimeFormatter MESSAGE_DATE_TIME = DateTimeFormatter.ofPattern("M월 d일 HH:mm");
 	private static final int MAX_PAGE_SIZE = 100;
+	// 같은 Idempotency-Key로 다시 온 등록 요청 (처음 등록한 대회를 돌려준다)
+	private static final String REGISTER_EXISTING_MESSAGE = "이미 처리한 대회 등록 요청입니다.";
 
 	private final ProductFacade productFacade;
 
@@ -68,13 +75,17 @@ public class ApiV1RaceController {
 			+ "판매 시작일 0시에 상태 배치(5분마다)가 판매 중으로 바꾸고, 이때부터 판매 시작 뒤 수정 규칙이 걸린다. "
 			+ "판매 상태는 판매자 화면용이고, 구매자는 크루 예매 시작·개인 예매 오픈 시각부터 예매할 수 있다. "
 			+ "이미지는 종목마다 받고(대표 이미지 1장 필수), 등록이 커밋된 뒤 file-service에 연결을 요청한다. "
-			+ "파일이 없거나 본인이 올린 파일이 아니어서 연결에 실패하면 응답에는 나오지 않고 file-service 로그에 남는다.")
+			+ "파일이 없거나 본인이 올린 파일이 아니어서 연결에 실패하면 응답에는 나오지 않고 file-service 로그에 남는다. "
+			+ "같은 판매자가 같은 Idempotency-Key로 다시 보내면 새로 등록하지 않고 처음 대회를 200으로 돌려준다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "등록 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.REGISTER_SUCCESS))),
+		@ApiResponse(responseCode = "200", description = "같은 Idempotency-Key로 이미 등록한 대회 (새로 등록하지 않음)",
+			content = @Content(examples = @ExampleObject(value = RaceApiExamples.REGISTER_EXISTING))),
 		@ApiResponse(responseCode = "400",
 			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·키트 금액·티셔츠 사이즈 오류, "
-				+ "판매 시작일이 이틀 뒤보다 빠름, 이미지 용도·개수 오류, 같은 파일 중복 또는 회원 ID 형식 오류",
+				+ "판매 시작일이 이틀 뒤보다 빠름, 이미지 용도·개수 오류, 같은 파일 중복, 회원 ID 형식 오류·0 이하 "
+				+ "또는 Idempotency-Key 헤더 없음·길이 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = RaceApiExamples.REGISTER_INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = RaceApiExamples.INVALID_BODY),
@@ -84,7 +95,10 @@ public class ApiV1RaceController {
 				@ExampleObject(name = "키트 없는 종목의 티셔츠 사이즈", value = RaceApiExamples.TSHIRT_SIZE_WITHOUT_KIT),
 				@ExampleObject(name = "대표 이미지 없음", value = RaceApiExamples.THUMBNAIL_REQUIRED),
 				@ExampleObject(name = "같은 파일 중복", value = RaceApiExamples.DUPLICATE_FILE),
-				@ExampleObject(name = "회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID),
+				@ExampleObject(name = "Idempotency-Key 헤더 없음", value = RaceApiExamples.MISSING_IDEMPOTENCY_KEY),
+				@ExampleObject(name = "Idempotency-Key 길이 오류", value = RaceApiExamples.INVALID_IDEMPOTENCY_KEY)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -95,12 +109,22 @@ public class ApiV1RaceController {
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> register(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "중복 등록 방지 키. 같은 [등록하기] 재시도에는 같은 값을 보낸다 (예: UUID)",
+			example = "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43")
+		@RequestHeader(IdempotencyKeyHeader.NAME)
+		@Size(min = 1, max = IdempotencyKeyHeader.MAX_LENGTH, message = IdempotencyKeyHeader.INVALID_MESSAGE)
+		String idempotencyKey,
 		@Valid @RequestBody RaceSaveRequestDto request
 	) {
-		RaceSaveDto race = productFacade.registerRace(memberId, request);
-		return ResponseEntity.created(URI.create("/api/v1/product/races/" + race.getRaceId()))
-			.body(RsData.of(HttpStatus.CREATED, registerMessage(race, request), race));
+		RaceRegisterResult result = productFacade.registerRace(memberId, idempotencyKey, request);
+		RaceSaveDto race = result.race();
+		return switch (result.outcome()) {
+			case CREATED -> ResponseEntity.created(URI.create("/api/v1/product/races/" + race.getRaceId()))
+				.body(RsData.of(HttpStatus.CREATED, registerMessage(race, request), race));
+			case EXISTING -> ResponseEntity.ok()
+				.body(RsData.of(HttpStatus.OK, REGISTER_EXISTING_MESSAGE, race));
+		};
 	}
 
 	// 판매 중 표시는 판매 시작일 0시에, 예매는 크루 예매 시작·개인 예매 오픈 시각에 열린다는 것을 함께 알린다
@@ -133,7 +157,7 @@ public class ApiV1RaceController {
 		@ApiResponse(responseCode = "400",
 			description = "입력값 검증 실패, 요청 본문 형식 오류, 날짜 순서·인원·나이·정원·키트 금액·티셔츠 사이즈 오류, "
 				+ "판매 시작 전 바뀐 판매 시작일이 이틀 뒤보다 빠름, 이미지 용도·개수 오류, 같은 파일 중복, "
-				+ "이 대회의 종목이 아닌 종목 ID 또는 대회 ID·회원 ID 형식 오류",
+				+ "이 대회의 종목이 아닌 종목 ID, 대회 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = RaceApiExamples.REGISTER_INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = RaceApiExamples.INVALID_BODY),
@@ -144,7 +168,8 @@ public class ApiV1RaceController {
 				@ExampleObject(name = "대표 이미지 없음", value = RaceApiExamples.THUMBNAIL_REQUIRED),
 				@ExampleObject(name = "같은 파일 중복", value = RaceApiExamples.DUPLICATE_FILE),
 				@ExampleObject(name = "이 대회의 종목이 아님", value = RaceApiExamples.COURSE_NOT_IN_RACE),
-				@ExampleObject(name = "대회 ID·회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "대회 ID·회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -178,7 +203,7 @@ public class ApiV1RaceController {
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> update(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId,
 		@Valid @RequestBody RaceSaveRequestDto request
@@ -196,9 +221,11 @@ public class ApiV1RaceController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "취소 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.CANCEL_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "대회 ID·회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.LOGIN_REQUIRED))),
@@ -219,7 +246,7 @@ public class ApiV1RaceController {
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> cancel(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId
 	) {
@@ -330,9 +357,11 @@ public class ApiV1RaceController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.MINE_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.LOGIN_REQUIRED))),
@@ -342,7 +371,7 @@ public class ApiV1RaceController {
 	})
 	public ResponseEntity<RsData<List<SellerRaceDto>>> findMine(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader("X-Member-Id") int memberId
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "내 대회 목록을 조회했습니다.", productFacade.findMyRaces(memberId)));
@@ -358,9 +387,11 @@ public class ApiV1RaceController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = RaceApiExamples.DETAIL_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = RaceApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "대회 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "대회 ID·회원 ID 형식 오류", value = RaceApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = RaceApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "404", description = "없는 대회 또는 다른 판매자의 취소된 대회",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND)))
@@ -368,7 +399,8 @@ public class ApiV1RaceController {
 	public ResponseEntity<RsData<RaceDetailDto>> findRace(
 		@Parameter(description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 취소된 대회는 등록한 판매자만 본다)",
 			example = "9001")
-		@RequestHeader(name = "X-Member-Id", required = false) Integer memberId,
+		@RequestHeader(name = MemberIdHeader.NAME, required = false)
+		@Positive(message = MemberIdHeader.INVALID_MESSAGE) Integer memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId
 	) {

@@ -240,7 +240,7 @@ export function DepositRefundDonePage() {
   return (
     <>
       <AppHeader type="sub" title="환급 완료" close backHref="/me/deposit" />
-      <main className="flex flex-1 flex-col gap-5 px-4 pt-6 pb-8">
+      <main className="flex flex-1 flex-col justify-center-safe gap-6 px-4 pt-6 pb-8">
         <div className="flex flex-col gap-2">
           <h2 className="text-heading-l">예치금을 돌려받았어요</h2>
           <p className="text-body-m text-text-secondary">

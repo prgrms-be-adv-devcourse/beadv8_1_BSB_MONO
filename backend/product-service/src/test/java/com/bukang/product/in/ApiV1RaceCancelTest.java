@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.common.shared.kafka.KafkaTopics;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.common.shared.race.event.RaceCancelEvent;
 import com.bukang.product.domain.CourseType;
 import com.bukang.product.domain.HoldReleaseReason;
@@ -28,7 +29,6 @@ import com.bukang.product.domain.HoldStatus;
 import com.bukang.product.domain.ParticipationHold;
 import com.bukang.product.domain.Race;
 import com.bukang.product.domain.RaceCourse;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.support.ProductIntegrationTest;
 import com.jayway.jsonpath.JsonPath;

@@ -18,6 +18,8 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.DynamicUpdate;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
+import com.bukang.common.shared.race.event.RaceChangedEvent;
 import com.bukang.product.domain.exception.InvalidRaceException;
 import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
 import com.bukang.product.dto.RaceSaveRequestDto;
@@ -30,6 +32,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -40,7 +43,10 @@ import lombok.NoArgsConstructor;
 @Entity
 @NoArgsConstructor(access = PROTECTED)
 @Getter
-@Table(name = "race")
+@Table(name = "race", uniqueConstraints = {
+	// 같은 판매자가 같은 등록 요청을 두 번 보내도 대회는 하나 (PRO-228)
+	@UniqueConstraint(name = "uk_race_idempotency", columnNames = {"seller_id", "idempotency_key"})
+})
 // 바뀐 컬럼만 UPDATE한다. 판매자가 수정하는 동안 상태 배치(RaceSaleStatusScheduler)가 바꾼 판매 상태를
 // 수정 트랜잭션이 처음 읽은 옛 상태로 덮어쓰지 않게 하려는 것이다 (수정은 판매 상태를 바꾸지 않는다)
 @DynamicUpdate
@@ -119,11 +125,17 @@ public class Race extends BaseIdAndTime {
 
 	private LocalDateTime canceledAt;
 
+	// 등록 중복 방지 키 (브라우저가 만든 Idempotency-Key 헤더). 같은 판매자가 같은 키로 다시 등록하면 처음 대회를 돌려준다
+	// 키를 받기 전에 등록된 대회는 값이 없어 null을 허용한다 (MySQL 유니크 제약은 null끼리 겹쳐도 막지 않는다)
+	@Column(length = 64)
+	private String idempotencyKey;
+
 	@OneToMany(mappedBy = "race", cascade = {PERSIST, REMOVE}, orphanRemoval = true)
 	private List<RaceCourse> courses = new ArrayList<>();
 
-	public Race(ProductSeller seller, RaceSaveRequestDto request, LocalDateTime now) {
+	public Race(ProductSeller seller, RaceSaveRequestDto request, String idempotencyKey, LocalDateTime now) {
 		this.seller = seller;
+		this.idempotencyKey = idempotencyKey;
 		apply(request);
 		// 등록하면 판매 예정이고, 판매 시작일 0시에 상태 배치(RaceSaleStatusScheduler)가 판매 중으로 바꾼다
 		checkSaleOpenDate(saleOpenDate, now);
@@ -291,5 +303,10 @@ public class Race extends BaseIdAndTime {
 	public boolean isAcceptingIndividual(LocalDateTime now) {
 		return (saleStatus == RaceSaleStatus.SCHEDULED || saleStatus == RaceSaleStatus.ON_SALE)
 			&& !now.isBefore(individualOpenAt) && now.isBefore(applicationCloseAt);
+	}
+
+	// 대기열에 보낼 대회 변경 메시지 (진입 판정에 쓰는 칸과 수정 일시)
+	public RaceChangedEvent toChangedEvent() {
+		return new RaceChangedEvent(getId(), saleStatus, individualOpenAt, applicationCloseAt, getModifyDate());
 	}
 }

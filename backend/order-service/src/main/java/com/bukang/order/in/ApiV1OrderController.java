@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.global.web.IdempotencyKeyHeader;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.order.app.OrderCancelUseCase;
 import com.bukang.order.app.OrderCreateResult;
 import com.bukang.order.app.OrderFacade;

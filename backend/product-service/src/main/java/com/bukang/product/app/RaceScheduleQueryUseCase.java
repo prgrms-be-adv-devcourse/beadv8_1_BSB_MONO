@@ -8,7 +8,7 @@ import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
-import com.bukang.product.domain.RaceSaleStatus;
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.exception.RacePeriodException;
 import com.bukang.product.dto.RaceScheduleDto;
 import com.bukang.product.out.RaceRepository;
