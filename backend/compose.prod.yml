@@ -86,12 +86,19 @@ services:
     restart: unless-stopped
 
   # 인프라도 죽거나 재부팅되면 다시 켠다 (로컬 compose.yml에는 넣지 않아 PC를 켤 때 저절로 뜨지 않는다)
+  # DB·Kafka·Redis 데이터는 이름 있는 볼륨에 둔다. 이미지가 만드는 익명 볼륨은 down 뒤 up 하면 새 볼륨으로 바뀌어 데이터가 사라진 것처럼 된다
   bukang-db:
     restart: unless-stopped
+    volumes:
+      - bukang-db-data:/var/lib/mysql
   bukang-kafka:
     restart: unless-stopped
+    volumes:
+      - bukang-kafka-data:/var/lib/redpanda/data
   bukang-redis:
     restart: unless-stopped
+    volumes:
+      - bukang-redis-data:/data
   bukang-elasticsearch:
     restart: unless-stopped
   bukang-s3mock:
@@ -106,3 +113,11 @@ volumes:
   certbot-conf:
   # Let's Encrypt 소유 확인용 토큰 파일. certbot이 쓰고 Nginx가 내보낸다
   certbot-www:
+  # 인프라 데이터. name을 정해 두어 compose 프로젝트 이름(폴더 이름)이 바뀌어도 같은 볼륨을 쓴다
+  # down -v 를 하면 이 볼륨도 지워진다 (DB 데이터가 모두 사라진다)
+  bukang-db-data:
+    name: bukang-db-data
+  bukang-kafka-data:
+    name: bukang-kafka-data
+  bukang-redis-data:
+    name: bukang-redis-data
