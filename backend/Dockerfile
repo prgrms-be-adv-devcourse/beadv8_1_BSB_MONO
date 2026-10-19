@@ -26,7 +26,9 @@ COPY queue-service queue-service
 
 # Gradle 캐시(~/.gradle)를 빌드 간에 유지해서, 의존성은 변경된 것만 새로 받는다
 # :<모듈>:bootJar 는 그 서비스와 의존하는 라이브러리 모듈(common, jwt)만 빌드한다
-RUN --mount=type=cache,target=/root/.gradle ./gradlew :${MODULE}:bootJar --no-daemon
+# compose가 서비스 이미지를 동시에 빌드하면 Gradle끼리 캐시 잠금(journal-1.lock)을 기다리다 시간 초과로 실패하므로,
+# sharing=locked로 이 캐시를 한 번에 한 빌드만 쓰게 한다
+RUN --mount=type=cache,target=/root/.gradle,sharing=locked ./gradlew :${MODULE}:bootJar --no-daemon
 
 # ── 2단계: 실행 (JRE 이미지에 jar만 복사) ──
 FROM eclipse-temurin:25-jre
