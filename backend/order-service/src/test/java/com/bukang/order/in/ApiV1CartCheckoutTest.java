@@ -38,6 +38,8 @@ import com.bukang.order.out.CartItemRepository;
 import com.bukang.order.out.CartRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.QueueAdmissionRepository;
+import com.bukang.order.support.QueueEntry;
 import com.bukang.order.support.StubQueueAdmissionPort;
 import com.bukang.order.support.StubQueueAdmissionPortConfig;
 import com.bukang.order.support.StubRaceCoursePort;
@@ -74,6 +76,9 @@ class ApiV1CartCheckoutTest {
 	private ParticipationRepository participationRepository;
 
 	@Autowired
+	private QueueAdmissionRepository queueAdmissionRepository;
+
+	@Autowired
 	private StubRaceCoursePort raceCoursePort;
 
 	@Autowired
@@ -92,6 +97,7 @@ class ApiV1CartCheckoutTest {
 	void tearDown() {
 		orderRepository.deleteAll();
 		participationRepository.deleteAll();
+		queueAdmissionRepository.deleteAll();
 		cartRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
@@ -158,11 +164,11 @@ class ApiV1CartCheckoutTest {
 	}
 
 	@Test
-	@DisplayName("장바구니 결제도 대기열 입장을 확인해, 입장 중이 아니면 FAILED로 알려 주고 자리를 잡지 않는다")
+	@DisplayName("장바구니 결제도 신청서 진입 때 저장한 입장을 확인해, 입장하지 못했으면 FAILED로 알려 주고 자리를 잡지 않는다")
 	void checkoutChecksQueuePerCourse() throws Exception {
 		addToCart(MEMBER_ID, COURSE_ID);
-		int notAdmitted = apply(MEMBER_ID, COURSE_ID);
 		queueAdmissionPort.notAdmitted(COURSE_ID);
+		int notAdmitted = apply(MEMBER_ID, COURSE_ID);
 
 		checkout(MEMBER_ID, newKey(), notAdmitted)
 			.andExpect(status().isOk())
@@ -376,6 +382,7 @@ class ApiV1CartCheckoutTest {
 	}
 
 	private int apply(int memberId, int raceCourseId) throws Exception {
+		QueueEntry.enter(mockMvc, memberId, raceCourseId);
 		String body = mockMvc.perform(post("/api/v1/order/participations")
 				.header("X-Member-Id", memberId)
 				.contentType(MediaType.APPLICATION_JSON)

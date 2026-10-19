@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.Participation;
+import com.bukang.order.domain.QueueAdmission;
 import com.bukang.order.domain.exception.ApplicationPeriodException;
 import com.bukang.order.domain.exception.OrderConflictException;
 import com.bukang.order.domain.exception.ParticipationAccessDeniedException;
@@ -17,7 +18,7 @@ import com.bukang.order.domain.exception.QueueNotAdmittedException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
-import com.bukang.order.out.queue.QueueAdmissionPort;
+import com.bukang.order.out.QueueAdmissionRepository;
 import com.bukang.order.out.race.RaceCourseInfo;
 import com.bukang.order.out.race.RaceCoursePort;
 import com.bukang.order.out.seat.SeatHoldPort;
@@ -27,8 +28,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 바로 결제 예매 ([결제하기], 정책 3장·4장). 대기열에 입장 중인지 확인하고(PRO-191), 상품 서비스(B)에 자리 1석을 확보받아
- * 입장 끝 시각을 결제 기한으로 하는 주문을 만든다 (정책 4장 2-4 "입장 뒤 10분 안에 신청서 + 결제")
+ * 바로 결제 예매 ([결제하기], 정책 3장·4장). 신청서 진입 때 저장한 입장 끝 시각이 남았는지 확인하고(PRO-191, PRO-249),
+ * 상품 서비스(B)에 자리 1석을 확보받아 입장 끝 시각을 결제 기한으로 하는 주문을 만든다 (정책 4장 2-4 "입장 뒤 10분 안에 신청서 + 결제")
  * 확보하면 참가 신청 PENDING → APPLIED, 주문 CREATED. 매진이면 참가 신청 FAILED, 주문 없음 (ERD 추천안 v4 8·9쪽)
  */
 @Slf4j
@@ -46,7 +47,7 @@ public class OrderCreateUseCase {
 	private final OrderRepository orderRepository;
 	private final RaceCoursePort raceCoursePort;
 	private final SeatHoldPort seatHoldPort;
-	private final QueueAdmissionPort queueAdmissionPort;
+	private final QueueAdmissionRepository queueAdmissionRepository;
 
 	public OrderCreateResult create(int memberId, int participationId, String idempotencyKey, LocalDateTime now) {
 		// 같은 신청서로 들어온 요청을 줄 세운다. 먼저 끝난 요청이 만든 주문을 뒤 요청이 아래에서 찾는다
@@ -77,10 +78,12 @@ public class OrderCreateUseCase {
 		}
 
 		// 개인 예매는 모두 대기열을 거친다. 장바구니 결제도 항목마다 여기를 지나므로 대기열을 건너뛰지 못한다
+		// 대기열에는 다시 묻지 않고 신청서 진입 때 저장한 입장 끝 시각을 쓴다 (10/17 회의 2번). 저장값이 없으면(주소 직접 입력) 막는다
 		// 입장 끝 시각까지 상품 서비스에 자리를 잡아 달라고 보내고, 이 시각이 결제 기한이 된다
-		LocalDateTime admissionEndsAt = queueAdmissionPort.findAdmissionEndsAt(memberId, course.raceId(),
-				course.raceCourseId(), now)
-			.filter(endsAt -> endsAt.isAfter(now))
+		LocalDateTime admissionEndsAt = queueAdmissionRepository.findByMemberIdAndRaceCourseId(memberId,
+				course.raceCourseId())
+			.filter(admission -> admission.isAdmittedAt(now))
+			.map(QueueAdmission::getAdmissionEndsAt)
 			.orElseThrow(() -> new QueueNotAdmittedException("대기열에서 입장한 뒤 결제할 수 있습니다."));
 		SeatHoldResult hold = seatHoldPort.hold(course.raceCourseId(), participation.getId(),
 			capAdmissionEndsAt(admissionEndsAt, now, memberId, course.raceCourseId()));

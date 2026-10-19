@@ -40,7 +40,9 @@ import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.QueueAdmissionRepository;
 import com.bukang.order.out.race.RaceCourseInfo;
+import com.bukang.order.support.QueueEntry;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubRefundEligibilityPort;
@@ -74,6 +76,9 @@ class ApiV1OrderCancelTest {
 	private ParticipationRepository participationRepository;
 
 	@Autowired
+	private QueueAdmissionRepository queueAdmissionRepository;
+
+	@Autowired
 	private StubRaceCoursePort raceCoursePort;
 
 	@Autowired
@@ -97,6 +102,7 @@ class ApiV1OrderCancelTest {
 	void tearDown() {
 		orderRepository.deleteAll();
 		participationRepository.deleteAll();
+		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
 		walletPort.clear();
@@ -438,6 +444,7 @@ class ApiV1OrderCancelTest {
 	}
 
 	private int applyAndGetId(int memberId) throws Exception {
+		QueueEntry.enter(mockMvc, memberId, COURSE_ID);
 		return read(mockMvc.perform(post("/api/v1/order/participations")
 			.header("X-Member-Id", memberId)
 			.contentType(MediaType.APPLICATION_JSON)
