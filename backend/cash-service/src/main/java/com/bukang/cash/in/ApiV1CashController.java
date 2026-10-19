@@ -3,7 +3,6 @@ package com.bukang.cash.in;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -41,23 +40,29 @@ public class ApiV1CashController {
 	private final CashFacade cashFacade;
 
 	// 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 RsData(data: null) 형식으로 반환한다
-	// JWT 인증이 생기기 전까지는 회원 ID(= 지갑 ID)를 경로로 받는다
-	@GetMapping("/wallets/{holderId}/balance")
-	@Operation(summary = "지갑 잔액 조회", description = "회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.")
+	// PRO-247: 경로 변수로 받던 회원 ID를 X-Member-Id 헤더로 바꿔, 요청자 본인의 지갑만 조회하게 한다 (IDOR 수정)
+	@GetMapping("/wallets/balance")
+	@Operation(summary = "지갑 잔액 조회", description = "요청자 본인의 지갑 잔액을 조회한다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = CashApiExamples.GET_BALANCE_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류",
+		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류 또는 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "회원 ID 형식 오류", value = CashApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = CashApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = CashApiExamples.INVALID_VALUE_TYPE))),
+				examples = @ExampleObject(value = CashApiExamples.LOGIN_REQUIRED))),
 		@ApiResponse(responseCode = "404", description = "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = CashApiExamples.WALLET_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<WalletBalanceResponseDto>> getBalance(
-		@Parameter(description = "지갑 주인의 회원 ID", example = "3") @PathVariable int holderId
+		@Parameter(description = "조회할 회원 ID (게이트웨이가 Access Token에서 넣어준다)", example = "3")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId
 	) {
-		WalletBalanceResponseDto walletBalanceResponseDto = cashFacade.getBalance(holderId);
+		WalletBalanceResponseDto walletBalanceResponseDto = cashFacade.getBalance(memberId);
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "잔액 조회 성공", walletBalanceResponseDto));
 	}
 

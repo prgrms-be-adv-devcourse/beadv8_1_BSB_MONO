@@ -54,13 +54,14 @@ class ApiV1CashControllerTest {
 	private WalletWithdrawalRepository walletWithdrawalRepository;
 
 	@Test
-	@DisplayName("잔액 조회: 지갑이 있으면 200과 RsData 형식으로 잔액을 돌려준다")
+	@DisplayName("잔액 조회: 지갑이 있으면 200과 RsData 형식으로 요청자 본인의 잔액을 돌려준다")
 	void getBalance() throws Exception {
 		LocalDateTime now = LocalDateTime.of(2026, 10, 12, 10, 0);
 		CashMember member = cashMemberRepository.save(new CashMember(3, now, now, "러너3"));
 		walletRepository.save(new Wallet(member));
 
-		mockMvc.perform(get("/api/v1/cash/wallets/3/balance"))
+		mockMvc.perform(get("/api/v1/cash/wallets/balance")
+				.header(MemberIdHeader.NAME, "3"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value(200))
 			.andExpect(jsonPath("$.message").value("잔액 조회 성공"))
@@ -71,11 +72,42 @@ class ApiV1CashControllerTest {
 	@Test
 	@DisplayName("잔액 조회: 지갑이 없으면 404와 에러 메시지를 돌려준다")
 	void getBalanceWithoutWallet() throws Exception {
-		mockMvc.perform(get("/api/v1/cash/wallets/999/balance"))
+		mockMvc.perform(get("/api/v1/cash/wallets/balance")
+				.header(MemberIdHeader.NAME, "999"))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.status").value(404))
 			.andExpect(jsonPath("$.message").value("존재하지 않는 지갑입니다."))
 			.andExpect(jsonPath("$.data").isEmpty());
+	}
+
+	@Test
+	@DisplayName("잔액 조회: 회원 ID 헤더가 없으면 401과 RsData 형식으로 로그인 필요를 알린다")
+	void getBalanceWithoutMemberId() throws Exception {
+		mockMvc.perform(get("/api/v1/cash/wallets/balance"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.status").value(401))
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
+			.andExpect(jsonPath("$.data").isEmpty());
+	}
+
+	@Test
+	@DisplayName("잔액 조회: 회원 ID가 0 이하면 400 INVALID_REQUEST로 응답한다")
+	void getBalanceWithNonPositiveMemberId() throws Exception {
+		mockMvc.perform(get("/api/v1/cash/wallets/balance")
+				.header(MemberIdHeader.NAME, "0"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value(MemberIdHeader.INVALID_MESSAGE));
+	}
+
+	@Test
+	@DisplayName("잔액 조회: 회원 ID가 숫자가 아니면 400 INVALID_REQUEST로 응답한다")
+	void getBalanceWithNonNumericMemberId() throws Exception {
+		mockMvc.perform(get("/api/v1/cash/wallets/balance")
+				.header(MemberIdHeader.NAME, "abc"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
 	}
 
 	@Test
