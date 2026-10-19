@@ -1,5 +1,6 @@
 package com.bukang.cash.in;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -18,9 +19,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.wallet.LedgerRefType;
+import com.bukang.cash.domain.wallet.LedgerType;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.out.CashMemberRepository;
+import com.bukang.cash.out.WalletLedgerRepository;
 import com.bukang.cash.out.WalletRepository;
+import com.bukang.cash.out.WalletWithdrawalRepository;
+import com.bukang.common.global.web.IdempotencyKeyHeader;
 import com.bukang.common.shared.member.web.MemberIdHeader;
 
 @SpringBootTest
@@ -32,6 +38,9 @@ class ApiV1CashControllerTest {
 	private static final String CHARGE_CONFIRM_BODY = """
 		{ "paymentKey": "5EnNZRJGvaBd3GirPNB6s", "orderId": "charge-1697000000000", "amount": 10000 }
 		""";
+	private static final String WITHDRAWAL_BODY = """
+		{ "bankCode": "004", "accountNumber": "110123456789", "accountHolder": "홍길동" }
+		""";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -39,6 +48,10 @@ class ApiV1CashControllerTest {
 	private CashMemberRepository cashMemberRepository;
 	@Autowired
 	private WalletRepository walletRepository;
+	@Autowired
+	private WalletLedgerRepository walletLedgerRepository;
+	@Autowired
+	private WalletWithdrawalRepository walletWithdrawalRepository;
 
 	@Test
 	@DisplayName("잔액 조회: 지갑이 있으면 200과 RsData 형식으로 잔액을 돌려준다")
@@ -113,5 +126,64 @@ class ApiV1CashControllerTest {
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
 			.andExpect(jsonPath("$.message").value("paymentKey를 작성해주세요."));
+	}
+
+	@Test
+	@DisplayName("환급 신청: Idempotency-Key 헤더 값을 멱등키로 저장하고, 같은 키로 다시 보내면 처음 결과를 돌려준다")
+	void requestWithdrawalWithIdempotencyKeyHeader() throws Exception {
+		createWalletWithBalance(3, 50_000);
+
+		for (int attempt = 0; attempt < 2; attempt++) {
+			mockMvc.perform(post("/api/v1/cash/withdrawals")
+					.header(MemberIdHeader.NAME, "3")
+					.header(IdempotencyKeyHeader.NAME, "withdrawal-key-1")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(WITHDRAWAL_BODY))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.message").value("환급 신청이 완료되었습니다."))
+				.andExpect(jsonPath("$.data.withdrawnAmount").value(50_000))
+				.andExpect(jsonPath("$.data.balance").value(0));
+		}
+
+		assertThat(walletWithdrawalRepository.findByIdempotencyKey("withdrawal-key-1")).isPresent();
+		assertThat(walletWithdrawalRepository.count()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("환급 신청: Idempotency-Key 헤더가 없으면 400 INVALID_REQUEST로 응답한다")
+	void requestWithdrawalWithoutIdempotencyKey() throws Exception {
+		createWalletWithBalance(3, 50_000);
+
+		mockMvc.perform(post("/api/v1/cash/withdrawals")
+				.header(MemberIdHeader.NAME, "3")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(WITHDRAWAL_BODY))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("필수 요청 헤더(Idempotency-Key)가 없습니다."));
+		assertThat(walletWithdrawalRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("환급 신청: Idempotency-Key가 64자를 넘으면 400 INVALID_REQUEST로 응답한다")
+	void requestWithdrawalWithTooLongIdempotencyKey() throws Exception {
+		createWalletWithBalance(3, 50_000);
+
+		mockMvc.perform(post("/api/v1/cash/withdrawals")
+				.header(MemberIdHeader.NAME, "3")
+				.header(IdempotencyKeyHeader.NAME, "k".repeat(IdempotencyKeyHeader.MAX_LENGTH + 1))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(WITHDRAWAL_BODY))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value(IdempotencyKeyHeader.INVALID_MESSAGE));
+		assertThat(walletWithdrawalRepository.count()).isZero();
+	}
+
+	private void createWalletWithBalance(int memberId, int balance) {
+		LocalDateTime now = LocalDateTime.of(2026, 10, 12, 10, 0);
+		CashMember member = cashMemberRepository.save(new CashMember(memberId, now, now, "러너" + memberId));
+		Wallet wallet = walletRepository.save(new Wallet(member));
+		walletLedgerRepository.save(wallet.credit(balance, LedgerType.충전__PG결제_토스페이먼츠, LedgerRefType.WalletCharge, 1));
 	}
 }

@@ -84,6 +84,18 @@ final class CashApiExamples {
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "은행 코드를 작성해주세요.", "data": null }
 		""";
 
+	static final String MISSING_IDEMPOTENCY_KEY = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.", "data": null }
+		""";
+
+	static final String INVALID_IDEMPOTENCY_KEY = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "Idempotency-Key는 1~64자로 보내주세요.", "data": null }
+		""";
+
+	static final String WITHDRAWAL_MEMBER_MISMATCH = """
+		{ "status": 409, "message": "이 Idempotency-Key로 환급한 회원과 요청한 회원이 다릅니다.", "data": null }
+		""";
+
 	private CashApiExamples() {
 	}
 }
