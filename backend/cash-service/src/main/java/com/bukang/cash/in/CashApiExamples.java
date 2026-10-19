@@ -46,11 +46,23 @@ final class CashApiExamples {
 		""";
 
 	static final String CHARGE_CONFIRM_INVALID_INPUT = """
-		{ "status": 400, "message": "paymentKey를 작성해주세요.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "paymentKey를 작성해주세요.", "data": null }
 		""";
 
 	static final String INVALID_BODY = """
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String INVALID_VALUE_TYPE = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String INVALID_MEMBER_ID = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String LOGIN_REQUIRED = """
+		{ "status": 401, "message": "로그인이 필요합니다.", "data": null }
 		""";
 
 	static final String WITHDRAWAL_SUCCESS = """

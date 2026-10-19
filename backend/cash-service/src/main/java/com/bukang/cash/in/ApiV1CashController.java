@@ -45,6 +45,9 @@ public class ApiV1CashController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = CashApiExamples.GET_BALANCE_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CashApiExamples.INVALID_VALUE_TYPE))),
 		@ApiResponse(responseCode = "404", description = "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = CashApiExamples.WALLET_NOT_FOUND)))
@@ -67,12 +70,18 @@ public class ApiV1CashController {
 				@ExampleObject(name = "충전 성공", value = CashApiExamples.CHARGE_CONFIRM_SUCCESS),
 				@ExampleObject(name = "PG 승인 거절", value = CashApiExamples.CHARGE_CONFIRM_FAILED)
 			})),
-		@ApiResponse(responseCode = "400", description = "최소 충전 금액 미만, 입력값 검증 실패 또는 요청 본문 형식 오류",
+		@ApiResponse(responseCode = "400",
+			description = "최소 충전 금액 미만, 입력값 검증 실패, 요청 본문 형식 오류, 회원 ID 형식 오류 또는 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "최소 충전 금액 미만", value = CashApiExamples.CHARGE_AMOUNT_TOO_SMALL),
 				@ExampleObject(name = "입력값 검증 실패", value = CashApiExamples.CHARGE_CONFIRM_INVALID_INPUT),
-				@ExampleObject(name = "요청 본문 형식 오류", value = CashApiExamples.INVALID_BODY)
+				@ExampleObject(name = "요청 본문 형식 오류", value = CashApiExamples.INVALID_BODY),
+				@ExampleObject(name = "회원 ID 형식 오류", value = CashApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = CashApiExamples.INVALID_MEMBER_ID)
 			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CashApiExamples.LOGIN_REQUIRED))),
 		@ApiResponse(responseCode = "404", description = "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = CashApiExamples.WALLET_NOT_FOUND)))
@@ -94,12 +103,18 @@ public class ApiV1CashController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "환급 신청 완료",
 			content = @Content(examples = @ExampleObject(value = CashApiExamples.WITHDRAWAL_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "환급할 잔액 없음, 입력값 검증 실패 또는 요청 본문 형식 오류",
+		@ApiResponse(responseCode = "400",
+			description = "환급할 잔액 없음, 입력값 검증 실패, 요청 본문 형식 오류, 회원 ID 형식 오류 또는 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "환급할 잔액 없음", value = CashApiExamples.WALLET_BALANCE_EMPTY),
 				@ExampleObject(name = "입력값 검증 실패", value = CashApiExamples.WITHDRAWAL_INVALID_INPUT),
-				@ExampleObject(name = "요청 본문 형식 오류", value = CashApiExamples.INVALID_BODY)
+				@ExampleObject(name = "요청 본문 형식 오류", value = CashApiExamples.INVALID_BODY),
+				@ExampleObject(name = "회원 ID 형식 오류", value = CashApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = CashApiExamples.INVALID_MEMBER_ID)
 			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CashApiExamples.LOGIN_REQUIRED))),
 		@ApiResponse(responseCode = "404", description = "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = CashApiExamples.WALLET_NOT_FOUND)))

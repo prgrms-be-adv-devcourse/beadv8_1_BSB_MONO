@@ -87,6 +87,7 @@ backend/
 │   ├── config/crypto/         민감정보 암호화 (AES, 블라인드 인덱스)
 │   └── dto/                   MemberDto, MemberJoinRequestDto, MemberLoginRequestDto, MemberSearchCondition
 ├── cash-service/    com.bukang.cash
+│   ├── in/                    CashExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
 │   └── domain/                CashMember extends ReplicaMember
 ├── payout-service/  com.bukang.payout
 │   ├── domain/                Payout, PayoutItem, PayoutHold, 상태·사유 enum
