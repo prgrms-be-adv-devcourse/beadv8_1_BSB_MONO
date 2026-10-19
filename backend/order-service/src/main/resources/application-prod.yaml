@@ -30,10 +30,10 @@ order:
     cash:
       mode: http
       base-url: http://bukang-cash-service:8081
-    # 프론트가 대기열 등록·순번 API를 부르기 전까지는 가짜(누구나 입장)로 둔다. 실제 대기열로 하면 아무도 등록되지 않아
-    # [결제하기]가 모두 403이 된다. 프론트 연결 뒤 mode만 http로 바꾸면 아래 주소로 부른다 (PRO-226)
+    # 대기열 입장 확인은 실제 대기열 서비스에 묻는다 (PRO-226). 프론트가 대기 화면에서 등록·순번 조회를 한 뒤 묻는다(PRO-251)
+    # 대기열 대회 복제본에 없는 대회는 줄을 설 수 없어 결제까지 못 간다. 막히면 mode를 fake(누구나 입장)로 되돌린다 (PRO-248)
     queue:
-      mode: fake
+      mode: http
       base-url: http://bukang-queue-service:8086
     # 판매자 ID 조회를 실제로 붙이기 전까지 운영에서는 판매자 키트 API를 막는다 (가짜는 누구나 판매자로 봄, PRO-197)
     seller:
