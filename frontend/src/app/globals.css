@@ -338,6 +338,8 @@
     --layout-header-height: 56px;
     --layout-form-max-width: none;
     --layout-app-max-width: 600px;
+    /* 마이 · 알림 · 내 참가권의 본문 위 여백: 화면 높이의 10% (16~96px). 위 정렬은 그대로라 내용이 움직이지 않는다. */
+    --layout-content-start: clamp(16px, 10dvh, 96px);
   }
 
   /* Typography·Layout 컬렉션의 Tablet 모드 */

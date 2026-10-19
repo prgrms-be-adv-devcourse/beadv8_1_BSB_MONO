@@ -70,7 +70,7 @@ export function NotificationsPage({ empty = false }: { empty?: boolean }) {
   return (
     <>
       <AppHeader />
-      <main className="flex flex-1 flex-col gap-4 px-4 pt-4 pb-8">
+      <main className="flex flex-1 flex-col gap-4 px-4 pt-(--layout-content-start) pb-8">
         <h1 className="text-heading-l">알림</h1>
         {empty ? (
           <div className="flex flex-1 items-center justify-center">
