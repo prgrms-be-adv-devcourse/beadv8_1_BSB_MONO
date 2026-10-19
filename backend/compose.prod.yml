@@ -55,24 +55,51 @@ services:
 
   # 앱 이미지는 GHCR에서 받는다 (app-cd.yml이 커밋 SHA와 latest 두 태그로 올린다)
   # 배포할 때는 IMAGE_TAG에 커밋 SHA를 넘겨 그 커밋의 이미지로 띄운다. 비우면 latest(가장 최근에 빌드된 이미지)
+  # restart: 실행 중에 죽은 컨테이너를 Docker가 다시 켠다. 재부팅 때는 순서 없이 동시에 켜지므로,
+  # 부팅 순서는 systemd(docker/systemd/crewrun.service)가 docker compose up으로 맞춘다
   gateway:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-gateway:${IMAGE_TAG:-latest}
+    restart: unless-stopped
   member-service:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-member-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
   cash-service:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-cash-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
   payout-service:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-payout-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
   file-service:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-file-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
   order-service:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-order-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
   product-service:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-product-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
   queue-service:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-queue-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
   web:
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  # 인프라도 죽거나 재부팅되면 다시 켠다 (로컬 compose.yml에는 넣지 않아 PC를 켤 때 저절로 뜨지 않는다)
+  bukang-db:
+    restart: unless-stopped
+  bukang-kafka:
+    restart: unless-stopped
+  bukang-redis:
+    restart: unless-stopped
+  bukang-elasticsearch:
+    restart: unless-stopped
+  bukang-s3mock:
+    restart: unless-stopped
+  bukang-kafka-console:
+    restart: unless-stopped
+  bukang-elasticvue:
+    restart: unless-stopped
 
 volumes:
   # 인증서와 계정 정보 (/etc/letsencrypt). 지우면 다시 발급해야 한다
