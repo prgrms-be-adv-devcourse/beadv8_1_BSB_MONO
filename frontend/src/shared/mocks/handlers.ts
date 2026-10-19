@@ -39,7 +39,9 @@ import type { SearchParams } from '@/shared/api/generated/product/product.schema
 
 import { fileUploadHandlers } from './file-upload'
 import {
+  clearMockLoginMarkCookie,
   clearMockRefreshCookie,
+  issueMockLoginMarkCookie,
   issueMockRefreshCookie,
   MOCK_REFRESH_COOKIE_NAME,
 } from './mock-session'
@@ -73,10 +75,17 @@ const fileImageHandler = getFindByRefMockHandler(({ request }) => {
  * 재발급은 요청 쿠키에 그 값이 있을 때만 성공하고(쿠키도 새로 바꿔 준다) 없으면 401.
  * 그래서 로그인하지 않고 새로고침하면 로그아웃 상태로 보인다.
  */
+/** 로그인 · 재발급 · 로그아웃이 심고 지우는 쿠키 묶음. Refresh Token 쿠키를 먼저 둔다. */
+function withCookies(...values: string[]) {
+  const headers = new Headers()
+  for (const value of values) headers.append('Set-Cookie', value)
+  return headers
+}
+
 const authHandlers = [
   http.post('*/api/v1/auth/login', () =>
     HttpResponse.json(getLoginResponseMock(), {
-      headers: { 'Set-Cookie': issueMockRefreshCookie() },
+      headers: withCookies(issueMockRefreshCookie(), issueMockLoginMarkCookie()),
     }),
   ),
   http.post('*/api/v1/auth/reissue', ({ cookies }) => {
@@ -95,12 +104,15 @@ const authHandlers = [
           accessToken: `${example.data?.accessToken}.${crypto.randomUUID()}`,
         },
       },
-      { headers: { 'Set-Cookie': issueMockRefreshCookie() } },
+      { headers: withCookies(issueMockRefreshCookie(), issueMockLoginMarkCookie()) },
     )
   }),
   http.post(
     '*/api/v1/auth/logout',
-    () => new HttpResponse(null, { headers: { 'Set-Cookie': clearMockRefreshCookie() } }),
+    () =>
+      new HttpResponse(null, {
+        headers: withCookies(clearMockRefreshCookie(), clearMockLoginMarkCookie()),
+      }),
   ),
 ]
 

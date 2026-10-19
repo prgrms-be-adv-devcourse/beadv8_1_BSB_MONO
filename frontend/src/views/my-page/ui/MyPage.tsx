@@ -29,7 +29,7 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
   return (
     <>
       <AppHeader />
-      <main className="flex flex-1 flex-col gap-4 px-4 py-6">
+      <main className="flex flex-1 flex-col gap-4 px-4 pt-(--layout-content-start) pb-6">
         <div className="flex items-center gap-3">
           <span
             aria-hidden

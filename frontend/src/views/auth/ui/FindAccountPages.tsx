@@ -45,10 +45,6 @@ export function PasswordResetPage() {
           error={errors.email?.message}
           {...register('email')}
         />
-        <p className="text-caption text-text-tertiary">
-          가입하지 않은 이메일을 적어도 같은 안내가 보여요. 다른 사람이 가입 여부를 알아낼 수 없게
-          하려는 거예요.
-        </p>
       </CenterBody>
       <BottomCta
         className="sticky bottom-0 z-10"

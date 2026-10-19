@@ -257,3 +257,25 @@ describe('대기열 줄서기 목', () => {
     await expect(register()).rejects.toMatchObject({ status: 409 })
   })
 })
+
+// 서버(proxy.ts)가 화면 요청에서 로그인 여부를 알 수 있게, 가짜 로그인이 Path=/ 표시 쿠키를 같이 심고 지우는지 확인한다.
+describe('가짜 로그인 표시 쿠키', () => {
+  const call = (path: string, cookie?: string) =>
+    fetch(`http://localhost/api/v1/auth/${path}`, {
+      method: 'POST',
+      headers: cookie ? { cookie } : undefined,
+    })
+  const cookiesOf = (response: Response) => response.headers.getSetCookie()
+
+  it('로그인하면 Refresh Token 쿠키와 Path=/ 표시 쿠키를 함께 심는다', async () => {
+    const cookies = cookiesOf(await call('login'))
+    expect(cookies.some((c) => /^mockRefreshToken=.*Path=\/api\/v1\/auth/.test(c))).toBe(true)
+    expect(cookies.some((c) => /^mockLoggedIn=1;.*Path=\/;/.test(c))).toBe(true)
+  })
+
+  it('로그아웃하면 두 쿠키를 모두 지운다', async () => {
+    const cookies = cookiesOf(await call('logout', MOCK_LOGGED_IN_COOKIE))
+    expect(cookies.some((c) => /^mockRefreshToken=; Max-Age=0/.test(c))).toBe(true)
+    expect(cookies.some((c) => /^mockLoggedIn=; Max-Age=0/.test(c))).toBe(true)
+  })
+})
