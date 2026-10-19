@@ -67,7 +67,8 @@ backend/
 │   │   ├── exception/         BusinessException, GlobalExceptionHandler
 │   │   ├── jpa/entity/        BaseEntity, BaseIdAndTime, BaseManualIdAndTime
 │   │   ├── json/              JsonConverter
-│   │   └── rsdata/            RsData (공통 응답)
+│   │   ├── rsdata/            RsData (공통 응답)
+│   │   └── web/               IdempotencyKeyHeader (중복 요청 방지 키 헤더 이름·최대 길이·오류 문구)
 │   ├── shared/                서비스 간 계약 (도메인 지식 있음)
 │   │   ├── file/domain/       FileType·FileKind (파일 용도·종류), FileRef (파일 연결 대상, 엔티티로만 만듦)
 │   │   └── member/
@@ -124,6 +125,8 @@ backend/
 - 회원 ID는 `X-Member-Id` 헤더로 받는다. 헤더 이름과 오류 문구는 common의 `shared/member/web/MemberIdHeader`를 쓴다. 게이트웨이의 `auth/JwtAuthenticationFilter`가 클라이언트가 보낸 이 헤더를 지우고, Access Token을 검사해 토큰 속 회원 ID로 다시 넣는다.
   토큰 없이 통과하는 주소는 `gateway`의 `application.yaml` `gateway.auth.public-paths`에 있다. 로그인 전에 쓰는 API를 추가하면 여기에도 추가한다(빠뜨리면 401로 막힌다).
   서비스는 이 헤더를 그대로 믿으므로, `compose.yml`은 서비스 포트를 호스트에 열지 않는다. 서비스를 직접 부르며 확인할 때는 `bootRun`(dev)으로 띄운 서비스 포트(예: 8084)로 부른다.
+- 두 번 처리하면 안 되는 요청(대회 등록, 주문 생성, 장바구니 결제)은 중복 요청 방지 키를 `Idempotency-Key` 헤더로 받는다.
+  헤더 이름·최대 길이(64)·오류 문구는 common의 `global/web/IdempotencyKeyHeader`를 쓴다.
 - 대상에 붙지 않은 파일(PENDING·UPLOADED·DELETED)은 마지막으로 바뀐 뒤 1일이 지나면 Spring Batch 정리 배치가 DB 행을 지우고 커밋한 뒤 S3 객체를 지운다.
   실행 기록은 DB의 `BATCH_` 테이블에 남는다 (`file-service/BATCH-ROADMAP.md`).
 
