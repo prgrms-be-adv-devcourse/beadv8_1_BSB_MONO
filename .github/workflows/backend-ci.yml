@@ -3,10 +3,11 @@ name: backend-ci
 # 모든 PR에서 돌고, backend/ 변경이 없으면 backend job을 건너뛴다.
 # on.paths로 거르면 워크플로 자체가 안 떠서 필수 체크가 영원히 대기 상태가 된다.
 # 건너뛴 job은 필수 체크에서 통과로 친다.
+# dev push에서도 돌려 Gradle 캐시를 dev 기준으로 저장한다. PR(base: dev)은 base 브랜치의 캐시를 읽을 수 있다.
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -49,10 +50,14 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # Gradle 의존성·빌드 캐시
+      # Gradle 의존성·래퍼·빌드 캐시(Gradle User Home)를 GitHub 캐시에 저장하고 복원한다
+      # 기본값은 main에서만 저장하므로, PR이 머지되는 dev에서도 저장하게 한다. PR 실행은 읽기만 해서 캐시가 PR마다 쌓이지 않는다
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
 
       - run: chmod +x gradlew
 
       # 컴파일 + 테스트(test 프로파일: H2, 외부 인프라 불필요) + checkstyle(경고만 출력)
-      - run: ./gradlew build --no-daemon
+      # --build-cache: 입력이 같은 작업(다른 모듈의 컴파일·테스트 등)은 캐시된 결과를 꺼내 쓰고 다시 실행하지 않는다
+      - run: ./gradlew build --no-daemon --build-cache

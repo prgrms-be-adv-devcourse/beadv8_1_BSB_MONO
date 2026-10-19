@@ -1,0 +1,123 @@
+# 운영(EC2)에서만 compose.yml 위에 덮어쓰는 설정. Nginx에 HTTPS(Let's Encrypt 인증서)를 붙인다
+# 로컬은 이 파일을 쓰지 않으므로 지금처럼 HTTP(80)로만 뜬다
+#
+# 앱 이미지 9개(gateway·서비스 7개·web)는 EC2에서 빌드하지 않고, GitHub Actions(app-cd.yml)가 빌드해 GHCR에 올린 것을 받는다
+# 배포는 app-cd.yml이 한다 (main push 또는 Actions에서 직접 실행). 서버에서 직접 띄울 때는:
+#   docker compose pull gateway member-service cash-service payout-service file-service order-service product-service queue-service web
+#   docker compose up -d --no-build
+# (--build를 붙이면 EC2에서 빌드한 이미지가 GHCR 이름으로 덮어써진다)
+#
+# backend/.env에 아래 네 줄을 적어 둔다 (.env.example 참고)
+#   COMPOSE_FILE=compose.yml:compose.prod.yml
+#   COMPOSE_PROFILES=app
+#   DOMAIN=crewrun.duckdns.org
+#   CERTBOT_EMAIL=...
+#
+# 처음 뜰 때 흐름: 인증서 없음 → Nginx는 HTTP 설정으로 뜸 → certbot이 80으로 소유 확인을 받아 발급
+#   → Nginx(start-https.sh)가 1분 안에 인증서를 알아채 HTTPS 설정으로 바꾸고 reload
+# 그 뒤: certbot이 12시간마다 갱신을 시도하고, 갱신되면 Nginx가 같은 방식으로 reload한다
+# 인증서는 볼륨 certbot-conf에 남는다. docker compose down -v 로 볼륨을 지우면 처음부터 다시 발급한다 (Let's Encrypt 발급 횟수 제한 주의)
+# !override는 Docker Compose 2.24.4 이상에서 동작한다
+
+services:
+
+  nginx:
+    ports:
+      - "443:443"
+    # compose.yml의 volumes(로컬 default.conf)를 이어 붙이지 않고 통째로 바꾼다
+    # conf.d/default.conf는 start-https.sh가 인증서 유무를 보고 템플릿으로 만든다
+    volumes: !override
+      - ./docker/nginx:/etc/nginx/crewrun:ro
+      - certbot-conf:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN을 backend/.env에 적어 주세요}
+    command: [ "/bin/sh", "/etc/nginx/crewrun/start-https.sh" ]
+    # 서버가 재부팅되거나 컨테이너가 죽어도 다시 뜨게 한다
+    restart: unless-stopped
+
+  # 인증서 발급·갱신 (스크립트: docker/certbot/run.sh)
+  certbot:
+    image: certbot/certbot:v5.8.0
+    container_name: bukang-certbot
+    profiles: [ app ]
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+      - ./docker/certbot/run.sh:/crewrun/run.sh:ro
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN을 backend/.env에 적어 주세요}
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL:?CERTBOT_EMAIL을 backend/.env에 적어 주세요}
+    entrypoint: [ "/bin/sh", "/crewrun/run.sh" ]
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
+  # 앱 이미지는 GHCR에서 받는다 (app-cd.yml이 커밋 SHA와 latest 두 태그로 올린다)
+  # 배포할 때는 IMAGE_TAG에 커밋 SHA를 넘겨 그 커밋의 이미지로 띄운다. 비우면 latest(가장 최근에 빌드된 이미지)
+  # restart: 실행 중에 죽은 컨테이너를 Docker가 다시 켠다. 재부팅 때는 순서 없이 동시에 켜지므로,
+  # 부팅 순서는 systemd(docker/systemd/crewrun.service)가 docker compose up으로 맞춘다
+  gateway:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-gateway:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+  member-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-member-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+  cash-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-cash-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+  payout-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-payout-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+  file-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-file-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+  order-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-order-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+  product-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-product-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+  queue-service:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-queue-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+  web:
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  # 인프라도 죽거나 재부팅되면 다시 켠다 (로컬 compose.yml에는 넣지 않아 PC를 켤 때 저절로 뜨지 않는다)
+  # DB·Kafka·Redis 데이터는 이름 있는 볼륨에 둔다. 이미지가 만드는 익명 볼륨은 down 뒤 up 하면 새 볼륨으로 바뀌어 데이터가 사라진 것처럼 된다
+  bukang-db:
+    restart: unless-stopped
+    volumes:
+      - bukang-db-data:/var/lib/mysql
+  bukang-kafka:
+    restart: unless-stopped
+    volumes:
+      - bukang-kafka-data:/var/lib/redpanda/data
+  bukang-redis:
+    restart: unless-stopped
+    volumes:
+      - bukang-redis-data:/data
+  bukang-elasticsearch:
+    restart: unless-stopped
+  bukang-s3mock:
+    restart: unless-stopped
+  bukang-kafka-console:
+    restart: unless-stopped
+  bukang-elasticvue:
+    restart: unless-stopped
+
+volumes:
+  # 인증서와 계정 정보 (/etc/letsencrypt). 지우면 다시 발급해야 한다
+  certbot-conf:
+  # Let's Encrypt 소유 확인용 토큰 파일. certbot이 쓰고 Nginx가 내보낸다
+  certbot-www:
+  # 인프라 데이터. name을 정해 두어 compose 프로젝트 이름(폴더 이름)이 바뀌어도 같은 볼륨을 쓴다
+  # down -v 를 하면 이 볼륨도 지워진다 (DB 데이터가 모두 사라진다)
+  bukang-db-data:
+    name: bukang-db-data
+  bukang-kafka-data:
+    name: bukang-kafka-data
+  bukang-redis-data:
+    name: bukang-redis-data
