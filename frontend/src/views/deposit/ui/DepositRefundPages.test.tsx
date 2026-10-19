@@ -31,7 +31,6 @@ type WithdrawalBody = {
   bankCode: string
   accountNumber: string
   accountHolder: string
-  idempotencyKey: string
 }
 
 async function fillAccount(user: ReturnType<typeof userEvent.setup>) {
@@ -52,8 +51,10 @@ describe('예치금 돌려받기 (M22)', () => {
 
   it('남은 잔액 전부를 은행 코드 · 숫자만 남긴 계좌번호와 함께 보내고 완료 화면으로 간다', async () => {
     const bodies: WithdrawalBody[] = []
+    const keys: (string | null)[] = []
     server.use(
       http.post('*/api/v1/cash/withdrawals', async ({ request }) => {
+        keys.push(request.headers.get('Idempotency-Key'))
         bodies.push((await request.json()) as WithdrawalBody)
         return HttpResponse.json({
           status: 200,
@@ -77,7 +78,9 @@ describe('예치금 돌려받기 (M22)', () => {
       accountNumber: '12345601234567',
       accountHolder: '김러너',
     })
-    expect(bodies[0].idempotencyKey).toMatch(/^[0-9a-f-]{36}$/)
+    // 중복 방지 키는 본문이 아니라 Idempotency-Key 헤더로 보낸다
+    expect(bodies[0]).not.toHaveProperty('idempotencyKey')
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('잔액이 0원이면 신청 버튼을 막는다', async () => {
@@ -96,7 +99,7 @@ describe('예치금 돌려받기 (M22)', () => {
     let release: () => void = () => {}
     server.use(
       http.post('*/api/v1/cash/withdrawals', async ({ request }) => {
-        keys.push(((await request.json()) as WithdrawalBody).idempotencyKey)
+        keys.push(request.headers.get('Idempotency-Key') ?? '')
         await new Promise<void>((resolve) => (release = resolve))
         return HttpResponse.json({
           status: 200,
@@ -123,7 +126,7 @@ describe('예치금 돌려받기 (M22)', () => {
     const keys: string[] = []
     server.use(
       http.post('*/api/v1/cash/withdrawals', async ({ request }) => {
-        keys.push(((await request.json()) as WithdrawalBody).idempotencyKey)
+        keys.push(request.headers.get('Idempotency-Key') ?? '')
         if (keys.length === 1) return HttpResponse.error()
         return HttpResponse.json({
           status: 200,
@@ -204,7 +207,7 @@ describe('예치금 돌려받기 (M22)', () => {
     const answers = [500, 400, 200]
     server.use(
       http.post('*/api/v1/cash/withdrawals', async ({ request }) => {
-        keys.push(((await request.json()) as WithdrawalBody).idempotencyKey)
+        keys.push(request.headers.get('Idempotency-Key') ?? '')
         const status = answers[keys.length - 1]
         if (status !== 200) {
           return HttpResponse.json({ status, message: '아무 문구', data: null }, { status })
@@ -237,13 +240,8 @@ describe('예치금 돌려받기 (M22)', () => {
     const send = (idempotencyKey: string) =>
       fetch('http://localhost/api/v1/cash/withdrawals', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bankCode: '004',
-          accountNumber: '1',
-          accountHolder: '김러너',
-          idempotencyKey,
-        }),
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ bankCode: '004', accountNumber: '1', accountHolder: '김러너' }),
       }).then((r) => r.json() as Promise<{ data: { withdrawnAmount: number; balance: number } }>)
 
     const first = await send('same-key')
@@ -254,10 +252,17 @@ describe('예치금 돌려받기 (M22)', () => {
     // 다른 키로 보내면 잔액이 없어 거절된다
     const other = await fetch('http://localhost/api/v1/cash/withdrawals', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ idempotencyKey: 'other-key' }),
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'other-key' },
+      body: JSON.stringify({}),
     })
     expect(other.status).toBe(400)
+    // 키가 없으면 진짜 서버처럼 400으로 거절한다
+    const missing = await fetch('http://localhost/api/v1/cash/withdrawals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    expect(missing.status).toBe(400)
   })
 })
 

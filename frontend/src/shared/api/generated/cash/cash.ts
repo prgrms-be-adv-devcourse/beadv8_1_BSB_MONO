@@ -64,7 +64,7 @@ export const getRequestWithdrawalUrl = () => {
 }
 
 /**
- * 회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. idempotencyKey를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
+ * 회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. Idempotency-Key 헤더를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
  * @summary 예치금 전액 환급 신청
  */
 export const requestWithdrawal = async (cashWithdrawalRequestDto: CashWithdrawalRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCashWithdrawalDto> => {

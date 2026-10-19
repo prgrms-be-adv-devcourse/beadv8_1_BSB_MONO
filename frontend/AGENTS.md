@@ -73,7 +73,8 @@ src/
   - 새로고침하면 토큰이 사라지므로 `features/auth`의 `AuthSessionRestorer`(app Provider)가 앱 시작 때 재발급으로 되살린다.
   - 서버 컴포넌트는 토큰을 붙일 수 없다. 로그인이 필요한 데이터는 클라이언트에서 불러온다.
   - 로그인 상태는 `useAuthStatus()`(`pending`·`authenticated`·`anonymous`), 로그인·로그아웃은 `useLogin`·`useLogout`.
-- 주문 생성·장바구니 결제는 `{ idempotencyKey: createIdempotencyKey() }`를 요청 옵션으로 넘겨 `Idempotency-Key` 헤더를 붙인다.
+- 대회 등록·주문 생성·장바구니 결제·예치금 환급은 `{ idempotencyKey }`를 요청 옵션으로 넘겨 `Idempotency-Key` 헤더를 붙인다(본문에 넣지 않는다).
+  키는 `useIdempotencyKey()`로 고른다: 같은 입력으로 다시 보내면(두 번 클릭·재시도) 같은 키, 입력이 바뀌면 새 키. MSW 목도 이 헤더가 없으면 400이다.
 - 생성된 MSW 목(명세의 응답 예시)은 `shared/mocks/handlers.ts`에 등록한다. 테스트도 같은 핸들러를 쓴다.
   - 인증 목은 로그인 상태를 쿠키로 흉내 낸다: 가짜 로그인이 `mockRefreshToken` 쿠키(`HttpOnly; SameSite=Lax; Path=/api/v1/auth`, Secure 없음. `shared/mocks/mock-session.ts`)를 심고, 로그아웃이 `Max-Age=0`으로 지운다. 재발급은 요청 쿠키가 있을 때만 성공, 없으면 401. 서버 메모리에 상태를 두지 않는다. Node의 MSW는 쿠키를 저장하지 않으므로 테스트에서 로그인된 채로 요청하려면 `Cookie: MOCK_LOGGED_IN_COOKIE`(`@/shared/testing`)를 직접 붙인다.
 - 서버 데이터는 TanStack Query(초기 데이터는 RSC). Zustand에 서버 데이터를 넣지 않는다.

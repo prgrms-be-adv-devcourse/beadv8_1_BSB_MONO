@@ -36,7 +36,7 @@ export function withdrawAllFromMockWallet(): number {
   return amount
 }
 
-/** 환급 결과(idempotencyKey = 멱등키). 같은 키로 다시 오면 처음 결과를 돌려준다 */
+/** 환급 결과(Idempotency-Key 헤더 = 멱등키). 같은 키로 다시 오면 처음 결과를 돌려준다 */
 const withdrawals = new Map<string, number>()
 
 export const walletHandlers = [
@@ -44,8 +44,7 @@ export const walletHandlers = [
    * 예치금 전액 환급 목. 진짜 서버처럼 신청하면 바로 완료되고, 잔액이 0원이면 400(code 없음)이다.
    */
   http.post('*/api/v1/cash/withdrawals', async ({ request }) => {
-    const body = (await request.json()) as { idempotencyKey?: string }
-    const key = body.idempotencyKey ?? ''
+    const key = request.headers.get('Idempotency-Key') ?? ''
     const done = withdrawals.get(key)
     if (done !== undefined) {
       return HttpResponse.json({
