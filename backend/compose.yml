@@ -1,10 +1,12 @@
 # 앱이 요청을 받을 준비가 됐는지 확인하는 공통 설정. 포트가 열리면(Tomcat·Netty 시작 완료) healthy로 본다
 # JRE 이미지에 curl이 없을 수 있어 bash의 /dev/tcp로 포트 연결만 확인한다. test는 서비스마다 포트를 바꿔 쓴다
+# start_period 동안의 실패는 횟수에 세지 않고, 준비되는 즉시 healthy가 된다 (정상일 때 늦어지지 않는다)
+# EC2(CPU 2개)에서 서비스 7개가 동시에 뜨면 하나당 150~180초가 걸려 30s로는 unhealthy가 됐다. 그래서 5분을 기다린다
 x-app-healthcheck: &app-healthcheck
   interval: 10s
   timeout: 3s
   retries: 12
-  start_period: 30s
+  start_period: 300s
 
 # 표를 만드는 방법 (cash·payout·file·order·product). 이 다섯 서비스는 아직 Flyway가 없어서,
 # application-prod.yaml의 validate 그대로면 빈 DB에서 "missing table"로 뜨지 않는다. 그래서 compose 실행에서만 update로 덮어
