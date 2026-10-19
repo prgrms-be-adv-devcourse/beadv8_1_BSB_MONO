@@ -21,7 +21,7 @@ import lombok.RequiredArgsConstructor;
 public class CashFacade {
 	private final CashSupport cashSupport;
 	private final CashSyncMemberUseCase cashSyncMemberUseCase;
-	private final CashCreateWalletUseCase cashCreateWalletUseCase;
+	private final CashEnsureWalletUseCase cashEnsureWalletUseCase;
 	private final CashCompleteOrderPaymentUseCase cashCompleteOrderPaymentUseCase;
 	private final CashCancelOrderPaymentUseCase cashCancelOrderPaymentUseCase;
 	private final CashRefundPaymentUseCase cashRefundPaymentUseCase;
@@ -31,12 +31,14 @@ public class CashFacade {
 	@Transactional
 	public CashMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate,
 		String nickname) {
-		return cashSyncMemberUseCase.syncMember(id, createDate, modifyDate, nickname);
+		CashMember cashMember = cashSyncMemberUseCase.syncMember(id, createDate, modifyDate, nickname);
+		cashEnsureWalletUseCase.ensureWallet(cashMember.getId());
+		return cashMember;
 	}
 
 	@Transactional
-	public Wallet createWallet(int id) {
-		return cashCreateWalletUseCase.createWallet(id);
+	public Wallet ensureWallet(int id) {
+		return cashEnsureWalletUseCase.ensureWallet(id);
 	}
 
 	@Transactional(readOnly = true)
@@ -64,7 +66,8 @@ public class CashFacade {
 		return cashRefundPaymentUseCase.refund(orderId, customerId);
 	}
 
-	@Transactional
+	// @Transactional을 일부러 안 붙인다 (PRO-215). Toss 호출이 트랜잭션 밖에서 일어나야 하는데,
+	// 여기에 걸면 CashChargeConfirmUseCase 안의 짧은 트랜잭션들이 이 트랜잭션에 합쳐져 버린다.
 	public CashChargeResponseDto confirmWalletCharge(int customerId, String paymentKey, String orderId, int amount) {
 		return cashChargeConfirmUseCase.confirmWalletCharge(customerId, paymentKey, orderId, amount);
 	}

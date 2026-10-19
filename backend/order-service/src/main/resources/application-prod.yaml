@@ -30,9 +30,10 @@ order:
     cash:
       mode: http
       base-url: http://bukang-cash-service:8081
-    # 대기열 입장 확인은 대기열 서비스 내부 API를 부른다 (PRO-226). 대기열 서비스(queue-service, #146)가 함께 떠 있어야 한다
+    # 프론트가 대기열 등록·순번 API를 부르기 전까지는 가짜(누구나 입장)로 둔다. 실제 대기열로 하면 아무도 등록되지 않아
+    # [결제하기]가 모두 403이 된다. 프론트 연결 뒤 mode만 http로 바꾸면 아래 주소로 부른다 (PRO-226)
     queue:
-      mode: http
+      mode: fake
       base-url: http://bukang-queue-service:8086
     # 판매자 ID 조회를 실제로 붙이기 전까지 운영에서는 판매자 키트 API를 막는다 (가짜는 누구나 판매자로 봄, PRO-197)
     seller:

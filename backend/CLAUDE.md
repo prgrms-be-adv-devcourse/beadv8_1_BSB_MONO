@@ -64,10 +64,12 @@ backend/
 ├── common/      com.bukang.common
 │   ├── global/                기술 공통 (도메인 지식 없음)
 │   │   ├── config/            LocalDevEnvironmentPostProcessor (compose.yml, .env 위치 탐색)
+│   │   ├── crypto/            민감정보 암호화 (AES, 블라인드 인덱스). crypto.enabled: true인 서비스(member, cash)에서만 빈 등록
 │   │   ├── exception/         BusinessException, GlobalExceptionHandler
 │   │   ├── jpa/entity/        BaseEntity, BaseIdAndTime, BaseManualIdAndTime
 │   │   ├── json/              JsonConverter
-│   │   └── rsdata/            RsData (공통 응답)
+│   │   ├── rsdata/            RsData (공통 응답)
+│   │   └── web/               IdempotencyKeyHeader (중복 요청 방지 키 헤더 이름·최대 길이·오류 문구)
 │   ├── shared/                서비스 간 계약 (도메인 지식 있음)
 │   │   ├── file/domain/       FileType·FileKind (파일 용도·종류), FileRef (파일 연결 대상, 엔티티로만 만듦)
 │   │   └── member/
@@ -83,9 +85,9 @@ backend/
 │   ├── in/ app/ domain/ out/  컨트롤러 / Facade·UseCase / 엔티티·도메인 예외 / Repository
 │   ├── domain/                SourceMember, Member, exception/
 │   ├── security/              WebConfig, CustomUserDetailService, AuthExceptionHandler (JWT 발급 예정)
-│   ├── config/crypto/         민감정보 암호화 (AES, 블라인드 인덱스)
 │   └── dto/                   MemberDto, MemberJoinRequestDto, MemberLoginRequestDto, MemberSearchCondition
 ├── cash-service/    com.bukang.cash
+│   ├── in/                    CashExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
 │   └── domain/                CashMember extends ReplicaMember
 ├── payout-service/  com.bukang.payout
 │   ├── domain/                Payout, PayoutItem, PayoutHold, 상태·사유 enum
@@ -124,13 +126,16 @@ backend/
 - 회원 ID는 `X-Member-Id` 헤더로 받는다. 헤더 이름과 오류 문구는 common의 `shared/member/web/MemberIdHeader`를 쓴다. 게이트웨이의 `auth/JwtAuthenticationFilter`가 클라이언트가 보낸 이 헤더를 지우고, Access Token을 검사해 토큰 속 회원 ID로 다시 넣는다.
   토큰 없이 통과하는 주소는 `gateway`의 `application.yaml` `gateway.auth.public-paths`에 있다. 로그인 전에 쓰는 API를 추가하면 여기에도 추가한다(빠뜨리면 401로 막힌다).
   서비스는 이 헤더를 그대로 믿으므로, `compose.yml`은 서비스 포트를 호스트에 열지 않는다. 서비스를 직접 부르며 확인할 때는 `bootRun`(dev)으로 띄운 서비스 포트(예: 8084)로 부른다.
+- 두 번 처리하면 안 되는 요청(대회 등록, 주문 생성, 장바구니 결제, 예치금 환급 신청)은 중복 요청 방지 키를 `Idempotency-Key` 헤더로 받는다.
+  헤더 이름·최대 길이(64)·오류 문구는 common의 `global/web/IdempotencyKeyHeader`를 쓴다.
 - 대상에 붙지 않은 파일(PENDING·UPLOADED·DELETED)은 마지막으로 바뀐 뒤 1일이 지나면 Spring Batch 정리 배치가 DB 행을 지우고 커밋한 뒤 S3 객체를 지운다.
   실행 기록은 DB의 `BATCH_` 테이블에 남는다 (`file-service/BATCH-ROADMAP.md`).
 
 - `common`은 실행 앱이 아니라 jar 라이브러리입니다. 각 서비스는 `implementation(project(":common"))`으로 의존합니다.
   서비스의 `@SpringBootApplication(scanBasePackages = {"com.bukang.<서비스>", "com.bukang.common"})`로 common의 빈도 등록합니다.
 - **서비스끼리는 서로 의존하지 않습니다.** 다른 서비스의 클래스가 필요하면 `common`에 올릴지(계약: 이벤트, 공개 필드) 먼저 검토합니다.
-  `common`에는 특정 서비스 전용 코드(Spring Security, 회원 엔티티 등)를 넣지 않습니다.
+  `common`에는 특정 서비스 전용 코드(Spring Security 인증·필터, 회원 엔티티 등)를 넣지 않습니다.
+  단, 암호화 유틸(`spring-security-crypto`)은 `global/crypto`에 두고, yaml에 `crypto.enabled: true`를 넣은 서비스에서만 빈을 만듭니다(`@ConditionalOnProperty`).
 - `common` 안에서 `global`(기술 공통)은 `shared`(서비스 간 계약)를 참조하지 않습니다. 의존 방향은 `shared` → `global` → `standard`입니다.
 - 다른 서비스가 회원 정보를 가져야 하면 `ReplicaMember`를 상속한 엔티티에 Kafka 이벤트(`MemberJoinedEvent`)로 복제해 보관합니다.
   `BaseMember`(원본·복제본 공통)에는 공개 정보(nickname)만 두고, 비밀번호·이메일·실명·휴대폰 번호·생년월일은 `SourceMember`에만 둡니다.

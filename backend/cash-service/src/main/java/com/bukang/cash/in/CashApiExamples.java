@@ -46,11 +46,23 @@ final class CashApiExamples {
 		""";
 
 	static final String CHARGE_CONFIRM_INVALID_INPUT = """
-		{ "status": 400, "message": "paymentKey를 작성해주세요.", "data": null }
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "paymentKey를 작성해주세요.", "data": null }
 		""";
 
 	static final String INVALID_BODY = """
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String INVALID_VALUE_TYPE = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String INVALID_MEMBER_ID = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "회원 ID가 올바르지 않습니다.", "data": null }
+		""";
+
+	static final String LOGIN_REQUIRED = """
+		{ "status": 401, "message": "로그인이 필요합니다.", "data": null }
 		""";
 
 	static final String WITHDRAWAL_SUCCESS = """
@@ -70,6 +82,18 @@ final class CashApiExamples {
 
 	static final String WITHDRAWAL_INVALID_INPUT = """
 		{ "status": 400, "code": "INVALID_REQUEST", "message": "은행 코드를 작성해주세요.", "data": null }
+		""";
+
+	static final String MISSING_IDEMPOTENCY_KEY = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "필수 요청 헤더(Idempotency-Key)가 없습니다.", "data": null }
+		""";
+
+	static final String INVALID_IDEMPOTENCY_KEY = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "Idempotency-Key는 1~64자로 보내주세요.", "data": null }
+		""";
+
+	static final String WITHDRAWAL_MEMBER_MISMATCH = """
+		{ "status": 409, "message": "이 Idempotency-Key로 환급한 회원과 요청한 회원이 다릅니다.", "data": null }
 		""";
 
 	private CashApiExamples() {

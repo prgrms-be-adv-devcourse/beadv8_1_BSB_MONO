@@ -42,10 +42,13 @@ import com.bukang.order.domain.OrderItem;
 import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.domain.QueueAdmission;
 import com.bukang.order.domain.ShippingAddress;
 import com.bukang.order.out.OrderItemRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.QueueAdmissionRepository;
+import com.bukang.order.support.QueueEntry;
 import com.bukang.order.support.StubQueueAdmissionPort;
 import com.bukang.order.support.StubQueueAdmissionPortConfig;
 import com.bukang.order.support.StubRaceCoursePort;
@@ -80,6 +83,9 @@ class ApiV1OrderTest {
 	private ParticipationRepository participationRepository;
 
 	@Autowired
+	private QueueAdmissionRepository queueAdmissionRepository;
+
+	@Autowired
 	private StubRaceCoursePort raceCoursePort;
 
 	@Autowired
@@ -103,17 +109,18 @@ class ApiV1OrderTest {
 	void tearDown() {
 		orderRepository.deleteAll();
 		participationRepository.deleteAll();
+		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
 		queueAdmissionPort.clear();
 	}
 
 	@Test
-	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 대기열 입장 끝 시각(10분 뒤)이다")
+	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 신청서 진입 때 받은 입장 끝 시각(10분 뒤)이다")
 	void create() throws Exception {
-		int participationId = applyAndGetId(MEMBER_ID);
 		// DB(H2·MySQL)는 마이크로초까지만 저장한다. Linux의 now()는 나노초까지 나오므로 비교 기준도 맞춰 자른다
 		LocalDateTime before = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+		int participationId = applyAndGetId(MEMBER_ID);
 
 		create(MEMBER_ID, participationId, newKey())
 			.andExpect(status().isCreated())
@@ -169,7 +176,7 @@ class ApiV1OrderTest {
 	}
 
 	@Test
-	@DisplayName("대기열에 입장 중이 아니거나 입장 시간이 끝났으면 403이고, 자리를 확보하지 않는다")
+	@DisplayName("신청서 진입 때 입장하지 못했거나 저장한 입장 시간이 끝났으면 403이고, 자리를 확보하지 않는다")
 	void createNotAdmitted() throws Exception {
 		queueAdmissionPort.notAdmitted(COURSE_ID);
 		int participationId = applyAndGetId(MEMBER_ID);
@@ -178,14 +185,40 @@ class ApiV1OrderTest {
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.code").value("ORDER_QUEUE_NOT_ADMITTED"))
 			.andExpect(jsonPath("$.message").value("대기열에서 입장한 뒤 결제할 수 있습니다."));
-		queueAdmissionPort.clear();
-		queueAdmissionPort.admitUntil(COURSE_ID, LocalDateTime.now().minusSeconds(1));
+		assertThat(queueAdmissionRepository.count()).isZero();
+		queueAdmissionRepository.save(QueueAdmission.of(MEMBER_ID, COURSE_ID, LocalDateTime.now().minusSeconds(1)));
 		create(MEMBER_ID, participationId, newKey()).andExpect(status().isForbidden());
 
 		assertThat(seatHoldPort.holdCalls()).isZero();
 		assertThat(orderRepository.count()).isZero();
 		assertThat(participationRepository.findById(participationId).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.PENDING);
+	}
+
+	@Test
+	@DisplayName("신청서 진입 뒤에는 대기열에 다시 묻지 않아, 대기열이 입장 중이 아니라고 해도 저장한 끝 시각 안이면 결제 기한으로 쓴다")
+	void createUsesSavedAdmissionWithoutAskingQueue() throws Exception {
+		LocalDateTime endsAt = LocalDateTime.now().plusMinutes(4).withNano(0);
+		queueAdmissionPort.admitUntil(COURSE_ID, endsAt);
+		int participationId = applyAndGetId(MEMBER_ID);
+		// 신청서를 쓰는 동안 대기열이 멈추거나 입장이 풀린 경우
+		queueAdmissionPort.notAdmitted(COURSE_ID);
+
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
+
+		assertThat(orderRepository.findAll().getFirst().getPaymentDueAt()).isEqualTo(endsAt);
+	}
+
+	@Test
+	@DisplayName("입장 상태 API를 부르지 않고(주소 직접 입력) [결제하기]하면 대기열이 입장 중이라고 해도 403이다")
+	void createWithoutEntry() throws Exception {
+		int participationId = applyAndGetId(MEMBER_ID);
+		queueAdmissionRepository.deleteAll();
+
+		create(MEMBER_ID, participationId, newKey())
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("ORDER_QUEUE_NOT_ADMITTED"));
+		assertThat(seatHoldPort.holdCalls()).isZero();
 	}
 
 	@Test
@@ -554,6 +587,7 @@ class ApiV1OrderTest {
 	}
 
 	private int applyAndGetId(int memberId, int raceCourseId) throws Exception {
+		QueueEntry.enter(mockMvc, memberId, raceCourseId);
 		String body = mockMvc.perform(post("/api/v1/order/participations")
 				.header("X-Member-Id", memberId)
 				.contentType(MediaType.APPLICATION_JSON)

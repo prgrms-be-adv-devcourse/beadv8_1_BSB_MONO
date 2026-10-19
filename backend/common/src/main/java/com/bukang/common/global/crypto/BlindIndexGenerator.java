@@ -1,4 +1,4 @@
-package com.bukang.member.config.crypto;
+package com.bukang.common.global.crypto;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -8,12 +8,16 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
  * 암호화된 컬럼을 검색하기 위한 블라인드 인덱스(HMAC-SHA256) 생성기
+ * 모든 서비스가 common을 스캔하므로, crypto.hmac-secret을 설정한 서비스(member)에서만 만든다.
+ * .env의 키 이름은 CRYPTO_HMAC_KEY라 crypto.hmac-secret으로 읽히지 않아, 다른 컨테이너에서는 켜지지 않는다
  */
 @Component
+@ConditionalOnProperty(prefix = "crypto", name = "hmac-secret")
 public class BlindIndexGenerator {
 	private static final String ALGORITHM = "HmacSHA256";
 

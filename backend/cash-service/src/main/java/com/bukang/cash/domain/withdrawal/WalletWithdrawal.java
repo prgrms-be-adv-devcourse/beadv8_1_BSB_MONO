@@ -5,8 +5,8 @@ import static jakarta.persistence.FetchType.LAZY;
 
 import java.time.LocalDateTime;
 
-import com.bukang.cash.config.crypto.EncryptedStringConverter;
 import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.common.global.crypto.EncryptedStringConverter;
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 
 import jakarta.persistence.Column;

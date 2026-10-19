@@ -52,6 +52,12 @@ public class CashSupport {
 		return paymentRepository.findByOrderId(orderId);
 	}
 
+	// 지갑 하나만 비관적 락으로 잠근다 (충전 확정처럼 다른 지갑과 같이 잠글 필요가 없을 때 쓴다, PRO-215)
+	public Wallet lockWallet(int holderId) {
+		return walletRepository.findByIdForUpdate(holderId)
+			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
+	}
+
 	// 고객 지갑·보관 지갑을 ID가 작은 쪽부터 비관적 락으로 잠근다 (교착 상태 방지, PRO-78)
 	// 지갑 ID가 회원 ID와 항상 같을 때만 올바르다. 지갑 ID가 자동 증가(BaseIdAndTime)라면
 	// 다른 회원의 지갑을 잠글 수 있으므로, 회원 ID로 잠그는 findByMemberIdForUpdate를 써야 한다.
