@@ -1,0 +1,33 @@
+# 운영: 인증서를 받은 뒤에 쓰는 설정 (start-https.sh가 인증서가 있을 때 고른다)
+# ${DOMAIN}만 start-https.sh가 .env 값으로 바꾼다. $request_uri 같은 Nginx 변수는 그대로 남는다
+include /etc/nginx/crewrun/upstreams.conf;
+
+server {
+	listen 80;
+	server_name ${DOMAIN};
+
+	# 갱신할 때도 80으로 확인하므로, 리다이렉트보다 먼저 이 경로를 열어 둔다
+	location /.well-known/acme-challenge/ {
+		root /var/www/certbot;
+	}
+
+	# 나머지 HTTP 요청은 HTTPS로 옮긴다. Host 헤더 대신 도메인을 직접 써서, 위조한 Host로 다른 주소에 보내지 못하게 한다
+	location / {
+		return 301 https://${DOMAIN}$request_uri;
+	}
+}
+
+server {
+	listen 443 ssl;
+	http2 on;
+	server_name ${DOMAIN};
+
+	# certbot이 받은 인증서. live 아래 파일은 최신 인증서를 가리키는 링크라 갱신돼도 경로는 그대로다
+	ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+	ssl_protocols TLSv1.2 TLSv1.3;
+	ssl_session_cache shared:SSL:10m;
+	ssl_session_timeout 1d;
+
+	include /etc/nginx/crewrun/routes.conf;
+}
