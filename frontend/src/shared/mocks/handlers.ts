@@ -548,6 +548,38 @@ const orderHandlers = [
   }),
 ]
 
+/** Idempotency-Key 헤더를 꼭 받는 요청. 백엔드가 이 헤더 없이 오면 400으로 거절한다. */
+const IDEMPOTENT_POSTS = [
+  '*/api/v1/product/races',
+  '*/api/v1/order/orders',
+  '*/api/v1/order/cart/checkout',
+  '*/api/v1/cash/withdrawals',
+]
+const IDEMPOTENCY_KEY_MAX = 64
+
+/**
+ * 진짜 서버처럼 Idempotency-Key 헤더가 없거나 1~64자가 아니면 400으로 답한다.
+ * 헤더가 맞으면 아무것도 돌려주지 않아 다음 핸들러(실제 응답 목)로 넘어간다. 맨 앞에 둔다.
+ */
+const idempotencyKeyHandlers = IDEMPOTENT_POSTS.map((path) =>
+  http.post(path, ({ request }) => {
+    const key = request.headers.get('Idempotency-Key')
+    if (key === null) {
+      return badIdempotencyKey('필수 요청 헤더(Idempotency-Key)가 없습니다.')
+    }
+    if (key.length < 1 || key.length > IDEMPOTENCY_KEY_MAX) {
+      return badIdempotencyKey('Idempotency-Key는 1~64자로 보내주세요.')
+    }
+  }),
+)
+
+function badIdempotencyKey(message: string) {
+  return HttpResponse.json(
+    { status: 400, code: 'INVALID_REQUEST', message, data: null },
+    { status: 400 },
+  )
+}
+
 /** orval이 서비스별 명세(openapi/*.json)의 응답 예시로 만든 목 */
 const generatedHandlers = [
   ...getBukangMemberAPIMock(),
@@ -565,6 +597,7 @@ const generatedHandlers = [
 export const handlers = [
   // 목 파이프라인이 살아있는지 확인하는 용도
   http.get('*/api/health', () => HttpResponse.json({ status: 'ok', mocked: true })),
+  ...idempotencyKeyHandlers,
   fileImageHandler,
   ...authHandlers,
   ...meHandlers,

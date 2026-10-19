@@ -10,6 +10,7 @@ export { ApiError } from './api-error'
 export { restoreSession } from './auth-session'
 export { customFetch, type CustomFetchInit } from './fetcher'
 export { createIdempotencyKey } from './idempotency'
+export { useIdempotencyKey } from './use-idempotency-key'
 export { getQueryClient } from './query-client'
 export { unwrapData, type RsData } from './rs-data'
 

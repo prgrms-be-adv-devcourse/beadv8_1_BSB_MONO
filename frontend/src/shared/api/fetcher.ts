@@ -5,7 +5,7 @@ import { tokenForRetry } from './auth-session'
 const isServer = typeof window === 'undefined'
 
 export interface CustomFetchInit extends RequestInit {
-  /** 주문 생성·장바구니 결제에 붙이는 Idempotency-Key 헤더 값 (`createIdempotencyKey()`로 만든다) */
+  /** 대회 등록·주문 생성·장바구니 결제·예치금 환급에 붙이는 Idempotency-Key 헤더 값 (`createIdempotencyKey()`로 만든다) */
   idempotencyKey?: string
 }
 

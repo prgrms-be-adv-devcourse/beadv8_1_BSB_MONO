@@ -402,18 +402,30 @@ describe('새 회원 쿠키 저장소가 둘일 때', () => {
       }
       return response
     }
-    const call = async (method: string, path: string, body?: unknown) =>
+    const call = async (
+      method: string,
+      path: string,
+      body?: unknown,
+      headers: Record<string, string> = {},
+    ) =>
       absorb(
         await fetch(`http://localhost${path}`, {
           method,
-          headers: { 'Content-Type': 'application/json', Cookie: cookie() },
+          headers: { 'Content-Type': 'application/json', Cookie: cookie(), ...headers },
           body: body === undefined ? undefined : JSON.stringify(body),
         }),
       )
-    const data = async (method: string, path: string, body?: unknown) =>
-      ((await call(method, path, body)).json() as Promise<{ data: Record<string, unknown> }>).then(
-        (json) => json.data,
-      )
+    const data = async (
+      method: string,
+      path: string,
+      body?: unknown,
+      headers?: Record<string, string>,
+    ) =>
+      (
+        (await call(method, path, body, headers)).json() as Promise<{
+          data: Record<string, unknown>
+        }>
+      ).then((json) => json.data)
     return { call, data }
   }
   const join = (email: string, nickname: string) => ({
@@ -462,7 +474,12 @@ describe('새 회원 쿠키 저장소가 둘일 때', () => {
     expect(pay.status).toBe(200)
     expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(10_000)
 
-    const refund = await a.data('POST', '/api/v1/cash/withdrawals', { idempotencyKey: 'k-c' })
+    const refund = await a.data(
+      'POST',
+      '/api/v1/cash/withdrawals',
+      {},
+      { 'Idempotency-Key': 'k-c' },
+    )
     expect(refund.withdrawnAmount).toBe(10_000)
     expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(0)
   })

@@ -8,7 +8,7 @@ import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { isQueueNotAdmitted, QUEUE_NOT_ADMITTED_CODE } from '@/features/queue-admission'
-import { ApiError, createIdempotencyKey, orderApi, unwrapData, type orderModel } from '@/shared/api'
+import { ApiError, orderApi, unwrapData, useIdempotencyKey, type orderModel } from '@/shared/api'
 import { formatWon } from '@/shared/lib'
 import {
   Alert,
@@ -74,7 +74,7 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
   // 장바구니 결제에서 자리를 잡지 못한 결과 (매진 · 실패). 담은 참가권 줄에 보여 준다.
   const [failure, setFailure] = useState<CheckoutResult | null>(null)
   // 같은 참가 신청으로 다시 누르면(두 번 클릭 · 실패 뒤 재시도) 같은 Idempotency-Key를 보낸다.
-  const [attempt, setAttempt] = useState<{ participationId: number; key: string } | null>(null)
+  const checkoutKey = useIdempotencyKey()
 
   const remove = useMutation({
     mutationFn: async (cartItemId: number) => unwrapData(await orderApi.removeItem(cartItemId)),
@@ -142,9 +142,7 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
   const startCheckout = () => {
     const participationId = payable?.application?.participationId
     if (participationId === undefined) return
-    const key = attempt?.participationId === participationId ? attempt.key : createIdempotencyKey()
-    setAttempt({ participationId, key })
-    checkout.mutate({ participationId, key })
+    checkout.mutate({ participationId, key: checkoutKey(participationId) })
   }
 
   // 장바구니에는 대회 1개만 담기므로 대회 · 종목을 아는 첫 줄의 대기열로 간다
