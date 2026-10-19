@@ -4,5 +4,6 @@
   "payout": 8082,
   "file": 8083,
   "order": 8084,
-  "product": 8085
+  "product": 8085,
+  "queue": 8086
 }
