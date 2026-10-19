@@ -40,7 +40,7 @@ import lombok.RequiredArgsConstructor;
 public class ApiV1CashController {
 	private final CashFacade cashFacade;
 
-	// 에러 응답은 GlobalExceptionHandler가 RsData(data: null) 형식으로 반환한다
+	// 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	// JWT 인증이 생기기 전까지는 회원 ID(= 지갑 ID)를 경로로 받는다
 	@GetMapping("/wallets/{holderId}/balance")
 	@Operation(summary = "지갑 잔액 조회", description = "회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.")
@@ -61,7 +61,7 @@ public class ApiV1CashController {
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "잔액 조회 성공", walletBalanceResponseDto));
 	}
 
-	// 에러 응답은 GlobalExceptionHandler가 RsData(data: null) 형식으로 반환한다
+	// 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	// PG 승인이 거절돼도 예외가 아니라 200으로 응답한다 (data.outcome이 FAILED)
 	@PostMapping("/charges/confirm")
 	@Operation(summary = "충전 승인 확정", description = "프론트가 Toss 결제위젯 콜백으로 받은 paymentKey·orderId·amount로 "
@@ -98,7 +98,7 @@ public class ApiV1CashController {
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, response.message(), response));
 	}
 
-	// 에러 응답은 GlobalExceptionHandler가 RsData(data: null) 형식으로 반환한다
+	// 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	@PostMapping("/withdrawals")
 	@Operation(summary = "예치금 전액 환급 신청", description = "회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. "
 		+ "Idempotency-Key 헤더를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.")
