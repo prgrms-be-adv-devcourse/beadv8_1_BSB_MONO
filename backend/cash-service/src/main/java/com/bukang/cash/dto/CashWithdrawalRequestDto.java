@@ -24,9 +24,4 @@ public class CashWithdrawalRequestDto {
 	@NotBlank(message = "예금주명을 작성해주세요.")
 	@Size(max = 50, message = "예금주명은 50자 이하여야 합니다.")
 	private final String accountHolder;
-
-	@Schema(description = "환급 신청 고유 ID (멱등키)", example = "withdrawal-1697000000000")
-	@NotBlank(message = "idempotencyKey를 작성해주세요.")
-	@Size(max = 64, message = "idempotencyKey는 64자 이하여야 합니다.")
-	private final String idempotencyKey;
 }

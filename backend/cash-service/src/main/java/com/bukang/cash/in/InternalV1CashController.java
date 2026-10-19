@@ -40,7 +40,7 @@ import lombok.RequiredArgsConstructor;
 public class InternalV1CashController {
 	private final CashFacade cashFacade;
 
-	// 에러 응답은 GlobalExceptionHandler가 RsData(data: null) 형식으로 반환한다
+	// 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	@PostMapping("/payments/{orderId}")
 	@Operation(summary = "주문 결제", description = "주문 ID로 결제 행을 멱등하게 찾거나 만들고, 예치금 잔액에서 결제 금액을 차감한다.")
 	@ApiResponses({
@@ -49,10 +49,11 @@ public class InternalV1CashController {
 				@ExampleObject(name = "결제 성공", value = CashInternalApiExamples.PAY_SUCCESS_PAID),
 				@ExampleObject(name = "잔액 부족", value = CashInternalApiExamples.PAY_SUCCESS_INSUFFICIENT)
 			})),
-		@ApiResponse(responseCode = "400", description = "입력값 검증 실패 또는 요청 본문 형식 오류",
+		@ApiResponse(responseCode = "400", description = "입력값 검증 실패, 요청 본문 형식 오류 또는 주문 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = CashInternalApiExamples.INVALID_MEMBER_ID),
-				@ExampleObject(name = "요청 본문 형식 오류", value = CashInternalApiExamples.INVALID_BODY)
+				@ExampleObject(name = "요청 본문 형식 오류", value = CashInternalApiExamples.INVALID_BODY),
+				@ExampleObject(name = "주문 ID 형식 오류", value = CashInternalApiExamples.INVALID_VALUE_TYPE)
 			})),
 		@ApiResponse(responseCode = "404", description = "존재하지 않는 지갑",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -79,10 +80,11 @@ public class InternalV1CashController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "취소 성공",
 			content = @Content(examples = @ExampleObject(value = CashInternalApiExamples.CANCEL_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "입력값 검증 실패 또는 요청 본문 형식 오류",
+		@ApiResponse(responseCode = "400", description = "입력값 검증 실패, 요청 본문 형식 오류 또는 주문 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = CashInternalApiExamples.INVALID_MEMBER_ID),
-				@ExampleObject(name = "요청 본문 형식 오류", value = CashInternalApiExamples.INVALID_BODY)
+				@ExampleObject(name = "요청 본문 형식 오류", value = CashInternalApiExamples.INVALID_BODY),
+				@ExampleObject(name = "주문 ID 형식 오류", value = CashInternalApiExamples.INVALID_VALUE_TYPE)
 			})),
 		@ApiResponse(responseCode = "404", description = "존재하지 않는 지갑",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -105,10 +107,11 @@ public class InternalV1CashController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "환불 성공",
 			content = @Content(examples = @ExampleObject(value = CashInternalApiExamples.REFUND_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "입력값 검증 실패 또는 요청 본문 형식 오류",
+		@ApiResponse(responseCode = "400", description = "입력값 검증 실패, 요청 본문 형식 오류 또는 주문 ID 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = CashInternalApiExamples.INVALID_MEMBER_ID),
-				@ExampleObject(name = "요청 본문 형식 오류", value = CashInternalApiExamples.INVALID_BODY)
+				@ExampleObject(name = "요청 본문 형식 오류", value = CashInternalApiExamples.INVALID_BODY),
+				@ExampleObject(name = "주문 ID 형식 오류", value = CashInternalApiExamples.INVALID_VALUE_TYPE)
 			})),
 		@ApiResponse(responseCode = "404", description = "존재하지 않는 지갑",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -137,7 +140,10 @@ public class InternalV1CashController {
 			content = @Content(examples = {
 				@ExampleObject(name = "잔액 있음", value = CashInternalApiExamples.BALANCE_SUCCESS),
 				@ExampleObject(name = "지갑 없음", value = CashInternalApiExamples.BALANCE_NO_WALLET)
-			}))
+			})),
+		@ApiResponse(responseCode = "400", description = "회원 ID 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CashInternalApiExamples.INVALID_VALUE_TYPE)))
 	})
 	public ResponseEntity<RsData<CashBalanceResponseDto>> getBalance(
 		@Parameter(description = "회원 ID (= 지갑 ID)", example = "3") @PathVariable int memberId

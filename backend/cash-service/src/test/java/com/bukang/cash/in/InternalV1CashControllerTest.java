@@ -221,6 +221,15 @@ class InternalV1CashControllerTest {
 			.andExpect(jsonPath("$.data.balance").value(0));
 	}
 
+	@Test
+	@DisplayName("경로의 회원 ID가 숫자가 아니면 400 INVALID_REQUEST로 응답한다")
+	void balanceWithNonNumericMemberId() throws Exception {
+		mockMvc.perform(get("/internal/v1/cash/wallets/abc/balance"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."));
+	}
+
 	private ResultActions pay(int orderId, int memberId, int amount) throws Exception {
 		return mockMvc.perform(post("/internal/v1/cash/payments/" + orderId)
 			.contentType(MediaType.APPLICATION_JSON)

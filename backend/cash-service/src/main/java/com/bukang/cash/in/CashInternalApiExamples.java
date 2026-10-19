@@ -72,6 +72,10 @@ final class CashInternalApiExamples {
 		{ "status": 400, "message": "요청 본문 형식이 올바르지 않습니다.", "data": null }
 		""";
 
+	static final String INVALID_VALUE_TYPE = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "요청 값의 형식이 올바르지 않습니다.", "data": null }
+		""";
+
 	static final String WALLET_NOT_FOUND = """
 		{ "status": 404, "message": "존재하지 않는 지갑입니다.", "data": null }
 		""";
