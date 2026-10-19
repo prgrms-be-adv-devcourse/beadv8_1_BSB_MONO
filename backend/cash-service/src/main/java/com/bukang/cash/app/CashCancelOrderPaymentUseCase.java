@@ -13,7 +13,9 @@ import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CashCancelOrderPaymentUseCase {
@@ -25,11 +27,13 @@ public class CashCancelOrderPaymentUseCase {
 	// 결제됐으면 돌려주고, 이미 취소·환불됐으면 그냥 성공(아무것도 안 바꿈)한다
 	public void cancelPayment(int orderId, int customerId) {
 		//1.고객 지갑이 없으면 지갑 없이는 결제도 성공할 수 없었으므로 취소할 것도 없이 성공으로 끝낸다
-        if (!cashSupport.hasWallet(customerId)) {
-            return;
-        }
+		if (!cashSupport.hasWallet(customerId)) {
+			log.warn("지갑 없는 회원의 결제 취소 요청, 아무것도 안 바꾸고 끝냄. orderId={}, customerId={}",
+				orderId, customerId);
+			return;
+		}
 
-        //2.지갑 잠금 (고객 지갑, 보관 지갑 / ID 작은 쪽부터)
+		//2.지갑 잠금 (고객 지갑, 보관 지갑 / ID 작은 쪽부터)
 		LockedWallets lockedWallets = cashSupport.lockCustomerAndHoldingWallets(customerId);
 		Wallet customerWallet = lockedWallets.customerWallet();
 		Wallet holdingWallet = lockedWallets.holdingWallet();

@@ -36,6 +36,8 @@ import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.LedgerType;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.domain.wallet.WalletLedger;
+import com.bukang.cash.dto.CashPaymentResponseDto;
+import com.bukang.cash.dto.CashRefundResponseDto;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
@@ -139,7 +141,7 @@ class CashRefundPaymentUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("환원(cancelPayment)된 결제를 환불하면 아무것도 바뀌지 않고 성공한다")
+	@DisplayName("환원(cancelPayment)된 결제를 환불하면 아무것도 바뀌지 않고 성공하며, 실제로 돌아간 금액을 그대로 돌려준다")
 	void refundCanceledPayment_noDoubleReturn() {
 		int orderId = 500;
 		int amount = 3_000;
@@ -148,13 +150,55 @@ class CashRefundPaymentUseCaseTest {
 		cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
 		cashFacade.cancelPayment(orderId, CUSTOMER_ID);
 
-		cashFacade.refund(orderId, CUSTOMER_ID);
+		CashRefundResponseDto response = cashFacade.refund(orderId, CUSTOMER_ID);
 
+		assertThat(response.amount())
+			.as("PRO-170: COMPLETED를 거쳐 실제로 돌아간 금액이니 그대로 돌려줘야 한다")
+			.isEqualTo(amount);
 		assertBalance(CUSTOMER_ID, 10_000);
 		assertThat(countLedgersForOrder(orderId)).as("결제 2줄 + 환원 2줄, 환불은 추가로 남기면 안 된다").isEqualTo(4);
 		assertThat(paymentRepository.findByOrderId(orderId).orElseThrow().getStatus())
 			.as("CANCELED는 그대로 유지돼야 한다(REFUNDED로 덮어쓰면 안 됨)")
 			.isEqualTo(PaymentStatus.CANCELED);
+	}
+
+	@Test
+	@DisplayName("PRO-170: COMPLETED를 거친 적 없이(잔액 부족으로 FAILED → 취소) CANCELED된 결제는 "
+		+ "환불 요청해도 0원을 돌려준다 (돈이 움직인 적이 없으므로)")
+	void refundNeverCompletedCanceledPayment_returnsZero() {
+		int orderId = 1_000;
+		int amount = 3_000;
+		createCustomerWallet(0);
+		createHoldingWallet();
+		CashPaymentResponseDto paymentResult = cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+		assertThat(paymentResult.outcome()).isEqualTo(CashPaymentResponseDto.Outcome.INSUFFICIENT_BALANCE);
+		cashFacade.cancelPayment(orderId, CUSTOMER_ID);
+		assertThat(paymentRepository.findByOrderId(orderId).orElseThrow().getStatus())
+			.isEqualTo(PaymentStatus.CANCELED);
+
+		CashRefundResponseDto response = cashFacade.refund(orderId, CUSTOMER_ID);
+
+		assertThat(response.amount()).as("실제로 돈이 움직인 적이 없으니 0원이어야 한다").isZero();
+		assertBalance(CUSTOMER_ID, 0);
+		assertBalance(cashWalletProperties.holdingMemberId(), 0);
+	}
+
+	@Test
+	@DisplayName("PRO-170: 이미 REFUNDED된 결제를 다시 환불 요청해도 실제 금액을 그대로 돌려준다 (회귀 없음)")
+	void refundAlreadyRefundedPayment_returnsCorrectAmountAgain() {
+		int orderId = 1_100;
+		int amount = 3_000;
+		createCustomerWallet(10_000);
+		createHoldingWallet();
+		cashFacade.completeOrderPayment(orderId, CUSTOMER_ID, amount);
+
+		CashRefundResponseDto first = cashFacade.refund(orderId, CUSTOMER_ID);
+		CashRefundResponseDto second = cashFacade.refund(orderId, CUSTOMER_ID);
+
+		assertThat(first.amount()).isEqualTo(amount);
+		assertThat(second.amount()).as("재요청해도 같은 실제 금액을 돌려줘야 한다").isEqualTo(amount);
+		assertBalance(CUSTOMER_ID, 10_000);
+		assertThat(countLedgersForOrder(orderId)).as("결제 2줄 + 환불 2줄, 재요청으로 더 늘면 안 된다").isEqualTo(4);
 	}
 
 	@Test
