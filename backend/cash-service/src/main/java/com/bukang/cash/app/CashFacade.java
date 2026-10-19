@@ -66,7 +66,8 @@ public class CashFacade {
 		return cashRefundPaymentUseCase.refund(orderId, customerId);
 	}
 
-	@Transactional
+	// @Transactional을 일부러 안 붙인다 (PRO-215). Toss 호출이 트랜잭션 밖에서 일어나야 하는데,
+	// 여기에 걸면 CashChargeConfirmUseCase 안의 짧은 트랜잭션들이 이 트랜잭션에 합쳐져 버린다.
 	public CashChargeResponseDto confirmWalletCharge(int customerId, String paymentKey, String orderId, int amount) {
 		return cashChargeConfirmUseCase.confirmWalletCharge(customerId, paymentKey, orderId, amount);
 	}
