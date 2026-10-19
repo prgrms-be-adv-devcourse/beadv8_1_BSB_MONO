@@ -6,7 +6,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Repository;
 
-import com.bukang.member.config.crypto.BlindIndexGenerator;
+import com.bukang.common.global.crypto.BlindIndexGenerator;
 import com.bukang.member.dto.MemberDto;
 import com.bukang.member.dto.MemberSearchCondition;
 import com.querydsl.core.types.Projections;

@@ -44,6 +44,7 @@ jwt:
 
 # 민감 정보 변환 정보
 crypto:
+  enabled: true # common global/crypto의 암호화 빈(TextEncryptor, EncryptedStringConverter)을 켠다
   hmac-secret: 5iXOaGlN4SRsdZBruRwXESrPF3qrRAiVpoRGyhCngqo=
   password: brH8W0e5axggiZDMxLeEcRiYSf5qght3KtDgWC+dT48=
   salt: d4cc93043cca7c91

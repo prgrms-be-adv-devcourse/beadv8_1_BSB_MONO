@@ -64,6 +64,7 @@ backend/
 ├── common/      com.bukang.common
 │   ├── global/                기술 공통 (도메인 지식 없음)
 │   │   ├── config/            LocalDevEnvironmentPostProcessor (compose.yml, .env 위치 탐색)
+│   │   ├── crypto/            민감정보 암호화 (AES, 블라인드 인덱스). crypto.enabled: true인 서비스(member, cash)에서만 빈 등록
 │   │   ├── exception/         BusinessException, GlobalExceptionHandler
 │   │   ├── jpa/entity/        BaseEntity, BaseIdAndTime, BaseManualIdAndTime
 │   │   ├── json/              JsonConverter
@@ -84,7 +85,6 @@ backend/
 │   ├── in/ app/ domain/ out/  컨트롤러 / Facade·UseCase / 엔티티·도메인 예외 / Repository
 │   ├── domain/                SourceMember, Member, exception/
 │   ├── security/              WebConfig, CustomUserDetailService, AuthExceptionHandler (JWT 발급 예정)
-│   ├── config/crypto/         민감정보 암호화 (AES, 블라인드 인덱스)
 │   └── dto/                   MemberDto, MemberJoinRequestDto, MemberLoginRequestDto, MemberSearchCondition
 ├── cash-service/    com.bukang.cash
 │   ├── in/                    CashExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
@@ -134,7 +134,8 @@ backend/
 - `common`은 실행 앱이 아니라 jar 라이브러리입니다. 각 서비스는 `implementation(project(":common"))`으로 의존합니다.
   서비스의 `@SpringBootApplication(scanBasePackages = {"com.bukang.<서비스>", "com.bukang.common"})`로 common의 빈도 등록합니다.
 - **서비스끼리는 서로 의존하지 않습니다.** 다른 서비스의 클래스가 필요하면 `common`에 올릴지(계약: 이벤트, 공개 필드) 먼저 검토합니다.
-  `common`에는 특정 서비스 전용 코드(Spring Security, 회원 엔티티 등)를 넣지 않습니다.
+  `common`에는 특정 서비스 전용 코드(Spring Security 인증·필터, 회원 엔티티 등)를 넣지 않습니다.
+  단, 암호화 유틸(`spring-security-crypto`)은 `global/crypto`에 두고, yaml에 `crypto.enabled: true`를 넣은 서비스에서만 빈을 만듭니다(`@ConditionalOnProperty`).
 - `common` 안에서 `global`(기술 공통)은 `shared`(서비스 간 계약)를 참조하지 않습니다. 의존 방향은 `shared` → `global` → `standard`입니다.
 - 다른 서비스가 회원 정보를 가져야 하면 `ReplicaMember`를 상속한 엔티티에 Kafka 이벤트(`MemberJoinedEvent`)로 복제해 보관합니다.
   `BaseMember`(원본·복제본 공통)에는 공개 정보(nickname)만 두고, 비밀번호·이메일·실명·휴대폰 번호·생년월일은 `SourceMember`에만 둡니다.

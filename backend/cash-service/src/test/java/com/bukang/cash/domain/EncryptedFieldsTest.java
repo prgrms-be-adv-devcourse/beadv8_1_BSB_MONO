@@ -1,4 +1,4 @@
-package com.bukang.cash.config.crypto;
+package com.bukang.cash.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

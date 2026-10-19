@@ -12,8 +12,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa") // dataJpa
 	implementation("org.springframework.boot:spring-boot-starter-validation") // @Valid 요청 검증
 	implementation("org.springframework.boot:spring-boot-starter-kafka") // kafka (회원 이벤트 수신)
-	// 계좌번호·pgPaymentKey 암호화(AES-GCM)에만 쓴다. 인증이 필요 없어서 starter-security 전체 대신 crypto 모듈만 가져온다
-	implementation("org.springframework.security:spring-security-crypto")
+	// 계좌번호·pgPaymentKey 암호화(AES-GCM)는 common global/crypto를 쓴다 (spring-security-crypto도 common이 가져온다)
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0") //swagger and openapi
 
 	developmentOnly("org.springframework.boot:spring-boot-devtools") // dev-tools

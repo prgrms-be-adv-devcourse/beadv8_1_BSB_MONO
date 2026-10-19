@@ -5,7 +5,7 @@ import java.time.LocalDate;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import com.bukang.member.config.crypto.BlindIndexGenerator;
+import com.bukang.common.global.crypto.BlindIndexGenerator;
 import com.bukang.member.domain.Member;
 import com.bukang.member.domain.exception.DuplicateNicknameException;
 import com.bukang.member.domain.exception.DuplicatePhoneException;
