@@ -18,10 +18,11 @@ export function useMyBalance() {
     enabled: loggedIn,
   })
   const memberId = me.data
+  // 캐시에는 잔액 조회 훅(cashApi.useGetBalance)과 같은 모양(RsData 그대로)을 넣고, 꺼낼 때만 select로 숫자를 만든다.
+  // 같은 키에 숫자를 넣으면 결제 화면(useDepositBalance)이 그 값을 응답으로 읽다 깨진다.
   const balance = useQuery({
-    queryKey: cashApi.getGetBalanceQueryKey(memberId ?? 0),
-    queryFn: async ({ signal }) =>
-      unwrapData(await cashApi.getBalance(Number(memberId), { signal })).balance ?? 0,
+    ...cashApi.getGetBalanceQueryOptions(memberId ?? 0),
+    select: (res) => unwrapData(res).balance ?? 0,
     enabled: loggedIn && memberId !== undefined,
   })
   const isError = me.isError || (memberId === undefined && me.isSuccess) || balance.isError

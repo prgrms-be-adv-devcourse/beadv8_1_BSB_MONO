@@ -64,11 +64,16 @@ export function myTicketsQueryOptions() {
   })
 }
 
-/** 주문 상세 (GET /api/v1/order/orders/{orderId}) */
+/**
+ * 주문 상세 (GET /api/v1/order/orders/{orderId}).
+ * 결제 · 완료 화면(orderApi.useFindById1)과 같은 캐시 키를 쓰므로 캐시에는 응답 그대로(RsData) 넣고,
+ * 꺼낼 때만 select로 주문을 만든다. 모양이 다르면 결제 직후 참가권을 열 때 주문을 못 읽는다.
+ */
 export function orderQueryOptions(orderId: number) {
   return queryOptions({
-    queryKey: orderApi.getFindById1QueryKey(orderId),
-    queryFn: ({ signal }) => fetchOrder(orderId, signal),
+    ...orderApi.getFindById1QueryOptions<orderModel.OrderDto, Error>(orderId, {
+      query: { select: unwrapData },
+    }),
   })
 }
 

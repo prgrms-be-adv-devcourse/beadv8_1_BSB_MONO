@@ -221,3 +221,39 @@ describe('대기열 입장 목', () => {
     expect(admitted.remainingSeconds).toBeLessThanOrEqual(600)
   })
 })
+
+// 대기열 줄서기 목: 등록 → 순번이 줄어듦 → 차례 → 입장 확인 흐름이 한 번에 돌아가는지 확인한다.
+describe('대기열 줄서기 목', () => {
+  type Status = { data: { myRank: number; ahead: number; canEnter: boolean } }
+  const base = 'http://localhost/api/v1/queue'
+  const register = () =>
+    customFetch<Status>(base, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raceId: 1, raceCourseId: 1 }),
+    })
+  const poll = () => customFetch<Status>(`${base}/races/1/racecourses/1`)
+
+  it('등록하면 순번을 주고, 물을 때마다 줄다가 차례가 오면 바로 입장 확인이 통과한다', async () => {
+    expect((await register()).data).toMatchObject({ myRank: 3, ahead: 2, canEnter: false })
+    expect((await poll()).data).toMatchObject({ ahead: 1, canEnter: false })
+    expect((await poll()).data).toMatchObject({ ahead: 0, canEnter: false })
+    expect((await poll()).data.canEnter).toBe(true)
+
+    const admission = await customFetch<{ data: { admitted: boolean } }>(
+      'http://localhost/api/v1/order/queue/admission?raceId=1&raceCourseId=1',
+    )
+    expect(admission.data.admitted).toBe(true)
+  })
+
+  it('줄을 서지 않고 순번을 물으면 404, 입장 중에 다시 등록하면 409다', async () => {
+    await expect(poll()).rejects.toMatchObject({ status: 404 })
+
+    await register()
+    await poll()
+    await poll()
+    await poll()
+    await customFetch('http://localhost/api/v1/order/queue/admission?raceId=1&raceCourseId=1')
+    await expect(register()).rejects.toMatchObject({ status: 409 })
+  })
+})

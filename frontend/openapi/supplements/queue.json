@@ -1,0 +1,21 @@
+{
+  "responses": {
+    "register": {
+      "200": {
+        "wrapper": "RsDataQueueStatusDto",
+        "data": {
+          "$ref": "#/components/schemas/QueueStatusDto"
+        }
+      }
+    },
+    "getStatus": {
+      "200": {
+        "wrapper": "RsDataQueueStatusDto",
+        "data": {
+          "$ref": "#/components/schemas/QueueStatusDto"
+        }
+      }
+    }
+  },
+  "schemas": {}
+}
