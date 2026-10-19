@@ -60,6 +60,7 @@ public class Payment extends BaseIdAndTime {
 		this.status = PaymentStatus.FAILED;
 		this.failReason = failReason;
 	}
+
 	public void markCanceled() {
 		this.status = PaymentStatus.CANCELED;
 		this.failReason = null;
@@ -70,4 +71,9 @@ public class Payment extends BaseIdAndTime {
 		this.failReason = null;
 	}
 
+	// completeDate는 markCompleted에서만 채워지므로, 지금 상태(CANCELED 등)와 상관없이
+	// 이 결제가 한 번이라도 COMPLETED를 거쳐 실제로 돈이 움직인 적 있는지를 말해준다 (PRO-170)
+	public boolean wasCompleted() {
+		return completeDate != null;
+	}
 }

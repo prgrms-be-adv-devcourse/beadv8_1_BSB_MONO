@@ -32,3 +32,21 @@ export function clearMockRefreshCookie(): string {
  * Node(테스트·/api 라우트)의 MSW는 쿠키를 저장해 두지 않으므로 요청마다 직접 붙인다.
  */
 export const MOCK_LOGGED_IN_COOKIE = `${MOCK_REFRESH_COOKIE_NAME}=mock-refresh-for-test`
+
+/**
+ * 가짜 로그인 표시 쿠키. 로그인했는지만 서버(proxy.ts)가 알 수 있게 Path=/ 로 둔다.
+ * 진짜 Refresh Token 쿠키는 Path=/api/v1/auth라 화면 요청에 실리지 않아 서버가 로그인 여부를 모른다.
+ * 가짜 응답 모드에서는 이 표시로 비로그인 요청을 화면을 그리기 전에 로그인 화면으로 보낸다.
+ * 값에는 아무 정보도 없고(1), 권한 판단에 쓰지 않는다. 가짜 응답 모드 전용이다.
+ */
+export const MOCK_LOGIN_MARK_COOKIE_NAME = 'mockLoggedIn'
+
+const MARK_ATTRIBUTES = 'Path=/; HttpOnly; SameSite=Lax'
+
+export function issueMockLoginMarkCookie(): string {
+  return `${MOCK_LOGIN_MARK_COOKIE_NAME}=1; Max-Age=${MAX_AGE_SECONDS}; ${MARK_ATTRIBUTES}`
+}
+
+export function clearMockLoginMarkCookie(): string {
+  return `${MOCK_LOGIN_MARK_COOKIE_NAME}=; Max-Age=0; ${MARK_ATTRIBUTES}`
+}

@@ -6,73 +6,35 @@ import { useState } from 'react'
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
 import { cn } from '@/shared/lib'
-import { EmptyState, FOCUS_RING, Icon, type IconName } from '@/shared/ui'
+import { EmptyState, FOCUS_RING, Icon, Skeleton } from '@/shared/ui'
 
-type Notice = {
-  id: string
-  icon: IconName
-  title: string
-  body: string
-  at: string
-  href: '/me/deposit' | '/tickets/R-20261002-0388/notice' | '/tickets'
-  unread: boolean
-}
-
-// TODO(api): 알림 API로 바꾼다. 시안 예시 값.
-const TODAY: Notice[] = [
-  {
-    id: 'n1',
-    icon: 'Calendar',
-    title: '예치금을 돌려받았어요',
-    body: '₩5,000을 국민은행 계좌로 보냈어요.\n예치금 내역에서 확인할 수 있어요.',
-    at: '방금',
-    href: '/me/deposit',
-    unread: true,
-  },
-  {
-    id: 'n2',
-    icon: 'Calendar',
-    title: '대회 일정이 바뀌었어요',
-    body: '춘천 나이트런 · 12/6 → 12/13.\n10/12까지 전액 환불할 수 있어요.',
-    at: '5시간 전',
-    href: '/tickets/R-20261002-0388/notice',
-    unread: true,
-  },
-]
-const EARLIER: Notice[] = [
-  {
-    id: 'n3',
-    icon: 'CircleCheck',
-    title: '대회가 취소됐어요',
-    body: '한강 나이트런 10K · 참가비 전액\n₩45,000을 예치금으로 돌려드렸어요.',
-    at: '10/5',
-    href: '/tickets',
-    unread: false,
-  },
-  {
-    id: 'n4',
-    icon: 'CircleCheck',
-    title: '환불이 끝났어요',
-    body: '가을 트레일 21K ·\n₩60,000이 예치금으로 들어왔어요.',
-    at: '9/30',
-    href: '/me/deposit',
-    unread: false,
-  },
-]
+import { useNotifications, type Notice } from '../api/use-notifications'
 
 // 피그마 V2 · M25 알림 (+ 없음)
+// empty는 시안 미리보기(?preview=empty)용. 없으면 알림 API로 불러온다. 불러오지 못하면 알림이 없는 것으로 본다.
 export function NotificationsPage({ empty = false }: { empty?: boolean }) {
   const [read, setRead] = useState(false)
-  const today = empty ? [] : TODAY.map((n) => ({ ...n, unread: n.unread && !read }))
-  const earlier = empty ? [] : EARLIER
+  const notifications = useNotifications()
+  const loading = !empty && notifications.isPending
+  const all = empty ? [] : (notifications.data ?? [])
+  const today = all
+    .filter((n) => n.group === 'today')
+    .map((n) => ({ ...n, unread: n.unread && !read }))
+  const earlier = all.filter((n) => n.group === 'earlier')
   const unreadCount = today.filter((n) => n.unread).length
+  const none = !loading && all.length === 0
 
   return (
     <>
       <AppHeader />
-      <main className="flex flex-1 flex-col gap-4 px-4 pt-4 pb-8">
+      <main className="flex flex-1 flex-col gap-4 px-4 pt-(--layout-content-start) pb-8">
         <h1 className="text-heading-l">알림</h1>
-        {empty ? (
+        {loading ? (
+          <div role="status" aria-label="알림 불러오는 중" className="flex flex-col gap-3">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : none ? (
           <div className="flex flex-1 items-center justify-center">
             <EmptyState
               icon="Bell"
@@ -93,8 +55,8 @@ export function NotificationsPage({ empty = false }: { empty?: boolean }) {
                 모두 읽음
               </button>
             </div>
-            <NoticeGroup title="오늘" items={today} />
-            <NoticeGroup title="이전" items={earlier} />
+            {today.length > 0 && <NoticeGroup title="오늘" items={today} />}
+            {earlier.length > 0 && <NoticeGroup title="이전" items={earlier} />}
           </>
         )}
       </main>

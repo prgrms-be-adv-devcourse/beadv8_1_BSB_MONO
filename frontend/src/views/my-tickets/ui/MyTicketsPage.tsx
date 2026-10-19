@@ -46,7 +46,7 @@ export function MyTicketsPage({ state }: { state?: MyTicketsState }) {
   return (
     <>
       <AppHeader />
-      <main className="flex flex-1 flex-col gap-6 px-4 py-6">
+      <main className="flex flex-1 flex-col gap-6 px-4 pt-(--layout-content-start) pb-6">
         <div className="flex items-center gap-3">
           <div className="size-12 shrink-0 rounded-full bg-bg-subtle" />
           <div className="flex min-w-0 flex-1 flex-col gap-1">

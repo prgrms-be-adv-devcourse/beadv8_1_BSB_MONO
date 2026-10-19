@@ -39,13 +39,27 @@ import type { SearchParams } from '@/shared/api/generated/product/product.schema
 
 import { fileUploadHandlers } from './file-upload'
 import {
+  clearMockBalanceCookie,
+  clearMockMemberCookie,
+  DEMO_MEMBER_EMAIL,
+  freshMemberOf,
+  issueMockJoinedCookie,
+  issueMockMemberCookie,
+  joinedProfileOf,
+  profileFromJoinBody,
+  type MockMemberProfile,
+} from './mock-member'
+import {
+  clearMockLoginMarkCookie,
   clearMockRefreshCookie,
+  issueMockLoginMarkCookie,
   issueMockRefreshCookie,
   MOCK_REFRESH_COOKIE_NAME,
 } from './mock-session'
+import { notificationHandlers } from './notifications'
 import { findMockRace, getMockRaces, mockImageOfCourse, searchMockRaces } from './races'
 import { resetMockKitsForTesting, sellerKitHandlers } from './seller-kits'
-import { payFromMockWallet, walletHandlers } from './wallet'
+import { balanceCookieHeaders, payFromMockWallet, walletHandlers } from './wallet'
 
 /** 경로 변수(:raceId) 수. 적은 것부터 둬야 /races/suggestions가 /races/:raceId에 먼저 걸리지 않는다. */
 function pathParamCount(handler: RequestHandler): number {
@@ -73,12 +87,39 @@ const fileImageHandler = getFindByRefMockHandler(({ request }) => {
  * 재발급은 요청 쿠키에 그 값이 있을 때만 성공하고(쿠키도 새로 바꿔 준다) 없으면 401.
  * 그래서 로그인하지 않고 새로고침하면 로그아웃 상태로 보인다.
  */
+/** 내 정보 응답 칸. 방금 가입한 회원의 프로필로 만든다 (시연용 기존 회원은 id 1) */
+function toMemberDto(profile: MockMemberProfile) {
+  const now = toKstDateTime(Date.now())
+  return { id: 2, createDate: now, modifyDate: now, ...profile }
+}
+
+/** 로그인 · 재발급 · 로그아웃이 심고 지우는 쿠키 묶음. Refresh Token 쿠키를 먼저 둔다. */
+function withCookies(...values: string[]) {
+  const headers = new Headers()
+  for (const value of values) headers.append('Set-Cookie', value)
+  return headers
+}
+
 const authHandlers = [
-  http.post('*/api/v1/auth/login', () =>
-    HttpResponse.json(getLoginResponseMock(), {
-      headers: { 'Set-Cookie': issueMockRefreshCookie() },
-    }),
-  ),
+  // 가입 때 심은 프로필과 같은 이메일로 로그인하면 방금 가입한 회원이다(내 정보는 그 프로필, 참가권 · 예치금 · 알림은 비어 있음).
+  // 그 밖에는(runner1 · 이메일 없음 · 모르는 이메일) 시연용 기존 회원이다.
+  http.post('*/api/v1/auth/login', async ({ request, cookies }) => {
+    const body = (await request.json().catch(() => ({}))) as { email?: unknown }
+    const joined = joinedProfileOf(cookies)
+    const fresh =
+      joined && body.email === joined.email && body.email !== DEMO_MEMBER_EMAIL ? joined : null
+    const example = getLoginResponseMock()
+    return HttpResponse.json(
+      fresh ? { ...example, data: { ...example.data, member: toMemberDto(fresh) } } : example,
+      {
+        headers: withCookies(
+          issueMockRefreshCookie(),
+          issueMockLoginMarkCookie(),
+          fresh ? issueMockMemberCookie(fresh) : clearMockMemberCookie(),
+        ),
+      },
+    )
+  }),
   http.post('*/api/v1/auth/reissue', ({ cookies }) => {
     if (!cookies[MOCK_REFRESH_COOKIE_NAME]) {
       return HttpResponse.json(
@@ -95,13 +136,54 @@ const authHandlers = [
           accessToken: `${example.data?.accessToken}.${crypto.randomUUID()}`,
         },
       },
-      { headers: { 'Set-Cookie': issueMockRefreshCookie() } },
+      { headers: withCookies(issueMockRefreshCookie(), issueMockLoginMarkCookie()) },
     )
   }),
   http.post(
     '*/api/v1/auth/logout',
-    () => new HttpResponse(null, { headers: { 'Set-Cookie': clearMockRefreshCookie() } }),
+    () =>
+      new HttpResponse(null, {
+        headers: withCookies(
+          clearMockRefreshCookie(),
+          clearMockLoginMarkCookie(),
+          clearMockMemberCookie(),
+        ),
+      }),
   ),
+]
+
+/**
+ * 내 정보 목. 방금 가입한 회원이면 가입 때 넣은 프로필을, 아니면 명세 예시(시연용 기존 회원 runner1)를 돌려준다.
+ * 방금 가입한 회원이 정보를 고치면 쿠키의 프로필을 고쳐 다음 조회부터 그 값이 보인다.
+ */
+const meHandlers = [
+  http.get('*/api/v1/member/members/me', ({ cookies }) => {
+    const profile = freshMemberOf(cookies)
+    if (!profile) return undefined
+    return HttpResponse.json({
+      status: 200,
+      message: '내 정보를 조회했습니다.',
+      data: toMemberDto(profile),
+    })
+  }),
+  http.put('*/api/v1/member/members/me', async ({ request, cookies }) => {
+    const profile = freshMemberOf(cookies)
+    if (!profile) return undefined
+    const body = (await request.json()) as Partial<MockMemberProfile>
+    const next: MockMemberProfile = {
+      ...profile,
+      name: body.name ?? profile.name,
+      nickname: body.nickname ?? profile.nickname,
+      phone: body.phone ?? profile.phone,
+      birthDate: body.birthDate ?? profile.birthDate,
+    }
+    // 로그아웃 뒤 다시 로그인해도 고친 값이 남도록 가입 때 프로필(mockJoined)도 같이 고쳐 덮어쓴다.
+    // 이 요청 경로에는 안 실리는 Path=/api/v1/auth 쿠키지만, 응답의 Set-Cookie는 그 경로로 저장된다.
+    return HttpResponse.json(
+      { status: 200, message: '내 정보를 수정했습니다.', data: toMemberDto(next) },
+      { headers: withCookies(issueMockMemberCookie(next), issueMockJoinedCookie(next)) },
+    )
+  }),
 ]
 
 /**
@@ -121,7 +203,7 @@ const withdrawHandlers = [
  */
 const signupHandlers = [
   http.post('*/api/v1/auth/join', async ({ request }) => {
-    const body = (await request.json()) as { agreedTerms?: unknown }
+    const body = (await request.json()) as Record<string, unknown> & { agreedTerms?: unknown }
     const agreed = Array.isArray(body.agreedTerms) ? body.agreedTerms : null
     if (!agreed) {
       return HttpResponse.json(
@@ -145,9 +227,17 @@ const signupHandlers = [
         { status: 400 },
       )
     }
+    // 가입한 프로필을 쿠키에 담아 두면 같은 이메일로 로그인할 때 그 정보로 시작한다 (mock-member.ts)
+    const profile = profileFromJoinBody(body)
     return HttpResponse.json(
       { status: 201, message: 'Member Joined Successfully', data: null },
-      { status: 201 },
+      {
+        status: 201,
+        // 새 계정이라 잔액은 0원에서 시작한다
+        headers: profile
+          ? withCookies(issueMockJoinedCookie(profile), clearMockBalanceCookie())
+          : undefined,
+      },
     )
   }),
   http.get('*/api/v1/member/members/email-availability', ({ request }) => {
@@ -175,8 +265,15 @@ const signupHandlers = [
  * 내 참가권 목. 생성된 주문 목록 예시는 결제 대기 · 기한 만료 주문뿐이라 참가권이 하나도 안 보인다.
  * 결제한 주문(주문 상세 예시와 같은 1번)을 맨 앞에 더한다. 생성된 핸들러보다 앞에 둔다.
  */
-const myOrdersHandler = getFindMineMockHandler(() => {
+const myOrdersHandler = getFindMineMockHandler(({ cookies }) => {
   const example = getFindMineResponseMock()
+  // 방금 가입한 회원은 주문이 없다
+  if (freshMemberOf(cookies)) {
+    return {
+      ...example,
+      data: { ...example.data, orders: [], page: 0, totalElements: 0, totalPages: 0 },
+    }
+  }
   const paid = {
     id: 1,
     createDate: '2026-10-12T10:00:00',
@@ -427,9 +524,9 @@ const orderHandlers = [
     return { ...example, data: { ...example.data, items: [] } }
   }),
   // 진짜 서버처럼 예치금(wallet.ts)에서 주문 금액을 뺀다. 모자라면 409 ORDER_INSUFFICIENT_BALANCE + 부족 금액
-  http.post('*/api/v1/order/orders/:orderId/payment', () => {
+  http.post('*/api/v1/order/orders/:orderId/payment', ({ cookies }) => {
     const paid = getPayResponseMock()
-    const { shortage } = payFromMockWallet(paid.data?.totalAmount ?? 0)
+    const { shortage, next } = payFromMockWallet(paid.data?.totalAmount ?? 0, cookies)
     if (shortage > 0) {
       return HttpResponse.json(
         {
@@ -442,7 +539,7 @@ const orderHandlers = [
       )
     }
     mockOrderAwaitingPayment = false
-    return HttpResponse.json(paid)
+    return HttpResponse.json(paid, { headers: balanceCookieHeaders(cookies, next) })
   }),
   getFindById1MockHandler(() => {
     if (!mockOrderAwaitingPayment) return getFindById1ResponseMock()
@@ -503,6 +600,8 @@ export const handlers = [
   ...idempotencyKeyHandlers,
   fileImageHandler,
   ...authHandlers,
+  ...meHandlers,
+  ...notificationHandlers,
   ...withdrawHandlers,
   ...signupHandlers,
   ...fileUploadHandlers,

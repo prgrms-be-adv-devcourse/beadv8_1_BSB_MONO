@@ -15,7 +15,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Optional;
 
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -94,11 +96,25 @@ class TossPaymentClientTest {
 	void rejectedWithClientError() {
 		server.expect(requestTo(URL))
 			.andRespond(withStatus(HttpStatus.NOT_FOUND)
-				.body(errorResponse())
+				.body(errorResponse("NOT_FOUND_PAYMENT", "존재하지 않는 결제 정보 입니다."))
 				.contentType(MediaType.APPLICATION_JSON));
 
 		assertThatThrownBy(() -> client.approve("pay_123", "order_1", 10_000))
 			.isInstanceOf(PaymentApprovalFailedException.class);
+	}
+
+	@Test
+	@DisplayName("Toss가 4xx로 거절하면 응답 본문의 code를 예외에 담아 둔다 (PRO-200)")
+	void keepsRejectionCodeOnException() {
+		server.expect(requestTo(URL))
+			.andRespond(withStatus(HttpStatus.BAD_REQUEST)
+				.body(errorResponse("ALREADY_PROCESSED_PAYMENT", "이미 처리가 끝난 결제 입니다."))
+				.contentType(MediaType.APPLICATION_JSON));
+
+		assertThatThrownBy(() -> client.approve("pay_123", "order_1", 10_000))
+			.asInstanceOf(InstanceOfAssertFactories.type(PaymentApprovalFailedException.class))
+			.extracting(PaymentApprovalFailedException::getPgCode)
+			.isEqualTo("ALREADY_PROCESSED_PAYMENT");
 	}
 
 	@Test
@@ -128,17 +144,62 @@ class TossPaymentClientTest {
 			.isInstanceOf(PaymentApprovalFailedException.class);
 	}
 
-	// Toss 결제 승인 응답의 모양 (우리가 실제로 쓰는 필드만)
+	@Test
+	@DisplayName("조회 결과가 DONE이면 승인 결과를 돌려준다 (PRO-200)")
+	void findCompletedByOrderIdReturnsResultWhenDone() {
+		String url = BASE_URL + "/v1/payments/orders/order_1";
+		server.expect(requestTo(url))
+			.andExpect(method(HttpMethod.GET))
+			.andExpect(header(HttpHeaders.AUTHORIZATION, BASIC_AUTH))
+			.andRespond(withSuccess(paymentResponse("pay_123", 10_000, "DONE"), MediaType.APPLICATION_JSON));
+
+		Optional<PaymentApprovalResult> result = client.findCompletedByOrderId("order_1");
+
+		assertThat(result).isPresent();
+		assertThat(result.get().approvedAmount()).isEqualTo(10_000);
+		assertThat(result.get().pgPaymentKey()).isEqualTo("pay_123");
+	}
+
+	@Test
+	@DisplayName("조회 결과가 DONE이 아니면(진행 중·취소 등) 빈 값을 돌려준다")
+	void findCompletedByOrderIdReturnsEmptyWhenNotDone() {
+		String url = BASE_URL + "/v1/payments/orders/order_1";
+		server.expect(requestTo(url))
+			.andRespond(withSuccess(paymentResponse("pay_123", 10_000, "CANCELED"), MediaType.APPLICATION_JSON));
+
+		Optional<PaymentApprovalResult> result = client.findCompletedByOrderId("order_1");
+
+		assertThat(result).isEmpty();
+	}
+
+	@Test
+	@DisplayName("조회 자체가 실패하면(타임아웃 등) 승인 여부를 알 수 없으니 빈 값을 돌려준다")
+	void findCompletedByOrderIdReturnsEmptyWhenLookupFails() {
+		String url = BASE_URL + "/v1/payments/orders/order_1";
+		server.expect(requestTo(url)).andRespond(withException(new SocketTimeoutException("read timed out")));
+
+		Optional<PaymentApprovalResult> result = client.findCompletedByOrderId("order_1");
+
+		assertThat(result).isEmpty();
+	}
+
+	// Toss 결제 승인·조회 응답의 모양 (우리가 실제로 쓰는 필드만)
 	private String confirmResponse(String paymentKey, int totalAmount) {
 		return """
 			{ "paymentKey": "%s", "totalAmount": %d }
 			""".formatted(paymentKey, totalAmount);
 	}
 
-	// Toss 오류 응답의 모양
-	private String errorResponse() {
+	private String paymentResponse(String paymentKey, int totalAmount, String status) {
 		return """
-			{ "code": "NOT_FOUND_PAYMENT", "message": "존재하지 않는 결제 정보 입니다." }
-			""";
+			{ "paymentKey": "%s", "totalAmount": %d, "status": "%s" }
+			""".formatted(paymentKey, totalAmount, status);
+	}
+
+	// Toss 오류 응답의 모양
+	private String errorResponse(String code, String message) {
+		return """
+			{ "code": "%s", "message": "%s" }
+			""".formatted(code, message);
 	}
 }

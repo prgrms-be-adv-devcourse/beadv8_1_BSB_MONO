@@ -1,5 +1,6 @@
 'use client'
 
+import { useQuery } from '@tanstack/react-query'
 import type { Route } from 'next'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
@@ -7,6 +8,7 @@ import type { ReactNode } from 'react'
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
 import { useAuthStatus, useLogout } from '@/features/auth'
+import { myTicketCountQueryOptions } from '@/entities/ticket'
 import { useMyBalance } from '@/entities/wallet'
 import { memberApi, unwrapData } from '@/shared/api'
 import { cn, formatWon } from '@/shared/lib'
@@ -17,7 +19,8 @@ import { maskPhone, toDotDate } from '../model/member-format'
 // 피그마 V2 · M30 마이 · 설정 (+ M30-2 판매자 승인 후)
 // 회원 정보는 내 정보 조회(GET /api/v1/member/members/me)로 불러온다.
 // 예치금은 지갑 잔액 API(useMyBalance)로 불러온다.
-// TODO(api): 알림 설정 · 판매자 상태 · 참가 대회 수 API가 아직 없다. 지금은 시안 값을 보여 준다.
+// 참가 대회 수는 내 참가권 화면과 같은 목록(주문 API)을 센다.
+// TODO(api): 알림 설정 · 판매자 상태 API가 아직 없다. 지금은 시안 값을 보여 준다.
 export function MyPage({ seller = false }: { seller?: boolean }) {
   const logout = useLogout()
   const me = memberApi.useFindMe({
@@ -26,10 +29,11 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
   })
   const member = me.data
   const { balance } = useMyBalance()
+  const ticketCount = useQuery(myTicketCountQueryOptions(useAuthStatus() === 'authenticated'))
   return (
     <>
       <AppHeader />
-      <main className="flex flex-1 flex-col gap-4 px-4 py-6">
+      <main className="flex flex-1 flex-col gap-4 px-4 pt-(--layout-content-start) pb-6">
         <div className="flex items-center gap-3">
           <span
             aria-hidden
@@ -75,7 +79,12 @@ export function MyPage({ seller = false }: { seller?: boolean }) {
         </section>
 
         <MenuCard>
-          <MenuRow href="/tickets" icon="Calendar" label="내 참가 대회" value="2개" />
+          <MenuRow
+            href="/tickets"
+            icon="Calendar"
+            label="내 참가 대회"
+            value={ticketCount.data === undefined ? '-' : `${ticketCount.data}개`}
+          />
           <MenuRow
             href="/me/deposit"
             icon="Package"
