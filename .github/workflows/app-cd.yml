@@ -1,4 +1,4 @@
-name: deploy
+name: app-cd
 
 # 운영 EC2(team05) 배포. main에 push되면(매일 05:00 KST dev→main 자동 머지 포함) 또는 Actions에서 직접 실행하면 돈다.
 # 1) build: GitHub 러너에서 앱 이미지 9개(gateway·서비스 7개·web)를 빌드해 GHCR에 올린다. 매번 9개를 모두 빌드한다
