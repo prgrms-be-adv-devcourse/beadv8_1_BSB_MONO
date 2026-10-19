@@ -39,6 +39,7 @@ import type { SearchParams } from '@/shared/api/generated/product/product.schema
 
 import { fileUploadHandlers } from './file-upload'
 import {
+  clearMockBalanceCookie,
   clearMockMemberCookie,
   DEMO_MEMBER_EMAIL,
   freshMemberOf,
@@ -58,7 +59,7 @@ import {
 import { notificationHandlers } from './notifications'
 import { findMockRace, getMockRaces, mockImageOfCourse, searchMockRaces } from './races'
 import { resetMockKitsForTesting, sellerKitHandlers } from './seller-kits'
-import { payFromMockWallet, walletHandlers } from './wallet'
+import { balanceCookieHeaders, payFromMockWallet, walletHandlers } from './wallet'
 
 /** 경로 변수(:raceId) 수. 적은 것부터 둬야 /races/suggestions가 /races/:raceId에 먼저 걸리지 않는다. */
 function pathParamCount(handler: RequestHandler): number {
@@ -176,9 +177,11 @@ const meHandlers = [
       phone: body.phone ?? profile.phone,
       birthDate: body.birthDate ?? profile.birthDate,
     }
+    // 로그아웃 뒤 다시 로그인해도 고친 값이 남도록 가입 때 프로필(mockJoined)도 같이 고쳐 덮어쓴다.
+    // 이 요청 경로에는 안 실리는 Path=/api/v1/auth 쿠키지만, 응답의 Set-Cookie는 그 경로로 저장된다.
     return HttpResponse.json(
       { status: 200, message: '내 정보를 수정했습니다.', data: toMemberDto(next) },
-      { headers: { 'Set-Cookie': issueMockMemberCookie(next) } },
+      { headers: withCookies(issueMockMemberCookie(next), issueMockJoinedCookie(next)) },
     )
   }),
 ]
@@ -230,7 +233,10 @@ const signupHandlers = [
       { status: 201, message: 'Member Joined Successfully', data: null },
       {
         status: 201,
-        headers: profile ? { 'Set-Cookie': issueMockJoinedCookie(profile) } : undefined,
+        // 새 계정이라 잔액은 0원에서 시작한다
+        headers: profile
+          ? withCookies(issueMockJoinedCookie(profile), clearMockBalanceCookie())
+          : undefined,
       },
     )
   }),
@@ -520,10 +526,7 @@ const orderHandlers = [
   // 진짜 서버처럼 예치금(wallet.ts)에서 주문 금액을 뺀다. 모자라면 409 ORDER_INSUFFICIENT_BALANCE + 부족 금액
   http.post('*/api/v1/order/orders/:orderId/payment', ({ cookies }) => {
     const paid = getPayResponseMock()
-    const { shortage } = payFromMockWallet(
-      paid.data?.totalAmount ?? 0,
-      freshMemberOf(cookies) !== null,
-    )
+    const { shortage, next } = payFromMockWallet(paid.data?.totalAmount ?? 0, cookies)
     if (shortage > 0) {
       return HttpResponse.json(
         {
@@ -536,7 +539,7 @@ const orderHandlers = [
       )
     }
     mockOrderAwaitingPayment = false
-    return HttpResponse.json(paid)
+    return HttpResponse.json(paid, { headers: balanceCookieHeaders(cookies, next) })
   }),
   getFindById1MockHandler(() => {
     if (!mockOrderAwaitingPayment) return getFindById1ResponseMock()

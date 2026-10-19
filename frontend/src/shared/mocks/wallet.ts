@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 
-import { freshMemberOf } from './mock-member'
+import { freshBalanceOf, freshMemberOf, issueMockBalanceCookie } from './mock-member'
 
 /**
  * 가짜 응답 모드의 예치금 지갑. 진짜 서버처럼 충전하면 늘고 결제하면 준다.
@@ -14,36 +14,40 @@ export const MOCK_INITIAL_BALANCE = 5_000
 const MIN_CHARGE = 10_000
 
 let balance = MOCK_INITIAL_BALANCE
-/** 방금 가입한 회원의 잔액. 0원에서 시작한다 (시연용 기존 회원의 잔액과 섞이지 않게 따로 둔다) */
-let freshBalance = 0
 /** 충전 확정 결과(orderId = 멱등키). 같은 orderId로 다시 오면 처음 결과를 돌려준다 */
 const charges = new Map<string, 'COMPLETED' | 'FAILED'>()
 
 /** 테스트 사이에 잔액 · 충전 기록이 넘어가지 않게 처음으로 돌린다. */
 export function resetMockWalletForTesting() {
   balance = MOCK_INITIAL_BALANCE
-  freshBalance = 0
   charges.clear()
   withdrawals.clear()
 }
 
-const currentBalance = (fresh: boolean) => (fresh ? freshBalance : balance)
+/**
+ * 잔액. 방금 가입한 회원은 쿠키(mockBalance)의 값이고, 시연용 기존 회원은 서버 메모리 변수다.
+ * 새 회원 잔액을 메모리에 두면 같은 인스턴스를 쓰는 새 회원끼리 잔액을 함께 쓰게 된다.
+ */
+const currentBalance = (cookies: Record<string, string>) =>
+  freshMemberOf(cookies) ? freshBalanceOf(cookies) : balance
 
-/** 주문 결제 목이 쓴다. 모자라면 차감하지 않고 모자란 금액을 돌려준다. */
-export function payFromMockWallet(amount: number, fresh = false): { shortage: number } {
-  const current = fresh ? freshBalance : balance
-  if (current < amount) return { shortage: amount - current }
-  if (fresh) freshBalance -= amount
-  else balance -= amount
-  return { shortage: 0 }
-}
+/** 잔액이 바뀐 응답에 붙일 쿠키. 새 회원만 새 잔액을 쿠키로 들고 간다 */
+export const balanceCookieHeaders = (cookies: Record<string, string>, next: number) =>
+  freshMemberOf(cookies) ? { 'Set-Cookie': issueMockBalanceCookie(next) } : undefined
 
-/** 환급 목이 쓴다. 남은 잔액 전부를 빼고 뺀 금액을 돌려준다. */
-export function withdrawAllFromMockWallet(fresh = false): number {
-  const amount = fresh ? freshBalance : balance
-  if (fresh) freshBalance = 0
-  else balance = 0
-  return amount
+/**
+ * 주문 결제 목이 쓴다. 모자라면 차감하지 않고 모자란 금액을 돌려준다.
+ * next는 결제 뒤 잔액이다(새 회원은 이 값을 쿠키에 심는다).
+ */
+export function payFromMockWallet(
+  amount: number,
+  cookies: Record<string, string> = {},
+): { shortage: number; next: number } {
+  const current = currentBalance(cookies)
+  if (current < amount) return { shortage: amount - current, next: current }
+  const next = current - amount
+  if (!freshMemberOf(cookies)) balance = next
+  return { shortage: 0, next }
 }
 
 /** 환급 결과(idempotencyKey = 멱등키). 같은 키로 다시 오면 처음 결과를 돌려준다 */
@@ -54,8 +58,6 @@ export const walletHandlers = [
    * 예치금 전액 환급 목. 진짜 서버처럼 신청하면 바로 완료되고, 잔액이 0원이면 400(code 없음)이다.
    */
   http.post('*/api/v1/cash/withdrawals', async ({ request, cookies }) => {
-    const fresh = freshMemberOf(cookies) !== null
-    const balance = currentBalance(fresh)
     const body = (await request.json()) as { idempotencyKey?: string }
     const key = body.idempotencyKey ?? ''
     const done = withdrawals.get(key)
@@ -63,22 +65,26 @@ export const walletHandlers = [
       return HttpResponse.json({
         status: 200,
         message: '환급 신청이 완료되었습니다.',
-        data: { withdrawnAmount: done, balance },
+        data: { withdrawnAmount: done, balance: currentBalance(cookies) },
       })
     }
-    if (balance <= 0) {
+    if (currentBalance(cookies) <= 0) {
       return HttpResponse.json(
         { status: 400, message: '환급할 잔액이 없습니다.', data: null },
         { status: 400 },
       )
     }
-    const amount = withdrawAllFromMockWallet(fresh)
+    const amount = currentBalance(cookies)
+    if (!freshMemberOf(cookies)) balance = 0
     withdrawals.set(key, amount)
-    return HttpResponse.json({
-      status: 200,
-      message: '환급 신청이 완료되었습니다.',
-      data: { withdrawnAmount: amount, balance: currentBalance(fresh) },
-    })
+    return HttpResponse.json(
+      {
+        status: 200,
+        message: '환급 신청이 완료되었습니다.',
+        data: { withdrawnAmount: amount, balance: 0 },
+      },
+      { headers: balanceCookieHeaders(cookies, 0) },
+    )
   }),
   http.get('*/api/v1/cash/wallets/:holderId/balance', ({ params, cookies }) =>
     HttpResponse.json({
@@ -86,7 +92,7 @@ export const walletHandlers = [
       message: '잔액 조회 성공',
       data: {
         holderId: Number(params.holderId),
-        balance: currentBalance(freshMemberOf(cookies) !== null),
+        balance: currentBalance(cookies),
       },
     }),
   ),
@@ -95,7 +101,6 @@ export const walletHandlers = [
    * 진짜 서버처럼 1만 원 미만은 400(code 없음), 같은 orderId는 처음 결과를 돌려준다.
    */
   http.post('*/api/v1/cash/charges/confirm', async ({ request, cookies }) => {
-    const fresh = freshMemberOf(cookies) !== null
     const body = (await request.json()) as {
       paymentKey?: string
       orderId?: string
@@ -107,7 +112,7 @@ export const walletHandlers = [
       return HttpResponse.json({
         status: 200,
         message: done === 'COMPLETED' ? '충전했습니다.' : '충전에 실패했습니다.',
-        data: { outcome: done, balance: currentBalance(fresh) },
+        data: { outcome: done, balance: currentBalance(cookies) },
       })
     }
     const amount = body.amount ?? 0
@@ -119,14 +124,15 @@ export const walletHandlers = [
     }
     const outcome = body.paymentKey?.includes('fail') ? 'FAILED' : 'COMPLETED'
     charges.set(orderId, outcome)
-    if (outcome === 'COMPLETED') {
-      if (fresh) freshBalance += amount
-      else balance += amount
-    }
-    return HttpResponse.json({
-      status: 200,
-      message: outcome === 'COMPLETED' ? '충전했습니다.' : '충전에 실패했습니다.',
-      data: { outcome, balance: currentBalance(fresh) },
-    })
+    const next = currentBalance(cookies) + (outcome === 'COMPLETED' ? amount : 0)
+    if (outcome === 'COMPLETED' && !freshMemberOf(cookies)) balance = next
+    return HttpResponse.json(
+      {
+        status: 200,
+        message: outcome === 'COMPLETED' ? '충전했습니다.' : '충전에 실패했습니다.',
+        data: { outcome, balance: next },
+      },
+      { headers: balanceCookieHeaders(cookies, next) },
+    )
   }),
 ]

@@ -8,6 +8,9 @@
  * - mockMember (Path=/): 방금 가입한 회원으로 로그인하면 심고, 로그아웃 · 시연 계정 로그인이 지운다.
  *   있으면 내 정보는 그 프로필, 참가권 · 예치금 · 알림은 비어 있다. 없으면 시연용 기존 회원(runner1)이다.
  *
+ * - mockBalance (Path=/): 방금 가입한 회원의 예치금 잔액(원). 충전 · 결제 · 환급이 새 값을 심는다. 가입이 지운다(새 계정은 0원).
+ *   서버 메모리에 두면 같은 인스턴스를 쓰는 새 회원끼리 잔액을 함께 쓰게 되므로 요청에 따라오게 둔다.
+ *
  * 쿠키가 없는 요청(테스트 · 직접 호출)은 시연용 기존 회원으로 본다. 가짜 응답 모드 전용이며 권한 판단에 쓰지 않는다.
  */
 export const DEMO_MEMBER_EMAIL = 'runner1@crewrun.com'
@@ -54,6 +57,20 @@ export function profileFromJoinBody(body: Record<string, unknown>): MockMemberPr
     }),
   )
 }
+
+export const MOCK_BALANCE_COOKIE_NAME = 'mockBalance'
+
+/** 방금 가입한 회원의 잔액(원). 쿠키가 없거나 값이 이상하면 0원 */
+export function freshBalanceOf(cookies: Record<string, string>): number {
+  const value = Number(cookies[MOCK_BALANCE_COOKIE_NAME])
+  return Number.isSafeInteger(value) && value > 0 ? value : 0
+}
+
+export const issueMockBalanceCookie = (balance: number) =>
+  `${MOCK_BALANCE_COOKIE_NAME}=${balance}; Max-Age=${MAX_AGE_SECONDS}; Path=/; HttpOnly; SameSite=Lax`
+
+export const clearMockBalanceCookie = () =>
+  `${MOCK_BALANCE_COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`
 
 const attributes = (path: string) => `Path=${path}; HttpOnly; SameSite=Lax`
 
