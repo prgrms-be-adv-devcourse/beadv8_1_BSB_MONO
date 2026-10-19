@@ -34,8 +34,8 @@ cash:
 # 계좌번호·pgPaymentKey 암호화 키
 crypto:
   enabled: true # common global/crypto의 암호화 빈(TextEncryptor, EncryptedStringConverter)을 켠다
-  password: ${CASH_CRYPTO_PASSWORD}
-  salt: ${CASH_CRYPTO_SALT}
+  password: ${CRYPTO_PASSWORD}
+  salt: ${CRYPTO_SALT}
 
 logging:
   level:

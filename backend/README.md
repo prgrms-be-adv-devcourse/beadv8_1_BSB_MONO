@@ -57,9 +57,8 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `
    | 변수 | 값 |
    |---|---|
    | `CRYPTO_HMAC_KEY` | `openssl rand -base64 32`로 생성 (아래 [민감정보 암호화](#민감정보-암호화) 참고) |
-   | `CRYPTO_PASSWORD` | `openssl rand -base64 32`로 생성 |
+   | `CRYPTO_PASSWORD` | `openssl rand -base64 32`로 생성 (암호화를 켠 모든 서비스가 같은 키를 씀) |
    | `CRYPTO_SALT` | `openssl rand -hex 8`로 생성 |
-   | `CASH_CRYPTO_PASSWORD` / `CASH_CRYPTO_SALT` | cash-service 계좌번호 암호화 키. 위 `CRYPTO_*`와 다른 값으로 각각 `openssl rand -base64 32`, `openssl rand -hex 8` |
    | `MYSQL_USER` / `MYSQL_PASS` / `MYSQL_DB` | `compose.yml`의 `bukang-db` 값과 동일 |
    | `JWT_SECRET` | 32자 이상의 임의 문자열 |
 
@@ -193,7 +192,8 @@ presigned URL은 만료 전까지 여러 번 쓸 수 있어서, 확인을 마친
 | `crypto.salt` | 〃 | `.env`의 `CRYPTO_SALT` | `openssl rand -hex 8` (16진수만 가능) |
 | `crypto.hmac-secret` | 〃 | `.env`의 `CRYPTO_HMAC_KEY` | `openssl rand -base64 32` |
 
-- dev/test 키는 개발용이라 yaml에 들어 있습니다. prod 키는 dev와 **다른 값**으로 만들고 `.env`에만 둡니다.
+- prod에서는 암호화를 켠 모든 서비스가 `.env`의 같은 `CRYPTO_*` 키를 씁니다. 각 서비스의 `application-prod.yaml`은 `${CRYPTO_PASSWORD}`, `${CRYPTO_SALT}`를 참조합니다.
+- dev/test 키는 개발용이라 서비스마다 yaml에 들어 있습니다(지금은 member와 cash 값이 다릅니다). prod 키는 dev와 **다른 값**으로 만들고 `.env`에만 둡니다.
 - 세 키는 서로 다른 값이어야 합니다. `JWT_SECRET`과도 같은 값을 쓰지 않습니다.
 - `openssl`은 Windows의 Git Bash와 macOS 터미널에 기본으로 들어 있습니다.
 
