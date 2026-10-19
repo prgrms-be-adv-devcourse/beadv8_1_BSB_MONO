@@ -42,8 +42,10 @@ export function useQueueAdmission(
   raceId: number | undefined,
   raceCourseId: number | undefined,
   mode: AdmissionMode,
+  /** false면 묻지 않는다. 대기열에서 차례가 오기 전에는 입장 확인을 묻지 않게 쓴다 */
+  allowed = true,
 ) {
-  const enabled = isId(raceId) && isId(raceCourseId)
+  const enabled = allowed && isId(raceId) && isId(raceCourseId)
   const query = orderApi.useFindAdmission(
     { raceId: raceId ?? 0, raceCourseId: raceCourseId ?? 0 },
     {
@@ -125,12 +127,14 @@ export function useAdmissionTimer(
   raceId: number | undefined,
   raceCourseId: number | undefined,
   mode: AdmissionMode,
+  allowed = true,
 ) {
   const router = useRouter()
   const { deadline, isFetching, isError, errorStatus } = useQueueAdmission(
     raceId,
     raceCourseId,
     mode,
+    allowed,
   )
   const remaining = useAdmissionCountdown(deadline)
   // 끝난 답을 새로 받는 중이면 아직 만료로 보지 않는다 (다시 입장했을 수 있다).

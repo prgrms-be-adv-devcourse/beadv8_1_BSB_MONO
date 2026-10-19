@@ -21,6 +21,37 @@ const admitted = (remainingSeconds: number) => ({
   remainingSeconds,
 })
 
+const queueStatus = (ahead: number, canEnter = false) => ({
+  status: 200,
+  message: '대기열 상태를 조회했습니다.',
+  data: { myRank: canEnter ? 0 : ahead + 1, ahead, total: canEnter ? 0 : 10, canEnter },
+})
+const queueFailure = (status: number) =>
+  HttpResponse.json({ status, message: '실패', data: null }, { status })
+
+/** 대기열 등록 · 순번 조회 응답을 차례로 정한다. 순번 답이 모자라면 마지막 답을 되풀이한다 */
+function mockQueue(
+  statuses: ReturnType<typeof queueStatus>[],
+  registered: ReturnType<typeof queueStatus> | Response = queueStatus(2),
+) {
+  const calls = { register: 0, status: 0 }
+  server.use(
+    http.post('*/api/v1/queue', () => {
+      calls.register += 1
+      return registered instanceof Response ? registered.clone() : HttpResponse.json(registered)
+    }),
+    http.get('*/api/v1/queue/races/:raceId/racecourses/:raceCourseId', () => {
+      const answer = statuses[Math.min(calls.status, statuses.length - 1)]
+      calls.status += 1
+      return HttpResponse.json(answer)
+    }),
+  )
+  return calls
+}
+
+/** 차례가 이미 와 있는 대기열 */
+const mockQueueOpen = () => mockQueue([queueStatus(0, true)])
+
 function renderQueue(props: { previewRemainingSeconds?: number } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
@@ -40,8 +71,15 @@ describe('RaceQueuePage', () => {
     vi.useRealTimers()
   })
 
-  it('입장 전이면 차례 기다리기(M05-Q1)를 값 없는 막대와 함께 보여 준다', async () => {
-    server.use(orderMock.getFindAdmissionMockHandler({ status: 200, data: NOT_ADMITTED }))
+  it('입장 전이면 차례 기다리기(M05-Q1)를 값 없는 막대와 내 앞 인원과 함께 보여 준다', async () => {
+    mockQueue([queueStatus(2)])
+    let admissionAsked = 0
+    server.use(
+      orderMock.getFindAdmissionMockHandler(() => {
+        admissionAsked += 1
+        return { status: 200, data: NOT_ADMITTED }
+      }),
+    )
     renderQueue()
 
     expect(screen.getByRole('heading', { name: '대기열' })).toBeInTheDocument()
@@ -49,7 +87,7 @@ describe('RaceQueuePage', () => {
       screen.getByRole('heading', { name: /지금 신청하는 분이 많아서\s*잠시 기다리고 있어요/ }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/차례대로 들어가고 있어요\. 잠시만 기다려 주세요\./),
+      await screen.findByText(/내 앞에 2명이 있어요\. 잠시만 기다려 주세요\./),
     ).toBeInTheDocument()
     expect(screen.getByText(/화면을 나가면 다시 줄을 서야 해요\./)).toBeInTheDocument()
     expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow')
@@ -58,50 +96,97 @@ describe('RaceQueuePage', () => {
     expect(screen.queryByRole('link', { name: '대회로 돌아가기' })).not.toBeInTheDocument()
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+    // 차례가 오기 전에는 주문 서비스에 입장 확인을 묻지 않는다
+    expect(admissionAsked).toBe(0)
   })
 
-  it('입장할 때까지 다시 묻다가 입장하면 내 차례(M05-Q2)로 바뀐다', async () => {
-    // 두 번은 기다리는 중, 세 번째에 입장한다
-    let asked = 0
+  it('등록한 뒤 순번을 다시 묻다가 차례가 오면 버튼 없이 신청서로 넘어간다', async () => {
+    // 순번은 두 번 줄고, 세 번째에 차례가 온다
+    const calls = mockQueue([queueStatus(1), queueStatus(0), queueStatus(0, true)])
+    let admissionAsked = 0
     server.use(
       orderMock.getFindAdmissionMockHandler(() => {
-        asked += 1
-        return { status: 200, data: asked < 3 ? NOT_ADMITTED : admitted(600) }
+        admissionAsked += 1
+        return { status: 200, data: admitted(600) }
       }),
     )
     renderQueue()
 
-    await vi.waitFor(() => expect(asked).toBe(1))
-    expect(screen.getByText(/지금 신청하는 분이 많아서/)).toBeInTheDocument()
+    await vi.waitFor(() => expect(calls.status).toBe(1))
+    expect(calls.register).toBe(1)
+    expect(await screen.findByText(/내 앞에 1명이 있어요/)).toBeInTheDocument()
+    expect(admissionAsked).toBe(0)
 
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
-    await vi.waitFor(() => expect(asked).toBe(2))
-    expect(screen.queryByRole('timer')).not.toBeInTheDocument()
+    await vi.waitFor(() => expect(calls.status).toBe(2))
+    expect(await screen.findByText(/내 앞에 0명이 있어요/)).toBeInTheDocument()
+    expect(replace).not.toHaveBeenCalled()
 
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
-    expect(await screen.findByRole('timer')).toHaveTextContent('남은 시간10:00')
-    expect(
-      screen.getByRole('heading', { name: /내 차례예요\s*지금 신청할 수 있어요/ }),
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '신청하러 가기' })).toHaveAttribute(
-      'href',
-      '/races/1/apply?option=2',
-    )
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/races/1/apply?option=2'))
+    expect(admissionAsked).toBe(1)
+    expect(screen.getByRole('timer')).toHaveTextContent('남은 시간10:00')
 
-    // 입장하면 더 묻지 않는다
+    // 차례가 오면 더 묻지 않는다
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS * 2))
-    expect(asked).toBe(3)
+    expect(calls.status).toBe(3)
+    expect(calls.register).toBe(1)
+  })
+
+  it('이미 입장한 회원의 등록(409)은 곧바로 입장 확인으로 넘어간다', async () => {
+    mockQueue([], queueFailure(409))
+    server.use(orderMock.getFindAdmissionMockHandler({ status: 200, data: admitted(600) }))
+    renderQueue()
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/races/1/apply?option=2'))
+  })
+
+  it('줄에서 사라지면(순번 조회 404) 다시 등록한다', async () => {
+    let statusAsked = 0
+    let registered = 0
+    server.use(
+      http.post('*/api/v1/queue', () => {
+        registered += 1
+        return HttpResponse.json(queueStatus(1))
+      }),
+      http.get('*/api/v1/queue/races/:raceId/racecourses/:raceCourseId', () => {
+        statusAsked += 1
+        return statusAsked === 1 ? queueFailure(404) : HttpResponse.json(queueStatus(0, true))
+      }),
+      orderMock.getFindAdmissionMockHandler({ status: 200, data: admitted(600) }),
+    )
+    renderQueue()
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/races/1/apply?option=2'))
+    expect(registered).toBe(2)
+  })
+
+  it('대기열 등록이 실패하면(503) 줄서기를 건너뛰고 입장 확인 결과를 따른다', async () => {
+    mockQueue([], queueFailure(503))
+    server.use(orderMock.getFindAdmissionMockHandler({ status: 200, data: admitted(600) }))
+    renderQueue()
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/races/1/apply?option=2'))
+  })
+
+  it('대기열 등록이 401이면 로그인 화면으로 보낸다', async () => {
+    mockQueue([], queueFailure(401))
+    renderQueue()
+
+    await vi.waitFor(() =>
+      expect(replace).toHaveBeenCalledWith(`/login?next=${encodeURIComponent('/races/1/queue')}`),
+    )
   })
 
   it('남은 시간이 1초씩 줄고 0이 되면 입장 시간 만료 화면(M07-1)으로 간다', async () => {
+    mockQueueOpen()
     server.use(orderMock.getFindAdmissionMockHandler({ status: 200, data: admitted(2) }))
     renderQueue()
 
     expect(await screen.findByRole('timer')).toHaveTextContent('00:02')
     await act(() => vi.advanceTimersByTimeAsync(1000))
     expect(screen.getByRole('timer')).toHaveTextContent('00:01')
-    expect(replace).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalledWith('/checkout?result=timeout&raceId=1')
 
     await act(() => vi.advanceTimersByTimeAsync(1000))
     await vi.waitFor(() =>
@@ -118,6 +203,7 @@ describe('RaceQueuePage', () => {
   })
 
   it('입장 확인이 401이면 로그인 화면으로 보낸다', async () => {
+    mockQueueOpen()
     server.use(
       http.get('*/api/v1/order/queue/admission', () =>
         HttpResponse.json(
@@ -134,6 +220,7 @@ describe('RaceQueuePage', () => {
   })
 
   it('입장 확인이 500이면 다시 묻지 않는다', async () => {
+    mockQueueOpen()
     let asked = 0
     server.use(
       http.get('*/api/v1/order/queue/admission', () => {
