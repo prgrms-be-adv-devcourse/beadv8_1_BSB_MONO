@@ -25,6 +25,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.bukang.order.domain.Order;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.QueueAdmissionRepository;
+import com.bukang.order.support.QueueEntry;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -52,6 +54,9 @@ class ApiV1OrderQueryTest {
 	private ParticipationRepository participationRepository;
 
 	@Autowired
+	private QueueAdmissionRepository queueAdmissionRepository;
+
+	@Autowired
 	private StubRaceCoursePort raceCoursePort;
 
 	@Autowired
@@ -68,6 +73,7 @@ class ApiV1OrderQueryTest {
 	void tearDown() {
 		orderRepository.deleteAll();
 		participationRepository.deleteAll();
+		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
 	}
@@ -180,6 +186,7 @@ class ApiV1OrderQueryTest {
 
 	// 신청서 작성 → [결제하기]로 주문을 만들고, 주문 일시를 정한 시각으로 바꾼다
 	private int orderAt(int memberId, int raceCourseId, LocalDateTime orderedAt) throws Exception {
+		QueueEntry.enter(mockMvc, memberId, raceCourseId);
 		int participationId = read(mockMvc.perform(post("/api/v1/order/participations")
 			.header("X-Member-Id", memberId)
 			.contentType(MediaType.APPLICATION_JSON)

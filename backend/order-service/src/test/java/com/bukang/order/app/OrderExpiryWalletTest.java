@@ -34,6 +34,8 @@ import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.QueueAdmissionRepository;
+import com.bukang.order.support.QueueEntry;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -71,6 +73,9 @@ class OrderExpiryWalletTest {
 	private ParticipationRepository participationRepository;
 
 	@Autowired
+	private QueueAdmissionRepository queueAdmissionRepository;
+
+	@Autowired
 	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
@@ -101,6 +106,7 @@ class OrderExpiryWalletTest {
 	void tearDown() {
 		orderRepository.deleteAll();
 		participationRepository.deleteAll();
+		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
 		walletPort.clear();
@@ -304,6 +310,7 @@ class OrderExpiryWalletTest {
 	}
 
 	private int apply(int memberId) throws Exception {
+		QueueEntry.enter(mockMvc, memberId, COURSE_ID);
 		String body = mockMvc.perform(post("/api/v1/order/participations")
 				.header("X-Member-Id", memberId)
 				.contentType(MediaType.APPLICATION_JSON)

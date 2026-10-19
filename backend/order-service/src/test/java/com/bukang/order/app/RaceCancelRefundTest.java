@@ -40,6 +40,8 @@ import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.in.RaceCanceledNotificationListener;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.QueueAdmissionRepository;
+import com.bukang.order.support.QueueEntry;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -76,6 +78,9 @@ class RaceCancelRefundTest {
 	private ParticipationRepository participationRepository;
 
 	@Autowired
+	private QueueAdmissionRepository queueAdmissionRepository;
+
+	@Autowired
 	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
@@ -110,6 +115,7 @@ class RaceCancelRefundTest {
 	void tearDown() {
 		orderRepository.deleteAll();
 		participationRepository.deleteAll();
+		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
 		walletPort.clear();
@@ -299,6 +305,7 @@ class RaceCancelRefundTest {
 	}
 
 	private int apply(int memberId, int courseId) throws Exception {
+		QueueEntry.enter(mockMvc, memberId, courseId);
 		String body = mockMvc.perform(post("/api/v1/order/participations")
 				.header("X-Member-Id", memberId)
 				.contentType(MediaType.APPLICATION_JSON)

@@ -40,7 +40,9 @@ import com.bukang.order.dto.SellerKitDto;
 import com.bukang.order.dto.SellerKitSummaryDto;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.out.QueueAdmissionRepository;
 import com.bukang.order.out.race.RaceCourseInfo;
+import com.bukang.order.support.QueueEntry;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubRefundEligibilityPortConfig;
@@ -78,6 +80,9 @@ class KitDeliveryTest {
 	private ParticipationRepository participationRepository;
 
 	@Autowired
+	private QueueAdmissionRepository queueAdmissionRepository;
+
+	@Autowired
 	private OrderCreateUseCase orderCreateUseCase;
 
 	@Autowired
@@ -102,6 +107,7 @@ class KitDeliveryTest {
 	void tearDown() {
 		orderRepository.deleteAll();
 		participationRepository.deleteAll();
+		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
 		walletPort.clear();
@@ -382,6 +388,7 @@ class KitDeliveryTest {
 	}
 
 	private int apply(int memberId, int courseId) throws Exception {
+		QueueEntry.enter(mockMvc, memberId, courseId);
 		String body = mockMvc.perform(post("/api/v1/order/participations")
 				.header("X-Member-Id", memberId)
 				.contentType(MediaType.APPLICATION_JSON)
