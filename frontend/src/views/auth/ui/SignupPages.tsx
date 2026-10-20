@@ -62,7 +62,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
     getValues,
     trigger,
     setError,
-    formState: { errors, isValid },
+    formState: { errors, isValid, isSubmitting },
   } = useForm<SignupAccountValues>({
     resolver: zodResolver(signupAccountSchema),
     mode: 'onTouched',
@@ -163,7 +163,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
         <BottomCta
           className="sticky bottom-0 z-10"
           primary={
-            <Button type="submit" size="l" disabled={!isValid || invalid}>
+            <Button type="submit" size="l" disabled={!isValid || invalid} loading={isSubmitting}>
               다음
             </Button>
           }
@@ -291,7 +291,10 @@ function SignupProfileForm() {
       },
     )
   })
-  const submitting = join.isPending || login.isPending
+  // 가입 → 자동 로그인 두 요청이 이어져 몇 초 걸릴 수 있다. 버튼에 Spinner를 띄워 멈춘 것처럼 보이지 않게 한다.
+  // loading 버튼은 클릭을 막으므로 Enter로도 다시 제출되지 않는다.
+  // 가입이 끝나면 로그인 결과와 상관없이 다른 화면으로 가므로, 이동할 때까지 계속 막아 두 번 가입하지 않게 한다.
+  const submitting = join.isPending || join.isSuccess
 
   return (
     <form noValidate onSubmit={onSubmit} className="contents">
@@ -340,7 +343,7 @@ function SignupProfileForm() {
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button type="submit" size="l" disabled={!isValid || submitting}>
+          <Button type="submit" size="l" disabled={!isValid} loading={submitting}>
             가입 완료
           </Button>
         }

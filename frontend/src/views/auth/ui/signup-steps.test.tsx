@@ -334,6 +334,31 @@ describe('Enter로 제출 (QA 10/20)', () => {
     expect(joined).toBe(1)
   })
 
+  it('가입 요청 중에는 버튼에 로딩을 띄우고 다시 눌러도 요청을 또 보내지 않는다', async () => {
+    let joined = 0
+    let finish = () => {}
+    server.use(
+      http.post('*/api/v1/auth/join', async () => {
+        joined += 1
+        await new Promise<void>((resolve) => (finish = resolve))
+        return HttpResponse.json({ status: 201, message: 'ok', data: null }, { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderProfileStep()
+
+    await fillProfile(user)
+    const button = screen.getByRole('button', { name: '가입 완료' })
+    await user.click(button)
+    await vi.waitFor(() => expect(button).toHaveAttribute('aria-busy', 'true'))
+    await user.click(button)
+    await user.type(screen.getByLabelText('닉네임'), '{Enter}')
+    expect(joined).toBe(1)
+
+    finish()
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
+  })
+
   it('회원 정보가 덜 채워졌으면 Enter를 눌러도 가입 요청을 보내지 않는다', async () => {
     let joined = 0
     server.use(
