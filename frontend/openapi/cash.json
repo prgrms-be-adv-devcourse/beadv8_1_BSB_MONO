@@ -247,23 +247,24 @@
         }
       }
     },
-    "/api/v1/cash/wallets/{holderId}/balance": {
+    "/api/v1/cash/wallets/balance": {
       "get": {
         "tags": [
           "Cash"
         ],
         "summary": "지갑 잔액 조회",
-        "description": "회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.",
+        "description": "요청자 본인의 지갑 잔액을 조회한다.",
         "operationId": "getBalance",
         "parameters": [
           {
-            "name": "holderId",
-            "in": "path",
-            "description": "지갑 주인의 회원 ID",
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "조회할 회원 ID (게이트웨이가 Access Token에서 넣어준다)",
             "required": true,
             "schema": {
               "type": "integer",
-              "format": "int32"
+              "format": "int32",
+              "exclusiveMinimum": 0
             },
             "example": 3
           }

@@ -85,12 +85,12 @@ export const walletHandlers = [
       { headers: balanceCookieHeaders(cookies, 0) },
     )
   }),
-  http.get('*/api/v1/cash/wallets/:holderId/balance', ({ params, cookies }) =>
+  http.get('*/api/v1/cash/wallets/balance', ({ request, cookies }) =>
     HttpResponse.json({
       status: 200,
       message: '잔액 조회 성공',
       data: {
-        holderId: Number(params.holderId),
+        holderId: Number(request.headers.get('X-Member-Id') ?? 0),
         balance: currentBalance(cookies),
       },
     }),
