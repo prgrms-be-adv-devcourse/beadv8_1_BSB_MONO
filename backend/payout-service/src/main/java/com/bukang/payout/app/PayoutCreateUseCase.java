@@ -91,22 +91,24 @@ public class PayoutCreateUseCase {
 				counts.failRace(race.raceId(), exception);
 				continue;
 			}
-			YearMonth payoutMonth = YearMonth.from(race.refundDeadline());
 			// 정산 내역은 판매자 × 대회 단위이고, 코스별 집계는 그 안의 1차 정산금 줄이 된다
 			summaries.stream()
 				.collect(groupingBy(SoldSummary::sellerId))
 				.forEach((sellerId, courses) -> createFirstGroup(new SellerRace(sellerId, race.raceId()), courses,
-					race.raceName(), payoutMonth, race.refundDeadline(), counts, now));
+					race.raceName(), race.refundDeadline(), counts, now));
 		}
 		return counts;
 	}
 
 	// 1차 정산 내역 하나를 만든다. 이미 만든 정산 내역은 건너뛰고, 실패하면 이 정산 내역만 실패로 남긴다
-	private void createFirstGroup(SellerRace key, List<SoldSummary> courses, String raceName, YearMonth payoutMonth,
+	private void createFirstGroup(SellerRace key, List<SoldSummary> courses, String raceName,
 		LocalDate refundDeadline, Counts counts, LocalDateTime now) {
 		try {
-			if (payoutRepository.existsBySellerIdAndRaceIdAndPayoutMonthAndPayoutStage(
-				key.sellerId(), key.raceId(), payoutMonth.toString(), PayoutStage.FIRST)) {
+			// 1차는 판매자 × 대회마다 한 번이라 정산 월은 보지 않는다. 판매 시작 뒤에도 환불 마감일을 늦출 수 있어
+			// (상품 Race.update) 마감일이 다음 달로 넘어가면 정산 월이 바뀌고, 월까지 보면 같은 대회의 1차가
+			// 한 번 더 만들어져 1차 정산금이 두 번 나간다 (PRO-232)
+			if (payoutRepository.existsBySellerIdAndRaceIdAndPayoutStage(key.sellerId(), key.raceId(),
+				PayoutStage.FIRST)) {
 				counts.skipped++;
 				return;
 			}
