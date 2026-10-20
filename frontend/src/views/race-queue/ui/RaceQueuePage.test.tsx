@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -93,7 +93,7 @@ describe('RaceQueuePage', () => {
     expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow')
     // 왼쪽 위 X는 대회 상세로 간다. 하단 버튼은 없다
     expect(screen.getByRole('link', { name: '닫기' })).toHaveAttribute('href', '/races/1')
-    expect(screen.queryByRole('link', { name: '대회로 돌아가기' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
     // 차례가 오기 전에는 주문 서비스에 입장 확인을 묻지 않는다
@@ -270,14 +270,14 @@ describe('RaceQueuePage', () => {
       )
       renderQueue()
 
-      expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: '대회로 돌아가기' })).toHaveAttribute(
-        'href',
-        '/races/1',
-      )
+      const dialog = await screen.findByRole('alertdialog')
+      expect(within(dialog).getByText(title)).toBeInTheDocument()
       await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS * 3))
       expect(asked).toBe(0)
       expect(replace).not.toHaveBeenCalled()
+
+      await act(async () => within(dialog).getByRole('button', { name: '대회로 돌아가기' }).click())
+      expect(replace).toHaveBeenCalledWith('/races/1')
     },
   )
 
@@ -295,6 +295,6 @@ describe('RaceQueuePage', () => {
     await vi.waitFor(() => expect(asked).toBe(1))
     await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
     await vi.waitFor(() => expect(asked).toBeGreaterThan(1))
-    expect(screen.queryByRole('link', { name: '대회로 돌아가기' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 })

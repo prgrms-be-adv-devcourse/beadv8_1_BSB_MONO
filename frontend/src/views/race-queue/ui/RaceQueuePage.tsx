@@ -8,7 +8,7 @@ import { useEffect } from 'react'
 import { AppHeader } from '@/widgets/app-header'
 import { loginHref } from '@/features/auth'
 import { skippedNotice, useAdmissionTimer, useQueuePosition } from '@/features/queue-admission'
-import { BottomCta, buttonClassName, formatTimer, Icon, ProgressBar } from '@/shared/ui'
+import { BottomCta, buttonClassName, Dialog, formatTimer, Icon, ProgressBar } from '@/shared/ui'
 
 // 피그마 V2 · M05-Q1 대기열 · 차례 기다리기 / M05-Q2 대기열 · 내 차례
 // 같은 주소에서 입장 여부에 따라 두 화면을 바꿔 그린다.
@@ -69,24 +69,17 @@ export function RaceQueuePage({
     <>
       <AppHeader type="sub" title="대기열" close backHref={raceHref} />
       {blocked ? (
+        // 줄을 서지 못했다. 배경에 대기 화면을 그리지 않고, 확인하면 대회 상세로 돌려보낸다
         <>
-          <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
-            <h1 className="text-center text-heading-l text-text-primary">{notice.title}</h1>
-            <Icon
-              name="Users"
-              className="size-24 text-text-primary"
-              strokeWidth={BIG_ICON_STROKE}
-              aria-hidden
-            />
-            <p className="text-center text-body-s text-text-secondary">{notice.description}</p>
-          </main>
-          <BottomCta
-            className="sticky bottom-0 z-10"
-            primary={
-              <Link href={raceHref} className={buttonClassName({ size: 'l' })}>
-                대회로 돌아가기
-              </Link>
-            }
+          <main className="flex-1" />
+          <Dialog
+            open
+            type="alert"
+            title={notice.title}
+            body={notice.description}
+            confirmLabel="대회로 돌아가기"
+            onConfirm={() => router.replace(raceHref)}
+            onOpenChange={() => router.replace(raceHref)}
           />
         </>
       ) : queue.failed && remaining === null ? (
