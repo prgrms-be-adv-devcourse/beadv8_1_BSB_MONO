@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { BookingFlowProvider, type BookingApplication } from '@/features/booking'
+import { BookingFlowProvider, useBookingFlow, type BookingApplication } from '@/features/booking'
 import { orderMock, server } from '@/shared/testing'
 
 import { CartPage } from './CartPage'
@@ -25,7 +25,15 @@ const APPLICATION: BookingApplication = {
   participantName: '이달림',
 }
 
-const cartWith = (items: { id: number; raceCourseId: number }[]) =>
+type CartItem = {
+  id: number
+  raceCourseId: number
+  participationId?: number | null
+  raceId?: number | null
+  participantName?: string | null
+}
+
+const cartWith = (items: CartItem[]) =>
   orderMock.getFindCartMockHandler({
     status: 200,
     message: '장바구니를 조회했습니다.',
@@ -34,6 +42,12 @@ const cartWith = (items: { id: number; raceCourseId: number }[]) =>
       items: items.map((i) => ({ ...i, createDate: '2026-10-12T10:15:30' })),
     },
   })
+
+/** 메모리(예매 흐름 스토어)에 남은 참가 신청의 종목 ID를 화면에 적어 둔다 */
+function RememberedApplications() {
+  const applications = useBookingFlow((s) => s.applications)
+  return <p data-testid="remembered">{Object.keys(applications).join(',')}</p>
+}
 
 function renderCart(
   applications: Record<string, BookingApplication> = { '1': APPLICATION },
@@ -44,6 +58,7 @@ function renderCart(
     <QueryClientProvider client={client}>
       <BookingFlowProvider initialState={{ applications }}>
         <CartPage queueDialogOpen={queueDialogOpen} />
+        <RememberedApplications />
       </BookingFlowProvider>
     </QueryClientProvider>,
   )
@@ -83,7 +98,7 @@ const checkoutResult = (outcome: 'CREATED' | 'SOLD_OUT', withOrder = outcome ===
 }
 
 describe('장바구니', () => {
-  it('담은 참가권을 대회 정보와 함께 보여 주고, 빼면 목록에서 사라진다', async () => {
+  it('담은 참가권을 대회 정보와 함께 보여 주고, 빼면 목록에서 사라지고 그 종목의 참가 신청을 잊는다', async () => {
     server.use(
       cartWith([{ id: 1, raceCourseId: 1 }]),
       orderMock.getRemoveItemMockHandler({
@@ -98,9 +113,48 @@ describe('장바구니', () => {
     expect(await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K')).toBeInTheDocument()
     expect(screen.getByText(/참가자 이달림/)).toBeInTheDocument()
 
+    expect(screen.getByTestId('remembered')).toHaveTextContent('1')
+
     await user.click(screen.getByRole('button', { name: '삭제' }))
 
     expect(await screen.findByText('장바구니가 비어 있어요')).toBeInTheDocument()
+    // 빼면 서버가 그 결제 전 신청서를 취소하므로, 다시 신청할 때 취소된 신청서를 고치지 않게 잊는다
+    expect(screen.getByTestId('remembered')).toHaveTextContent(/^$/)
+  })
+
+  it('새로고침해 메모리가 비어 있어도 장바구니에 붙은 참가 신청으로 대회 정보를 보여 주고 결제한다', async () => {
+    server.use(
+      cartWith([
+        { id: 1, raceCourseId: 1, participationId: 21, raceId: 1, participantName: '이달림' },
+      ]),
+    )
+    const calls = captureCheckout(() => checkoutResult('CREATED'))
+    const user = userEvent.setup()
+    renderCart({})
+
+    expect(await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K')).toBeInTheDocument()
+    expect(screen.getByText(/참가자 이달림/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '결제하기' }))
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout?orderId=1'))
+    expect(calls[0].body).toEqual({ participationIds: [21] })
+  })
+
+  it('장바구니에 붙은 참가 신청이 메모리 값과 다르면 서버 값으로 결제한다', async () => {
+    server.use(
+      cartWith([
+        { id: 1, raceCourseId: 1, participationId: 21, raceId: 1, participantName: '이달림' },
+      ]),
+    )
+    const calls = captureCheckout(() => checkoutResult('CREATED'))
+    const user = userEvent.setup()
+    renderCart()
+
+    await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K')
+    await user.click(screen.getByRole('button', { name: '결제하기' }))
+
+    await vi.waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0].body).toEqual({ participationIds: [21] })
   })
 
   it('장바구니가 비어 있으면 빈 화면을 보여 준다', async () => {
@@ -167,8 +221,12 @@ describe('장바구니', () => {
     expect(push).not.toHaveBeenCalled()
   })
 
-  it('이 기기에서 저장한 신청서가 없는 항목은 결제할 수 없다고 알린다', async () => {
-    server.use(cartWith([{ id: 1, raceCourseId: 1 }]))
+  it('장바구니에 붙은 신청서도 메모리 신청서도 없는 항목은 결제할 수 없다고 알린다', async () => {
+    server.use(
+      cartWith([
+        { id: 1, raceCourseId: 1, participationId: null, raceId: null, participantName: null },
+      ]),
+    )
     renderCart({})
 
     expect(
