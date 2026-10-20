@@ -4,11 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 
 import { ConsoleCard } from '@/widgets/console-page'
 import { useAuthStatus } from '@/features/auth'
+import { formatSellerDate, SELLER_STATUS } from '@/entities/member'
 import { memberApi, unwrapData, type memberModel } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import {
@@ -20,7 +21,6 @@ import {
   FOCUS_RING,
   Radio,
   RadioGroup,
-  Select,
   Skeleton,
   TextField,
   type BadgeTone,
@@ -32,6 +32,7 @@ import {
   SELLER_API_ERRORS,
   toApplyRequest,
   toApplyStatus,
+  toFormValues,
   type SellerApplyStatus,
 } from '../model/seller-apply-api'
 import {
@@ -39,13 +40,6 @@ import {
   sellerApplyFormSchema,
   type SellerApplyFormValues,
 } from '../model/seller-apply-form'
-
-const BANKS = ['국민은행', '신한은행', '우리은행', '하나은행', '카카오뱅크', '토스뱅크'].map(
-  (b) => ({
-    value: b,
-    label: b,
-  }),
-)
 
 // 데스크톱 폼 화면의 본문: 위 48 · 아래 64, 가운데 고정 폭 칸
 function FormBody({
@@ -79,6 +73,14 @@ export function SellerApplyPage() {
   const queryClient = useQueryClient()
   const apply = memberApi.useApply()
   const [formError, setFormError] = useState<string>()
+  // 반려 뒤 다시 신청하면 전에 낸 값을 채운다. 신청 전(404)이면 빈 폼 그대로.
+  const mine = memberApi.useFindMine({
+    query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated', retry: false },
+  })
+  const previous = useMemo(
+    () => (mine.data?.status === 'REJECTED' ? toFormValues(mine.data) : undefined),
+    [mine.data],
+  )
   const {
     register,
     control,
@@ -87,6 +89,9 @@ export function SellerApplyPage() {
   } = useForm<SellerApplyFormValues>({
     resolver: zodResolver(sellerApplyFormSchema),
     defaultValues: EMPTY_SELLER_APPLY_FORM,
+    // 이미 고친 칸은 덮어쓰지 않는다
+    values: previous,
+    resetOptions: { keepDirtyValues: true },
   })
   const business = useWatch({ control, name: 'business' })
   const agreed = useWatch({ control, name: 'agreed' })
@@ -171,39 +176,7 @@ export function SellerApplyPage() {
         </ConsoleCard>
 
         <ConsoleCard title="정산 계좌">
-          <div className="flex gap-4">
-            <Controller
-              control={control}
-              name="bank"
-              render={({ field }) => (
-                <Select
-                  label="은행"
-                  items={BANKS}
-                  value={field.value || null}
-                  onValueChange={(bank) => field.onChange(bank ?? '')}
-                  error={errors.bank?.message}
-                  className="flex-1"
-                />
-              )}
-            />
-            <TextField
-              label="예금주"
-              className="flex-1"
-              error={errors.accountHolder?.message}
-              {...register('accountHolder')}
-            />
-          </div>
-          <TextField
-            label="계좌번호"
-            inputMode="numeric"
-            error={errors.accountNumber?.message}
-            {...register('accountNumber')}
-          />
-          <Alert
-            tone="warning"
-            title="정산 계좌가 없으면 정산이 지급보류돼요"
-            description="나중에 등록해도 되지만, 등록 전까지는 정산금을 받을 수 없어요."
-          />
+          <SettlementAccountNotice />
         </ConsoleCard>
 
         <ConsoleCard title="약관 동의">
@@ -298,9 +271,8 @@ function resultCard(seller: memberModel.SellerDto): ResultCard {
     badge: '심사 중',
     title: '관리자가 신청 내용을 확인하고 있어요',
     description: '결과가 나오면 알림(M25)으로 알려 드려요. 심사 중에는 신청 내용을 고칠 수 없어요.',
-    // TODO(design): 신청 내용을 다시 보는 화면은 시안에 없다. 지금은 신청 폼으로 연결한다.
     actions: (
-      <Link href="/seller-apply" className={buttonClassName({ variant: 'secondary' })}>
+      <Link href="/seller-apply/mine" className={buttonClassName({ variant: 'secondary' })}>
         신청 내용 보기
       </Link>
     ),
@@ -349,5 +321,111 @@ function ResultSection({ card }: { card: ResultCard }) {
       {card.description && <p className="text-body-s text-text-secondary">{card.description}</p>}
       <div className="flex gap-2">{card.actions}</div>
     </section>
+  )
+}
+
+// 신청 때는 계좌를 받지 않는다(서버가 저장하지 않음). 승인 뒤 판매자 설정(S11)에서 등록한다.
+function SettlementAccountNotice() {
+  return (
+    <Alert
+      title="정산 계좌는 판매자 설정에서 등록해요"
+      description="승인된 뒤 판매자 설정에서 등록해요. 등록 전까지는 정산금 지급이 보류돼요."
+    />
+  )
+}
+
+// 피그마 V2 · S01-2 신청 내용 보기: 내가 낸 신청(GET /api/v1/member/sellers/me)을 S01 폼에 채우고 모든 칸을 잠근다.
+// 서버가 받지 않는 연락처 · 정산 계좌는 빈 칸으로 두지 않고 뺀다.
+export function SellerApplicationPage() {
+  const mine = memberApi.useFindMine({
+    query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated', retry: false },
+  })
+
+  return (
+    <FormBody
+      width="w-160"
+      title="신청 내용"
+      description="심사 중에는 고칠 수 없어요. 반려되면 이 값을 채운 채로 다시 신청할 수 있어요."
+    >
+      {mine.data ? (
+        <LockedApplication seller={mine.data} />
+      ) : mine.isError ? (
+        isNoApplication(mine.error) ? (
+          <section className="flex flex-col items-start gap-3 rounded-lg bg-bg-surface p-5 inset-ring inset-ring-border-default">
+            <h2 className="text-heading-s">아직 판매자 신청을 하지 않았어요</h2>
+            <Link href="/seller-apply" className={buttonClassName()}>
+              판매자 신청하러 가기
+            </Link>
+          </section>
+        ) : (
+          <Alert tone="danger" title={SELLER_API_ERRORS.loadFailed} />
+        )
+      ) : (
+        <Skeleton shape="rect" className="h-80 w-full" />
+      )}
+    </FormBody>
+  )
+}
+
+function LockedApplication({ seller }: { seller: memberModel.SellerDto }) {
+  const status = SELLER_STATUS[seller.status]
+  const business = seller.sellerType === 'BUSINESS'
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <Badge tone={status.tone}>{status.label}</Badge>
+        <p className="text-body-s text-text-secondary">
+          신청일 {formatSellerDate(seller.requestedAt)}
+        </p>
+      </div>
+
+      <ConsoleCard title="판매자 정보">
+        <RadioGroup value={business ? 'business' : 'personal'} disabled className="flex-row gap-6">
+          <Radio value="business" label="사업자예요" />
+          <Radio value="personal" label="사업자가 아니에요" />
+        </RadioGroup>
+        {business ? (
+          <>
+            <div className="flex gap-4">
+              <TextField
+                label="사업자등록번호"
+                className="flex-1"
+                value={seller.businessNumber ?? ''}
+                disabled
+                readOnly
+              />
+              <TextField
+                label="상호"
+                className="flex-1"
+                value={seller.businessName ?? ''}
+                disabled
+                readOnly
+              />
+            </div>
+            <TextField label="대표자" value={seller.representativeName} disabled readOnly />
+          </>
+        ) : (
+          <TextField label="성명" value={seller.representativeName} disabled readOnly />
+        )}
+        <p className="text-caption text-text-tertiary">
+          {business
+            ? '사업자등록번호 · 상호 · 대표자를 심사해요.'
+            : '비사업자는 성명만 보여요. 연락처는 아직 서버에 저장하지 않아요.'}
+        </p>
+      </ConsoleCard>
+
+      <ConsoleCard title="정산 계좌">
+        <SettlementAccountNotice />
+      </ConsoleCard>
+
+      <div className="flex justify-end">
+        <Link
+          href="/seller-apply/result"
+          className={buttonClassName({ variant: 'secondary', size: 'l' })}
+        >
+          신청 결과로
+        </Link>
+      </div>
+    </>
   )
 }

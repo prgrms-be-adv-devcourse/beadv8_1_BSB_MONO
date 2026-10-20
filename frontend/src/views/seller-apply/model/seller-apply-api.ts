@@ -1,6 +1,6 @@
 import { ApiError, type memberModel } from '@/shared/api'
 
-import type { SellerApplyFormValues } from './seller-apply-form'
+import { EMPTY_SELLER_APPLY_FORM, type SellerApplyFormValues } from './seller-apply-form'
 
 // 판매자 신청 API(PRO-129)와 화면 값을 이어 주는 곳. 오류 문구는 서버가 주는 code로 정한다.
 
@@ -19,7 +19,7 @@ export function toApplyStatus(status: memberModel.SellerDtoStatus): SellerApplyS
 /**
  * 폼 값을 신청 요청으로 바꾼다.
  * 서버는 종류·상호·사업자등록번호·대표자 4칸만 받는다. 비사업자는 성명이 대표자 칸에 들어가고,
- * 상호·사업자등록번호는 보내지 않는다. 연락처·정산 계좌·약관 동의는 서버가 아직 받지 않는다.
+ * 상호·사업자등록번호는 보내지 않는다. 연락처·약관 동의는 서버가 아직 받지 않는다.
  */
 export function toApplyRequest(values: SellerApplyFormValues): memberModel.SellerApplyRequestDto {
   if (values.business === 'business') {
@@ -31,6 +31,23 @@ export function toApplyRequest(values: SellerApplyFormValues): memberModel.Selle
     }
   }
   return { sellerType: 'INDIVIDUAL', representativeName: values.name }
+}
+
+/**
+ * 내가 낸 신청 → 폼 값. 반려 뒤 다시 신청할 때 전에 적은 값을 채운다(시안 S01-1 메모).
+ * 서버에 없는 연락처 · 약관 동의는 빈 값으로 둔다.
+ */
+export function toFormValues(seller: memberModel.SellerDto): SellerApplyFormValues {
+  if (seller.sellerType === 'BUSINESS') {
+    return {
+      ...EMPTY_SELLER_APPLY_FORM,
+      business: 'business',
+      businessNumber: seller.businessNumber ?? '',
+      businessName: seller.businessName ?? '',
+      representative: seller.representativeName,
+    }
+  }
+  return { ...EMPTY_SELLER_APPLY_FORM, business: 'personal', name: seller.representativeName }
 }
 
 export const SELLER_API_ERRORS = {

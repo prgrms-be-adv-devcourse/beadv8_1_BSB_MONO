@@ -9,12 +9,7 @@ import { memberApi, setAccessToken, type memberModel } from '@/shared/api'
 import { memberMock, server } from '@/shared/testing'
 
 import { SELLER_API_ERRORS } from '../model/seller-apply-api'
-import {
-  EMPTY_SELLER_APPLY_FORM,
-  SELLER_APPLY_ERRORS,
-  sellerApplyFormSchema,
-} from '../model/seller-apply-form'
-import { SellerApplyPage, SellerApplyResultPage } from './SellerApplyPages'
+import { SellerApplicationPage, SellerApplyPage, SellerApplyResultPage } from './SellerApplyPages'
 
 const push = vi.fn()
 vi.mock('next/navigation', () => ({
@@ -22,7 +17,15 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/seller-apply',
 }))
 
-beforeEach(() => push.mockClear())
+beforeEach(() => {
+  push.mockClear()
+  // 기본은 신청 전(404). 명세 예시(반려)가 신청 폼을 미리 채우지 않게 한다.
+  server.use(
+    http.get('*/api/v1/member/sellers/me', () =>
+      errorResponse(404, 'SELLER_NOT_FOUND', '판매자 신청 내역이 없습니다.'),
+    ),
+  )
+})
 
 const SELLER: memberModel.SellerDto = {
   id: 1,
@@ -281,33 +284,68 @@ describe('SellerApplyResultPage 상태별 카드', () => {
   })
 })
 
-describe('정산 계좌 묶음 검사', () => {
-  const base = {
-    ...EMPTY_SELLER_APPLY_FORM,
-    businessNumber: '123-45-67890',
-    businessName: '(주)러닝',
-    representative: '김주최',
-    agreed: true,
-  }
-  const messages = (values: typeof base) => {
-    const result = sellerApplyFormSchema.safeParse(values)
-    return result.success ? [] : result.error.issues.map((i) => i.message)
-  }
+describe('SellerApplyPage 정산 계좌', () => {
+  it('서버가 받지 않는 계좌 칸 대신 판매자 설정에서 등록한다고 안내한다', () => {
+    renderWithClient(<SellerApplyPage />)
+    expect(screen.getByText('정산 계좌는 판매자 설정에서 등록해요')).toBeInTheDocument()
+    expect(screen.queryByLabelText('계좌번호')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('예금주')).not.toBeInTheDocument()
+  })
+})
 
-  it('계좌번호만 넣으면 은행 · 예금주 오류가 난다', () => {
-    expect(messages({ ...base, accountNumber: '1234567890' })).toEqual([
-      SELLER_APPLY_ERRORS.bankRequired,
-      SELLER_APPLY_ERRORS.accountHolderRequired,
-    ])
+describe('SellerApplyPage 반려 뒤 다시 신청', () => {
+  it('반려된 신청의 값을 폼에 채운다', async () => {
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'REJECTED' })))
+    renderWithClient(<SellerApplyPage />)
+
+    await waitFor(() => expect(screen.getByLabelText('사업자등록번호')).toHaveValue('123-45-67890'))
+    expect(screen.getByLabelText('상호')).toHaveValue('크루런 스포츠')
+    expect(screen.getByLabelText('대표자')).toHaveValue('김러너')
+  })
+})
+
+describe('SellerApplyResultPage 신청 내용 보기', () => {
+  it('심사 중 카드의 버튼은 잠근 신청 내용으로 간다', async () => {
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'PENDING' })))
+    renderWithClient(<SellerApplyResultPage />)
+    expect(await screen.findByRole('link', { name: '신청 내용 보기' })).toHaveAttribute(
+      'href',
+      '/seller-apply/mine',
+    )
+  })
+})
+
+describe('SellerApplicationPage 잠근 신청 내용', () => {
+  it('내가 낸 값을 잠근 칸에 채우고 상태 배지와 신청일을 보여 준다', async () => {
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'PENDING' })))
+    renderWithClient(<SellerApplicationPage />)
+
+    expect(await screen.findByLabelText('사업자등록번호')).toHaveValue('123-45-67890')
+    expect(screen.getByLabelText('사업자등록번호')).toBeDisabled()
+    expect(screen.getByLabelText('상호')).toBeDisabled()
+    expect(screen.getByLabelText('대표자')).toHaveValue('김러너')
+    expect(screen.getByRole('radio', { name: '사업자예요' })).toBeChecked()
+    expect(screen.getByText('심사 중')).toBeInTheDocument()
+    expect(screen.getByText('신청일 2026. 10. 5.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '신청하기' })).not.toBeInTheDocument()
   })
 
-  it('셋 다 비우면 통과한다', () => {
-    expect(messages(base)).toEqual([])
-  })
+  it('서버가 받지 않는 연락처 · 계좌 칸은 빈 칸으로 두지 않는다', async () => {
+    server.use(
+      memberMock.getFindMineMockHandler(
+        sellerResponse({
+          sellerType: 'INDIVIDUAL',
+          businessName: null,
+          businessNumber: null,
+          representativeName: '이춘천',
+        }),
+      ),
+    )
+    renderWithClient(<SellerApplicationPage />)
 
-  it('셋 다 넣으면 통과한다', () => {
-    expect(
-      messages({ ...base, bank: '국민은행', accountHolder: '김주최', accountNumber: '1234567890' }),
-    ).toEqual([])
+    expect(await screen.findByLabelText('성명')).toHaveValue('이춘천')
+    expect(screen.queryByLabelText('연락처')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('계좌번호')).not.toBeInTheDocument()
+    expect(screen.getByText('정산 계좌는 판매자 설정에서 등록해요')).toBeInTheDocument()
   })
 })
