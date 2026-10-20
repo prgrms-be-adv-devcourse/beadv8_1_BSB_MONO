@@ -6,13 +6,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.wallet.LedgerCategory;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.dto.CashBalanceResponseDto;
 import com.bukang.cash.dto.CashChargeResponseDto;
 import com.bukang.cash.dto.CashPaymentResponseDto;
 import com.bukang.cash.dto.CashRefundResponseDto;
 import com.bukang.cash.dto.CashWithdrawalResponseDto;
+import com.bukang.cash.dto.PageDto;
 import com.bukang.cash.dto.WalletBalanceResponseDto;
+import com.bukang.cash.dto.WalletLedgerItemDto;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,6 +30,7 @@ public class CashFacade {
 	private final CashRefundPaymentUseCase cashRefundPaymentUseCase;
 	private final CashChargeConfirmUseCase cashChargeConfirmUseCase;
 	private final CashWithdrawalUseCase cashWithdrawalUseCase;
+	private final CashWalletLedgerQueryUseCase cashWalletLedgerQueryUseCase;
 
 	@Transactional
 	public CashMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate,
@@ -49,6 +53,11 @@ public class CashFacade {
 	@Transactional(readOnly = true)
 	public CashBalanceResponseDto getBalanceOrZero(int memberId) {
 		return new CashBalanceResponseDto(cashSupport.findBalanceOrZero(memberId));
+	}
+
+	@Transactional(readOnly = true)
+	public PageDto<WalletLedgerItemDto> findLedgers(int memberId, LedgerCategory category, int page, int size) {
+		return cashWalletLedgerQueryUseCase.findLedgers(memberId, category, page, size);
 	}
 
 	@Transactional

@@ -111,6 +111,78 @@ class ApiV1CashControllerTest {
 	}
 
 	@Test
+	@DisplayName("내역 조회: 전체 조회 시 카테고리가 섞여도 최신순으로 PageDto 형식으로 돌려주고, "
+		+ "다른 지갑(홀딩·다른 회원) 줄은 안 섞인다")
+	void getLedgers() throws Exception {
+		Wallet wallet = createWalletWithBalance(3, 10_000);
+		walletLedgerRepository.save(wallet.debit(4_000, LedgerType.사용__주문결제, LedgerRefType.Order, 100));
+		walletLedgerRepository.save(wallet.credit(4_000, LedgerType.환불__주문취소, LedgerRefType.Order, 100));
+		// 같은 주문으로 홀딩 지갑에도 짝이 되는 줄이 남는다 (장부 기록 규칙) — 요청자(3번) 조회엔 안 섞여야 한다
+		Wallet holdingWallet = createWalletWithBalance(2, 0);
+		walletLedgerRepository.save(holdingWallet.credit(4_000, LedgerType.임시보관__주문결제, LedgerRefType.Order, 100));
+		// 다른 회원(4번)의 내역도 안 섞여야 한다
+		Wallet otherWallet = createWalletWithBalance(4, 10_000);
+		walletLedgerRepository.save(otherWallet.debit(4_000, LedgerType.사용__주문결제, LedgerRefType.Order, 200));
+
+		mockMvc.perform(get("/api/v1/cash/wallets/ledgers")
+				.header(MemberIdHeader.NAME, "3"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content.length()").value(3))
+			.andExpect(jsonPath("$.data.content[0].category").value("REFUND"))
+			.andExpect(jsonPath("$.data.content[0].ledgerType").value("환불__주문취소"))
+			.andExpect(jsonPath("$.data.content[0].amount").value(4_000))
+			.andExpect(jsonPath("$.data.content[0].balanceAfter").value(10_000))
+			.andExpect(jsonPath("$.data.content[0].refId").value(100))
+			.andExpect(jsonPath("$.data.content[1].category").value("PAYMENT"))
+			.andExpect(jsonPath("$.data.content[1].amount").value(-4_000))
+			.andExpect(jsonPath("$.data.content[2].category").value("CHARGE"))
+			.andExpect(jsonPath("$.data.page").value(0))
+			.andExpect(jsonPath("$.data.totalElements").value(3));
+	}
+
+	@Test
+	@DisplayName("내역 조회: category로 넘기면 그 탭에 해당하는 내역만 돌려준다")
+	void getLedgersFilteredByCategory() throws Exception {
+		Wallet wallet = createWalletWithBalance(3, 10_000);
+		walletLedgerRepository.save(wallet.debit(4_000, LedgerType.사용__주문결제, LedgerRefType.Order, 100));
+
+		mockMvc.perform(get("/api/v1/cash/wallets/ledgers")
+				.header(MemberIdHeader.NAME, "3")
+				.param("category", "PAYMENT"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.content.length()").value(1))
+			.andExpect(jsonPath("$.data.content[0].category").value("PAYMENT"));
+	}
+
+	@Test
+	@DisplayName("내역 조회: 페이지 크기가 100을 넘으면 400 INVALID_REQUEST로 응답한다")
+	void getLedgersWithTooLargePageSize() throws Exception {
+		mockMvc.perform(get("/api/v1/cash/wallets/ledgers")
+				.header(MemberIdHeader.NAME, "3")
+				.param("size", "101"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+			.andExpect(jsonPath("$.message").value("한 번에 100개까지 조회할 수 있습니다."));
+	}
+
+	@Test
+	@DisplayName("내역 조회: 지갑이 없으면 404와 에러 메시지를 돌려준다")
+	void getLedgersWithoutWallet() throws Exception {
+		mockMvc.perform(get("/api/v1/cash/wallets/ledgers")
+				.header(MemberIdHeader.NAME, "999"))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("존재하지 않는 지갑입니다."));
+	}
+
+	@Test
+	@DisplayName("내역 조회: 회원 ID 헤더가 없으면 401과 RsData 형식으로 로그인 필요를 알린다")
+	void getLedgersWithoutMemberId() throws Exception {
+		mockMvc.perform(get("/api/v1/cash/wallets/ledgers"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
 	@DisplayName("충전 확정: 회원 ID 헤더가 없으면 401과 RsData 형식으로 로그인 필요를 알린다")
 	void confirmChargeWithoutMemberId() throws Exception {
 		mockMvc.perform(post("/api/v1/cash/charges/confirm")
@@ -212,10 +284,11 @@ class ApiV1CashControllerTest {
 		assertThat(walletWithdrawalRepository.count()).isZero();
 	}
 
-	private void createWalletWithBalance(int memberId, int balance) {
+	private Wallet createWalletWithBalance(int memberId, int balance) {
 		LocalDateTime now = LocalDateTime.of(2026, 10, 12, 10, 0);
 		CashMember member = cashMemberRepository.save(new CashMember(memberId, now, now, "러너" + memberId));
 		Wallet wallet = walletRepository.save(new Wallet(member));
 		walletLedgerRepository.save(wallet.credit(balance, LedgerType.충전__PG결제_토스페이먼츠, LedgerRefType.WalletCharge, 1));
+		return wallet;
 	}
 }

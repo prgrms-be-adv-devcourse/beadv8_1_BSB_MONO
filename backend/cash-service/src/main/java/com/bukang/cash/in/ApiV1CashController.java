@@ -7,14 +7,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.cash.app.CashFacade;
+import com.bukang.cash.domain.wallet.LedgerCategory;
 import com.bukang.cash.dto.CashChargeConfirmRequestDto;
 import com.bukang.cash.dto.CashChargeResponseDto;
 import com.bukang.cash.dto.CashWithdrawalRequestDto;
 import com.bukang.cash.dto.CashWithdrawalResponseDto;
+import com.bukang.cash.dto.PageDto;
 import com.bukang.cash.dto.WalletBalanceResponseDto;
+import com.bukang.cash.dto.WalletLedgerItemDto;
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.global.web.IdempotencyKeyHeader;
 import com.bukang.common.shared.member.web.MemberIdHeader;
@@ -28,6 +32,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +43,8 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/cash")
 @RequiredArgsConstructor
 public class ApiV1CashController {
+	private static final int MAX_PAGE_SIZE = 100;
+
 	private final CashFacade cashFacade;
 
 	// 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 RsData(data: null) 형식으로 반환한다
@@ -64,6 +72,42 @@ public class ApiV1CashController {
 	) {
 		WalletBalanceResponseDto walletBalanceResponseDto = cashFacade.getBalance(memberId);
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "잔액 조회 성공", walletBalanceResponseDto));
+	}
+
+	// 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 RsData(data: null) 형식으로 반환한다
+	// PRO-258: 프론트 "내역" 화면이 쓰던 목업 데이터를 실제 WalletLedger 조회로 대체한다
+	@GetMapping("/wallets/ledgers")
+	@Operation(summary = "예치금 내역 조회", description = "요청자 본인 지갑의 내역을 최신순으로 조회한다. "
+		+ "category로 탭(CHARGE/PAYMENT/REFUND/WITHDRAWAL/PAYOUT)을 필터링할 수 있고, 생략하면 전체를 돌려준다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "조회 성공 (내역이 없으면 빈 목록)",
+			content = @Content(examples = @ExampleObject(value = CashApiExamples.LEDGER_LIST_SUCCESS))),
+		@ApiResponse(responseCode = "400", description = "페이지·회원 ID·category 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "페이지 크기 초과", value = CashApiExamples.INVALID_PAGE),
+				@ExampleObject(name = "값 형식 오류", value = CashApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = CashApiExamples.INVALID_MEMBER_ID)
+			})),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CashApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "404", description = "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CashApiExamples.WALLET_NOT_FOUND)))
+	})
+	public ResponseEntity<RsData<PageDto<WalletLedgerItemDto>>> getLedgers(
+		@Parameter(description = "조회할 회원 ID (게이트웨이가 Access Token에서 넣어준다)", example = "3")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@Parameter(description = "탭 필터. 생략하면 전체", example = "CHARGE")
+		@RequestParam(required = false) LedgerCategory category,
+		@Parameter(description = "페이지 번호 (0부터)", example = "0")
+		@RequestParam(defaultValue = "0") @Min(value = 0, message = "페이지 번호는 0 이상이어야 합니다.") int page,
+		@Parameter(description = "페이지 크기 (1~100)", example = "20")
+		@RequestParam(defaultValue = "20") @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다.")
+		@Max(value = MAX_PAGE_SIZE, message = "한 번에 100개까지 조회할 수 있습니다.") int size
+	) {
+		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "예치금 내역을 조회했습니다.",
+			cashFacade.findLedgers(memberId, category, page, size)));
 	}
 
 	// 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 RsData(data: null) 형식으로 반환한다
