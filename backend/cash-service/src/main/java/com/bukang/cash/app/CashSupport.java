@@ -1,5 +1,8 @@
 package com.bukang.cash.app;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -58,22 +61,24 @@ public class CashSupport {
 			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
 	}
 
-	// 고객 지갑·보관 지갑을 ID가 작은 쪽부터 비관적 락으로 잠근다 (교착 상태 방지, PRO-78)
+	// 여러 지갑을 회원 ID 오름차순으로 비관적 락으로 잠근다 (교착 상태 방지, PRO-78을 임의 개수로 확장, PRO-256)
 	// 지갑 ID가 회원 ID와 항상 같을 때만 올바르다. 지갑 ID가 자동 증가(BaseIdAndTime)라면
 	// 다른 회원의 지갑을 잠글 수 있으므로, 회원 ID로 잠그는 findByMemberIdForUpdate를 써야 한다.
+	public Map<Integer, Wallet> lockWallets(int... holderIds) {
+		Map<Integer, Wallet> locked = new LinkedHashMap<>();
+		Arrays.stream(holderIds)
+			.distinct()
+			.sorted()
+			.forEach(id -> locked.put(id, walletRepository.findByIdForUpdate(id)
+				.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."))));
+		return locked;
+	}
+
+	// 고객 지갑·보관 지갑을 함께 잠근다 (PRO-78)
 	public LockedWallets lockCustomerAndHoldingWallets(int customerId) {
 		int holdingMemberId = cashWalletProperties.holdingMemberId();
-		int firstId = Math.min(customerId, holdingMemberId);
-		int secondId = Math.max(customerId, holdingMemberId);
-
-		Wallet first = walletRepository.findByIdForUpdate(firstId)
-			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
-		Wallet second = walletRepository.findByIdForUpdate(secondId)
-			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
-
-		Wallet customerWallet = customerId == firstId ? first : second;
-		Wallet holdingWallet = holdingMemberId == firstId ? first : second;
-		return new LockedWallets(customerWallet, holdingWallet);
+		Map<Integer, Wallet> wallets = lockWallets(customerId, holdingMemberId);
+		return new LockedWallets(wallets.get(customerId), wallets.get(holdingMemberId));
 	}
 
 	public record LockedWallets(Wallet customerWallet, Wallet holdingWallet) {

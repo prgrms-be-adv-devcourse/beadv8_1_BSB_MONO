@@ -29,6 +29,7 @@ import com.bukang.cash.domain.wallet.LedgerType;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.PaymentRepository;
+import com.bukang.cash.out.PayoutTransferRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
 import com.bukang.cash.out.WalletRepository;
 
@@ -52,12 +53,15 @@ class InternalV1CashControllerTest {
 	@Autowired
 	private PaymentRepository paymentRepository;
 	@Autowired
+	private PayoutTransferRepository payoutTransferRepository;
+	@Autowired
 	private TransactionTemplate transactionTemplate;
 
 	@BeforeEach
 	void setUp() {
 		transactionTemplate.executeWithoutResult(status -> {
 			createWallet(cashWalletProperties.holdingMemberId(), "홀딩");
+			createWallet(cashWalletProperties.systemMemberId(), "시스템");
 			Wallet customerWallet = createWallet(CUSTOMER_ID, "러너3");
 			walletLedgerRepository.save(
 				customerWallet.credit(10_000, LedgerType.충전__PG결제_토스페이먼츠, LedgerRefType.WalletCharge, 1));
@@ -67,6 +71,7 @@ class InternalV1CashControllerTest {
 	@AfterEach
 	void tearDown() {
 		paymentRepository.deleteAll();
+		payoutTransferRepository.deleteAll();
 		walletLedgerRepository.deleteAll();
 		walletRepository.deleteAll();
 		cashMemberRepository.deleteAll();
@@ -210,6 +215,83 @@ class InternalV1CashControllerTest {
 	}
 
 	@Test
+	@DisplayName("최종 정산 지급은 홀딩 지갑에서 판매자·시스템 지갑으로 대금·수수료를 옮긴다")
+	void payoutFinalStageTransfersSettlementAndFee() throws Exception {
+		int sellerId = 10;
+		createWallet(sellerId, "판매자");
+
+		payout(900, sellerId, "FINAL", 90_000, 5_500)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("정산금을 지급했습니다."))
+			.andExpect(jsonPath("$.data.outcome").value("PAID"))
+			.andExpect(jsonPath("$.data.settlementAmount").value(90_000))
+			.andExpect(jsonPath("$.data.feeAmount").value(5_500));
+
+		assertBalance(sellerId, 90_000);
+		assertBalance(cashWalletProperties.systemMemberId(), 5_500);
+	}
+
+	@Test
+	@DisplayName("1차 정산 지급은 수수료 없이 대금만 옮긴다")
+	void payoutFirstStageTransfersSettlementOnly() throws Exception {
+		int sellerId = 11;
+		createWallet(sellerId, "판매자2");
+
+		payout(901, sellerId, "FIRST", 40_000, 0)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.outcome").value("PAID"))
+			.andExpect(jsonPath("$.data.feeAmount").value(0));
+
+		assertBalance(sellerId, 40_000);
+		assertBalance(cashWalletProperties.systemMemberId(), 0);
+	}
+
+	@Test
+	@DisplayName("같은 정산 ID로 다시 지급 요청해도 중복 이동 없이 ALREADY_PAID만 돌아온다")
+	void payoutIsIdempotentByPayoutId() throws Exception {
+		int sellerId = 12;
+		createWallet(sellerId, "판매자3");
+
+		payout(902, sellerId, "FINAL", 90_000, 5_500).andExpect(status().isOk());
+
+		payout(902, sellerId, "FINAL", 90_000, 5_500)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.outcome").value("ALREADY_PAID"));
+
+		assertBalance(sellerId, 90_000);
+		assertBalance(cashWalletProperties.systemMemberId(), 5_500);
+	}
+
+	@Test
+	@DisplayName("존재하지 않는 판매자 지갑으로 정산 지급을 요청하면 404다")
+	void payoutWithoutSellerWallet() throws Exception {
+		payout(903, 999, "FINAL", 90_000, 5_500)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("존재하지 않는 지갑입니다."));
+	}
+
+	@Test
+	@DisplayName("정산 지급 요청에 필수 값이 없으면 400이다")
+	void payoutInvalidRequest() throws Exception {
+		mockMvc.perform(post("/internal/v1/cash/payouts/904")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{}"))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@DisplayName("최종 정산에서 대금이 0원이면 수수료만 옮기고, 판매자 지갑이 없어도 성공한다")
+	void payoutWithZeroSettlementTransfersFeeOnly() throws Exception {
+		payout(905, 13, "FINAL", 0, 5_500)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.outcome").value("PAID"))
+			.andExpect(jsonPath("$.data.settlementAmount").value(0))
+			.andExpect(jsonPath("$.data.feeAmount").value(5_500));
+
+		assertBalance(cashWalletProperties.systemMemberId(), 5_500);
+	}
+
+	@Test
 	@DisplayName("회원 잔액 조회는 지갑 잔액을 주고, 지갑이 없는 회원은 404가 아니라 0원을 준다")
 	void balanceForWithdrawal() throws Exception {
 		mockMvc.perform(get("/internal/v1/cash/wallets/{memberId}/balance", CUSTOMER_ID))
@@ -247,6 +329,14 @@ class InternalV1CashControllerTest {
 		return mockMvc.perform(post("/internal/v1/cash/payments/" + orderId + "/refund")
 			.contentType(MediaType.APPLICATION_JSON)
 			.content("{\"memberId\": %d}".formatted(memberId)));
+	}
+
+	private ResultActions payout(int payoutId, int sellerId, String payoutStage, int settlementAmount, int feeAmount)
+		throws Exception {
+		return mockMvc.perform(post("/internal/v1/cash/payouts/" + payoutId)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content(("{\"sellerId\": %d, \"payoutStage\": \"%s\", \"settlementAmount\": %d, \"feeAmount\": %d}")
+				.formatted(sellerId, payoutStage, settlementAmount, feeAmount)));
 	}
 
 

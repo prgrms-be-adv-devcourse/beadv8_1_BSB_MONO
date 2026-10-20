@@ -14,6 +14,8 @@ import com.bukang.cash.dto.CashBalanceResponseDto;
 import com.bukang.cash.dto.CashCancelPaymentRequestDto;
 import com.bukang.cash.dto.CashPaymentRequestDto;
 import com.bukang.cash.dto.CashPaymentResponseDto;
+import com.bukang.cash.dto.CashPayoutRequestDto;
+import com.bukang.cash.dto.CashPayoutResponseDto;
 import com.bukang.cash.dto.CashRefundRequestDto;
 import com.bukang.cash.dto.CashRefundResponseDto;
 import com.bukang.common.global.rsdata.RsData;
@@ -150,5 +152,34 @@ public class InternalV1CashController {
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "잔액을 조회했습니다.", cashFacade.getBalanceOrZero(memberId)));
+	}
+
+	// 정산 서비스가 지급 배치에서 정산 내역마다 부른다. 에러 응답은 GlobalExceptionHandler, CashExceptionHandler가 처리한다
+	@PostMapping("/payouts/{payoutId}")
+	@Operation(summary = "정산 지급", description = "홀딩 지갑에서 판매자 지갑으로 정산 대금을 옮기고, 최종 정산이면 시스템 지갑으로 "
+		+ "수수료도 함께 옮긴다. 같은 정산 ID의 이동을 다시 요청해도 지갑을 건드리지 않고 그대로 성공한다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "지급 성공 또는 이미 지급됨",
+			content = @Content(examples = {
+				@ExampleObject(name = "지급 성공", value = CashInternalApiExamples.PAYOUT_SUCCESS_PAID),
+				@ExampleObject(name = "이미 지급됨", value = CashInternalApiExamples.PAYOUT_ALREADY_PAID)
+			})),
+		@ApiResponse(responseCode = "400", description = "입력값 검증 실패, 요청 본문 형식 오류 또는 정산 ID 형식 오류",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "입력값 검증 실패", value = CashInternalApiExamples.INVALID_SELLER_ID),
+				@ExampleObject(name = "요청 본문 형식 오류", value = CashInternalApiExamples.INVALID_BODY),
+				@ExampleObject(name = "정산 ID 형식 오류", value = CashInternalApiExamples.INVALID_VALUE_TYPE)
+			})),
+		@ApiResponse(responseCode = "404", description = "존재하지 않는 홀딩·판매자·시스템 지갑",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = CashInternalApiExamples.WALLET_NOT_FOUND)))
+	})
+	public ResponseEntity<RsData<CashPayoutResponseDto>> payout(
+		@Parameter(description = "정산 ID", example = "500") @PathVariable int payoutId,
+		@Valid @RequestBody CashPayoutRequestDto request
+	) {
+		CashPayoutResponseDto result = cashFacade.payout(payoutId, request.getSellerId(), request.getPayoutStage(),
+			request.getSettlementAmount(), request.getFeeAmount());
+		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, result.message(), result));
 	}
 }

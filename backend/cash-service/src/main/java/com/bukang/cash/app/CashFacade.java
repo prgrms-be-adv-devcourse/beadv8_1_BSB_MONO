@@ -6,10 +6,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.cash.domain.member.CashMember;
+import com.bukang.cash.domain.payout.PayoutStage;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.dto.CashBalanceResponseDto;
 import com.bukang.cash.dto.CashChargeResponseDto;
 import com.bukang.cash.dto.CashPaymentResponseDto;
+import com.bukang.cash.dto.CashPayoutResponseDto;
 import com.bukang.cash.dto.CashRefundResponseDto;
 import com.bukang.cash.dto.CashWithdrawalResponseDto;
 import com.bukang.cash.dto.WalletBalanceResponseDto;
@@ -27,6 +29,7 @@ public class CashFacade {
 	private final CashRefundPaymentUseCase cashRefundPaymentUseCase;
 	private final CashChargeConfirmUseCase cashChargeConfirmUseCase;
 	private final CashWithdrawalUseCase cashWithdrawalUseCase;
+	private final CashPayoutUseCase cashPayoutUseCase;
 
 	@Transactional
 	public CashMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate,
@@ -78,5 +81,12 @@ public class CashFacade {
 	) {
 		return cashWithdrawalUseCase.requestWithdrawal(
 			customerId, bankCode, accountNumber, accountHolder, idempotencyKey);
+	}
+
+	@Transactional
+	public CashPayoutResponseDto payout(
+		int payoutId, int sellerId, PayoutStage payoutStage, int settlementAmount, int feeAmount
+	) {
+		return cashPayoutUseCase.payout(payoutId, sellerId, payoutStage, settlementAmount, feeAmount);
 	}
 }

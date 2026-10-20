@@ -64,8 +64,36 @@ final class CashInternalApiExamples {
 		}
 		""";
 
+	static final String PAYOUT_SUCCESS_PAID = """
+		{
+			"status": 200,
+			"message": "정산금을 지급했습니다.",
+			"data": {
+				"outcome": "PAID",
+				"settlementAmount": 90000,
+				"feeAmount": 5500
+			}
+		}
+		""";
+
+	static final String PAYOUT_ALREADY_PAID = """
+		{
+			"status": 200,
+			"message": "이미 지급된 정산입니다.",
+			"data": {
+				"outcome": "ALREADY_PAID",
+				"settlementAmount": 90000,
+				"feeAmount": 5500
+			}
+		}
+		""";
+
 	static final String INVALID_MEMBER_ID = """
 		{ "status": 400, "message": "회원 ID를 작성해주세요.", "data": null }
+		""";
+
+	static final String INVALID_SELLER_ID = """
+		{ "status": 400, "message": "판매자 회원 ID를 작성해주세요.", "data": null }
 		""";
 
 	static final String INVALID_BODY = """
