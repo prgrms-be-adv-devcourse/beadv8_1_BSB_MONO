@@ -62,8 +62,8 @@ function renderProfileStep() {
 
 async function fillProfile(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('이름'), '김러너')
-  await user.type(screen.getByLabelText('생년월일'), '1995.03.02')
-  await user.type(screen.getByLabelText('휴대폰 번호'), '010-1234-5678')
+  await user.type(screen.getByLabelText('생년월일'), '1995-03-02')
+  await user.type(screen.getByLabelText('휴대폰 번호'), '01012345678')
   await user.type(screen.getByLabelText('닉네임'), '달리는곰')
 }
 

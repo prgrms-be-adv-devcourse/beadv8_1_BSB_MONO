@@ -17,6 +17,7 @@ import {
   Divider,
   FOCUS_RING,
   KeyValue,
+  PhoneField,
   Radio,
   RadioGroup,
   Section,
@@ -189,10 +190,8 @@ function ParticipantForm({
               error={errors.emergencyContactName?.message}
               {...register('emergencyContactName')}
             />
-            <TextField
+            <PhoneField
               label="연락처"
-              type="tel"
-              inputMode="tel"
               error={errors.emergencyContactPhone?.message}
               {...register('emergencyContactPhone')}
             />

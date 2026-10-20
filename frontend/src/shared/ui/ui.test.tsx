@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { Button } from './button/Button'
 import { Carousel, CarouselSlide } from './carousel/Carousel'
+import { PhoneField } from './field/PhoneField'
 import { Textarea } from './field/Textarea'
 import { TextField } from './field/TextField'
 import { pageSlots } from './pagination/Pagination'
@@ -69,6 +70,44 @@ describe('TextField', () => {
     expect(screen.getByText('이름을 입력해 주세요')).toBeInTheDocument()
     expect(screen.queryByText('주민등록상 이름')).not.toBeInTheDocument()
     expect(screen.getByLabelText('참가자 이름')).toHaveAttribute('aria-invalid', 'true')
+  })
+})
+
+describe('PhoneField', () => {
+  it('숫자만 쳐도 하이픈을 넣고, 숫자가 아닌 글자와 11자리 넘는 숫자는 버린다', async () => {
+    const user = userEvent.setup()
+    render(<PhoneField label="휴대폰 번호" />)
+    const input = screen.getByLabelText('휴대폰 번호')
+
+    await user.type(input, '010a1234567899')
+
+    expect(input).toHaveValue('010-1234-5678')
+    expect(input).toHaveAttribute('inputmode', 'numeric')
+    expect(input).toHaveAttribute('autocomplete', 'tel')
+  })
+
+  it('붙여넣은 번호에도 하이픈을 넣는다', async () => {
+    const user = userEvent.setup()
+    render(<PhoneField label="휴대폰 번호" />)
+    const input = screen.getByLabelText('휴대폰 번호')
+
+    await user.click(input)
+    await user.paste('0111234567')
+
+    expect(input).toHaveValue('011-123-4567')
+  })
+
+  it('하이픈 바로 뒤에서 지우면 앞 숫자가 지워진다', async () => {
+    const user = userEvent.setup()
+    render(<PhoneField label="휴대폰 번호" />)
+    const input = screen.getByLabelText<HTMLInputElement>('휴대폰 번호')
+
+    await user.type(input, '0101234')
+    input.setSelectionRange(4, 4)
+    await user.keyboard('{Backspace}')
+
+    expect(input).toHaveValue('011-234')
+    expect(input.selectionStart).toBe(2)
   })
 })
 

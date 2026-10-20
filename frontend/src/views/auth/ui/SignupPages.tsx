@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { checkEmailAvailable, useLogin } from '@/features/auth'
+import { BirthDateField } from '@/entities/member'
 import { memberApi } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import {
@@ -17,6 +18,7 @@ import {
   Checkbox,
   FOCUS_RING,
   Icon,
+  PhoneField,
   Stepper,
   TextField,
 } from '@/shared/ui'
@@ -300,18 +302,14 @@ function SignupProfileForm() {
           error={errors.name?.message}
           {...register('name')}
         />
-        <TextField
+        <BirthDateField
           label="생년월일"
-          inputMode="numeric"
-          placeholder="1995.03.02"
           helper="만 14세 미만은 가입할 수 없어요"
           error={errors.birth?.message}
           {...register('birth')}
         />
-        <TextField
+        <PhoneField
           label="휴대폰 번호"
-          type="tel"
-          autoComplete="tel"
           placeholder="010-1234-5678"
           error={errors.phone?.message}
           {...register('phone')}

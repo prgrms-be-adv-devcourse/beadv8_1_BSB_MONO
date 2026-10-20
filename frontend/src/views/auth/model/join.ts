@@ -8,11 +8,6 @@ import {
 } from './schemas'
 import { agreedTermTypes, type SignupTermChecks } from './signup-terms'
 
-/** 화면의 "1995.03.02"를 API의 "1995-03-02"로 바꾼다. */
-export function toIsoDate(birth: string): string {
-  return birth.trim().replaceAll('.', '-')
-}
-
 /**
  * 가입 단계 입력을 가입 요청(POST /api/v1/auth/join) 본문으로 바꾼다.
  * 약관은 동의한 종류만 agreedTerms로 보낸다("만 14세 이상"은 약관이 아니라 보내지 않는다). 성별은 선택이라 비워 둔다.
@@ -29,7 +24,8 @@ export function toJoinRequest(
     name: profile.name.trim(),
     nickname: profile.nickname.trim(),
     phone: profile.phone.trim(),
-    birthDate: toIsoDate(profile.birth),
+    // 날짜 선택기 값이 이미 API 형식(YYYY-MM-DD)이다
+    birthDate: profile.birth.trim(),
     agreedTerms: agreedTermTypes(terms),
   }
 }
