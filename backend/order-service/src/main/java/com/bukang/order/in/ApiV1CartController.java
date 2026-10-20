@@ -45,7 +45,9 @@ public class ApiV1CartController {
 	// 에러 응답은 GlobalExceptionHandler, OrderExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	@GetMapping
 	@Operation(summary = "내 장바구니 조회",
-		description = "회원별로 서버에 저장한 장바구니를 돌려준다. 장바구니에는 한 종목만 담기므로 항목은 하나다. 담은 적이 없으면 빈 목록이다.")
+		description = "회원별로 서버에 저장한 장바구니를 돌려준다. 장바구니에는 한 종목만 담기므로 항목은 하나다. 담은 적이 없으면 빈 목록이다. "
+			+ "항목마다 그 종목으로 저장한 결제 전 신청서(PENDING)의 ID·대회 ID·참가자 이름을 붙인다(장바구니 결제에 보낼 신청서). "
+			+ "신청서 없이 담았으면 세 값은 null이다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = {
@@ -115,7 +117,8 @@ public class ApiV1CartController {
 	}
 
 	@DeleteMapping("/items/{cartItemId}")
-	@Operation(summary = "장바구니에서 빼기", description = "본인 장바구니의 항목을 빼고, 남은 장바구니를 돌려준다.")
+	@Operation(summary = "장바구니에서 빼기", description = "본인 장바구니의 항목을 빼고, 남은 장바구니를 돌려준다. "
+		+ "그 종목으로 저장한 결제 전 신청서(PENDING)도 함께 취소해, 같은 대회에 다시 신청할 수 있게 한다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "빼기 성공",
 			content = @Content(examples = @ExampleObject(value = CartApiExamples.REMOVE_SUCCESS))),

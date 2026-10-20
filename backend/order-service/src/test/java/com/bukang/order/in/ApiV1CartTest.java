@@ -123,9 +123,15 @@ class ApiV1CartTest {
 	}
 
 	@Test
-	@DisplayName("담기만으로는 참가 신청·자리 확보가 생기지 않는다")
+	@DisplayName("담기만으로는 참가 신청·자리 확보가 생기지 않고, 신청서가 없으니 항목의 신청서 ID는 비어 있다")
 	void addDoesNotHoldSeat() throws Exception {
-		add(MEMBER_ID, COURSE_ID).andExpect(status().isCreated());
+		add(MEMBER_ID, COURSE_ID)
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.participationId").doesNotExist());
+		find(MEMBER_ID)
+			.andExpect(jsonPath("$.data.items[0].participationId").doesNotExist())
+			.andExpect(jsonPath("$.data.items[0].raceId").doesNotExist())
+			.andExpect(jsonPath("$.data.items[0].participantName").doesNotExist());
 
 		// 자리 확보는 [결제하기]에서 참가 신청을 APPLIED로 바꿀 때 일어난다 (PRO-41). 담기는 참가 신청을 만들지 않는다
 		assertThat(participationRepository.count()).isZero();

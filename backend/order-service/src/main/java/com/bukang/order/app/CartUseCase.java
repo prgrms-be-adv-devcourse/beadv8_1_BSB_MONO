@@ -2,6 +2,9 @@ package com.bukang.order.app;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -10,13 +13,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.order.domain.Cart;
 import com.bukang.order.domain.CartItem;
+import com.bukang.order.domain.Participation;
+import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.domain.exception.ApplicationPeriodException;
 import com.bukang.order.domain.exception.CartConflictException;
 import com.bukang.order.domain.exception.CartItemAccessDeniedException;
 import com.bukang.order.domain.exception.CartItemNotFoundException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
+import com.bukang.order.dto.CartDto;
 import com.bukang.order.out.CartItemRepository;
 import com.bukang.order.out.CartRepository;
+import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.out.race.RaceCourseInfo;
 import com.bukang.order.out.race.RaceCoursePort;
 
@@ -33,6 +40,7 @@ public class CartUseCase {
 
 	private final CartRepository cartRepository;
 	private final CartItemRepository cartItemRepository;
+	private final ParticipationRepository participationRepository;
 	private final RaceCoursePort raceCoursePort;
 	private final TransactionTemplate transactionTemplate;
 
@@ -87,10 +95,16 @@ public class CartUseCase {
 		CartItem item = cart.addItem(raceCourseId);
 		// 새 항목의 ID를 받고, 유니크 제약 위반을 여기서 잡으려고 바로 반영한다
 		cartRepository.flush();
-		return new CartAddResult(item.toDto(), added);
+		Participation pending = findPending(memberId, List.of(raceCourseId)).get(raceCourseId);
+		return new CartAddResult(item.toDto(pending), added);
 	}
 
-	public Cart removeItem(int memberId, int cartItemId) {
+	/**
+	 * 항목을 빼고, 그 종목으로 저장한 결제 전 신청서(PENDING)도 취소한다 (PRO-122와 같은 취소)
+	 * 남겨 두면 한 대회 1건 제약(uk_participation_active) 때문에 같은 대회에 다시 신청할 수 없고, 결제 전 신청서는 기한이 없어 풀리지 않는다
+	 * 이미 결제 대기·결제된 신청은 주문 쪽에서 다루므로 건드리지 않는다
+	 */
+	public Cart removeItem(int memberId, int cartItemId, LocalDateTime now) {
 		CartItem item = cartItemRepository.findById(cartItemId)
 			.orElseThrow(() -> new CartItemNotFoundException("장바구니에 없는 항목입니다."));
 		Cart cart = item.getCart();
@@ -98,7 +112,35 @@ public class CartUseCase {
 			throw new CartItemAccessDeniedException("본인의 장바구니 항목만 뺄 수 있습니다.");
 		}
 		cart.removeItem(item);
+		cancelPendingParticipations(memberId, item.getRaceCourseId(), now);
 		return cart;
+	}
+
+	// [결제하기]와 겹쳐도 한 요청씩 처리하도록 신청서를 잠근 뒤 상태를 다시 본다
+	private void cancelPendingParticipations(int memberId, int raceCourseId, LocalDateTime now) {
+		List<Integer> ids = participationRepository.findIdsByMemberIdAndRaceCourseIdAndStatus(memberId, raceCourseId,
+			ParticipationStatus.PENDING);
+		for (int id : ids) {
+			participationRepository.findByIdForUpdate(id)
+				.filter(participation -> participation.getStatus() == ParticipationStatus.PENDING)
+				.ifPresent(participation -> participation.cancelBeforePayment(now));
+		}
+	}
+
+	// 장바구니 항목마다 그 종목으로 저장한 결제 전 신청서를 붙인다. 다른 기기·새로고침에서도 장바구니 결제에 보낼 신청서를 알 수 있다
+	public CartDto toDto(Cart cart) {
+		List<Integer> courseIds = cart.getItems().stream().map(CartItem::getRaceCourseId).toList();
+		return cart.toDto(findPending(cart.getMemberId(), courseIds));
+	}
+
+	private Map<Integer, Participation> findPending(int memberId, List<Integer> raceCourseIds) {
+		if (raceCourseIds.isEmpty()) {
+			return Map.of();
+		}
+		return participationRepository.findByMemberIdAndStatusAndRaceCourseIdIn(memberId, ParticipationStatus.PENDING,
+				raceCourseIds).stream()
+			.collect(Collectors.toMap(Participation::getRaceCourseId, Function.identity(),
+				(first, second) -> first));
 	}
 
 	private boolean isCartConflict(DataIntegrityViolationException exception) {
