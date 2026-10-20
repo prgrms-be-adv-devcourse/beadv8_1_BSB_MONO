@@ -192,6 +192,8 @@ function ParticipantForm({
             />
             <PhoneField
               label="연락처"
+              // 비상 연락처라 브라우저가 본인 번호를 제안하지 않게 한다
+              autoComplete="off"
               error={errors.emergencyContactPhone?.message}
               {...register('emergencyContactPhone')}
             />

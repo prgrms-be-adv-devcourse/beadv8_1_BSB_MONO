@@ -366,6 +366,8 @@ function ParticipantForm({
           />
           <PhoneField
             label="비상 연락처 전화번호"
+            // 비상 연락처라 브라우저가 본인 번호를 제안하지 않게 한다
+            autoComplete="off"
             helper="연락받을 분께 미리 알려 주세요"
             error={errors.emergencyContactPhone?.message}
             {...register('emergencyContactPhone')}
