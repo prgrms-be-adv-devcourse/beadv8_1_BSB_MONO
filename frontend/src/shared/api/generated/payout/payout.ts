@@ -29,6 +29,7 @@ import type {
   ItemsParams,
   PayoutHoldRequestDto,
   PayoutsParams,
+  RefundEligibilityParams,
   RsData,
   RsDataListPayoutDto,
   RsDataListSellerPayoutHoldDto,
@@ -58,6 +59,81 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getCompleteUrl = (recoveryId: number,) => {
+
+
+
+
+  return `/api/v1/payout/recoveries/${recoveryId}/complete`
+}
+
+/**
+ * 판매자의 입금을 확인한 회수를 회수 완료(COMPLETED)로 바꾸고 확인한 관리자와 일시를 남긴다.
+ * @summary 회수 완료
+ */
+export const complete = async (recoveryId: number, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getCompleteUrl(recoveryId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteMutationKey = () => ['complete'] as const;
+
+export const getCompleteMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof complete>>, TError,CompleteMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof complete>>, TError,CompleteMutationVariables, TContext> => {
+
+const mutationKey = getCompleteMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof complete>>, CompleteMutationVariables> = (props) => {
+          const {recoveryId} = props ?? {};
+
+          return  complete(recoveryId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteMutationResult = NonNullable<Awaited<ReturnType<typeof complete>>>
+
+    export type CompleteMutationError = RsData
+    export type CompleteMutationVariables = {recoveryId: number}
+
+    /**
+ * @summary 회수 완료
+ */
+export const useComplete = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof complete>>, TError,CompleteMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof complete>>,
+        TError,
+        CompleteMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCompleteMutationOptions(options), queryClient);
+    }
 
 export const getHoldUrl = (payoutId: number,) => {
 
@@ -223,6 +299,115 @@ export const useRelease = <TError = RsData,
       > => {
       return useMutation(getReleaseMutationOptions(options), queryClient);
     }
+
+export const getRefundEligibilityUrl = (params: RefundEligibilityParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/internal/v1/payout/refund-eligibility?${stringifiedParams}` : `/internal/v1/payout/refund-eligibility`
+}
+
+/**
+ * 대회일로 정산 대상일(대회 다음 날)을 구해, 오늘(한국 날짜)이 정산 대상일 전이면 환불 가능으로 돌려준다. 정산 대상일 당일부터는 사유와 상관없이(대회 취소·일정 변경 포함) 환불할 수 없다. 환불 기한 판단은 주문 서비스가 하고, 환불 요청을 받을 때 이 API를 동기 호출로 부른다.
+ * @summary 참가권 환불 가능 여부 조회
+ */
+export const refundEligibility = async (params: RefundEligibilityParams, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getRefundEligibilityUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getRefundEligibilityQueryKey = (params?: RefundEligibilityParams,) => {
+    return [
+    `/internal/v1/payout/refund-eligibility`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getRefundEligibilityQueryOptions = <TData = Awaited<ReturnType<typeof refundEligibility>>, TError = RsData>(params: RefundEligibilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof refundEligibility>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getRefundEligibilityQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof refundEligibility>>> = ({ signal }) => refundEligibility(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof refundEligibility>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type RefundEligibilityQueryResult = NonNullable<Awaited<ReturnType<typeof refundEligibility>>>
+export type RefundEligibilityQueryError = RsData
+
+
+export function useRefundEligibility<TData = Awaited<ReturnType<typeof refundEligibility>>, TError = RsData>(
+ params: RefundEligibilityParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof refundEligibility>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof refundEligibility>>,
+          TError,
+          Awaited<ReturnType<typeof refundEligibility>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useRefundEligibility<TData = Awaited<ReturnType<typeof refundEligibility>>, TError = RsData>(
+ params: RefundEligibilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof refundEligibility>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof refundEligibility>>,
+          TError,
+          Awaited<ReturnType<typeof refundEligibility>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useRefundEligibility<TData = Awaited<ReturnType<typeof refundEligibility>>, TError = RsData>(
+ params: RefundEligibilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof refundEligibility>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 참가권 환불 가능 여부 조회
+ */
+
+export function useRefundEligibility<TData = Awaited<ReturnType<typeof refundEligibility>>, TError = RsData>(
+ params: RefundEligibilityParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof refundEligibility>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getRefundEligibilityQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSummaryUrl = () => {
 

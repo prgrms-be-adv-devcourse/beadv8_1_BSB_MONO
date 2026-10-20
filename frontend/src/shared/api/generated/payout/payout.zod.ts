@@ -8,6 +8,17 @@
 import * as zod from 'zod';
 
 /**
+ * 판매자의 입금을 확인한 회수를 회수 완료(COMPLETED)로 바꾸고 확인한 관리자와 일시를 남긴다.
+ * @summary 회수 완료
+ */
+export const CompleteParams = zod.object({
+  "recoveryId": zod.int().describe('회수 ID')
+})
+
+export const CompleteResponse = zod.unknown()
+
+
+/**
  * 정산 예정(CALCULATED)인 정산 내역에 지급보류를 걸어 지급 배치에서 지급되지 않게 한다. 한 정산 내역에는 보류를 하나만 걸 수 있고, 지급보류 ID(HD-)를 붙인다.
  * @summary 지급보류 걸기
  */
@@ -70,6 +81,17 @@ export const ReleaseResponse = zod.object({
 
 
 /**
+ * 대회일로 정산 대상일(대회 다음 날)을 구해, 오늘(한국 날짜)이 정산 대상일 전이면 환불 가능으로 돌려준다. 정산 대상일 당일부터는 사유와 상관없이(대회 취소·일정 변경 포함) 환불할 수 없다. 환불 기한 판단은 주문 서비스가 하고, 환불 요청을 받을 때 이 API를 동기 호출로 부른다.
+ * @summary 참가권 환불 가능 여부 조회
+ */
+export const RefundEligibilityQueryParams = zod.object({
+  "raceDate": zod.iso.date().describe('참가권의 대회일 (yyyy-MM-dd)')
+})
+
+export const RefundEligibilityResponse = zod.unknown()
+
+
+/**
  * 다음 정산일, 정산 예정액(다음 정산일에 나갈 지급액 합계, 보류 제외), 지급보류 중인 정산 내역 수를 돌려준다. 조회 기간과 상관없이 판매자의 지금 상태로 계산한다.
  * @summary 정산 요약 조회
  */
@@ -101,12 +123,14 @@ export const PayoutsResponse = zod.object({
   "payoutCode": zod.string(),
   "raceId": zod.int(),
   "raceName": zod.string(),
+  "payoutStage": zod.enum(['FIRST', 'FINAL']).describe('정산 단계 (FIRST: 1차 정산, FINAL: 최종 정산)'),
   "payoutMonth": zod.string(),
   "salesAmount": zod.int(),
   "refundAmount": zod.int(),
   "feeAmount": zod.int(),
+  "advanceDeductionAmount": zod.int().describe('1차 정산금 차감 (최종에서 뺀 1차 지급액 − 회수액, 1차는 0)'),
   "payoutAmount": zod.int(),
-  "status": zod.enum(['CALCULATED', 'HELD', 'PAID']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)'),
+  "status": zod.enum(['CALCULATED', 'HELD', 'PAID', 'CANCELED']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, CANCELED: 취소)'),
   "settledAt": zod.iso.datetime({"offset":true}),
   "scheduledPayDate": zod.iso.date(),
   "paidAt": zod.iso.datetime({"offset":true}).nullish()
@@ -134,8 +158,8 @@ export const ItemsResponse = zod.object({
   "data": zod.object({
   "content": zod.array(zod.object({
   "id": zod.int(),
-  "orderItemId": zod.int(),
-  "recordType": zod.enum(['SALE', 'REFUND']).describe('구분 (SALE: 판매, REFUND: 환불)'),
+  "orderItemId": zod.int().nullish(),
+  "recordType": zod.enum(['ADVANCE_PAID', 'SALE', 'FEE', 'ADVANCE_OFFSET', 'RECOVERY_REQUESTED', 'RECEIVABLE_ADDED', 'RECOVERY_OFFSET', 'RECOVERY_RECEIVED', 'ADVANCE_PAID_CANCELED', 'SALE_CANCELED', 'FEE_CANCELED', 'ADVANCE_OFFSET_CANCELED', 'RECOVERY_OFFSET_CANCELED']).describe('원장 줄 종류 (ADVANCE_PAID: 선금, SALE: 판매, FEE: 수수료, ADVANCE_OFFSET: 선지급 차감, RECOVERY_REQUESTED: 회수 요청, RECEIVABLE_ADDED: 갚을 돈 추가, RECOVERY_OFFSET: 회수 상계, RECOVERY_RECEIVED: 회수 입금, ADVANCE_PAID_CANCELED: 선금 취소, SALE_CANCELED: 판매 취소, FEE_CANCELED: 수수료 취소, ADVANCE_OFFSET_CANCELED: 선지급 차감 취소, RECOVERY_OFFSET_CANCELED: 회수 상계 취소)'),
   "amount": zod.int(),
   "feeRate": zod.number(),
   "feeAmount": zod.int(),
@@ -144,7 +168,7 @@ export const ItemsResponse = zod.object({
   "payoutCode": zod.string(),
   "raceId": zod.int(),
   "raceName": zod.string(),
-  "payoutStatus": zod.enum(['CALCULATED', 'HELD', 'PAID']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)'),
+  "payoutStatus": zod.enum(['CALCULATED', 'HELD', 'PAID', 'CANCELED']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, CANCELED: 취소)'),
   "scheduledPayDate": zod.iso.date()
 })),
   "page": zod.int(),

@@ -95,6 +95,9 @@
         "raceName": {
           "type": "string"
         },
+        "payoutStage": {
+          "$ref": "#/components/schemas/PayoutStage"
+        },
         "payoutMonth": {
           "type": "string"
         },
@@ -109,6 +112,11 @@
         "feeAmount": {
           "type": "integer",
           "format": "int64"
+        },
+        "advanceDeductionAmount": {
+          "type": "integer",
+          "format": "int64",
+          "description": "1차 정산금 차감 (최종에서 뺀 1차 지급액 − 회수액, 1차는 0)"
         },
         "payoutAmount": {
           "type": "integer",
@@ -136,10 +144,12 @@
         "payoutCode",
         "raceId",
         "raceName",
+        "payoutStage",
         "payoutMonth",
         "salesAmount",
         "refundAmount",
         "feeAmount",
+        "advanceDeductionAmount",
         "payoutAmount",
         "status",
         "settledAt",
@@ -155,7 +165,8 @@
         },
         "orderItemId": {
           "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "nullable": true
         },
         "recordType": {
           "$ref": "#/components/schemas/PayoutRecordType"
@@ -199,7 +210,6 @@
       },
       "required": [
         "id",
-        "orderItemId",
         "recordType",
         "amount",
         "feeRate",
@@ -366,9 +376,10 @@
       "enum": [
         "CALCULATED",
         "HELD",
-        "PAID"
+        "PAID",
+        "CANCELED"
       ],
-      "description": "정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)"
+      "description": "정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, CANCELED: 취소)"
     },
     "PayoutHoldStatus": {
       "type": "string",
@@ -389,10 +400,29 @@
     "PayoutRecordType": {
       "type": "string",
       "enum": [
+        "ADVANCE_PAID",
         "SALE",
-        "REFUND"
+        "FEE",
+        "ADVANCE_OFFSET",
+        "RECOVERY_REQUESTED",
+        "RECEIVABLE_ADDED",
+        "RECOVERY_OFFSET",
+        "RECOVERY_RECEIVED",
+        "ADVANCE_PAID_CANCELED",
+        "SALE_CANCELED",
+        "FEE_CANCELED",
+        "ADVANCE_OFFSET_CANCELED",
+        "RECOVERY_OFFSET_CANCELED"
       ],
-      "description": "구분 (SALE: 판매, REFUND: 환불)"
+      "description": "원장 줄 종류 (ADVANCE_PAID: 선금, SALE: 판매, FEE: 수수료, ADVANCE_OFFSET: 선지급 차감, RECOVERY_REQUESTED: 회수 요청, RECEIVABLE_ADDED: 갚을 돈 추가, RECOVERY_OFFSET: 회수 상계, RECOVERY_RECEIVED: 회수 입금, ADVANCE_PAID_CANCELED: 선금 취소, SALE_CANCELED: 판매 취소, FEE_CANCELED: 수수료 취소, ADVANCE_OFFSET_CANCELED: 선지급 차감 취소, RECOVERY_OFFSET_CANCELED: 회수 상계 취소)"
+    },
+    "PayoutStage": {
+      "type": "string",
+      "enum": [
+        "FIRST",
+        "FINAL"
+      ],
+      "description": "정산 단계 (FIRST: 1차 정산, FINAL: 최종 정산)"
     }
   }
 }

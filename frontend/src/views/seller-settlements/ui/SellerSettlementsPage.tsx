@@ -10,6 +10,7 @@ import {
   formatWeekday,
   HOLD_REASON,
   HOLD_STATUS,
+  PAYOUT_STAGE,
   PAYOUT_STATUS,
   recentPayoutMonths,
   RECORD_TYPE,
@@ -36,6 +37,9 @@ export type SettlementTab = 'monthly' | 'orders' | 'holds'
 
 /** 건별 정산 한 페이지 크기 (백엔드 한도 1~100) */
 const ITEM_PAGE_SIZE = 20
+
+/** 해당 없는 금액 칸 */
+const DASH = '–'
 
 function errorText(error: unknown) {
   return (error instanceof ApiError && error.serverMessage) || '잠시 뒤 다시 시도해 주세요.'
@@ -153,7 +157,12 @@ function MonthlyPayouts({ today }: { today: Date }) {
             columns={[
               { key: 'id', header: '정산 ID', width: 'w-42.5', render: (r) => r.payoutCode },
               { key: 'race', header: '대회', render: (r) => r.raceName },
-              { key: 'month', header: '정산 월', render: (r) => r.payoutMonth },
+              {
+                key: 'stage',
+                header: '구분',
+                width: 'w-15',
+                render: (r) => PAYOUT_STAGE[r.payoutStage],
+              },
               {
                 key: 'sales',
                 header: '판매액',
@@ -166,11 +175,19 @@ function MonthlyPayouts({ today }: { today: Date }) {
                 align: 'right',
                 render: (r) => formatWon(r.refundAmount),
               },
+              // 수수료와 1차 정산금 차감은 최종 정산에서만 뺀다. 1차 줄은 "–"
               {
                 key: 'fee',
                 header: '수수료',
                 align: 'right',
-                render: (r) => formatWon(r.feeAmount),
+                render: (r) => (r.payoutStage === 'FINAL' ? formatWon(r.feeAmount) : DASH),
+              },
+              {
+                key: 'advanceDeduction',
+                header: '1차 정산금 차감',
+                align: 'right',
+                render: (r) =>
+                  r.payoutStage === 'FINAL' ? formatWon(r.advanceDeductionAmount) : DASH,
               },
               {
                 key: 'payout',
@@ -196,7 +213,8 @@ function MonthlyPayouts({ today }: { today: Date }) {
         )}
       </QueryRows>
       <p className="text-caption text-text-tertiary">
-        대회가 끝나면 한 번에 정산해요. 수수료는 (판매액 − 환불액)의 5.5%(부가세 포함)예요.
+        환불 마감 뒤 판매액의 40%를 1차 정산으로 먼저 지급하고, 대회가 끝나면 나머지를 최종 정산으로
+        지급해요. 최종 정산에서 수수료((판매액 − 환불액)의 5.5%, 부가세 포함)와 1차 정산금을 빼요.
       </p>
     </ConsoleCard>
   )

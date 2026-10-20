@@ -5,6 +5,13 @@
  * 크루 중심 마라톤 대회 예매·커머스 플랫폼 정산 API
  * OpenAPI spec version: v1
  */
+export interface RsData {
+  status?: number;
+  code?: string;
+  message?: string;
+  data?: unknown;
+}
+
 /**
  * 보류 사유 (ACCOUNT_NOT_REGISTERED: 정산 계좌 미등록, RACE_CANCELED: 대회 취소 처리)
  */
@@ -30,13 +37,6 @@ export interface PayoutHoldRequestDto {
   reason?: string;
 }
 
-export interface RsData {
-  status?: number;
-  code?: string;
-  message?: string;
-  data?: unknown;
-}
-
 export interface PayoutSummaryDto {
   nextPayDate: string;
   scheduledPayoutAmount: number;
@@ -44,7 +44,18 @@ export interface PayoutSummaryDto {
 }
 
 /**
- * 정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료)
+ * 정산 단계 (FIRST: 1차 정산, FINAL: 최종 정산)
+ */
+export type PayoutStage = typeof PayoutStage[keyof typeof PayoutStage];
+
+
+export const PayoutStage = {
+  FIRST: 'FIRST',
+  FINAL: 'FINAL',
+} as const;
+
+/**
+ * 정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, CANCELED: 취소)
  */
 export type PayoutStatus = typeof PayoutStatus[keyof typeof PayoutStatus];
 
@@ -53,6 +64,7 @@ export const PayoutStatus = {
   CALCULATED: 'CALCULATED',
   HELD: 'HELD',
   PAID: 'PAID',
+  CANCELED: 'CANCELED',
 } as const;
 
 export interface PayoutDto {
@@ -60,10 +72,13 @@ export interface PayoutDto {
   payoutCode: string;
   raceId: number;
   raceName: string;
+  payoutStage: PayoutStage;
   payoutMonth: string;
   salesAmount: number;
   refundAmount: number;
   feeAmount: number;
+  /** 1차 정산금 차감 (최종에서 뺀 1차 지급액 − 회수액, 1차는 0) */
+  advanceDeductionAmount: number;
   payoutAmount: number;
   status: PayoutStatus;
   settledAt: string;
@@ -73,19 +88,31 @@ export interface PayoutDto {
 }
 
 /**
- * 구분 (SALE: 판매, REFUND: 환불)
+ * 원장 줄 종류 (ADVANCE_PAID: 선금, SALE: 판매, FEE: 수수료, ADVANCE_OFFSET: 선지급 차감, RECOVERY_REQUESTED: 회수 요청, RECEIVABLE_ADDED: 갚을 돈 추가, RECOVERY_OFFSET: 회수 상계, RECOVERY_RECEIVED: 회수 입금, ADVANCE_PAID_CANCELED: 선금 취소, SALE_CANCELED: 판매 취소, FEE_CANCELED: 수수료 취소, ADVANCE_OFFSET_CANCELED: 선지급 차감 취소, RECOVERY_OFFSET_CANCELED: 회수 상계 취소)
  */
 export type PayoutRecordType = typeof PayoutRecordType[keyof typeof PayoutRecordType];
 
 
 export const PayoutRecordType = {
+  ADVANCE_PAID: 'ADVANCE_PAID',
   SALE: 'SALE',
-  REFUND: 'REFUND',
+  FEE: 'FEE',
+  ADVANCE_OFFSET: 'ADVANCE_OFFSET',
+  RECOVERY_REQUESTED: 'RECOVERY_REQUESTED',
+  RECEIVABLE_ADDED: 'RECEIVABLE_ADDED',
+  RECOVERY_OFFSET: 'RECOVERY_OFFSET',
+  RECOVERY_RECEIVED: 'RECOVERY_RECEIVED',
+  ADVANCE_PAID_CANCELED: 'ADVANCE_PAID_CANCELED',
+  SALE_CANCELED: 'SALE_CANCELED',
+  FEE_CANCELED: 'FEE_CANCELED',
+  ADVANCE_OFFSET_CANCELED: 'ADVANCE_OFFSET_CANCELED',
+  RECOVERY_OFFSET_CANCELED: 'RECOVERY_OFFSET_CANCELED',
 } as const;
 
 export interface PayoutItemDto {
   id: number;
-  orderItemId: number;
+  /** @nullable */
+  orderItemId?: number | null;
   recordType: PayoutRecordType;
   amount: number;
   feeRate: number;
@@ -191,6 +218,13 @@ export interface RsDataListSellerPayoutHoldDto {
   message?: string;
   data?: SellerPayoutHoldDto[];
 }
+
+export type RefundEligibilityParams = {
+/**
+ * 참가권의 대회일 (yyyy-MM-dd)
+ */
+raceDate: string;
+};
 
 export type PayoutsParams = {
 /**
