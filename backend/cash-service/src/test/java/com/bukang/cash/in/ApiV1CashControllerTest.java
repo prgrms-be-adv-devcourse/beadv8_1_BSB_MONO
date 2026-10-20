@@ -111,11 +111,18 @@ class ApiV1CashControllerTest {
 	}
 
 	@Test
-	@DisplayName("내역 조회: 전체 조회 시 카테고리가 섞여도 최신순으로 PageDto 형식으로 돌려준다")
+	@DisplayName("내역 조회: 전체 조회 시 카테고리가 섞여도 최신순으로 PageDto 형식으로 돌려주고, "
+		+ "다른 지갑(홀딩·다른 회원) 줄은 안 섞인다")
 	void getLedgers() throws Exception {
 		Wallet wallet = createWalletWithBalance(3, 10_000);
 		walletLedgerRepository.save(wallet.debit(4_000, LedgerType.사용__주문결제, LedgerRefType.Order, 100));
 		walletLedgerRepository.save(wallet.credit(4_000, LedgerType.환불__주문취소, LedgerRefType.Order, 100));
+		// 같은 주문으로 홀딩 지갑에도 짝이 되는 줄이 남는다 (장부 기록 규칙) — 요청자(3번) 조회엔 안 섞여야 한다
+		Wallet holdingWallet = createWalletWithBalance(2, 0);
+		walletLedgerRepository.save(holdingWallet.credit(4_000, LedgerType.임시보관__주문결제, LedgerRefType.Order, 100));
+		// 다른 회원(4번)의 내역도 안 섞여야 한다
+		Wallet otherWallet = createWalletWithBalance(4, 10_000);
+		walletLedgerRepository.save(otherWallet.debit(4_000, LedgerType.사용__주문결제, LedgerRefType.Order, 200));
 
 		mockMvc.perform(get("/api/v1/cash/wallets/ledgers")
 				.header(MemberIdHeader.NAME, "3"))
@@ -127,6 +134,7 @@ class ApiV1CashControllerTest {
 			.andExpect(jsonPath("$.data.content[0].balanceAfter").value(10_000))
 			.andExpect(jsonPath("$.data.content[0].refId").value(100))
 			.andExpect(jsonPath("$.data.content[1].category").value("PAYMENT"))
+			.andExpect(jsonPath("$.data.content[1].amount").value(-4_000))
 			.andExpect(jsonPath("$.data.content[2].category").value("CHARGE"))
 			.andExpect(jsonPath("$.data.page").value(0))
 			.andExpect(jsonPath("$.data.totalElements").value(3));
