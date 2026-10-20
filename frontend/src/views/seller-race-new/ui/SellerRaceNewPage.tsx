@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { format, isBefore, startOfToday } from 'date-fns'
+import { isBefore, startOfToday } from 'date-fns'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
@@ -41,10 +41,6 @@ const FORM_ID = 'seller-race-new'
 // 지난 날은 대회 일시·접수 기간·환불 기한으로 고를 수 없다
 const today = startOfToday()
 const isPast = (date: Date) => isBefore(date, today)
-
-// 달력 칸의 Date ↔ 폼 값 문자열 (race-form.ts의 'yyyy-MM-dd HH:mm' · 'yyyy-MM-dd' 형식)
-const toDateTimeText = (date: Date | undefined) => (date ? format(date, 'yyyy-MM-dd HH:mm') : '')
-const toDateText = (date: Date | undefined) => (date ? format(date, 'yyyy-MM-dd') : '')
 
 const KITS = [
   {
@@ -192,7 +188,7 @@ export function SellerRaceNewPage() {
                   error={errors.raceDate?.message}
                   isDateDisabled={isPast}
                   startMonth={today}
-                  onValueChange={(date) => field.onChange(toDateTimeText(date))}
+                  onValueChange={field.onChange}
                   className="flex-1"
                 />
               )}
@@ -232,10 +228,10 @@ export function SellerRaceNewPage() {
               isDateDisabled={isPast}
               startMonth={today}
               onValueChange={(range) => {
-                setValue('individualOpenAt', toDateTimeText(range.from), {
+                setValue('individualOpenAt', range.from, {
                   shouldValidate: isSubmitted,
                 })
-                setValue('applicationCloseAt', toDateTimeText(range.to), {
+                setValue('applicationCloseAt', range.to, {
                   shouldValidate: isSubmitted,
                 })
               }}
@@ -321,7 +317,7 @@ export function SellerRaceNewPage() {
             control={control}
             name="refundDeadline"
             render={({ field }) => (
-              // 백엔드는 날짜만 받는다. 시간은 고르게 되어 있지만 그 날 23:59까지로 본다
+              // 백엔드는 날짜만 받는다. 시간 칸 값은 보내지 않고 그 날 23:59까지로 본다
               <DateTimeField
                 mode="single"
                 label="환불 기한"
@@ -329,7 +325,7 @@ export function SellerRaceNewPage() {
                 error={errors.refundDeadline?.message}
                 isDateDisabled={isPast}
                 startMonth={today}
-                onValueChange={(date) => field.onChange(toDateText(date))}
+                onValueChange={field.onChange}
               />
             )}
           />
