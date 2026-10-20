@@ -14,4 +14,5 @@ export {
   NICKNAME_PATTERN,
   nicknameWidth,
 } from './model/nickname'
+export { formatSellerDate, SELLER_STATUS, SELLER_TYPE_LABEL } from './model/seller'
 export { BirthDateField, type BirthDateFieldProps } from './ui/BirthDateField'
