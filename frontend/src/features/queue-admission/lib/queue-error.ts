@@ -18,3 +18,29 @@ export function admissionExpiredHref(raceId: number | undefined): Route {
       : `/checkout?result=timeout&raceId=${raceId}`
   ) as Route
 }
+
+/** 줄서기를 건너뛴 이유(등록 오류의 HTTP 상태)에 맞는 안내 문구. 입장 확인도 입장 전이라 들어갈 수 없을 때 보여 준다 */
+export function skippedNotice(status: number) {
+  switch (status) {
+    case 403:
+      return {
+        title: '지금은 접수 기간이 아니에요',
+        description: '접수 기간에 다시 들어와 주세요.',
+      }
+    case 404:
+      return {
+        title: '대회 정보를 찾지 못했어요',
+        description: '대회 상세로 돌아가 다시 시도해 주세요.',
+      }
+    case 503:
+      return {
+        title: '대기열이 잠시 불안정해요',
+        description: '잠시 뒤에 다시 시도해 주세요.',
+      }
+    default:
+      return {
+        title: '지금은 입장할 수 없어요',
+        description: '대회 상세로 돌아가 다시 시도해 주세요.',
+      }
+  }
+}

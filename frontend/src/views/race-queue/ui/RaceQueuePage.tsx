@@ -7,7 +7,7 @@ import { useEffect } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
 import { loginHref } from '@/features/auth'
-import { useAdmissionTimer, useQueuePosition } from '@/features/queue-admission'
+import { skippedNotice, useAdmissionTimer, useQueuePosition } from '@/features/queue-admission'
 import { BottomCta, buttonClassName, formatTimer, Icon, ProgressBar } from '@/shared/ui'
 
 // 피그마 V2 · M05-Q1 대기열 · 차례 기다리기 / M05-Q2 대기열 · 내 차례
@@ -41,6 +41,8 @@ export function RaceQueuePage({
     preview ? undefined : Number(optionId),
     'wait',
     queue.canEnter,
+    // 줄서기를 건너뛰었는데 입장 전이라고 답하면 기다려도 차례가 오지 않으니 묻기를 멈춘다
+    queue.skippedStatus !== undefined,
   )
   const remaining = preview ? previewRemainingSeconds : timer.remaining
 
@@ -61,10 +63,35 @@ export function RaceQueuePage({
     if (admitted && !preview) router.replace(applyHref)
   }, [admitted, preview, applyHref, router])
 
+  const blocked =
+    !preview && queue.skippedStatus !== undefined && timer.notAdmitted && remaining === null
+  const notice = skippedNotice(queue.skippedStatus ?? 0)
+
   return (
     <>
       <AppHeader type="sub" title="대기열" close backHref={raceHref} />
-      {queue.failed && remaining === null ? (
+      {blocked ? (
+        <>
+          <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
+            <h1 className="text-center text-heading-l text-text-primary">{notice.title}</h1>
+            <Icon
+              name="Users"
+              className="size-24 text-text-primary"
+              strokeWidth={BIG_ICON_STROKE}
+              aria-hidden
+            />
+            <p className="text-center text-body-s text-text-secondary">{notice.description}</p>
+          </main>
+          <BottomCta
+            className="sticky bottom-0 z-10"
+            primary={
+              <Link href={raceHref} className={buttonClassName({ size: 'l' })}>
+                대회로 돌아가기
+              </Link>
+            }
+          />
+        </>
+      ) : queue.failed && remaining === null ? (
         <>
           <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-6">
             <h1 className="text-center text-heading-l text-text-primary">

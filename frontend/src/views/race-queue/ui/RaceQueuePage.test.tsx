@@ -260,4 +260,49 @@ describe('RaceQueuePage', () => {
     expect(asked).toBe(1)
     expect(replace).not.toHaveBeenCalled()
   })
+
+  it.each([
+    [403, /지금은 접수 기간이 아니에요/],
+    [404, /대회 정보를 찾지 못했어요/],
+    [503, /대기열이 잠시 불안정해요/],
+  ])(
+    '등록이 %i로 실패해 줄서기를 건너뛰었는데 입장 전이면 이유를 안내하고 더 묻지 않는다',
+    async (status, title) => {
+      mockQueue([], queueFailure(status))
+      let asked = 0
+      server.use(
+        http.get('*/api/v1/order/queue/admission', () => {
+          asked += 1
+          return HttpResponse.json({ status: 200, message: 'ok', data: NOT_ADMITTED })
+        }),
+      )
+      renderQueue()
+
+      expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: '대회로 돌아가기' })).toHaveAttribute(
+        'href',
+        '/races/1',
+      )
+      await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS * 3))
+      expect(asked).toBe(1)
+      expect(replace).not.toHaveBeenCalled()
+    },
+  )
+
+  it('이미 입장한 회원(409)의 입장 확인이 입장 전이어도 계속 묻는다', async () => {
+    mockQueue([], queueFailure(409))
+    let asked = 0
+    server.use(
+      http.get('*/api/v1/order/queue/admission', () => {
+        asked += 1
+        return HttpResponse.json({ status: 200, message: 'ok', data: NOT_ADMITTED })
+      }),
+    )
+    renderQueue()
+
+    await vi.waitFor(() => expect(asked).toBe(1))
+    await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS))
+    await vi.waitFor(() => expect(asked).toBeGreaterThan(1))
+    expect(screen.queryByRole('link', { name: '대회로 돌아가기' })).not.toBeInTheDocument()
+  })
 })
