@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { PROFILE_ERRORS, profileSchema } from './profile-schema'
 
-const valid = { name: '김러너', birth: '1995.03.02', phone: '010-1234-5678', nickname: '러너1' }
+const valid = { name: '김러너', birth: '1995-03-02', phone: '010-1234-5678', nickname: '러너1' }
 
 function birthError(birth: string) {
   const result = profileSchema.safeParse({ ...valid, birth })
@@ -17,15 +17,16 @@ describe('profileSchema 생년월일', () => {
 
   it('만 14세 미만은 가입 화면과 같은 문구로 거절한다', () => {
     const year = new Date().getFullYear() - 10
-    expect(birthError(`${year}.01.01`)).toBe(PROFILE_ERRORS.birthUnder14)
+    expect(birthError(`${year}-01-01`)).toBe(PROFILE_ERRORS.birthUnder14)
   })
 
   it('미래 날짜는 거절한다', () => {
     const year = new Date().getFullYear() + 1
-    expect(birthError(`${year}.01.01`)).toBe(PROFILE_ERRORS.birthUnder14)
+    expect(birthError(`${year}-01-01`)).toBe(PROFILE_ERRORS.birthUnder14)
   })
 
-  it('형식이 틀리면 형식 문구를 보여 준다', () => {
-    expect(birthError('1995-03-02')).toBe(PROFILE_ERRORS.birth)
+  it('비었거나 없는 날짜면 형식 문구를 보여 준다', () => {
+    expect(birthError('')).toBe(PROFILE_ERRORS.birth)
+    expect(birthError('1995-02-30')).toBe(PROFILE_ERRORS.birth)
   })
 })

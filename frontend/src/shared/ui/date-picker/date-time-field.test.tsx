@@ -2,36 +2,33 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import { rangeDateText, TIME_ITEMS, timeItemsWith, withTime } from './date-time'
+import { dateTimeText, formatTimeTyping, padTime, rangeDateText } from './date-time'
 import { DateTimeField } from './DateTimeField'
 
 const day = (d: number, h = 0, m = 0) => new Date(2026, 9, d, h, m) // 2026년 10월
 
-describe('시간 목록', () => {
-  it('30분 단위 48개 뒤에 23:59가 온다', () => {
-    expect(TIME_ITEMS).toHaveLength(49)
-    expect(TIME_ITEMS.slice(0, 2).map((i) => i.value)).toEqual(['00:00', '00:30'])
-    expect(TIME_ITEMS.slice(-2).map((i) => i.value)).toEqual(['23:30', '23:59'])
+describe('시간 칸 글자', () => {
+  it('숫자만 치면 두 자리 뒤에 콜론을 넣는다', () => {
+    expect(formatTimeTyping('18')).toBe('18')
+    expect(formatTimeTyping('183')).toBe('18:3')
+    expect(formatTimeTyping('1830')).toBe('18:30')
+    expect(formatTimeTyping('183045')).toBe('18:30')
   })
 
-  it('목록에 없는 기본 시각은 순서에 맞춰 끼워 넣는다', () => {
-    const values = timeItemsWith('10:15', null).map((i) => i.value)
-    expect(values.slice(values.indexOf('10:00'), values.indexOf('10:00') + 3)).toEqual([
-      '10:00',
-      '10:15',
-      '10:30',
-    ])
-  })
-})
-
-describe('withTime', () => {
-  it('날짜에 시각을 붙인다', () => {
-    expect(withTime(day(31), '23:59')).toEqual(day(31, 23, 59))
+  it('콜론을 직접 치면 그대로 두고 숫자 아닌 글자는 뺀다', () => {
+    expect(formatTimeTyping('9:30')).toBe('9:30')
+    expect(formatTimeTyping('1a:3b0')).toBe('1:30')
   })
 
-  it('날짜나 시간 중 하나라도 없으면 undefined', () => {
-    expect(withTime(undefined, '10:00')).toBeUndefined()
-    expect(withTime(day(1), null)).toBeUndefined()
+  it('칸을 떠날 때 한 자리 시를 두 자리로 채운다', () => {
+    expect(padTime('9:30')).toBe('09:30')
+    expect(padTime('18:30')).toBe('18:30')
+  })
+
+  it('폼 글자는 날짜와 시간을 띄어 쓴다', () => {
+    expect(dateTimeText(day(31), '18:00')).toBe('2026-10-31 18:00')
+    expect(dateTimeText(undefined, '18:00')).toBe(' 18:00')
+    expect(dateTimeText(undefined, '')).toBe('')
   })
 })
 
@@ -54,7 +51,7 @@ describe('DateTimeField', () => {
     await userEvent.click(screen.getByRole('button', { name: /10월 20일/ }))
     await userEvent.click(screen.getByRole('button', { name: '선택 완료' }))
 
-    expect(onValueChange).toHaveBeenLastCalledWith(day(20, 8, 0))
+    expect(onValueChange).toHaveBeenLastCalledWith('2026-10-20 08:00')
     expect(screen.getByRole('button', { name: /2026-10-20 \(화\)/ })).toBeInTheDocument()
   })
 
@@ -84,7 +81,26 @@ describe('DateTimeField', () => {
         defaultValue={{ from: day(14, 10, 0), to: day(31, 18, 0) }}
       />,
     )
-    expect(screen.getByRole('combobox', { name: '접수 기간 시작 시간' })).toHaveTextContent('10:00')
-    expect(screen.getByRole('combobox', { name: '접수 기간 끝 시간' })).toHaveTextContent('18:00')
+    expect(screen.getByRole('textbox', { name: '접수 기간 시작 시간' })).toHaveValue('10:00')
+    expect(screen.getByRole('textbox', { name: '접수 기간 끝 시간' })).toHaveValue('18:00')
+  })
+
+  it('시간 칸에 숫자를 치면 콜론을 넣어 알린다', async () => {
+    const onValueChange = vi.fn()
+    render(
+      <DateTimeField
+        mode="single"
+        label="대회 일시"
+        defaultValue={day(18, 8, 0)}
+        onValueChange={onValueChange}
+      />,
+    )
+    const time = screen.getByRole('textbox', { name: '대회 일시 시간' })
+    await userEvent.clear(time)
+    await userEvent.type(time, '1830')
+
+    expect(time).toHaveValue('18:30')
+    expect(time).toHaveAttribute('inputmode', 'numeric')
+    expect(onValueChange).toHaveBeenLastCalledWith('2026-10-18 18:30')
   })
 })
