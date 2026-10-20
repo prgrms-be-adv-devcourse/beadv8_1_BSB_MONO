@@ -34,7 +34,6 @@ export function PhoneField({ onChange, onFocus, onKeyDown, ...props }: PhoneFiel
       type="tel"
       inputMode="numeric"
       autoComplete="tel"
-      maxLength={13}
       onFocus={(event) => {
         before.current = event.currentTarget.value
         onFocus?.(event)

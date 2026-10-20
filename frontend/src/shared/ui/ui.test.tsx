@@ -97,6 +97,17 @@ describe('PhoneField', () => {
     expect(input).toHaveValue('011-123-4567')
   })
 
+  it('국가번호(+82)가 붙은 번호를 붙여넣어도 010 번호가 된다', async () => {
+    const user = userEvent.setup()
+    render(<PhoneField label="휴대폰 번호" />)
+    const input = screen.getByLabelText('휴대폰 번호')
+
+    await user.click(input)
+    await user.paste('+82 10-1234-5678')
+
+    expect(input).toHaveValue('010-1234-5678')
+  })
+
   it('하이픈 바로 뒤에서 지우면 앞 숫자가 지워진다', async () => {
     const user = userEvent.setup()
     render(<PhoneField label="휴대폰 번호" />)

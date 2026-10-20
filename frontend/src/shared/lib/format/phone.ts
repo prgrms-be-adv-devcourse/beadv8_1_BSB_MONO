@@ -4,14 +4,19 @@
 /** 휴대폰 번호의 최대 자릿수 */
 export const PHONE_MAX_DIGITS = 11
 
-const onlyDigits = (value: string) => value.replace(/\D/g, '').slice(0, PHONE_MAX_DIGITS)
+// 숫자만 남긴다. 국가번호(+82 10-1234-5678)로 붙여넣거나 자동완성되면 82를 0으로 바꾼다.
+// 휴대폰 번호는 늘 0으로 시작하므로 82로 시작하는 숫자는 국가번호로 봐도 된다.
+const toDigits = (value: string) => {
+  const digits = value.replace(/\D/g, '')
+  return digits.startsWith('82') ? `0${digits.slice(2)}` : digits
+}
 
 /**
  * 숫자만 남겨 하이픈을 넣는다. 11자리는 3-4-4, 10자리(011 등)는 3-3-4.
  * 치는 중(8·9자리)에는 010 번호처럼 3-4-나머지로 보여 주다가, 10자리에서 멈추면 3-3-4로 바뀐다.
  */
 export function formatPhoneNumber(value: string): string {
-  const digits = onlyDigits(value)
+  const digits = toDigits(value).slice(0, PHONE_MAX_DIGITS)
   if (digits.length <= 3) return digits
   if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
   if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
@@ -29,9 +34,9 @@ export function formatPhoneInput(
   caret: number,
   inputType?: string,
 ): { value: string; caret: number } {
-  let digits = next.replace(/\D/g, '')
-  let digitsBefore = next.slice(0, caret).replace(/\D/g, '').length
-  const onlyHyphenRemoved = next.length < prev.length && digits === prev.replace(/\D/g, '')
+  let digits = toDigits(next)
+  let digitsBefore = toDigits(next.slice(0, caret)).length
+  const onlyHyphenRemoved = next.length < prev.length && digits === toDigits(prev)
   if (onlyHyphenRemoved && inputType === 'deleteContentBackward' && digitsBefore > 0) {
     digits = digits.slice(0, digitsBefore - 1) + digits.slice(digitsBefore)
     digitsBefore -= 1

@@ -23,6 +23,11 @@ describe('formatPhoneNumber', () => {
     expect(formatPhoneNumber('010-1234-5678-9')).toBe('010-1234-5678')
     expect(formatPhoneNumber('abc')).toBe('')
   })
+
+  it('국가번호 82로 시작하면 0으로 바꾼다', () => {
+    expect(formatPhoneNumber('+82 10-1234-5678')).toBe('010-1234-5678')
+    expect(formatPhoneNumber('+821012345678')).toBe('010-1234-5678')
+  })
 })
 
 describe('formatPhoneInput', () => {
@@ -32,6 +37,13 @@ describe('formatPhoneInput', () => {
 
   it('붙여넣으면 하이픈을 넣고 커서를 끝으로 보낸다', () => {
     expect(formatPhoneInput('', '01012345678', 11)).toEqual({ value: '010-1234-5678', caret: 13 })
+  })
+
+  it('국가번호가 붙은 번호를 붙여넣어도 010 번호로 바꾸고 커서를 끝으로 보낸다', () => {
+    expect(formatPhoneInput('', '+82 10-1234-5678', 16)).toEqual({
+      value: '010-1234-5678',
+      caret: 13,
+    })
   })
 
   it('중간에 숫자를 넣어도 커서는 넣은 숫자 바로 뒤에 있다', () => {
