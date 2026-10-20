@@ -38,6 +38,12 @@ spring:
         - classpath:/public/
         - classpath:/dev-static/
 
+# S3 키 앞에 붙이는 환경 이름. 로컬도 운영과 같은 버킷을 쓸 수 있어서 dev/uploads/…, dev/files/…로 나눈다
+file:
+  storage:
+    s3:
+      key-prefix: dev
+
 logging:
   level:
     com.bukang: debug

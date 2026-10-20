@@ -245,7 +245,7 @@
         xhr.onload = () => {
           log(`② S3 ${upload.method} → ${xhr.status}`, xhr.responseText || '(본문 없음)');
           if (xhr.status === 200) {
-            card.step(1, 'ok', '② S3 업로드 완료 (uploads/에 올라감)');
+            card.step(1, 'ok', '② S3 업로드 완료 ({환경}/uploads/에 올라감)');
             resolve(true);
           } else {
             card.step(1, 'fail', `② S3가 ${xhr.status}로 거절했습니다. 아래 기록의 S3 오류(XML)를 확인하세요.`);
@@ -263,7 +263,7 @@
       });
     }
 
-    // ③ 업로드 완료 확인: 서버가 files/로 복사하고 크기·매직 바이트를 검사해 UPLOADED로 바꾼다
+    // ③ 업로드 완료 확인: 서버가 {환경}/files/로 복사하고 크기·매직 바이트를 검사해 UPLOADED로 바꾼다
     async function completeUpload(upload, memberId, fileType, file, card) {
       try {
         const result = await callApi(
@@ -273,7 +273,7 @@
           return;
         }
         const stored = result.body.data;
-        card.step(2, 'ok', `③ 확인 완료: 상태 ${stored.status} (files/로 옮겨짐)`);
+        card.step(2, 'ok', `③ 확인 완료: 상태 ${stored.status} ({환경}/files/로 옮겨짐)`);
         card.preview(stored);
         if (!uploadedFiles.has(stored.id)) {
           const sameTypeCount = [...uploadedFiles.values()].filter(item => item.fileType === fileType).length;
@@ -299,11 +299,12 @@
       return CONTENT_TYPE_BY_EXTENSION[extension] ?? '';
     }
 
-    // presigned URL의 경로에서 객체 키(uploads/…)를 꺼낸다. 확정 키는 앞부분만 files/로 바뀐다
+    // presigned URL의 경로에서 객체 키({환경}/uploads/…)를 꺼낸다. 확정 키는 uploads/ 자리만 files/로 바뀐다
+    // path-style(S3Mock)은 경로 앞에 버킷 이름이 붙으므로, uploads/ 바로 앞 칸(환경 이름)부터 끝까지를 키로 본다
     function uploadKeyOf(uploadUrl) {
       const path = decodeURIComponent(new URL(uploadUrl).pathname);
-      const index = path.indexOf('uploads/');
-      return index >= 0 ? path.substring(index) : path;
+      const match = path.match(/[^/]+\/uploads\/[^/]+$/);
+      return match ? match[0] : path;
     }
 
     function createCard(file) {
@@ -344,7 +345,7 @@
           keys.textContent = [
             `저장소: ${new URL(uploadUrl).host}`,
             `업로드 키: ${uploadKey}`,
-            `확정 키: ${uploadKey.replace(/^uploads\//, 'files/')}  ← S3 콘솔에서 이 키를 찾으세요`,
+            `확정 키: ${uploadKey.replace('/uploads/', '/files/')}  ← S3 콘솔에서 이 키를 찾으세요`,
           ].join('\n');
         },
         manualButtons(onPut, onComplete) {
