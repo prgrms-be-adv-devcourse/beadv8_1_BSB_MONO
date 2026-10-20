@@ -56,7 +56,7 @@ services:
         # 공유 카드(og:image)의 절대 주소. 서버(EC2)에서는 접속 주소(도메인)로 바꾼다
         # layout.tsx의 metadata가 모듈을 불러올 때 한 번 계산돼, 빌드 때 만든 정적 페이지에는 빌드 시점 값이 남으므로 빌드에도 넘긴다
         SITE_URL: ${SITE_URL:-http://localhost}
-        # 토스 결제창 클라이언트 키(test_ck_/live_ck_). 비우면 결제창이 안 뜬다
+        # 토스 결제창 클라이언트 키(test_ck_만). 비우면 API_MOCKING=off에서는 충전 버튼이 실패 화면으로 간다
         NEXT_PUBLIC_TOSS_CLIENT_KEY: ${NEXT_PUBLIC_TOSS_CLIENT_KEY:-}
     image: bukang-web:latest
     container_name: bukang-web
