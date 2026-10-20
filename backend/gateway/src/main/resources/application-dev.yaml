@@ -1,13 +1,13 @@
 # 서비스를 bootRun/IDE로 호스트에서 실행할 때의 주소
 gateway:
   services:
-    member: http://localhost:8080
-    cash: http://localhost:8081
-    payout: http://localhost:8082
-    file: http://localhost:8083
-    order: http://localhost:8084
-    product: http://localhost:8085
-    queue: http://localhost:8086
+    member: ${DEV_MEMBER_SERVICE_URL:http://localhost:8080}
+    cash: ${DEV_CASH_SERVICE_URL:http://localhost:8081}
+    payout: ${DEV_PAYOUT_SERVICE_URL:http://localhost:8082}
+    file: ${DEV_FILE_SERVICE_URL:http://localhost:8083}
+    order: ${DEV_ORDER_SERVICE_URL:http://localhost:8084}
+    product: ${DEV_PRODUCT_SERVICE_URL:http://localhost:8085}
+    queue: ${DEV_QUEUE_SERVICE_URL:http://localhost:8086}
 
 # Access Token 검사용 서명 키. member-service가 발급할 때 쓰는 키와 같아야 한다
 jwt:

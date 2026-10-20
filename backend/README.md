@@ -8,6 +8,8 @@ Gradle 멀티 모듈로 `common`·`jwt`(공통 라이브러리), `gateway`(API �
 
 ### 컨테이너 구성 (`compose.yml`)
 
+로컬은 `compose.yml`, 운영(EC2)은 `compose.prod.yml` 하나로 띄웁니다. 두 파일은 합치지 않고 환경마다 통째로 둡니다(인프라 정의가 두 파일에 같이 있으니 함께 고칩니다).
+
 | 서비스 | 용도 | 주소 |
 |---|---|---|
 | `bukang-db` | MySQL 8.4 | `localhost:3306` |
@@ -19,14 +21,14 @@ Gradle 멀티 모듈로 `common`·`jwt`(공통 라이브러리), `gateway`(API �
 | `bukang-s3mock` | 로컬 S3 대체재 (Adobe S3Mock, 버킷 `bukang-file`) | http://localhost:9090 |
 | `nginx` | 입구 (`/api`는 `gateway`, 나머지는 `web`으로 넘김, 설정 `docker/nginx/default.conf`) | http://localhost |
 | `web` | 프론트엔드 Next.js (`../frontend` 이미지, nginx를 거쳐서만 접속) | - |
-| `gateway` | API 게이트웨이 (prod 프로파일, `/api` 요청을 각 서비스로 넘김) | http://localhost:8000 |
-| `member-service` | 회원 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-member-service:8080`) |
-| `cash-service` | 캐시 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-cash-service:8081`) |
-| `payout-service` | 정산 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-payout-service:8082`) |
-| `file-service` | 파일 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-file-service:8083`) |
-| `order-service` | 주문 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-order-service:8084`) |
-| `product-service` | 상품 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-product-service:8085`) |
-| `queue-service` | 대기열 서비스 (prod 프로파일) | 호스트에 열지 않음 (`bukang-queue-service:8086`) |
+| `gateway` | API 게이트웨이 (기본 dev 프로파일, `/api` 요청을 각 서비스로 넘김) | http://localhost:8000 |
+| `member-service` | 회원 서비스 (기본 dev 프로파일) | 호스트에 열지 않음 (`bukang-member-service:8080`) |
+| `cash-service` | 캐시 서비스 (기본 dev 프로파일) | 호스트에 열지 않음 (`bukang-cash-service:8081`) |
+| `payout-service` | 정산 서비스 (기본 dev 프로파일) | 호스트에 열지 않음 (`bukang-payout-service:8082`) |
+| `file-service` | 파일 서비스 (기본 dev 프로파일) | 호스트에 열지 않음 (`bukang-file-service:8083`) |
+| `order-service` | 주문 서비스 (기본 dev 프로파일) | 호스트에 열지 않음 (`bukang-order-service:8084`) |
+| `product-service` | 상품 서비스 (기본 dev 프로파일) | 호스트에 열지 않음 (`bukang-product-service:8085`) |
+| `queue-service` | 대기열 서비스 (기본 dev 프로파일) | 호스트에 열지 않음 (`bukang-queue-service:8086`) |
 
 앱 서비스(`nginx`, `web`, `gateway`, `member-service`, `cash-service`, `payout-service`, `file-service`, `order-service`, `product-service`, `queue-service`)는 `app` 프로파일로 분리되어 있어서 `--profile app`을 붙일 때만 실행됩니다.
 서비스 7개는 호스트에 포트를 열지 않고 `gateway`를 거쳐서만 부를 수 있습니다. 서비스는 `X-Member-Id` 헤더를 로그인한 회원으로 믿기 때문에,
@@ -44,11 +46,21 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `
 
 `docker/elasticsearch/Dockerfile`을 수정했다면 `docker compose up -d --build`로 이미지를 다시 만듭니다.
 
-### 운영(prod) 앱 컨테이너 실행
+### 앱 컨테이너 실행 (로컬, dev / prod)
 
-앱을 운영용 이미지로 빌드해서 인프라와 함께 컨테이너로 실행합니다.
+앱을 이미지로 빌드해서 인프라와 함께 컨테이너로 실행합니다. Spring 프로파일은 **기본 dev**이고, `APP_PROFILE=prod`를 붙이면 prod로 뜹니다.
 
-1. `.env.example`을 복사해 `.env`를 만들고 값을 채웁니다. 접속 정보는 `compose.yml`의 `bukang-db` 설정과 맞춥니다.
+| 명령 | 프로파일 | 특징 |
+|---|---|---|
+| `docker compose --profile app up -d --build` | dev | 개발용 키(yaml), Swagger 켜짐, 다른 서비스 연동은 fake, dev 시작 데이터(`*DataInit`) 생성 |
+| `APP_PROFILE=prod docker compose --profile app up -d --build` (Git Bash) | prod | 운영과 같은 설정. 비밀값·주소를 `.env`에서 읽고 Swagger 꺼짐 |
+| `$env:APP_PROFILE='prod'; docker compose --profile app up -d --build` (PowerShell) | prod | 같은 창에서는 값이 남으니 dev로 돌아가려면 `Remove-Item Env:APP_PROFILE` |
+
+- dev 컨테이너는 `application-dev.yaml`의 `DEV_*` 자리로 컨테이너 주소(`bukang-db`, `bukang-kafka:29092`, `bukang-order-service:8084` 등)를 받습니다. 값은 `compose.yml`의 `x-dev-addresses`에 있습니다. **`.env`에는 `DEV_*`를 적지 않습니다.** bootRun도 `.env`를 읽어 PC에서 컨테이너 이름으로 접속하려다 실패합니다.
+- dev에서 다른 서비스를 실제로 부르려면 필요한 것만 `.env`에 켭니다(예: `ORDER_CLIENTS_PAYOUT_MODE=http`). 기본은 `application.yaml`의 fake입니다.
+- `.env`의 `JWT_SECRET`·`CRYPTO_*` 줄이 비어 있으면, `compose.yml`이 dev yaml과 같은 개발용 값을 넣습니다(빈 환경 변수가 yaml 값을 덮어써 앱이 뜨지 않는 것을 막음).
+
+1. (prod로 띄울 때) `.env.example`을 복사해 `.env`를 만들고 값을 채웁니다. 접속 정보는 `compose.yml`의 `bukang-db` 설정과 맞춥니다.
 
    ```bash
    cp .env.example .env
@@ -67,22 +79,24 @@ IntelliJ에서는 `MemberApplication`, `CashApplication`, `PayoutApplication`, `
 3. 앱 이미지를 빌드하고 전체 컨테이너를 실행합니다.
 
    ```bash
-   docker compose --profile app up -d --build   # 서비스 + 인프라 실행 (인프라가 healthy가 된 뒤 서비스 시작)
+   docker compose --profile app up -d --build   # 서비스 + 인프라 실행 (dev. prod는 앞에 APP_PROFILE=prod)
    docker compose logs -f member-service        # 로그 확인 ("Started MemberApplication"이면 성공)
    docker compose --profile app ps              # 상태 확인 (서비스·gateway가 healthy, nginx가 Up이면 http://localhost 접속)
    docker compose --profile app down            # 앱 포함 전체 중지 + 삭제
    ```
 
-앱 컨테이너는 Docker 내부 서비스 이름(`bukang-db`, `bukang-kafka:29092` 등)으로 인프라에 접속하므로, `.env`의 주소에는 `localhost` 대신 서비스 이름을 사용합니다. 운영 프로파일에서는 Swagger가 비활성화됩니다.
+prod로 띄우면 앱 컨테이너는 `.env`의 주소로 인프라에 접속하므로, `.env`의 주소에는 `localhost` 대신 서비스 이름(`bukang-db`, `bukang-kafka:29092` 등)을 사용합니다. prod 프로파일에서는 Swagger가 비활성화됩니다.
+
+운영(EC2)은 `compose.prod.yml`로 띄웁니다(항상 prod, HTTPS·GHCR 이미지·restart·이름 있는 볼륨 포함). 서버 `.env`에 `COMPOSE_FILE=compose.prod.yml`을 둡니다.
 
 #### 빈 DB에서 표가 만들어지는 방법
 
 모든 서비스의 `application-prod.yaml`은 `ddl-auto: validate`(표를 만들지 않고 엔티티와 맞는지만 확인)입니다.
 
 - `member-service`는 Flyway(`db/migration`, 기록 표 `flyway_schema_history_member`)가 먼저 표를 만들고 validate로 확인합니다.
-- `cash`·`payout`·`file`·`order`·`product`는 아직 Flyway가 없습니다. 그래서 `compose.yml`이 이 다섯 서비스에만 `SPRING_JPA_HIBERNATE_DDL_AUTO=update`를 넘겨,
+- `cash`·`payout`·`file`·`order`·`product`·`queue`는 아직 Flyway가 없습니다. 그래서 `compose.yml`·`compose.prod.yml`이 이 여섯 서비스에만 `SPRING_JPA_HIBERNATE_DDL_AUTO=update`를 넘겨,
   dev처럼 Hibernate가 없는 표·칼럼을 만들게 합니다(`x-jpa-ddl-auto`). `update`는 칼럼을 지우거나 타입을 바꾸지 않습니다.
-  어떤 서비스에 Flyway가 생기면 `compose.yml`에서 그 서비스의 `SPRING_JPA_HIBERNATE_DDL_AUTO` 줄을 지웁니다.
+  어떤 서비스에 Flyway가 생기면 두 파일에서 그 서비스의 `SPRING_JPA_HIBERNATE_DDL_AUTO` 줄을 지웁니다.
 - prod 프로파일은 dev 시작 데이터(`*DataInit`: 기본 회원·관리자, 대회·정산 샘플)를 만들지 않습니다. 빈 DB로 띄우면 회원·대회가 하나도 없습니다.
 
 #### 처음 띄운 뒤 확인할 것 (체크리스트)

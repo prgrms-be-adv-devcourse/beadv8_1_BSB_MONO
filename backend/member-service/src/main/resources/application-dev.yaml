@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/bukang-db
+    url: jdbc:mysql://${DEV_DB_HOST:localhost}:3306/bukang-db
     username: bukang2
     password: bukang2
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -29,14 +29,14 @@ spring:
 
   kafka:
     bootstrap-servers:
-      - localhost:9092
+      - ${DEV_KAFKA_SERVERS:localhost:9092}
 
   elasticsearch:
-    uris: http://localhost:9200
+    uris: ${DEV_ES_URIS:http://localhost:9200}
 
   data:
     redis:
-      host: localhost
+      host: ${DEV_REDIS_HOST:localhost}
       port: 6379
 
 jwt:

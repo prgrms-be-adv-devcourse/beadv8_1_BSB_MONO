@@ -8,25 +8,48 @@ x-app-healthcheck: &app-healthcheck
   retries: 12
   start_period: 300s
 
-# 표를 만드는 방법 (cash·payout·file·order·product). 이 다섯 서비스는 아직 Flyway가 없어서,
+# 표를 만드는 방법 (cash·payout·file·order·product·queue). 이 여섯 서비스는 아직 Flyway가 없어서,
 # application-prod.yaml의 validate 그대로면 빈 DB에서 "missing table"로 뜨지 않는다. 그래서 compose 실행에서만 update로 덮어
 # dev와 같은 방식(Hibernate가 없는 표·칼럼을 만듦)으로 표를 만든다. 서비스에 Flyway가 생기면 그 서비스의 줄을 지운다
 # member-service는 Flyway가 표를 만들고 validate로 확인하므로 넣지 않는다. 표만 확인하려면 .env에 JPA_DDL_AUTO=validate
 x-jpa-ddl-auto: &jpa-ddl-auto ${JPA_DDL_AUTO:-update}
 
+# 앱 컨테이너를 dev 프로파일로 띄울 때 쓰는 인프라·서비스 주소 (application-dev.yaml의 DEV_* 자리에 들어간다)
+# dev yaml의 기본값은 bootRun용 localhost라, 컨테이너 안에서는 이 값으로 컨테이너 이름을 넘긴다
+# prod 프로파일은 DEV_*를 읽지 않으므로 APP_PROFILE=prod로 띄워도 영향이 없다 (prod 주소는 .env의 MYSQL_HOST 등)
+# .env에는 DEV_*를 적지 않는다. bootRun도 .env를 읽어 PC에서 컨테이너 이름으로 접속하려다 실패한다
+x-dev-addresses: &dev-addresses
+  DEV_DB_HOST: bukang-db
+  DEV_KAFKA_SERVERS: bukang-kafka:29092
+  DEV_REDIS_HOST: bukang-redis
+  DEV_ES_URIS: http://bukang-elasticsearch:9200
+  DEV_MEMBER_SERVICE_URL: http://bukang-member-service:8080
+  DEV_CASH_SERVICE_URL: http://bukang-cash-service:8081
+  DEV_PAYOUT_SERVICE_URL: http://bukang-payout-service:8082
+  DEV_FILE_SERVICE_URL: http://bukang-file-service:8083
+  DEV_ORDER_SERVICE_URL: http://bukang-order-service:8084
+  DEV_PRODUCT_SERVICE_URL: http://bukang-product-service:8085
+  DEV_QUEUE_SERVICE_URL: http://bukang-queue-service:8086
+
+# 로컬 전용 파일이다. 운영(EC2)은 이 파일을 쓰지 않고 compose.prod.yml 하나로 띄운다 (인프라 정의가 두 파일에 같이 있으니 함께 고친다)
+
 services:
 
-  # Spring 앱 (운영 프로파일로 실행, backend/Dockerfile에 MODULE 인자를 넘겨 서비스별로 빌드)
+  # Spring 앱 (backend/Dockerfile에 MODULE 인자를 넘겨 서비스별로 빌드)
+  # Spring 프로파일은 기본 dev(개발용 키, Swagger, 다른 서비스 연동은 fake). prod로 띄우려면 APP_PROFILE=prod를 붙인다
+  #   dev:  docker compose --profile app up -d --build
+  #   prod: APP_PROFILE=prod docker compose --profile app up -d --build        (Git Bash)
+  #         $env:APP_PROFILE='prod'; docker compose --profile app up -d --build (PowerShell, 그 창에서는 값이 남는다)
+  # dev에서 다른 서비스를 실제로 부르려면 .env에 ORDER_CLIENTS_PAYOUT_MODE=http처럼 필요한 것만 켠다
   # profiles 지정으로 기본 `docker compose up`에서는 제외된다
   # (bootRun 시 Spring Boot가 compose를 띄울 때 앱 컨테이너가 포트를 선점하지 않도록)
-  # 실행: docker compose --profile app up -d --build
   # 요청 흐름: 브라우저 → nginx(80) → /api는 gateway(8000) → 각 서비스 / 나머지는 web(Next.js, 3000)
   # 서비스 7개(member~queue)는 호스트에 포트를 열지 않는다. 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿으므로,
   # 게이트웨이를 건너뛰고 서비스 포트로 직접 오면 헤더를 위조할 수 있기 때문이다. 컨테이너끼리는 이름(bukang-order-service:8084)으로 통한다
   # 서비스를 직접 부르며 확인하려면 컨테이너 대신 bootRun(dev 프로파일)으로 띄운다
 
   # 입구: 80 포트 하나만 열고 /api는 gateway, 나머지는 web으로 넘긴다 (설정: docker/nginx/default.conf)
-  # 운영(EC2)은 compose.prod.yml이 443과 Let's Encrypt 인증서를 덧붙인다
+  # 운영(EC2)은 compose.prod.yml에서 443과 Let's Encrypt 인증서까지 붙인 nginx를 따로 정의한다
   nginx:
     image: nginx:1.28-alpine
     container_name: bukang-nginx
@@ -70,7 +93,7 @@ services:
         condition: service_healthy
 
   # API 게이트웨이: Nginx가 /api를 이 컨테이너(8000)로 넘기고, 게이트웨이가 경로를 보고 각 서비스로 보낸다
-  # 서비스 주소는 gateway의 application-prod.yaml에 컨테이너 이름으로 들어 있다
+  # 서비스 주소는 prod면 application-prod.yaml, dev면 위 DEV_*_SERVICE_URL(컨테이너 이름)을 쓴다
   gateway:
     build:
       context: .
@@ -86,7 +109,11 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      <<: *dev-addresses
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
+      # .env의 비밀값 줄이 비어 있으면(JWT_SECRET= 등) 빈 환경 변수가 yaml의 같은 설정을 덮어써 앱이 뜨지 않는다
+      # 그래서 비었을 때는 application-dev.yaml과 같은 개발용 값을 넣는다. 운영은 compose.prod.yml이라 영향 없다
+      JWT_SECRET: ${JWT_SECRET:-jwt-dev-secret-key-1423-1126-7541-3217}
     healthcheck:
       <<: *app-healthcheck
       test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8000" ]
@@ -121,7 +148,13 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      <<: *dev-addresses
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
+      # .env의 비밀값 줄이 비어 있으면(JWT_SECRET= 등) 빈 환경 변수가 yaml의 같은 설정을 덮어써 앱이 뜨지 않는다
+      # 그래서 비었을 때는 application-dev.yaml과 같은 개발용 값을 넣는다. 운영은 compose.prod.yml이라 영향 없다
+      JWT_SECRET: ${JWT_SECRET:-jwt-dev-secret-key-1423-1126-7541-3217}
+      CRYPTO_PASSWORD: ${CRYPTO_PASSWORD:-brH8W0e5axggiZDMxLeEcRiYSf5qght3KtDgWC+dT48=}
+      CRYPTO_SALT: ${CRYPTO_SALT:-d4cc93043cca7c91}
     healthcheck:
       <<: *app-healthcheck
       test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8080" ]
@@ -148,7 +181,12 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      <<: *dev-addresses
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
+      # .env의 비밀값 줄이 비어 있으면(JWT_SECRET= 등) 빈 환경 변수가 yaml의 같은 설정을 덮어써 앱이 뜨지 않는다
+      # 그래서 비었을 때는 application-dev.yaml과 같은 개발용 값을 넣는다. 운영은 compose.prod.yml이라 영향 없다
+      CRYPTO_PASSWORD: ${CRYPTO_PASSWORD:-IOqDAv1zFDK/FVo/sIReebOrto+TKARA7gfE8EQCPOA=}
+      CRYPTO_SALT: ${CRYPTO_SALT:-25dc6e5c1bc8b786}
       SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
@@ -171,7 +209,8 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      <<: *dev-addresses
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
       SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
@@ -194,7 +233,8 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      <<: *dev-addresses
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
       SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
       # 기본은 compose의 S3Mock. .env에서 S3_ENDPOINT·S3_PUBLIC_ENDPOINT를 빈 값으로 두면 실제 AWS S3를 쓴다
       # 앱은 컨테이너 주소(bukang-s3mock)로 접속하고, presigned URL은 브라우저가 쓰는 주소(localhost)로 서명한다
@@ -228,7 +268,8 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      <<: *dev-addresses
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
       SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
@@ -251,7 +292,8 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      <<: *dev-addresses
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
       SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
@@ -276,7 +318,9 @@ services:
       - path: .env
         required: false
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      <<: *dev-addresses
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-dev}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
     healthcheck:
       <<: *app-healthcheck
       test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8086" ]

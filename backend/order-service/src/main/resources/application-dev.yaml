@@ -1,7 +1,7 @@
 spring:
   # 지금은 member-service와 같은 DB(bukang-db)를 쓰고, 테이블 이름 접두사(ORDER_)로 구분한다
   datasource:
-    url: jdbc:mysql://localhost:3306/bukang-db
+    url: jdbc:mysql://${DEV_DB_HOST:localhost}:3306/bukang-db
     username: bukang2
     password: bukang2
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -18,10 +18,23 @@ spring:
 
   kafka:
     bootstrap-servers:
-      - localhost:9092
+      - ${DEV_KAFKA_SERVERS:localhost:9092}
 
 logging:
   level:
     com.bukang: debug
     org.hibernate.SQL: debug
     org.hibernate.orm.jdbc.bind: trace
+
+# 다른 서비스 주소. 기본은 bootRun(localhost), 로컬 컨테이너(compose.yml)에서는 DEV_*로 컨테이너 이름을 받는다
+# 연동 방식(mode)은 application.yaml의 기본값(fake)을 따른다. 실제로 부르려면 .env에 ORDER_CLIENTS_<대상>_MODE=http
+order:
+  clients:
+    product:
+      base-url: ${DEV_PRODUCT_SERVICE_URL:http://localhost:8085}
+    payout:
+      base-url: ${DEV_PAYOUT_SERVICE_URL:http://localhost:8082}
+    cash:
+      base-url: ${DEV_CASH_SERVICE_URL:http://localhost:8081}
+    queue:
+      base-url: ${DEV_QUEUE_SERVICE_URL:http://localhost:8086}

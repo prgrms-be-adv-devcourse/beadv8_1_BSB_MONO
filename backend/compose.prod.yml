@@ -1,40 +1,73 @@
-# 운영(EC2)에서만 compose.yml 위에 덮어쓰는 설정. Nginx에 HTTPS(Let's Encrypt 인증서)를 붙인다
-# 로컬은 이 파일을 쓰지 않으므로 지금처럼 HTTP(80)로만 뜬다
+# 운영(EC2) 전용 compose 파일. 로컬용 compose.yml과 합치지 않고 이 파일 하나로 띄운다 (환경마다 파일을 통째로 둔다)
+# 인프라 정의는 compose.yml과 같으니 한쪽을 고치면 다른 쪽도 함께 고친다. Spring 프로파일은 항상 prod다
 #
-# 앱 이미지 9개(gateway·서비스 7개·web)는 EC2에서 빌드하지 않고, GitHub Actions(app-cd.yml)가 빌드해 GHCR에 올린 것을 받는다
-# 배포는 app-cd.yml이 한다 (main push 또는 Actions에서 직접 실행). 서버에서 직접 띄울 때는:
-#   docker compose pull gateway member-service cash-service payout-service file-service order-service product-service queue-service web
-#   docker compose up -d --no-build
-# (--build를 붙이면 EC2에서 빌드한 이미지가 GHCR 이름으로 덮어써진다)
-#
-# backend/.env에 아래 네 줄을 적어 둔다 (.env.example 참고)
-#   COMPOSE_FILE=compose.yml:compose.prod.yml
+# 서버 backend/.env (.env.example 참고):
+#   COMPOSE_FILE=compose.prod.yml
 #   COMPOSE_PROFILES=app
 #   DOMAIN=crewrun.duckdns.org
 #   CERTBOT_EMAIL=...
 #
-# 처음 뜰 때 흐름: 인증서 없음 → Nginx는 HTTP 설정으로 뜸 → certbot이 80으로 소유 확인을 받아 발급
+# 앱 이미지 9개(gateway·서비스 7개·web)는 EC2에서 빌드하지 않고, GitHub Actions(app-cd.yml)가 빌드해 GHCR에 올린 것을 받는다
+# 배포는 app-cd.yml이 한다 (main push 또는 Actions에서 직접 실행). 서버에서 직접 띄울 때는 IMAGE_TAG에 배포한 커밋 SHA를 넘긴다:
+#   IMAGE_TAG=<SHA> docker compose up -d --no-build --wait --wait-timeout 900
+# (--build를 붙이면 EC2에서 빌드한 이미지가 GHCR 이름으로 덮어써진다)
+#
+# 인증서 처음 발급 흐름: 인증서 없음 → Nginx는 HTTP 설정으로 뜸 → certbot이 80으로 소유 확인을 받아 발급
 #   → Nginx(start-https.sh)가 1분 안에 인증서를 알아채 HTTPS 설정으로 바꾸고 reload
 # 그 뒤: certbot이 12시간마다 갱신을 시도하고, 갱신되면 Nginx가 같은 방식으로 reload한다
-# 인증서는 볼륨 certbot-conf에 남는다. docker compose down -v 로 볼륨을 지우면 처음부터 다시 발급한다 (Let's Encrypt 발급 횟수 제한 주의)
-# !override는 Docker Compose 2.24.4 이상에서 동작한다
+# 인증서·DB 데이터는 볼륨에 남는다. docker compose down -v 로 볼륨을 지우면 DB가 비고 인증서를 다시 발급한다
+# restart: 실행 중에 죽은 컨테이너를 Docker가 다시 켠다. 재부팅 때는 순서 없이 켜지므로 부팅 순서는
+# systemd(docker/systemd/crewrun.service)가 docker compose up으로 맞춘다
+
+# 앱이 요청을 받을 준비가 됐는지 확인하는 공통 설정. 포트가 열리면(Tomcat·Netty 시작 완료) healthy로 본다
+# JRE 이미지에 curl이 없을 수 있어 bash의 /dev/tcp로 포트 연결만 확인한다. test는 서비스마다 포트를 바꿔 쓴다
+# start_period 동안의 실패는 횟수에 세지 않고, 준비되는 즉시 healthy가 된다 (정상일 때 늦어지지 않는다)
+# EC2(CPU 2개)에서 서비스 7개가 동시에 뜨면 하나당 150~180초가 걸려 30s로는 unhealthy가 됐다. 그래서 5분을 기다린다
+x-app-healthcheck: &app-healthcheck
+  interval: 10s
+  timeout: 3s
+  retries: 12
+  start_period: 300s
+
+# 표를 만드는 방법 (cash·payout·file·order·product·queue). 이 여섯 서비스는 아직 Flyway가 없어서,
+# application-prod.yaml의 validate 그대로면 빈 DB에서 "missing table"로 뜨지 않는다. 그래서 compose 실행에서만 update로 덮어
+# dev와 같은 방식(Hibernate가 없는 표·칼럼을 만듦)으로 표를 만든다. 서비스에 Flyway가 생기면 그 서비스의 줄을 지운다
+# member-service는 Flyway가 표를 만들고 validate로 확인하므로 넣지 않는다. 표만 확인하려면 .env에 JPA_DDL_AUTO=validate
+x-jpa-ddl-auto: &jpa-ddl-auto ${JPA_DDL_AUTO:-update}
 
 services:
 
+  # Spring 앱. 운영은 항상 prod 프로파일이고 이미지는 GHCR에서 받는다
+  # profiles 지정으로 기본 `docker compose up`에서는 제외된다
+  # (bootRun 시 Spring Boot가 compose를 띄울 때 앱 컨테이너가 포트를 선점하지 않도록)
+  # 요청 흐름: 브라우저 → nginx(80) → /api는 gateway(8000) → 각 서비스 / 나머지는 web(Next.js, 3000)
+  # 서비스 7개(member~queue)는 호스트에 포트를 열지 않는다. 서비스는 X-Member-Id 헤더를 로그인한 회원으로 믿으므로,
+  # 게이트웨이를 건너뛰고 서비스 포트로 직접 오면 헤더를 위조할 수 있기 때문이다. 컨테이너끼리는 이름(bukang-order-service:8084)으로 통한다
+  # 서비스를 직접 부르며 확인하려면 컨테이너 대신 bootRun(dev 프로파일)으로 띄운다
+
+  # 입구: 80·443을 열고 /api는 gateway, 나머지는 web으로 넘긴다
+  # 설정 파일은 start-https.sh가 인증서 유무를 보고 템플릿(docker/nginx/*.conf.template)으로 만든다
   nginx:
+    image: nginx:1.28-alpine
+    container_name: bukang-nginx
+    profiles: [ app ]
+    restart: unless-stopped
     ports:
+      - "80:80"
       - "443:443"
-    # compose.yml의 volumes(로컬 default.conf)를 이어 붙이지 않고 통째로 바꾼다
-    # conf.d/default.conf는 start-https.sh가 인증서 유무를 보고 템플릿으로 만든다
-    volumes: !override
+    volumes:
       - ./docker/nginx:/etc/nginx/crewrun:ro
       - certbot-conf:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot:ro
     environment:
       DOMAIN: ${DOMAIN:?DOMAIN을 backend/.env에 적어 주세요}
     command: [ "/bin/sh", "/etc/nginx/crewrun/start-https.sh" ]
-    # 서버가 재부팅되거나 컨테이너가 죽어도 다시 뜨게 한다
-    restart: unless-stopped
+    # Nginx는 시작할 때 upstream 이름(bukang-gateway, bukang-web)을 찾으므로 두 컨테이너가 먼저 떠 있어야 한다
+    depends_on:
+      gateway:
+        condition: service_healthy
+      web:
+        condition: service_started
 
   # 인증서 발급·갱신 (스크립트: docker/certbot/run.sh)
   certbot:
@@ -53,60 +86,396 @@ services:
       - nginx
     restart: unless-stopped
 
-  # 앱 이미지는 GHCR에서 받는다 (app-cd.yml이 커밋 SHA와 latest 두 태그로 올린다)
-  # 배포할 때는 IMAGE_TAG에 커밋 SHA를 넘겨 그 커밋의 이미지로 띄운다. 비우면 latest(가장 최근에 빌드된 이미지)
-  # restart: 실행 중에 죽은 컨테이너를 Docker가 다시 켠다. 재부팅 때는 순서 없이 동시에 켜지므로,
-  # 부팅 순서는 systemd(docker/systemd/crewrun.service)가 docker compose up으로 맞춘다
-  gateway:
-    image: ghcr.io/prgrms-be-adv-devcourse/bukang-gateway:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-  member-service:
-    image: ghcr.io/prgrms-be-adv-devcourse/bukang-member-service:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-  cash-service:
-    image: ghcr.io/prgrms-be-adv-devcourse/bukang-cash-service:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-  payout-service:
-    image: ghcr.io/prgrms-be-adv-devcourse/bukang-payout-service:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-  file-service:
-    image: ghcr.io/prgrms-be-adv-devcourse/bukang-file-service:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-  order-service:
-    image: ghcr.io/prgrms-be-adv-devcourse/bukang-order-service:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-  product-service:
-    image: ghcr.io/prgrms-be-adv-devcourse/bukang-product-service:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-  queue-service:
-    image: ghcr.io/prgrms-be-adv-devcourse/bukang-queue-service:${IMAGE_TAG:-latest}
-    restart: unless-stopped
+  # 프론트엔드(Next.js). 화면 요청은 nginx가 넘겨 주고, 서버 컴포넌트는 BACKEND_URL(게이트웨이)로 API를 직접 부른다
+  # args는 빌드할 때 이미지에 고정되므로, 바꾸면 --build로 다시 빌드한다. 값은 backend/.env에서 읽는다 (.env.example 참고)
   web:
+    build:
+      context: ../frontend
+      args:
+        API_MOCKING: "off"
+        IMAGE_REMOTE_HOSTS: ${IMAGE_REMOTE_HOSTS:-}
+        NEXT_PUBLIC_IMAGE_CDN_URL: ${NEXT_PUBLIC_IMAGE_CDN_URL:-}
+        # 공유 카드(og:image)의 절대 주소. 서버(EC2)에서는 접속 주소(도메인)로 바꾼다
+        # layout.tsx의 metadata가 모듈을 불러올 때 한 번 계산돼, 빌드 때 만든 정적 페이지에는 빌드 시점 값이 남으므로 빌드에도 넘긴다
+        SITE_URL: ${SITE_URL:-http://localhost}
+        # 토스 결제창 클라이언트 키(test_ck_만). 비우면 API_MOCKING=off에서는 충전 버튼이 실패 화면으로 간다
+        NEXT_PUBLIC_TOSS_CLIENT_KEY: ${NEXT_PUBLIC_TOSS_CLIENT_KEY:-}
     image: ghcr.io/prgrms-be-adv-devcourse/bukang-web:${IMAGE_TAG:-latest}
+    container_name: bukang-web
     restart: unless-stopped
+    profiles: [ app ]
+    environment:
+      BACKEND_URL: http://bukang-gateway:8000
+      # 실행 중에 새로 그리는 페이지도 같은 값을 쓰게 한다 (위 build.args와 같은 값)
+      SITE_URL: ${SITE_URL:-http://localhost}
+    depends_on:
+      gateway:
+        condition: service_healthy
 
-  # 인프라도 죽거나 재부팅되면 다시 켠다 (로컬 compose.yml에는 넣지 않아 PC를 켤 때 저절로 뜨지 않는다)
-  # DB·Kafka·Redis 데이터는 이름 있는 볼륨에 둔다. 이미지가 만드는 익명 볼륨은 down 뒤 up 하면 새 볼륨으로 바뀌어 데이터가 사라진 것처럼 된다
+  # API 게이트웨이: Nginx가 /api를 이 컨테이너(8000)로 넘기고, 게이트웨이가 경로를 보고 각 서비스로 보낸다
+  # 서비스 주소는 gateway의 application-prod.yaml에 컨테이너 이름으로 들어 있다
+  gateway:
+    build:
+      context: .
+      args:
+        MODULE: gateway
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-gateway:${IMAGE_TAG:-latest}
+    container_name: bukang-gateway
+    restart: unless-stopped
+    profiles: [ app ]
+    ports:
+      - "8000:8000"
+    # 토큰 검사에 member-service와 같은 JWT_SECRET을 쓴다 (.env.example 참고)
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8000" ]
+    # 서비스가 준비되기 전에 들어온 요청은 연결 실패로 응답하므로, 서비스가 healthy가 된 뒤에 시작한다
+    # (condition 없이 이름만 쓰면 "컨테이너가 켜졌다"까지만 기다리고 앱 준비는 기다리지 않는다)
+    depends_on:
+      member-service:
+        condition: service_healthy
+      cash-service:
+        condition: service_healthy
+      payout-service:
+        condition: service_healthy
+      file-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      queue-service:
+        condition: service_healthy
+
+  member-service:
+    build:
+      context: .
+      args:
+        MODULE: member-service
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-member-service:${IMAGE_TAG:-latest}
+    container_name: bukang-member-service
+    restart: unless-stopped
+    profiles: [ app ]
+    # 접속 정보와 비밀값(JWT_SECRET, CRYPTO_* 등)은 모두 .env에서 읽는다 (.env.example 참고)
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8080" ]
+    # 인프라가 모두 healthy 상태가 된 뒤에 시작
+    depends_on:
+      bukang-db:
+        condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
+      bukang-elasticsearch:
+        condition: service_healthy
+      bukang-redis:
+        condition: service_healthy
+
+  cash-service:
+    build:
+      context: .
+      args:
+        MODULE: cash-service
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-cash-service:${IMAGE_TAG:-latest}
+    container_name: bukang-cash-service
+    restart: unless-stopped
+    profiles: [ app ]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8081" ]
+    depends_on:
+      bukang-db:
+        condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
+
+  payout-service:
+    build:
+      context: .
+      args:
+        MODULE: payout-service
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-payout-service:${IMAGE_TAG:-latest}
+    container_name: bukang-payout-service
+    restart: unless-stopped
+    profiles: [ app ]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8082" ]
+    depends_on:
+      bukang-db:
+        condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
+
+  file-service:
+    build:
+      context: .
+      args:
+        MODULE: file-service
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-file-service:${IMAGE_TAG:-latest}
+    container_name: bukang-file-service
+    restart: unless-stopped
+    profiles: [ app ]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
+      # 기본은 compose의 S3Mock. .env에서 S3_ENDPOINT·S3_PUBLIC_ENDPOINT를 빈 값으로 두면 실제 AWS S3를 쓴다
+      # 앱은 컨테이너 주소(bukang-s3mock)로 접속하고, presigned URL은 브라우저가 쓰는 주소(localhost)로 서명한다
+      S3_BUCKET: ${S3_BUCKET:-bukang-file}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      S3_ENDPOINT: ${S3_ENDPOINT-http://bukang-s3mock:9090}
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT-http://localhost:9090}
+      S3_PATH_STYLE: ${S3_PATH_STYLE:-true}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY-s3mock}
+      S3_SECRET_KEY: ${S3_SECRET_KEY-s3mock}
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8083" ]
+    depends_on:
+      bukang-db:
+        condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
+      bukang-s3mock:
+        condition: service_started
+
+  order-service:
+    build:
+      context: .
+      args:
+        MODULE: order-service
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-order-service:${IMAGE_TAG:-latest}
+    container_name: bukang-order-service
+    restart: unless-stopped
+    profiles: [ app ]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8084" ]
+    depends_on:
+      bukang-db:
+        condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
+
+  product-service:
+    build:
+      context: .
+      args:
+        MODULE: product-service
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-product-service:${IMAGE_TAG:-latest}
+    container_name: bukang-product-service
+    restart: unless-stopped
+    profiles: [ app ]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8085" ]
+    depends_on:
+      bukang-db:
+        condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
+      bukang-elasticsearch:
+        condition: service_healthy
+
+  queue-service:
+    build:
+      context: .
+      args:
+        MODULE: queue-service
+    image: ghcr.io/prgrms-be-adv-devcourse/bukang-queue-service:${IMAGE_TAG:-latest}
+    container_name: bukang-queue-service
+    restart: unless-stopped
+    profiles: [ app ]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_JPA_HIBERNATE_DDL_AUTO: *jpa-ddl-auto
+    healthcheck:
+      <<: *app-healthcheck
+      test: [ "CMD", "bash", "-c", "</dev/tcp/127.0.0.1/8086" ]
+    depends_on:
+      bukang-db:
+        condition: service_healthy
+      bukang-kafka:
+        condition: service_healthy
+      bukang-redis:
+        condition: service_healthy
+
   bukang-db:
+    # 팀원 간 버전 차이를 막기 위해 LTS 버전으로 고정
+    image: mysql:8.4
+    container_name: bukang-db
     restart: unless-stopped
     volumes:
       - bukang-db-data:/var/lib/mysql
+    # 한글 저장/정렬을 위해 문자셋을 utf8mb4로 명시
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: bukang-admin
+      MYSQL_DATABASE: bukang-db
+      MYSQL_USER: bukang2
+      MYSQL_PASSWORD: bukang2
+      # NOW() 등 DB 시간 함수를 한국 시간 기준으로 동작시킨다
+      TZ: Asia/Seoul
+    healthcheck:
+      test: [ "CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Kafka 호환 브로커 Redpanda (JVM 없는 단일 바이너리라 노트북에서도 가볍게 동작)
   bukang-kafka:
+    image: redpandadata/redpanda:v26.2.3
+    container_name: bukang-kafka
     restart: unless-stopped
     volumes:
       - bukang-kafka-data:/var/lib/redpanda/data
+    command:
+      - redpanda
+      - start
+      # 로컬 개발용 모드 (토픽 자동 생성 허용, 리소스 사용 최소화)
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      # 리스너를 두 개로 나눈다
+      # internal: 같은 Docker 네트워크의 컨테이너(앱, Kafka Console)가 접속 (bukang-kafka:29092)
+      # external: 호스트에서 실행하는 앱이 접속 (application-dev.yaml의 localhost:9092)
+      - --kafka-addr=internal://0.0.0.0:29092,external://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://bukang-kafka:29092,external://localhost:9092
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Kafka 관리 UI (토픽/메시지/컨슈머 그룹 조회) → http://localhost:8091
+  bukang-kafka-console:
+    image: redpandadata/console:v3.12.0
+    container_name: bukang-kafka-console
+    restart: unless-stopped
+    ports:
+      # 8080은 Spring 앱, 8090은 Elasticvue가 사용하므로 8091 사용
+      - "8091:8080"
+    environment:
+      # 컨테이너 내부에서 접속하므로 internal 리스너와 서비스 이름을 사용
+      KAFKA_BROKERS: bukang-kafka:29092
+      REDPANDA_ADMINAPI_ENABLED: "true"
+      REDPANDA_ADMINAPI_URLS: http://bukang-kafka:9644
+    depends_on:
+      bukang-kafka:
+        # 브로커가 healthy 상태가 된 뒤에 시작
+        condition: service_healthy
+
+  # Elasticsearch + nori (단일 노드, 로컬 개발용으로 보안 비활성화)
+  bukang-elasticsearch:
+    build: ./docker/elasticsearch
+    image: bukang-elasticsearch:9.4.5-nori
+    container_name: bukang-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      # 브라우저에서 동작하는 Elasticvue가 ES에 직접 요청할 수 있도록 CORS 허용
+      http.cors.enabled: "true"
+      http.cors.allow-origin: "http://localhost:8090"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fs 'localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # Elasticsearch 관리 UI (Kibana 대체, 인덱스 조회와 REST 쿼리 작성 가능) → http://localhost:8090
+  bukang-elasticvue:
+    # Docker Hub에 최신 버전 태그가 올라오지 않아 latest 사용 (앱과 무관한 UI 도구라 영향 없음)
+    image: cars10/elasticvue:latest
+    container_name: bukang-elasticvue
+    restart: unless-stopped
+    ports:
+      # 컨테이너 포트 8080은 Spring 앱과 겹치므로 호스트는 8090 사용
+      - "8090:8080"
+    environment:
+      # 접속할 클러스터를 미리 등록 (브라우저에서 접속하므로 localhost 주소 사용)
+      ELASTICVUE_CLUSTERS: '[{"name": "bukang-local", "uri": "http://localhost:9200"}]'
+
+  # 로컬 S3 대체재 (Adobe S3Mock) → http://localhost:9090
+  # 팀원 PC와 CI에는 AWS 계정이 없어서 로컬에서는 이 컨테이너를 S3처럼 쓴다 (path-style 주소만 지원)
+  # LocalStack은 인증 토큰이 필요하고 MinIO 커뮤니티판은 유지보수가 끝나서 S3Mock을 쓴다
+  # presigned URL의 서명과 만료는 검사하지 않으므로, 서명 관련 동작은 실제 S3에서 확인한다
+  bukang-s3mock:
+    image: adobe/s3mock:5.2.3
+    container_name: bukang-s3mock
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      # 시작할 때 버킷을 만든다 (file-service의 기본 버킷 이름과 같다)
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: bukang-file
+
+  # Redis
   bukang-redis:
+    image: redis:8.2
+    container_name: bukang-redis
     restart: unless-stopped
     volumes:
       - bukang-redis-data:/data
-  bukang-elasticsearch:
-    restart: unless-stopped
-  bukang-s3mock:
-    restart: unless-stopped
-  bukang-kafka-console:
-    restart: unless-stopped
-  bukang-elasticvue:
-    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   # 인증서와 계정 정보 (/etc/letsencrypt). 지우면 다시 발급해야 한다

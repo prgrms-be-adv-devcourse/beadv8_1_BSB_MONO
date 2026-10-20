@@ -28,7 +28,7 @@
 - 공통 빌드 설정(Java 버전, Spring Boot BOM, Lombok, Checkstyle)은 루트 `build.gradle.kts`, 모듈별 의존성은 각 모듈의 `build.gradle.kts`에 있습니다.
 - 운영에서는 Nginx가 HTTP 요청을 받아 `/api`를 `gateway`(8000)로, 나머지를 프론트(`web`, Next.js 3000)로 넘기고, 게이트웨이가 경로를 보고 각 서비스로 보냅니다.
   Nginx 라우팅은 `docker/nginx/routes.conf`(로컬 `default.conf`와 운영 `*.conf.template`이 include), 컨테이너는 `compose.yml`의 `nginx`·`web`입니다.
-  운영(EC2)은 `compose.prod.yml`이 443과 Let's Encrypt 인증서(certbot 컨테이너)를 덧붙입니다. Nginx도 주소를 자르지 않고 `/internal/`은 404로 막습니다.
+  로컬은 `compose.yml`(앱 컨테이너 기본 dev, `APP_PROFILE=prod`로 prod), 운영(EC2)은 `compose.prod.yml` 하나로 띄웁니다(항상 prod, 443과 Let's Encrypt 인증서·certbot 포함). Nginx도 주소를 자르지 않고 `/internal/`은 404로 막습니다.
   게이트웨이는 주소 앞부분을 자르지 않고(StripPrefix 없음) `/internal/**`는 라우팅하지 않습니다. 새 서비스를 추가하면 `gateway`의 라우팅 규칙도 추가합니다.
   `gateway`는 WebFlux 기반이라 webmvc를 가져오는 `common`에 의존하지 않습니다.
 
@@ -60,8 +60,8 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 backend/
 ├── settings.gradle.kts        include("common", "jwt", "gateway", "member-service", "cash-service", "payout-service", "file-service", "order-service", "product-service", "queue-service")
 ├── build.gradle.kts           모든 모듈 공통 설정
-├── compose.yml                공용 인프라 (MySQL, Kafka, Elasticsearch, Redis) + 서비스별 앱 컨테이너 + nginx·web(프론트)
-├── compose.prod.yml           운영(EC2) 덮어쓰기: Nginx HTTPS + certbot (인증서 자동 발급·갱신)
+├── compose.yml                로컬 전체 파일: 공용 인프라 (MySQL, Kafka, Elasticsearch, Redis) + 서비스별 앱 컨테이너(기본 dev) + nginx·web(프론트)
+├── compose.prod.yml           운영(EC2) 전체 파일: 인프라 + 앱(prod, GHCR 이미지) + Nginx HTTPS·certbot. compose.yml과 합치지 않는다
 ├── docker/nginx/              Nginx 설정 (routes.conf 라우팅: /api → gateway, 나머지 → web)
 ├── common/      com.bukang.common
 │   ├── global/                기술 공통 (도메인 지식 없음)
@@ -169,6 +169,7 @@ Spring Boot 4의 모듈화된 스타터를 사용합니다. 테스트 지원도 
 
 - `backend/.env`와 `backend/compose.yml`은 `common`의 `global/config/LocalDevEnvironmentPostProcessor`가 실행 위치(working directory)와 상관없이 찾아 적용합니다.
 - 프로파일: `dev`(기본, 로컬 MySQL 등 compose 인프라), `test`(H2, Kafka 리스너 꺼짐), `prod`(값은 `.env` 환경변수).
+  `application-dev.yaml`의 주소는 `${DEV_*:localhost}` 자리라 bootRun은 localhost, 로컬 앱 컨테이너는 `compose.yml`의 `x-dev-addresses`(컨테이너 이름)를 씁니다. `.env`에는 `DEV_*`를 적지 않습니다.
 - dev/test의 암호화 키와 JWT 키는 개발용으로 yaml에 들어 있습니다. prod 키는 `.env`에만 두고 dev와 다른 값을 씁니다.
 - 인증은 JWT + Redis(Stateless)입니다. Access Token은 게이트웨이가 검사하고, 서비스는 게이트웨이가 넣어 준 `X-Member-Id` 헤더로 회원을 알아봅니다. 서비스는 세션을 만들지 않습니다 (`member-service`의 `security/WebConfig`).
 - 개인정보(휴대폰 번호)는 AES로 암호화해 저장하고 해시 컬럼으로 조회합니다. 암호화한 필드로 직접 조회하지 않습니다 (README 참고).

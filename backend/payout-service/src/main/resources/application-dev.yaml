@@ -1,7 +1,7 @@
 spring:
   # 지금은 다른 서비스와 같은 DB(bukang-db)를 쓰고, 테이블 이름 접두사(PAYOUT_)로 구분한다
   datasource:
-    url: jdbc:mysql://localhost:3306/bukang-db
+    url: jdbc:mysql://${DEV_DB_HOST:localhost}:3306/bukang-db
     username: bukang2
     password: bukang2
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -18,7 +18,7 @@ spring:
 
   kafka:
     bootstrap-servers:
-      - localhost:9092
+      - ${DEV_KAFKA_SERVERS:localhost:9092}
 
 logging:
   level:
@@ -29,5 +29,5 @@ logging:
 # 정산이 부르는 다른 서비스 주소 (게이트웨이의 gateway.services.*와 같은 방식). 로컬에서는 각 서비스를 bootRun으로 띄운다
 payout:
   services:
-    order: http://localhost:8084
-    product: http://localhost:8085
+    order: ${DEV_ORDER_SERVICE_URL:http://localhost:8084}
+    product: ${DEV_PRODUCT_SERVICE_URL:http://localhost:8085}

@@ -286,7 +286,7 @@ fileClient.link(ref.getType(), ref.getId(), memberId, files);   // 3. owner는 �
    - `S3FileStorageTest`는 Docker가 있으면 S3Mock 컨테이너로 돌고, 없으면 건너뜁니다.
    - 정리 배치는 `FileCleanupTest`(삭제 로직)와 `FileCleanupJobTest`(Job 실행, 스케줄러 연결)로 확인합니다.
      스케줄러는 prod 프로파일에서만 등록됩니다. IntelliJ·`bootRun`(dev)이나 인프라만 띄우는 `docker compose up`에서는 돌지 않습니다.
-     `docker compose --profile app up`으로 앱 컨테이너를 띄우면 prod 프로파일이라 05:00에 돌고, `.env`가 실제 버킷을 가리키면 그 버킷에서 지웁니다.
+     `APP_PROFILE=prod docker compose --profile app up`(또는 운영 `compose.prod.yml`)으로 앱 컨테이너를 prod로 띄우면 05:00에 돌고, `.env`가 실제 버킷을 가리키면 그 버킷에서 지웁니다.
    - presigned URL 서명, CORS, IAM 권한은 S3Mock과 가짜 저장소가 검사하지 않아서 실제 버킷으로만 확인할 수 있습니다.
 
 ## 7. 아직 안 된 것

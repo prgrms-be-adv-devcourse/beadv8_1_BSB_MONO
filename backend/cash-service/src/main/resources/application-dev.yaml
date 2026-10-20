@@ -1,7 +1,7 @@
 spring:
   # 지금은 member-service와 같은 DB(bukang-db)를 쓰고, 테이블 이름 접두사(CASH_)로 구분한다
   datasource:
-    url: jdbc:mysql://localhost:3306/bukang-db
+    url: jdbc:mysql://${DEV_DB_HOST:localhost}:3306/bukang-db
     username: bukang2
     password: bukang2
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -18,7 +18,7 @@ spring:
 
   kafka:
     bootstrap-servers:
-      - localhost:9092
+      - ${DEV_KAFKA_SERVERS:localhost:9092}
 
 logging:
   level:
