@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 
 import { AppHeader } from '@/widgets/app-header'
-import { useBookingFlow } from '@/features/booking'
 import { raceDetailQueryOptions } from '@/entities/race'
 import { orderApi, unwrapData } from '@/shared/api'
 import { formatNumber } from '@/shared/lib'
@@ -20,13 +19,16 @@ export function CheckoutCompletePage({ orderId }: { orderId: number }) {
     ...raceDetailQueryOptions(String(raceId)),
     enabled: raceId !== undefined,
   })
-  const applications = useBookingFlow((s) => s.applications)
-
   const item = order.data?.items?.[0]
+  // 참가자 이름은 참가 신청 API로 불러온다 (예매 흐름 스토어는 새로고침하면 비어서 쓰지 않는다)
+  const participationId = item?.participationId
+  const participation = orderApi.useFindById(participationId ?? 0, {
+    query: { enabled: participationId !== undefined, select: unwrapData },
+  })
+
   const option = race.data?.options.find((o) => o.id === String(item?.raceCourseId))
   const participant =
-    Object.values(applications).find((a) => a.participationId === item?.participationId)
-      ?.participantName ?? order.data?.shippingAddress?.recipientName
+    participation.data?.participant?.name ?? order.data?.shippingAddress?.recipientName
   const refundDeadline = race.data?.schedule.find((row) => row.label === '전액 환불 기한')?.value
 
   return (
