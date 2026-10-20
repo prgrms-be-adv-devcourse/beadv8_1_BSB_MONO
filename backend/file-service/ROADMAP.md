@@ -12,8 +12,8 @@
 판매자 브라우저                     file-service                          S3
 ① POST /api/v1/file/files ────▶ 형식·크기 검사, FILE_FILE에 PENDING 저장
    ◀──── fileId, presigned PUT URL(10분)
-② PUT uploadUrl (파일 본문) ──────────────────────────────────────▶ uploads/{uuid}.png
-③ POST /api/v1/file/files/{id}/complete ─▶ uploads/ → files/ 복사, 복사본 검사, uploads/ 삭제 → UPLOADED
+② PUT uploadUrl (파일 본문) ──────────────────────────────────────▶ {환경}/uploads/{uuid}.png
+③ POST /api/v1/file/files/{id}/complete ─▶ {환경}/uploads/ → {환경}/files/ 복사, 복사본 검사, 업로드 객체 삭제 → UPLOADED
 ④ 대회 등록(fileId 포함) ─▶ product-service ─FileClient─▶ PUT /internal/v1/file/refs/Race/{raceId}/files → ACTIVE
 ⑤ GET /api/v1/file/files?refType=Race&refId=1 ─▶ 파일 목록 + presigned GET URL(30분)
 ```
