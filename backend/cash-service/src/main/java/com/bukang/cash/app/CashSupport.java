@@ -8,9 +8,11 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 import com.bukang.cash.config.CashWalletProperties;
+import com.bukang.cash.domain.exception.CashSellerNotFoundException;
 import com.bukang.cash.domain.exception.WalletNotFoundException;
 import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.cash.out.CashSellerRepository;
 import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.WalletRepository;
 
@@ -22,6 +24,7 @@ public class CashSupport {
 	private final WalletRepository walletRepository;
 	private final PaymentRepository paymentRepository;
 	private final CashWalletProperties cashWalletProperties;
+	private final CashSellerRepository cashSellerRepository;
 
 	// 지갑 ID = 회원 ID. 지갑은 가입 이벤트로 만들어지므로, 없으면 조회 시점에 만들지 않고 404로 알린다
 	public Wallet findWalletByHolderId(int holderId) {
@@ -79,6 +82,14 @@ public class CashSupport {
 		int holdingMemberId = cashWalletProperties.holdingMemberId();
 		Map<Integer, Wallet> wallets = lockWallets(customerId, holdingMemberId);
 		return new LockedWallets(wallets.get(customerId), wallets.get(holdingMemberId));
+	}
+
+	// 정산 지급 때 받는 sellerId는 판매자 신청서 ID라 회원 ID(= 지갑 ID)와 다르다.
+	// CashSeller 복제본으로 실제 지갑 주인(회원 ID)을 찾는다 (PRO-256 리뷰 반영)
+	public int resolveSellerMemberId(int sellerId) {
+		return cashSellerRepository.findById(sellerId)
+			.map(seller -> seller.getMember().getId())
+			.orElseThrow(() -> new CashSellerNotFoundException("존재하지 않는 판매자입니다. sellerId=%d".formatted(sellerId)));
 	}
 
 	public record LockedWallets(Wallet customerWallet, Wallet holdingWallet) {

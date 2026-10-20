@@ -24,10 +24,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.bukang.cash.config.CashWalletProperties;
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.payment.PaymentStatus;
+import com.bukang.cash.domain.seller.CashSeller;
 import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.LedgerType;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.out.CashMemberRepository;
+import com.bukang.cash.out.CashSellerRepository;
 import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.PayoutTransferRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
@@ -55,6 +57,8 @@ class InternalV1CashControllerTest {
 	@Autowired
 	private PayoutTransferRepository payoutTransferRepository;
 	@Autowired
+	private CashSellerRepository cashSellerRepository;
+	@Autowired
 	private TransactionTemplate transactionTemplate;
 
 	@BeforeEach
@@ -74,6 +78,7 @@ class InternalV1CashControllerTest {
 		payoutTransferRepository.deleteAll();
 		walletLedgerRepository.deleteAll();
 		walletRepository.deleteAll();
+		cashSellerRepository.deleteAll();
 		cashMemberRepository.deleteAll();
 	}
 
@@ -217,57 +222,77 @@ class InternalV1CashControllerTest {
 	@Test
 	@DisplayName("최종 정산 지급은 홀딩 지갑에서 판매자·시스템 지갑으로 대금·수수료를 옮긴다")
 	void payoutFinalStageTransfersSettlementAndFee() throws Exception {
-		int sellerId = 10;
-		createWallet(sellerId, "판매자");
+		int sellerApplicationId = 50;
+		int sellerMemberId = 10;
+		createSellerWithMapping(sellerApplicationId, sellerMemberId, "판매자");
 
-		payout(900, sellerId, "FINAL", 90_000, 5_500)
+		payout(900, sellerApplicationId, "FINAL", 90_000, 5_500)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("정산금을 지급했습니다."))
 			.andExpect(jsonPath("$.data.outcome").value("PAID"))
 			.andExpect(jsonPath("$.data.settlementAmount").value(90_000))
 			.andExpect(jsonPath("$.data.feeAmount").value(5_500));
 
-		assertBalance(sellerId, 90_000);
+		assertBalance(sellerMemberId, 90_000);
 		assertBalance(cashWalletProperties.systemMemberId(), 5_500);
 	}
 
 	@Test
 	@DisplayName("1차 정산 지급은 수수료 없이 대금만 옮긴다")
 	void payoutFirstStageTransfersSettlementOnly() throws Exception {
-		int sellerId = 11;
-		createWallet(sellerId, "판매자2");
+		int sellerApplicationId = 51;
+		int sellerMemberId = 11;
+		createSellerWithMapping(sellerApplicationId, sellerMemberId, "판매자2");
 
-		payout(901, sellerId, "FIRST", 40_000, 0)
+		payout(901, sellerApplicationId, "FIRST", 40_000, 0)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.outcome").value("PAID"))
 			.andExpect(jsonPath("$.data.feeAmount").value(0));
 
-		assertBalance(sellerId, 40_000);
+		assertBalance(sellerMemberId, 40_000);
 		assertBalance(cashWalletProperties.systemMemberId(), 0);
 	}
 
 	@Test
 	@DisplayName("같은 정산 ID로 다시 지급 요청해도 중복 이동 없이 ALREADY_PAID만 돌아온다")
 	void payoutIsIdempotentByPayoutId() throws Exception {
-		int sellerId = 12;
-		createWallet(sellerId, "판매자3");
+		int sellerApplicationId = 52;
+		int sellerMemberId = 12;
+		createSellerWithMapping(sellerApplicationId, sellerMemberId, "판매자3");
 
-		payout(902, sellerId, "FINAL", 90_000, 5_500).andExpect(status().isOk());
+		payout(902, sellerApplicationId, "FINAL", 90_000, 5_500).andExpect(status().isOk());
 
-		payout(902, sellerId, "FINAL", 90_000, 5_500)
+		payout(902, sellerApplicationId, "FINAL", 90_000, 5_500)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.outcome").value("ALREADY_PAID"));
 
-		assertBalance(sellerId, 90_000);
+		assertBalance(sellerMemberId, 90_000);
 		assertBalance(cashWalletProperties.systemMemberId(), 5_500);
 	}
 
 	@Test
-	@DisplayName("존재하지 않는 판매자 지갑으로 정산 지급을 요청하면 404다")
-	void payoutWithoutSellerWallet() throws Exception {
+	@DisplayName("같은 정산 ID로 다른 금액을 다시 요청하면 지갑을 건드리지 않고 저장된 값으로 409를 돌려준다")
+	void payoutWithDifferentAmountRejectsAndKeepsStoredValue() throws Exception {
+		int sellerApplicationId = 53;
+		int sellerMemberId = 14;
+		createSellerWithMapping(sellerApplicationId, sellerMemberId, "판매자5");
+		payout(906, sellerApplicationId, "FINAL", 90_000, 5_500).andExpect(status().isOk());
+
+		payout(906, sellerApplicationId, "FINAL", 95_000, 5_500)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.data.outcome").value("ALREADY_PAID"))
+			.andExpect(jsonPath("$.data.settlementAmount").value(90_000))
+			.andExpect(jsonPath("$.data.feeAmount").value(5_500));
+
+		assertBalance(sellerMemberId, 90_000);
+	}
+
+	@Test
+	@DisplayName("존재하지 않는 판매자(신청서 ID)로 정산 지급을 요청하면 404다")
+	void payoutWithoutSellerMapping() throws Exception {
 		payout(903, 999, "FINAL", 90_000, 5_500)
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.message").value("존재하지 않는 지갑입니다."));
+			.andExpect(jsonPath("$.message").value("존재하지 않는 판매자입니다. sellerId=999"));
 	}
 
 	@Test
@@ -280,7 +305,7 @@ class InternalV1CashControllerTest {
 	}
 
 	@Test
-	@DisplayName("최종 정산에서 대금이 0원이면 수수료만 옮기고, 판매자 지갑이 없어도 성공한다")
+	@DisplayName("최종 정산에서 대금이 0원이면 수수료만 옮기고, 판매자 매핑이 없어도 성공한다")
 	void payoutWithZeroSettlementTransfersFeeOnly() throws Exception {
 		payout(905, 13, "FINAL", 0, 5_500)
 			.andExpect(status().isOk())
@@ -355,5 +380,15 @@ class InternalV1CashControllerTest {
 		LocalDateTime now = LocalDateTime.of(2026, 10, 12, 10, 0);
 		CashMember member = cashMemberRepository.save(new CashMember(memberId, now, now, nickname));
 		return walletRepository.save(new Wallet(member));
+	}
+
+	// 판매자 신청서 ID(sellerApplicationId) → 회원(memberId) 매핑까지 함께 만든다
+	private void createSellerWithMapping(int sellerApplicationId, int memberId, String nickname) {
+		transactionTemplate.executeWithoutResult(status -> {
+			LocalDateTime now = LocalDateTime.of(2026, 10, 12, 10, 0);
+			CashMember member = cashMemberRepository.save(new CashMember(memberId, now, now, nickname));
+			walletRepository.save(new Wallet(member));
+			cashSellerRepository.save(new CashSeller(sellerApplicationId, member));
+		});
 	}
 }

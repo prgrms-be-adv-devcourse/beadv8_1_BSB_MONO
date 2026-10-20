@@ -24,18 +24,22 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.bukang.cash.config.CashWalletProperties;
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.payout.PayoutStage;
+import com.bukang.cash.domain.seller.CashSeller;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.dto.CashPayoutResponseDto;
 import com.bukang.cash.out.CashMemberRepository;
+import com.bukang.cash.out.CashSellerRepository;
 import com.bukang.cash.out.PayoutTransferRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
 import com.bukang.cash.out.WalletRepository;
 
 // PRO-256: 같은 정산 ID로 정산 지급 요청이 동시에 여러 번 와도 지갑 잔액이 한 번만 바뀌는지 확인한다
+// sellerId는 판매자 신청서 ID(SELLER_APPLICATION_ID)이고, 실제 지갑 주인은 회원 ID(SELLER_MEMBER_ID)로 서로 다르다
 @SpringBootTest
 @ActiveProfiles("test")
 class PayoutConcurrencyTest {
-	private static final int SELLER_ID = 10;
+	private static final int SELLER_APPLICATION_ID = 50;
+	private static final int SELLER_MEMBER_ID = 10;
 	private static final int PAYOUT_ID = 900;
 
 	@Autowired
@@ -44,6 +48,8 @@ class PayoutConcurrencyTest {
 	private CashWalletProperties cashWalletProperties;
 	@Autowired
 	private CashMemberRepository cashMemberRepository;
+	@Autowired
+	private CashSellerRepository cashSellerRepository;
 	@Autowired
 	private WalletRepository walletRepository;
 	@Autowired
@@ -58,6 +64,7 @@ class PayoutConcurrencyTest {
 		payoutTransferRepository.deleteAll();
 		walletLedgerRepository.deleteAll();
 		walletRepository.deleteAll();
+		cashSellerRepository.deleteAll();
 		cashMemberRepository.deleteAll();
 	}
 
@@ -66,10 +73,10 @@ class PayoutConcurrencyTest {
 	void concurrentSamePayoutId_transfersOnlyOnce() throws InterruptedException {
 		createWallet(cashWalletProperties.holdingMemberId(), "홀딩");
 		createWallet(cashWalletProperties.systemMemberId(), "시스템");
-		createWallet(SELLER_ID, "판매자");
+		createSellerWithMapping();
 
 		List<AttemptResult> results = runConcurrently(10, i -> () ->
-			cashFacade.payout(PAYOUT_ID, SELLER_ID, PayoutStage.FINAL, 90_000, 5_500));
+			cashFacade.payout(PAYOUT_ID, SELLER_APPLICATION_ID, PayoutStage.FINAL, 90_000, 5_500));
 
 		long paidCount = results.stream().filter(result -> result.dto() != null
 			&& result.dto().outcome() == CashPayoutResponseDto.Outcome.PAID).count();
@@ -83,7 +90,7 @@ class PayoutConcurrencyTest {
 		assertThat(paidCount).as("딱 한 번만 실제로 지급돼야 한다").isEqualTo(1);
 		assertThat(alreadyPaidCount).as("나머지는 이미 지급됨으로 수렴해야 한다").isEqualTo(9);
 		assertBalance(cashWalletProperties.holdingMemberId(), -95_500);
-		assertBalance(SELLER_ID, 90_000);
+		assertBalance(SELLER_MEMBER_ID, 90_000);
 		assertBalance(cashWalletProperties.systemMemberId(), 5_500);
 		assertThat(walletLedgerRepository.findAll()).as("장부는 대금 2줄 + 수수료 2줄만 있어야 한다").hasSize(4);
 		assertThat(payoutTransferRepository.count()).as("이동 기록도 대금·수수료 하나씩만 있어야 한다").isEqualTo(2);
@@ -137,6 +144,16 @@ class PayoutConcurrencyTest {
 			LocalDateTime now = LocalDateTime.of(2026, 10, 20, 10, 0);
 			CashMember member = cashMemberRepository.save(new CashMember(memberId, now, now, nickname));
 			walletRepository.save(new Wallet(member));
+		});
+	}
+
+	// 판매자 신청서 ID(SELLER_APPLICATION_ID) → 회원(SELLER_MEMBER_ID) 매핑까지 함께 만든다
+	private void createSellerWithMapping() {
+		transactionTemplate.executeWithoutResult(status -> {
+			LocalDateTime now = LocalDateTime.of(2026, 10, 20, 10, 0);
+			CashMember member = cashMemberRepository.save(new CashMember(SELLER_MEMBER_ID, now, now, "판매자"));
+			walletRepository.save(new Wallet(member));
+			cashSellerRepository.save(new CashSeller(SELLER_APPLICATION_ID, member));
 		});
 	}
 

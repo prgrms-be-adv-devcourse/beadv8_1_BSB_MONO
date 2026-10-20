@@ -29,6 +29,8 @@ public class PayoutTransfer extends BaseIdAndTime {
 	@Column(nullable = false)
 	private int payoutId;
 
+	// 판매자 신청서 ID(= SellerChangedEvent.id). 회원 ID가 아니라서 지갑 조회에는 못 쓴다 (PRO-256 리뷰 반영)
+	// 지갑은 CashSupport.resolveSellerMemberId로 바꾼 회원 ID로 찾고, 여기엔 payout-service가 보낸 원래 값을 추적용으로 남긴다
 	@Column(nullable = false)
 	private int sellerId;
 

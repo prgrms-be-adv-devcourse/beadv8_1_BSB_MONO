@@ -170,9 +170,13 @@ public class InternalV1CashController {
 				@ExampleObject(name = "요청 본문 형식 오류", value = CashInternalApiExamples.INVALID_BODY),
 				@ExampleObject(name = "정산 ID 형식 오류", value = CashInternalApiExamples.INVALID_VALUE_TYPE)
 			})),
-		@ApiResponse(responseCode = "404", description = "존재하지 않는 홀딩·판매자·시스템 지갑",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = CashInternalApiExamples.WALLET_NOT_FOUND)))
+		@ApiResponse(responseCode = "404", description = "존재하지 않는 판매자 또는 존재하지 않는 홀딩·판매자·시스템 지갑",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "존재하지 않는 판매자", value = CashInternalApiExamples.SELLER_NOT_FOUND),
+				@ExampleObject(name = "존재하지 않는 지갑", value = CashInternalApiExamples.WALLET_NOT_FOUND)
+			})),
+		@ApiResponse(responseCode = "409", description = "같은 정산 ID로 이전과 다른 판매자·금액이 요청됨 (data에 저장된 원래 값이 담김)",
+			content = @Content(examples = @ExampleObject(value = CashInternalApiExamples.PAYOUT_MISMATCH)))
 	})
 	public ResponseEntity<RsData<CashPayoutResponseDto>> payout(
 		@Parameter(description = "정산 ID", example = "500") @PathVariable int payoutId,

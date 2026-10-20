@@ -93,7 +93,7 @@ final class CashInternalApiExamples {
 		""";
 
 	static final String INVALID_SELLER_ID = """
-		{ "status": 400, "message": "판매자 회원 ID를 작성해주세요.", "data": null }
+		{ "status": 400, "message": "판매자 ID를 작성해주세요.", "data": null }
 		""";
 
 	static final String INVALID_BODY = """
@@ -106,6 +106,22 @@ final class CashInternalApiExamples {
 
 	static final String WALLET_NOT_FOUND = """
 		{ "status": 404, "message": "존재하지 않는 지갑입니다.", "data": null }
+		""";
+
+	static final String SELLER_NOT_FOUND = """
+		{ "status": 404, "message": "존재하지 않는 판매자입니다. sellerId=10", "data": null }
+		""";
+
+	static final String PAYOUT_MISMATCH = """
+		{
+			"status": 409,
+			"message": "같은 정산 ID로 이전과 다른 값이 요청됐습니다. payoutId=500",
+			"data": {
+				"outcome": "ALREADY_PAID",
+				"settlementAmount": 90000,
+				"feeAmount": 5500
+			}
+		}
 		""";
 
 	static final String PAYMENT_ALREADY_FINALIZED = """
