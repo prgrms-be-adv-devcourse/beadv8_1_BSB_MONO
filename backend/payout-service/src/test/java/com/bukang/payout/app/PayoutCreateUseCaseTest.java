@@ -452,4 +452,28 @@ class PayoutCreateUseCaseTest {
 			.extracting(PayoutItem::getTargetDate)
 			.containsOnly(LocalDate.of(2026, 9, 29));
 	}
+
+	@Test
+	@DisplayName("1차를 만든 뒤 판매자가 환불 마감일을 다음 달로 늦춰도(9/30 → 10/5) 1차 정산은 하나만 있다")
+	void firstPayoutOnceWhenRefundDeadlineMovesToNextMonth() {
+		LocalDate raceDate = LocalDate.of(2026, 10, 10);
+		List<SoldEntry> entries = List.of(
+			new SoldEntry(100, 1, 10, 10, raceDate, 50_000L),
+			new SoldEntry(101, 1, 10, 10, raceDate, 50_000L)
+		);
+		// 10/1 실행: 환불 마감 9/30 → 1차(정산 월 2026-09)
+		useCaseSelling(entries, sellerId -> true,
+			List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 30))))
+			.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
+
+		// 판매자가 환불 마감일을 10/5로 늦췄다 (상품 Race.update는 늦추는 변경을 허용한다). 10/6 실행
+		useCaseSelling(entries, sellerId -> true,
+			List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 10, 5))))
+			.run(LocalDate.of(2026, 10, 6), LocalDateTime.of(2026, 10, 6, 3, 0));
+
+		assertThat(payoutRepository.findAll())
+			.filteredOn(payout -> payout.getPayoutStage() == PayoutStage.FIRST)
+			.extracting(Payout::getPayoutMonth, Payout::getPayoutAmount)
+			.containsExactly(tuple("2026-09", 40_000L));
+	}
 }
