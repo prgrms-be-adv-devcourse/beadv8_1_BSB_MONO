@@ -23,7 +23,7 @@ function renderWithClient(ui: React.ReactNode) {
 }
 
 const balanceHandler = (balance: number) =>
-  http.get('*/api/v1/cash/wallets/:holderId/balance', () =>
+  http.get('*/api/v1/cash/wallets/balance', () =>
     HttpResponse.json({ status: 200, message: '잔액 조회 성공', data: { holderId: 1, balance } }),
   )
 

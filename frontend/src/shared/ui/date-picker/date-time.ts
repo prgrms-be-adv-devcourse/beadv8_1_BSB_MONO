@@ -1,44 +1,35 @@
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
-import type { SelectItem } from '../field/Select'
 import type { DateRange } from './selection'
 
-// 시간 드롭다운: 30분 단위 + 하루 끝 마감 시각 23:59 (환불 기한·접수 마감처럼 "그날까지"를 뜻할 때)
-export const TIME_ITEMS: SelectItem<string>[] = [
-  ...Array.from({ length: 48 }, (_, i) => {
-    const time = `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`
-    return { value: time, label: time }
-  }),
-  { value: '23:59', label: '23:59' },
-]
-
-/** 목록에 없는 시각(예: 10:15)이 기본값으로 들어오면 순서에 맞춰 끼워 넣어 그대로 보여 준다. */
-export function timeItemsWith(...times: (string | null)[]): SelectItem<string>[] {
-  const extra = times.filter(
-    (t): t is string => t !== null && !TIME_ITEMS.some((item) => item.value === t),
-  )
-  if (extra.length === 0) {
-    return TIME_ITEMS
+/**
+ * 시간 칸에 치는 글자를 HH:mm 모양으로 다듬는다. 숫자만 쳐도 두 자리 뒤에 콜론을 넣는다(1830 → 18:30).
+ * 맞는 시각인지는 여기서 보지 않는다(폼의 zod 규칙이 본다).
+ */
+export function formatTimeTyping(raw: string): string {
+  if (raw.includes(':')) {
+    const [hours, minutes = ''] = raw.split(':')
+    return `${hours.replace(/\D/g, '').slice(0, 2)}:${minutes.replace(/\D/g, '').slice(0, 2)}`
   }
-  return [...TIME_ITEMS, ...extra.map((t) => ({ value: t, label: t }))].sort((a, b) =>
-    a.value.localeCompare(b.value),
-  )
+  const digits = raw.replace(/\D/g, '').slice(0, 4)
+  return digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits
 }
 
-export function timeOf(date: Date | undefined): string | null {
-  return date ? format(date, 'HH:mm') : null
+/** 칸을 떠날 때 한 자리 시를 두 자리로 채운다(9:30 → 09:30). 그 밖의 글자는 그대로 둔다. */
+export function padTime(text: string): string {
+  const match = /^(\d):(\d{2})$/.exec(text)
+  return match ? `0${match[1]}:${match[2]}` : text
 }
 
-/** 날짜(일)에 'HH:mm' 시각을 붙인다. 둘 중 하나라도 없으면 아직 다 고르지 않은 것이다. */
-export function withTime(date: Date | undefined, time: string | null): Date | undefined {
-  if (!date || !time) {
-    return undefined
-  }
-  const [hours, minutes] = time.split(':').map(Number)
-  const next = new Date(date)
-  next.setHours(hours, minutes, 0, 0)
-  return next
+/** 폼에 넘기는 글자 'yyyy-MM-dd HH:mm'. 날짜나 시간이 비면 그 자리가 빈 채로 간다(예: ' 18:30'). */
+export function dateTimeText(date: Date | undefined, time: string): string {
+  const day = date ? format(date, 'yyyy-MM-dd') : ''
+  return day || time ? `${day} ${time}` : ''
+}
+
+export function timeOf(date: Date | undefined): string {
+  return date ? format(date, 'HH:mm') : ''
 }
 
 // 2026-11-01 (일)

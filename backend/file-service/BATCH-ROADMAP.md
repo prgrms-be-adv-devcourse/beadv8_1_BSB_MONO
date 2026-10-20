@@ -28,12 +28,13 @@ file-service 1~3단계 작업 기록은 `ROADMAP.md`에 있습니다. 기준을 
 
 | 상태 | 생기는 경우 | S3에 남은 객체 |
 |---|---|---|
-| PENDING | 업로드 URL만 받고 완료(`complete`)를 부르지 않음 | `uploads/…` (브라우저가 올렸을 때만) |
-| UPLOADED | 확인은 끝났지만 대상에 연결하지 않음 | `files/…` |
-| DELETED (교체) | `link`에서 목록에서 빠짐 (DB 상태만 바뀐다) | `files/…` |
+| PENDING | 업로드 URL만 받고 완료(`complete`)를 부르지 않음 | `{환경}/uploads/…` (브라우저가 올렸을 때만) |
+| UPLOADED | 확인은 끝났지만 대상에 연결하지 않음 | `{환경}/files/…` |
+| DELETED (교체) | `link`에서 목록에서 빠짐 (DB 상태만 바뀐다) | `{환경}/files/…` |
 | DELETED (검사 실패) | `complete`에서 형식·크기가 신고와 다름 | 없음 (`complete`가 이미 지운다) |
 
-`s3_key` 컬럼에는 PENDING과 검사 실패로 DELETED가 된 파일이면 `uploads/…`, 검사를 통과한 파일(UPLOADED, ACTIVE, 교체로 DELETED)이면 `files/…`가 들어 있습니다.
+`s3_key` 컬럼에는 PENDING과 검사 실패로 DELETED가 된 파일이면 `{환경}/uploads/…`, 검사를 통과한 파일(UPLOADED, ACTIVE, 교체로 DELETED)이면 `{환경}/files/…`가 들어 있습니다.
+`{환경}`은 `file.storage.s3.key-prefix`(dev·prod)입니다. 환경 이름을 붙이기 전에 만든 행은 루트 `uploads/…`, `files/…` 그대로입니다.
 배치는 상태와 상관없이 `s3_key`의 객체를 지우면 됩니다. 이미 없는 키를 지워도 S3는 성공으로 응답합니다.
 
 ## 3. 정한 규칙
@@ -247,7 +248,8 @@ H2 + `FakeFileStorage` (`S3FileStorage.deleteAll`만 S3Mock)
 - 나중에
   - 대회를 삭제하거나 판매를 중지할 때 연결된 파일을 어떻게 할지 product-service와 정한다
   - file-service를 여러 대로 늘리면 ShedLock 같은 중복 실행 방지가 필요하다
-  - `uploads/` 수명 주기 규칙을 학원 AWS 계정에서 설정할 수 있는지 확인한다
+  - `dev/uploads/`·`prod/uploads/` 수명 주기 규칙(접두사마다 하나씩)을 학원 AWS 계정에서 설정할 수 있는지 확인한다.
+    정리 배치는 prod에서만 돌므로 `dev/`에 따로 규칙을 둘지도 함께 정한다
   - 이 규칙을 FigJam 정책(⑩ 또는 정책 2장)에 남길지 팀과 정한다
 
 ## 논의 기록

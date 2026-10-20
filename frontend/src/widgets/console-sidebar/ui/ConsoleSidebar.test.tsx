@@ -41,3 +41,24 @@ describe('ConsoleSidebar 로그아웃', () => {
     expect(getAuthStatus()).toBe('anonymous')
   })
 })
+
+describe('ConsoleSidebar 크루런 홈으로', () => {
+  it.each(['seller', 'admin'] as const)(
+    '%s 콘솔의 설정과 로그아웃 사이에 크루런 홈(/)으로 가는 링크가 있다',
+    (role) => {
+      render(
+        <QueryClientProvider client={new QueryClient()}>
+          <ConsoleSidebar role={role} />
+        </QueryClientProvider>,
+      )
+
+      const home = screen.getByRole('link', { name: '크루런 홈으로' })
+      expect(home).toHaveAttribute('href', '/')
+      expect(home).not.toHaveAttribute('aria-current')
+      const settings = screen.getByRole('link', { name: '설정' })
+      const logout = screen.getByRole('button', { name: '로그아웃' })
+      expect(settings.compareDocumentPosition(home) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(home.compareDocumentPosition(logout) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    },
+  )
+})

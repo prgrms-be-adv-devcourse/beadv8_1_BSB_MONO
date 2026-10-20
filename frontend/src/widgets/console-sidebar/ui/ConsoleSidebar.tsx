@@ -67,6 +67,8 @@ export function ConsoleSidebar({ role }: { role: ConsoleRole }) {
       <div className="flex-1" />
       <div className="flex w-full flex-col gap-1">
         <SidebarItem href={menu.settings} label="설정" icon="Settings" selected={false} />
+        {/* 콘솔 밖 크루런 홈으로 나가는 링크라 선택 표시를 하지 않는다. 로그인 상태는 그대로다 */}
+        <SidebarItem href="/" label="크루런 홈으로" icon="Home" selected={false} />
         <LogoutItem />
       </div>
     </aside>

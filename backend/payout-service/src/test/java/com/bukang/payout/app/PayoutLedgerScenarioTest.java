@@ -84,7 +84,8 @@ class PayoutLedgerScenarioTest {
 		BusinessDayCalendar calendar = new BusinessDayCalendar();
 		ledgerUseCase = new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository);
 		creator = new PayoutGroupCreator(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
-		payUseCase = new PayoutPayUseCase(payoutRepository);
+		payUseCase = new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
+		});
 		recoveryRequestUseCase = new PayoutRecoveryRequestUseCase(payoutRepository, payoutItemRepository,
 			payoutRecoveryRepository, ledgerUseCase);
 		recoveryUseCase = new PayoutRecoveryUseCase(payoutRecoveryRepository, payoutItemRepository, ledgerUseCase);

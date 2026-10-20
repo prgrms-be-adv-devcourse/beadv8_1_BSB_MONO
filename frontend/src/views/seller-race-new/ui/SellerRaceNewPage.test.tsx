@@ -42,9 +42,9 @@ async function pickDates(label: string, days: number[]) {
   await userEvent.click(screen.getByRole('button', { name: '선택 완료' }))
 }
 
-async function pickTime(name: string, time: string) {
-  await userEvent.click(screen.getByRole('combobox', { name }))
-  await userEvent.click(await screen.findByRole('option', { name: time }))
+/** 시간 칸에 숫자만 친다 (콜론은 칸이 넣는다) */
+async function typeTime(name: string, digits: string) {
+  await userEvent.type(screen.getByRole('textbox', { name }), digits)
 }
 
 describe('SellerRaceNewPage', () => {
@@ -62,19 +62,29 @@ describe('SellerRaceNewPage', () => {
     expect(await screen.findByText(RACE_FORM_ERRORS.titleRequired)).toBeInTheDocument()
     expect(screen.getByText(RACE_FORM_ERRORS.sidoRequired)).toBeInTheDocument()
     expect(screen.getByText(RACE_FORM_ERRORS.coverRequired)).toBeInTheDocument()
-    expect(screen.getAllByText(RACE_FORM_ERRORS.dateTimeFormat)).toHaveLength(3)
+    expect(screen.getAllByText(RACE_FORM_ERRORS.dateRequired)).toHaveLength(3)
     expect(requested).toBe(false)
   })
 
   it('접수 마감이 대회 일시보다 늦으면 알려 준다', async () => {
     renderPage()
     await pickDates('대회 일시', [25])
-    await pickTime('대회 일시 시간', '08:00')
+    await typeTime('대회 일시 시간', '0800')
     await pickDates('접수 기간', [20, 28])
-    await pickTime('접수 기간 시작 시간', '10:00')
-    await pickTime('접수 기간 끝 시간', '18:00')
+    await typeTime('접수 기간 시작 시간', '1000')
+    await typeTime('접수 기간 끝 시간', '1800')
     await userEvent.click(screen.getByRole('button', { name: '등록하기' }))
     expect(await screen.findByText(RACE_FORM_ERRORS.closeBeforeRace)).toBeInTheDocument()
+  })
+
+  it('시간 칸은 숫자만 쳐도 콜론을 넣고, 15분 단위가 아니면 알려 준다', async () => {
+    renderPage()
+    await pickDates('대회 일시', [25])
+    const time = screen.getByRole('textbox', { name: '대회 일시 시간' })
+    await userEvent.type(time, '0807')
+    expect(time).toHaveValue('08:07')
+    await userEvent.click(screen.getByRole('button', { name: '등록하기' }))
+    expect(await screen.findByText(RACE_FORM_ERRORS.timeQuarter)).toBeInTheDocument()
   })
 
   it('종목 표는 등록할 종목 값으로 그린다', () => {

@@ -12,9 +12,11 @@ export const RACE_FORM_ERRORS = {
   sidoMax: `시·도는 ${productZod.registerBodyRegionSidoMax}자 이하로 입력해 주세요.`,
   sigunguRequired: '시·군·구를 입력해 주세요.',
   sigunguMax: `시·군·구는 ${productZod.registerBodyRegionSigunguMax}자 이하로 입력해 주세요.`,
-  // 달력 칸은 날짜와 시간을 둘 다 골라야 값이 들어간다
-  dateTimeFormat: '날짜와 시간을 골라 주세요.',
-  dateFormat: '날짜와 시간을 골라 주세요.',
+  // 달력 칸에서 날짜를 고르고, 옆 칸에 시간을 친다
+  dateRequired: '날짜를 골라 주세요.',
+  timeRequired: '시간을 입력해 주세요.',
+  timeFormat: '시간을 18:30처럼 24시간(00:00~23:45)으로 입력해 주세요.',
+  timeQuarter: '15분 단위(00·15·30·45분)로 입력해 주세요.',
   closeAfterOpen: '접수 마감은 접수 시작보다 늦어야 해요.',
   closeBeforeRace: '접수 마감은 대회 일시보다 늦을 수 없어요.',
   refundBeforeRace: '환불 기한은 대회 날짜보다 늦을 수 없어요.',
@@ -36,9 +38,33 @@ export type RaceCourseInput = Omit<productModel.RaceCourseSaveRequestDto, 'image
 // 종목 한 줄은 orval이 만든 요청 스키마에서 이미지만 뺀 모양 (이미지는 등록할 때 올려서 붙인다)
 const courseSchema = productZod.RegisterBody.shape.courses.element.omit({ images: true })
 
-const dateTime = z
+// 시는 00~23, 분은 00 · 15 · 30 · 45만 받는다
+const TIME_FORMAT = /^([01]\d|2[0-3]):([0-5]\d)$/
+const QUARTER_MINUTES = new Set(['00', '15', '30', '45'])
+
+/** 시간 칸 하나('HH:mm')의 규칙 */
+export const raceTimeSchema = z
   .string()
-  .refine((value) => parseRaceDateTimeInput(value) !== null, RACE_FORM_ERRORS.dateTimeFormat)
+  .min(1, RACE_FORM_ERRORS.timeRequired)
+  .regex(TIME_FORMAT, RACE_FORM_ERRORS.timeFormat)
+  .refine((time) => QUARTER_MINUTES.has(time.slice(3)), RACE_FORM_ERRORS.timeQuarter)
+
+/** 날짜 · 시간 칸('yyyy-MM-dd HH:mm'). 날짜가 비면 날짜를, 아니면 시간 규칙을 알린다 */
+const dateTime = z.string().superRefine((value, ctx) => {
+  const [date = '', time = ''] = value.split(' ')
+  if (!date) {
+    ctx.addIssue({ code: 'custom', message: RACE_FORM_ERRORS.dateRequired })
+    return
+  }
+  const timeResult = raceTimeSchema.safeParse(time)
+  if (!timeResult.success) {
+    ctx.addIssue({ code: 'custom', message: timeResult.error.issues[0].message })
+    return
+  }
+  if (parseRaceDateTimeInput(value) === null) {
+    ctx.addIssue({ code: 'custom', message: RACE_FORM_ERRORS.dateRequired })
+  }
+})
 
 export const raceFormSchema = z
   .object({
@@ -65,9 +91,8 @@ export const raceFormSchema = z
     raceDate: dateTime,
     individualOpenAt: dateTime,
     applicationCloseAt: dateTime,
-    refundDeadline: z
-      .string()
-      .refine((value) => parseRaceDateInput(value) !== null, RACE_FORM_ERRORS.dateFormat),
+    // 서버는 날짜만 받지만 칸 모양이 같아 시간도 같은 규칙으로 본다
+    refundDeadline: dateTime,
     courses: z.array(courseSchema).min(1, RACE_FORM_ERRORS.coursesRequired),
   })
   .superRefine((values, ctx) => {
@@ -75,7 +100,7 @@ export const raceFormSchema = z
     const raceDate = parseRaceDateTimeInput(values.raceDate)
     const openAt = parseRaceDateTimeInput(values.individualOpenAt)
     const closeAt = parseRaceDateTimeInput(values.applicationCloseAt)
-    const refund = parseRaceDateInput(values.refundDeadline)
+    const refund = parseRaceDateInput(values.refundDeadline.slice(0, 10))
     if (openAt && closeAt && closeAt <= openAt) {
       ctx.addIssue({
         code: 'custom',
@@ -161,7 +186,8 @@ export function toRaceSaveRequest(
     raceDate: dateTime(values.raceDate),
     individualOpenAt: dateTime(values.individualOpenAt),
     applicationCloseAt: dateTime(values.applicationCloseAt),
-    refundDeadline: parseRaceDateInput(values.refundDeadline) ?? values.refundDeadline,
+    // 환불 기한은 날짜만 보낸다 (칸의 시간은 보내지 않는다)
+    refundDeadline: parseRaceDateInput(values.refundDeadline.slice(0, 10)) ?? values.refundDeadline,
     crewMinCount: CREW_MIN_COUNT,
     // 세미는 크루 예매가 없어 크루 예매 기간을 비우고 크루 몫 정원은 0으로 보낸다
     courses: values.courses.map((course, i) => ({

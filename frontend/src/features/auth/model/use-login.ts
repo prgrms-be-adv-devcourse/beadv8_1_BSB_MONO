@@ -17,6 +17,8 @@ export function useLogin() {
     },
     onSuccess: ({ accessToken, member }) => {
       setAccessToken(accessToken)
+      // 세션 만료(재발급 실패)로 로그아웃 없이 다른 회원이 로그인해도 이전 회원의 캐시(잔액 등)가 남지 않게 비운다.
+      queryClient.removeQueries()
       if (member) {
         queryClient.setQueryData<memberModel.RsDataMemberDto>(memberApi.getFindMeQueryKey(), {
           status: 200,

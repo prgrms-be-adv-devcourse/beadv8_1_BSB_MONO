@@ -235,11 +235,37 @@ public class Payout extends BaseIdAndTime {
 		this.payoutCode = "ST-%s-%04X".formatted(settledAt.format(CODE_DATE), getId() & 0xFFFF);
 	}
 
-	// 세미의 지급 완료는 실제 계좌 지급 없이 상태만 바꾸는 모의 지급이다 (payout.md 1장 지급 6번)
-	// 보류된 정산 내역은 지급 완료로 바꿀 수 없다. 배치가 CALCULATED만 고르지만, 잘못 불려도 여기서 막는다
-	public void pay(LocalDateTime paidAt) {
+	/**
+	 * 캐시 서비스에 정산금 이동을 요청하기 전에 지급 중(PAYING)으로 바꾼다 (PRO-252)
+	 * 이 상태를 먼저 커밋해 두면, 요청 결과를 모르는 동안에도 보류 · 상계 · 취소가 이 정산 내역을 바꾸지 못한다
+	 * 배치 두 개가 같은 정산 내역을 동시에 고르면 낙관적 락(@Version) 때문에 늦게 커밋한 쪽이 실패해 한쪽만 요청한다
+	 */
+	public void startPaying(LocalDateTime startedAt) {
 		if (status != PayoutStatus.CALCULATED) {
-			throw new IllegalStateException("정산 예정 상태가 아니라 지급할 수 없습니다. payoutId=%d, status=%s"
+			throw new IllegalStateException("정산 예정 상태가 아니라 지급을 시작할 수 없습니다. payoutId=%d, status=%s"
+				.formatted(getId(), status));
+		}
+		changeStatus(PayoutStatus.PAYING, PayoutHold.SYSTEM_MEMBER_ID, startedAt, null);
+	}
+
+	/**
+	 * 캐시 서비스가 요청을 거절해(4xx) 돈이 옮겨지지 않은 것이 확실할 때 정산 예정으로 되돌린다 (PRO-252)
+	 * 지급 예정일은 그대로 두므로 다음 실행에서 다시 지급한다. 결과를 모를 때(타임아웃 · 5xx)는 되돌리지 않고 PAYING으로 둔다
+	 */
+	public void revertPaying(LocalDateTime revertedAt, String reason) {
+		if (status != PayoutStatus.PAYING) {
+			throw new IllegalStateException("지급 중 상태가 아니라 되돌릴 수 없습니다. payoutId=%d, status=%s"
+				.formatted(getId(), status));
+		}
+		changeStatus(PayoutStatus.CALCULATED, PayoutHold.SYSTEM_MEMBER_ID, revertedAt, reason);
+	}
+
+	// 지급 완료: 캐시 서비스가 정산금을 판매자 · 시스템 지갑으로 옮긴 뒤(PAYING) 바꾼다 (PRO-252)
+	// 옮길 돈이 0원인 정산 내역은 캐시 서비스를 부르지 않으므로 정산 예정(CALCULATED)에서 바로 바꾼다
+	// 보류된 정산 내역은 지급 완료로 바꿀 수 없다. 배치가 HELD를 고르지 않지만, 잘못 불려도 여기서 막는다
+	public void pay(LocalDateTime paidAt) {
+		if (status != PayoutStatus.CALCULATED && status != PayoutStatus.PAYING) {
+			throw new IllegalStateException("정산 예정 · 지급 중 상태가 아니라 지급할 수 없습니다. payoutId=%d, status=%s"
 				.formatted(getId(), status));
 		}
 		// 지급은 지급 배치가 한다
@@ -247,11 +273,20 @@ public class Payout extends BaseIdAndTime {
 		this.paidAt = paidAt;
 	}
 
+	// 캐시 서비스로 옮길 돈이 있는지. 지급액(대금)이 상계로 0원이어도 수수료가 남아 있으면 옮긴다 (PRO-252)
+	public boolean hasTransferAmount() {
+		return payoutAmount > 0 || feeAmount > 0;
+	}
+
 	// 지급보류 걸기: 정산 예정(CALCULATED)일 때만 건다. 세미는 활성 보류를 하나만 둔다 (PRO-26)
 	// 보류 기록(PayoutHold)은 여기서만 만든다. 저장은 호출한 쪽이 한다
 	public PayoutHold hold(PayoutHoldReason reasonType, String reason, int heldBy, LocalDateTime heldAt) {
 		if (status == PayoutStatus.HELD) {
 			throw new PayoutHoldConflictException("이미 지급보류 중인 정산 내역입니다.");
+		}
+		// 캐시 서비스에 돈을 옮겨 달라고 요청한 뒤라 돈이 이미 나갔을 수 있다 (PRO-252)
+		if (status == PayoutStatus.PAYING) {
+			throw new PayoutHoldConflictException("지급 중인 정산 내역입니다.");
 		}
 		if (status == PayoutStatus.PAID) {
 			throw new PayoutHoldConflictException("이미 지급 완료된 정산 내역입니다.");
@@ -296,6 +331,10 @@ public class Payout extends BaseIdAndTime {
 		}
 		if (status == PayoutStatus.CANCELED) {
 			throw new IllegalStateException("이미 취소된 정산 내역입니다. payoutId=%d".formatted(getId()));
+		}
+		// 지급 중에는 돈이 이미 나갔을 수 있어 닫지 않는다. 대회 취소가 지급 중을 만났을 때의 처리는 PRO-253에서 정한다
+		if (status == PayoutStatus.PAYING) {
+			throw new IllegalStateException("지급 중인 정산 내역은 취소할 수 없습니다. payoutId=%d".formatted(getId()));
 		}
 		List<PayoutItem> original = List.copyOf(items);
 		original.forEach(item -> addLine(item.getRecordType().canceled(), item.getOrderItemId(),
