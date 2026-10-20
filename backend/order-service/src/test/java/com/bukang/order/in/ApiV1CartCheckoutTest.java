@@ -208,6 +208,20 @@ class ApiV1CartCheckoutTest {
 	}
 
 	@Test
+	@DisplayName("결제 전 신청서가 남은 채로 신청서를 다시 저장하면, 새 신청서로 결제까지 할 수 있다")
+	void applyAgainWithLeftoverPendingThenCheckout() throws Exception {
+		int leftover = apply(MEMBER_ID, COURSE_ID);
+		int again = apply(MEMBER_ID, COURSE_ID);
+		addToCart(MEMBER_ID, COURSE_ID);
+
+		checkout(MEMBER_ID, newKey(), again)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"));
+		assertThat(statusOf(leftover)).isEqualTo(ParticipationStatus.CANCELED);
+		assertThat(statusOf(again)).isEqualTo(ParticipationStatus.APPLIED);
+	}
+
+	@Test
 	@DisplayName("매진이면 SOLD_OUT으로 알려 주고, 참가 신청은 FAILED가 되며 그 종목은 장바구니에 남는다")
 	void checkoutPartlySoldOut() throws Exception {
 		addToCart(MEMBER_ID, OTHER_COURSE_ID);

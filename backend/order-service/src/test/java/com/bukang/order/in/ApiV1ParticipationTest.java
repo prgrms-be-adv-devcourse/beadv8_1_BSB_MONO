@@ -9,6 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -220,22 +227,73 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
-	@DisplayName("같은 회원이 같은 대회에 살아 있는 신청을 두 건 가질 수 없다")
-	void applyTwice() throws Exception {
-		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
-			.andExpect(status().isCreated());
+	@DisplayName("같은 대회에 결제 전 신청서가 남아 있으면 그 신청서를 취소하고 새 신청서를 받는다 (같은 대회의 다른 종목이어도)")
+	void applyReplacesPendingParticipation() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
 
-		// 같은 대회의 다른 종목이어도 막는다
+		// 주문 생성이 실패했거나 결제 없이 떠나 결제 전 신청서가 남은 뒤, 신청서 화면에 다시 들어와 저장한 상황
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
-		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "L"), true))
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 이 대회에 신청했습니다."))
-			.andExpect(jsonPath("$.code").value("ORDER_DUPLICATE_PARTICIPATION"));
+		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("박러너", "1990-01-01", "M"), true))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.status").value("PENDING"))
+			.andExpect(jsonPath("$.data.raceCourseId").value(COURSE_ID + 1))
+			.andExpect(jsonPath("$.data.participant.name").value("박러너"));
 
-		// 다른 회원은 신청할 수 있다
-		apply(OTHER_MEMBER_ID, applyBody(COURSE_ID, participant("박러너", "1990-01-01", "M"), true))
+		Participation replaced = participationRepository.findById(first).orElseThrow();
+		assertThat(replaced.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
+		assertThat(replaced.getActiveFlag()).isNull();
+		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
+
+		// 다른 회원은 따로 신청할 수 있다
+		apply(OTHER_MEMBER_ID, applyBody(COURSE_ID, participant("최러너", "1990-01-01", "M"), true))
 			.andExpect(status().isCreated());
-		assertThat(participationRepository.count()).isEqualTo(2);
+		assertThat(activeCount(OTHER_MEMBER_ID)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("같은 대회에 결제 대기·결제 완료 신청이 있으면 409이고, 그 신청은 그대로다")
+	void applyTwiceWhenAppliedOrConfirmed() throws Exception {
+		for (ParticipationStatus status : new ParticipationStatus[] {ParticipationStatus.APPLIED,
+			ParticipationStatus.CONFIRMED}) {
+			int id = applyAndGetId(MEMBER_ID);
+			moveTo(id, status);
+
+			apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("이미 이 대회에 신청했습니다."))
+				.andExpect(jsonPath("$.code").value("ORDER_DUPLICATE_PARTICIPATION"));
+
+			assertThat(participationRepository.findById(id).orElseThrow().getStatus()).isEqualTo(status);
+			assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
+			participationRepository.deleteAll();
+		}
+	}
+
+	@Test
+	@DisplayName("같은 회원이 같은 대회에 동시에 신청해도 살아 있는 신청은 1건만 남는다")
+	void applyConcurrently() throws Exception {
+		applyAndGetId(MEMBER_ID);
+		int threads = 4;
+		ExecutorService executor = Executors.newFixedThreadPool(threads);
+		CountDownLatch start = new CountDownLatch(1);
+		List<Future<Integer>> results = new ArrayList<>();
+		for (int i = 0; i < threads; i++) {
+			results.add(executor.submit(() -> {
+				start.await();
+				return apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+					.andReturn().getResponse().getStatus();
+			}));
+		}
+		start.countDown();
+		List<Integer> statuses = new ArrayList<>();
+		for (Future<Integer> result : results) {
+			statuses.add(result.get(30, TimeUnit.SECONDS));
+		}
+		executor.shutdown();
+
+		// 늦은 쪽은 새 신청서를 다시 취소하고 받거나(201), 먼저 끝난 신청과 겹쳐 409로 끝난다
+		assertThat(statuses).contains(201).allMatch(code -> code == 201 || code == 409);
+		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
 	}
 
 	@Test
@@ -498,6 +556,13 @@ class ApiV1ParticipationTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 끝난 신청입니다(현재 상태: 취소)."))
 			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_CANCELABLE"));
+	}
+
+	private long activeCount(int memberId) {
+		return participationRepository.findAll().stream()
+			.filter(participation -> participation.getMemberId() == memberId)
+			.filter(participation -> Boolean.TRUE.equals(participation.getActiveFlag()))
+			.count();
 	}
 
 	private ResultActions apply(int memberId, String body) throws Exception {
