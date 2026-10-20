@@ -186,14 +186,6 @@ describe('RaceQueuePage', () => {
     expect(screen.queryByText(/대기열에서 자리를 잃었어요/)).not.toBeInTheDocument()
   })
 
-  it('대기열 등록이 실패하면(503) 줄서기를 건너뛰고 입장 확인 결과를 따른다', async () => {
-    mockQueue([], queueFailure(503))
-    server.use(orderMock.getFindAdmissionMockHandler({ status: 200, data: admitted(600) }))
-    renderQueue()
-
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/races/1/apply?option=2'))
-  })
-
   it('대기열 등록이 401이면 로그인 화면으로 보낸다', async () => {
     mockQueue([], queueFailure(401))
     renderQueue()
@@ -266,14 +258,14 @@ describe('RaceQueuePage', () => {
     [404, /대회 정보를 찾지 못했어요/],
     [503, /대기열이 잠시 불안정해요/],
   ])(
-    '등록이 %i로 실패해 줄서기를 건너뛰었는데 입장 전이면 이유를 안내하고 더 묻지 않는다',
+    '대기열 등록이 %i로 실패하면 입장 확인을 묻지 않고 이유와 대회로 돌아가기를 보여 준다',
     async (status, title) => {
       mockQueue([], queueFailure(status))
       let asked = 0
       server.use(
         http.get('*/api/v1/order/queue/admission', () => {
           asked += 1
-          return HttpResponse.json({ status: 200, message: 'ok', data: NOT_ADMITTED })
+          return HttpResponse.json({ status: 200, message: 'ok', data: admitted(600) })
         }),
       )
       renderQueue()
@@ -284,7 +276,7 @@ describe('RaceQueuePage', () => {
         '/races/1',
       )
       await act(() => vi.advanceTimersByTimeAsync(ADMISSION_POLL_MS * 3))
-      expect(asked).toBe(1)
+      expect(asked).toBe(0)
       expect(replace).not.toHaveBeenCalled()
     },
   )

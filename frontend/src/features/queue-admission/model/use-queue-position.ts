@@ -22,9 +22,9 @@ const statusOf = (error: unknown) => (error instanceof ApiError ? error.status :
  *
  * - 이미 입장한 회원의 등록(409)은 입장 가능으로 본다.
  * - 줄에서 사라지면(순번 조회 404) 다시 등록한다. MAX_REREGISTER번 해도 404면 failed로 알리고 멈춘다.
- * - 등록이 401이 아닌 오류로 실패하면(대기열 장애 · 접수 기간 아님 등) 줄서기를 건너뛰고 canEnter로 둔다.
- *   입장 여부는 어차피 주문 서비스의 입장 확인이 정하므로, 못 들어오면 그쪽이 막는다.
- *   그때 입장 확인이 입장 전이라고 답하면 기다려도 차례가 오지 않으므로, 화면이 skippedStatus로 이유를 안내한다.
+ * - 등록이 401이 아닌 오류로 실패하면(접수 기간 아님 403 · 대회 없음 404 · 대기열 장애 503 등) 줄을 서지 못한 것이다.
+ *   입장 확인(TTL)은 대기열을 정상으로 거친 뒤에만 묻고 백엔드도 그때만 입장을 내주므로 canEnter로 두지 않고,
+ *   화면이 skippedStatus로 이유를 안내한다.
  */
 export function useQueuePosition(raceId: number | undefined, raceCourseId: number | undefined) {
   const enabled = isId(raceId) && isId(raceCourseId)
@@ -88,9 +88,9 @@ export function useQueuePosition(raceId: number | undefined, raceCourseId: numbe
   const status = position.data ?? register.data
   return {
     /** 이제 입장 확인(주문 서비스)을 물어도 되는지 */
-    /** 줄서기를 건너뛴 등록 오류의 HTTP 상태(403 · 404 · 503 등). 건너뛰지 않았으면 undefined. 응답을 못 받은 오류는 0 */
+    /** 줄서기를 줄을 서지 못한 등록 오류의 HTTP 상태(403 · 404 · 503 등). 아니면 undefined. 응답을 못 받은 오류는 0 */
     skippedStatus: skipped ? (registerStatus ?? 0) : undefined,
-    canEnter: alreadyActive || skipped || position.data?.canEnter === true,
+    canEnter: alreadyActive || position.data?.canEnter === true,
     /** 내 순번(1부터) · 내 앞 인원. 아직 모르면 undefined */
     rank: status && !status.canEnter ? status.myRank : undefined,
     ahead: status && !status.canEnter ? status.ahead : undefined,

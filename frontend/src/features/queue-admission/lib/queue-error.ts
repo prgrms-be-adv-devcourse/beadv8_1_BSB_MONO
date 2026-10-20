@@ -19,7 +19,7 @@ export function admissionExpiredHref(raceId: number | undefined): Route {
   ) as Route
 }
 
-/** 줄서기를 건너뛴 이유(등록 오류의 HTTP 상태)에 맞는 안내 문구. 입장 확인도 입장 전이라 들어갈 수 없을 때 보여 준다 */
+/** 대기열에 등록하지 못한 이유(등록 오류의 HTTP 상태)에 맞는 안내 문구 */
 export function skippedNotice(status: number) {
   switch (status) {
     case 403:

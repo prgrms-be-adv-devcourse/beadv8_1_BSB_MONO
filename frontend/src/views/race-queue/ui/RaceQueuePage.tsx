@@ -41,8 +41,6 @@ export function RaceQueuePage({
     preview ? undefined : Number(optionId),
     'wait',
     queue.canEnter,
-    // 줄서기를 건너뛰었는데 입장 전이라고 답하면 기다려도 차례가 오지 않으니 묻기를 멈춘다
-    queue.skippedStatus !== undefined,
   )
   const remaining = preview ? previewRemainingSeconds : timer.remaining
 
@@ -63,8 +61,8 @@ export function RaceQueuePage({
     if (admitted && !preview) router.replace(applyHref)
   }, [admitted, preview, applyHref, router])
 
-  const blocked =
-    !preview && queue.skippedStatus !== undefined && timer.notAdmitted && remaining === null
+  // 대기열에 등록하지 못했다. 입장 확인은 묻지 않고 이유를 안내한다
+  const blocked = !preview && queue.skippedStatus !== undefined
   const notice = skippedNotice(queue.skippedStatus ?? 0)
 
   return (
