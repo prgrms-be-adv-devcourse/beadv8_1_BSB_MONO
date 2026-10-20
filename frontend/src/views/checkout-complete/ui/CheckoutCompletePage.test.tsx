@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { BookingFlowProvider } from '@/features/booking'
+import { orderMock, server } from '@/shared/testing'
 
 import { CheckoutCompletePage } from './CheckoutCompletePage'
 
@@ -16,9 +16,7 @@ describe('결제 완료', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <BookingFlowProvider>
-          <CheckoutCompletePage orderId={1} />
-        </BookingFlowProvider>
+        <CheckoutCompletePage orderId={1} />
       </QueryClientProvider>,
     )
 
@@ -27,5 +25,23 @@ describe('결제 완료', () => {
     expect(screen.getByText('₩50,000 (예치금)')).toBeInTheDocument()
     expect(await screen.findByText('2026 용감한 쿠키RUN in 서울 · 10K')).toBeInTheDocument()
     expect(screen.getByText('김러너 · 10K')).toBeInTheDocument()
+  })
+
+  it('참가자 이름은 배송지 받는 사람이 아니라 참가 신청에서 가져온다 (새로고침해도 같다)', async () => {
+    const example = orderMock.getFindByIdResponseMock()
+    server.use(
+      orderMock.getFindByIdMockHandler({
+        ...example,
+        data: { ...example.data, participant: { ...example.data!.participant, name: '이달림' } },
+      }),
+    )
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <CheckoutCompletePage orderId={1} />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('이달림 · 10K')).toBeInTheDocument()
   })
 })
