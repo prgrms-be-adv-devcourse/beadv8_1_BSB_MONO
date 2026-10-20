@@ -15,7 +15,8 @@ final class DevPayoutBatchApiExamples {
 		""";
 
 	static final String PAY_SUCCESS = """
-		{ "status": 200, "message": "지급 배치를 실행했습니다.", "data": { "today": "2026-11-20", "paid": 2 } }
+		{ "status": 200, "message": "지급 배치를 실행했습니다.",
+			"data": { "today": "2026-11-20", "paid": 2, "failed": 0, "unknown": 0 } }
 		""";
 
 	static final String INVALID_VALUE_TYPE = """

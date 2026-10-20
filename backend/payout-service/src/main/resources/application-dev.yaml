@@ -30,4 +30,5 @@ logging:
 payout:
   services:
     order: http://localhost:8084
+    cash: http://localhost:8081
     product: http://localhost:8085
