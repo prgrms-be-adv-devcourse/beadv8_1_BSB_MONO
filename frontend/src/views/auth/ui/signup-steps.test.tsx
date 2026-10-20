@@ -288,6 +288,73 @@ describe('이메일 중복 확인 (PRO-201)', () => {
   })
 })
 
+describe('Enter로 제출 (QA 10/20)', () => {
+  it('계정 단계에서 Enter를 누르면 다음과 같이 회원 정보 단계로 간다', async () => {
+    const user = userEvent.setup()
+    renderSignup()
+    await agreeRequiredTerms(user)
+
+    await user.type(screen.getByLabelText('이메일'), 'runner@crewrun.kr')
+    await user.type(screen.getByLabelText('비밀번호'), 'password123')
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'password123{Enter}')
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/signup/profile'))
+  })
+
+  it('계정 입력이 틀리면 Enter를 눌러도 넘어가지 않는다', async () => {
+    const user = userEvent.setup()
+    renderSignup()
+    await agreeRequiredTerms(user)
+
+    await user.type(screen.getByLabelText('이메일'), 'runner@crewrun.kr')
+    await user.type(screen.getByLabelText('비밀번호'), 'short{Enter}')
+
+    // 검사에 실패하면 다음 버튼이 꺼져 있어 Enter로도 제출되지 않는다
+    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled()
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('회원 정보 단계의 휴대폰 · 생년월일 칸에서 Enter를 누르면 가입한다', async () => {
+    let joined = 0
+    server.use(
+      http.post('*/api/v1/auth/join', () => {
+        joined += 1
+        return HttpResponse.json(
+          { status: 201, message: 'Member Joined Successfully', data: null },
+          { status: 201 },
+        )
+      }),
+    )
+    const user = userEvent.setup()
+    renderProfileStep()
+
+    await fillProfile(user)
+    await user.type(screen.getByLabelText('휴대폰 번호'), '{Enter}')
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
+    expect(joined).toBe(1)
+  })
+
+  it('회원 정보가 덜 채워졌으면 Enter를 눌러도 가입 요청을 보내지 않는다', async () => {
+    let joined = 0
+    server.use(
+      http.post('*/api/v1/auth/join', () => {
+        joined += 1
+        return HttpResponse.json({ status: 201, message: 'ok', data: null }, { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderProfileStep()
+
+    await user.type(screen.getByLabelText('이름'), '김러너')
+    await user.type(screen.getByLabelText('생년월일'), '1995-03-02')
+    await user.type(screen.getByLabelText('휴대폰 번호'), '01012345678{Enter}')
+
+    expect(screen.getByRole('button', { name: '가입 완료' })).toBeDisabled()
+    expect(joined).toBe(0)
+    expect(replace).not.toHaveBeenCalled()
+  })
+})
+
 describe('약관 동의 전송 (PRO-208)', () => {
   async function submitWith(terms: SignupStepInitial['terms']) {
     const user = userEvent.setup()
