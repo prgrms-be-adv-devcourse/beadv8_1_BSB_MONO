@@ -270,6 +270,11 @@ final class ParticipationApiExamples {
 			"message": "방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
 		""";
 
+	static final String APPLY_RETRY = """
+		{ "status": 409, "code": "ORDER_PARTICIPATION_CHANGE_RETRY",
+			"message": "이전 신청서를 처리하고 있습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
+		""";
+
 	private ParticipationApiExamples() {
 	}
 }

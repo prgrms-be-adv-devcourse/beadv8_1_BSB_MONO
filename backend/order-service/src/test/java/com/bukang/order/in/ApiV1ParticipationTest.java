@@ -251,6 +251,20 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
+	@DisplayName("다시 신청한 내용이 잘못되면(나이 제한 밖) 400이고, 남아 있던 결제 전 신청서는 취소하지 않는다")
+	void invalidApplyKeepsPendingParticipation() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+		String birth = LocalDate.now().minusYears(12).toString();
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김어린", birth, "S"), true))
+			.andExpect(status().isBadRequest());
+
+		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.PENDING);
+		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
+	}
+
+	@Test
 	@DisplayName("같은 대회에 결제 대기·결제 완료 신청이 있으면 409이고, 그 신청은 그대로다")
 	void applyTwiceWhenAppliedOrConfirmed() throws Exception {
 		for (ParticipationStatus status : new ParticipationStatus[] {ParticipationStatus.APPLIED,
