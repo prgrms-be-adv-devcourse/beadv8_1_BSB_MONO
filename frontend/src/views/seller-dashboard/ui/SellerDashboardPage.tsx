@@ -6,84 +6,34 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 import { ConsoleCard, ConsoleLoading, ConsoleOffline, ConsolePage } from '@/widgets/console-page'
-import { formatMonthDay, formatWeekday } from '@/entities/payout'
-import { myRacesQueryOptions, toSellerRaceRow } from '@/entities/race'
+import { detailPeriods, formatMonthDay, formatWeekday, HOLD_REASON } from '@/entities/payout'
+import {
+  daysUntil,
+  formatDDay,
+  formatRaceDateTime,
+  myRacesQueryOptions,
+  toSellerRaceRow,
+} from '@/entities/race'
 import { shippableCount, useSellerKitSummary } from '@/entities/seller-kit'
-import { ApiError, payoutApi, unwrapData } from '@/shared/api'
+import { ApiError, payoutApi, unwrapData, type productModel } from '@/shared/api'
 import { cn, formatNumber } from '@/shared/lib'
 import {
   Alert,
   Badge,
   buttonClassName,
-  DataTable,
   EmptyState,
   FOCUS_RING,
   ProgressBar,
   Skeleton,
   StatTile,
-  type BadgeTone,
 } from '@/shared/ui'
 
 function errorText(error: unknown) {
   return (error instanceof ApiError && error.serverMessage) || '잠시 뒤 다시 시도해 주세요.'
 }
 
-// TODO(api): 처리할 일 API가 없다. 키트 배송 대기만 키트 건수 API로 채우고, 나머지는 시안 예시 값이다.
-// (위 "처리할 일" 숫자 타일도 예시 값)
-const TODOS = [
-  { title: '접수 마감 임박', description: '쿠키RUN · 10/31 18:00 접수 마감', count: 'D-7' },
-  { title: '지급보류 알림', description: 'HD-20261027-01A2 · 정산 계좌 미등록', count: '1건' },
-]
-
-type Order = {
-  id: string
-  nickname: string
-  race: string
-  course: string
-  status: string
-  tone: BadgeTone
-  paidAt: string
-}
-
-// TODO(api): 최근 주문 API가 없다. 지금은 시안 예시 값.
-const ORDERS: Order[] = [
-  {
-    id: 'R-20261019-0907',
-    nickname: '주말장거리',
-    race: '2026 용감한 쿠키RUN in 서울',
-    course: '5K',
-    status: '참가 확정',
-    tone: 'brand',
-    paidAt: '10/19',
-  },
-  {
-    id: 'R-20261019-0911',
-    nickname: '새벽런',
-    race: '2026 춘천 나이트런',
-    course: '10K',
-    status: '참가 확정',
-    tone: 'brand',
-    paidAt: '10/19',
-  },
-  {
-    id: 'R-20261018-0874',
-    nickname: '한강조깅',
-    race: '2026 춘천 나이트런',
-    course: '5K',
-    status: '취소 · 환불',
-    tone: 'neutral',
-    paidAt: '10/18',
-  },
-  {
-    id: 'R-20261018-0850',
-    nickname: '달리는쿠키',
-    race: '2026 용감한 쿠키RUN in 서울',
-    course: '10K',
-    status: '참가 확정',
-    tone: 'brand',
-    paidAt: '10/18',
-  },
-]
+// 접수 마감이 이 날 수 안에 오면 처리할 일에 띄운다 (정책 2장 등록 정보-6: 조기 마감될 수 있어 미리 알린다)
+const CLOSING_SOON_DAYS = 7
 
 const LINK = cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)
 
@@ -140,12 +90,17 @@ function TodoRow({
 
 function DashboardBody() {
   const summary = payoutApi.useSummary({ query: { select: unwrapData } })
-  const races = useQuery({
-    ...myRacesQueryOptions(),
-    select: (list) => list.map(toSellerRaceRow),
-  })
-  const onSale = races.data?.filter((r) => r.saleStatus === 'ON_SALE')
+  const races = useQuery(myRacesQueryOptions())
+  const rows = races.data?.map(toSellerRaceRow)
+  const onSale = rows?.filter((r) => r.saleStatus === 'ON_SALE')
   const kits = useSellerKitSummary()
+  const closing = races.data && closingSoon(races.data)
+  // 처리할 일 숫자 = 배송 대기 키트 + 접수 마감 임박 대회 + 지급보류. 하나라도 못 받으면 셀 수 없다.
+  const todoCount =
+    kits.data && closing && summary.data
+      ? shippableCount(kits.data) + closing.length + summary.data.heldCount
+      : undefined
+  const todoFailed = kits.isError || races.isError || summary.isError
 
   return (
     <>
@@ -179,8 +134,13 @@ function DashboardBody() {
         ) : (
           <Skeleton className="h-24 flex-1" />
         )}
-        {/* TODO(api): 처리할 일 건수 API가 없다. 예시 값 */}
-        <StatTile label="처리할 일" value="5" unit="건" />
+        {todoCount !== undefined ? (
+          <StatTile label="처리할 일" value={String(todoCount)} unit="건" />
+        ) : todoFailed ? (
+          <StatTile label="처리할 일" value="-" />
+        ) : (
+          <Skeleton className="h-24 flex-1" />
+        )}
       </div>
 
       <div className="flex flex-wrap items-start gap-6">
@@ -231,7 +191,7 @@ function DashboardBody() {
             description="환불 기한이 지난 주문 · 송장 번호를 넣으면 배송 중으로 바뀌어요"
             count={
               kits.data ? (
-                <Badge tone="warning">{shippableCount(kits.data)}건</Badge>
+                <CountBadge count={shippableCount(kits.data)} />
               ) : kits.isError ? (
                 <Badge tone="neutral">-</Badge>
               ) : (
@@ -239,50 +199,101 @@ function DashboardBody() {
               )
             }
           />
-          {TODOS.map((todo) => (
-            <TodoRow
-              key={todo.title}
-              title={todo.title}
-              description={todo.description}
-              count={<Badge tone="warning">{todo.count}</Badge>}
-            />
-          ))}
+          <ClosingSoonRow races={closing} failed={races.isError} />
+          <HoldRow heldCount={summary.data?.heldCount} failed={summary.isError} />
         </ConsoleCard>
       </div>
 
-      <ConsoleCard
-        title="최근 주문"
-        aside={
-          <Link href="/seller/sales" className={LINK}>
-            주문 · 참가자에서 보기
-          </Link>
-        }
-      >
-        <DataTable
-          label="최근 주문"
-          rows={ORDERS}
-          rowKey={(order) => order.id}
-          columns={[
-            { key: 'id', header: '주문번호', width: 'w-42.5', render: (o) => o.id },
-            { key: 'nickname', header: '닉네임', width: 'w-58.75', render: (o) => o.nickname },
-            { key: 'race', header: '대회', render: (o) => o.race },
-            { key: 'course', header: '종목', width: 'w-30', render: (o) => o.course },
-            {
-              key: 'status',
-              header: '상태',
-              width: 'w-40',
-              render: (o) => <Badge tone={o.tone}>{o.status}</Badge>,
-            },
-            {
-              key: 'paidAt',
-              header: '결제일',
-              align: 'right',
-              width: 'w-30',
-              render: (o) => o.paidAt,
-            },
-          ]}
+      {/* TODO(api): 판매자 주문 목록 API가 없다. 생기면 최근 주문 표(시안 S05)로 바꾼다 */}
+      <ConsoleCard title="최근 주문">
+        <EmptyState
+          title="최근 주문 목록은 준비 중이에요"
+          description="대회별 접수 인원은 위 진행 중 대회에서 볼 수 있어요."
         />
       </ConsoleCard>
     </>
+  )
+}
+
+/** 판매 중이고 접수 마감이 CLOSING_SOON_DAYS일 안에 오는 대회, 마감이 가까운 순 */
+function closingSoon(races: productModel.SellerRaceDto[]): productModel.SellerRaceDto[] {
+  return races
+    .filter((race) => {
+      if (race.saleStatus !== 'ON_SALE' || !race.applicationCloseAt) return false
+      const days = daysUntil(race.applicationCloseAt)
+      return days >= 0 && days <= CLOSING_SOON_DAYS
+    })
+    .sort((a, b) => (a.applicationCloseAt ?? '').localeCompare(b.applicationCloseAt ?? ''))
+}
+
+function CountBadge({ count }: { count: number }) {
+  return <Badge tone={count > 0 ? 'warning' : 'neutral'}>{count}건</Badge>
+}
+
+function ClosingSoonRow({
+  races,
+  failed,
+}: {
+  races: productModel.SellerRaceDto[] | undefined
+  failed: boolean
+}) {
+  const first = races?.[0]
+  const others = (races?.length ?? 0) - 1
+  const description = first?.applicationCloseAt
+    ? `${first.title ?? ''}${others > 0 ? ` 외 ${others}개` : ''} · ${formatRaceDateTime(first.applicationCloseAt)} 접수 마감`
+    : `${CLOSING_SOON_DAYS}일 안에 접수가 끝나는 대회가 없어요`
+  return (
+    <TodoRow
+      href="/seller/races"
+      title="접수 마감 임박"
+      description={failed ? '접수 마감 일정을 불러오지 못했어요' : description}
+      count={
+        first?.applicationCloseAt ? (
+          <Badge tone="warning">{formatDDay(first.applicationCloseAt)}</Badge>
+        ) : races ? (
+          <CountBadge count={0} />
+        ) : failed ? (
+          <Badge tone="neutral">-</Badge>
+        ) : (
+          <Skeleton className="h-6 w-10" />
+        )
+      }
+    />
+  )
+}
+
+// 건수는 정산 요약의 heldCount, 설명은 최근 1개월 지급보류 중 아직 보류 중인 가장 최근 것
+function HoldRow({ heldCount, failed }: { heldCount: number | undefined; failed: boolean }) {
+  const [period] = detailPeriods(new Date(), 1)
+  const holds = payoutApi.useHolds(
+    { from: period.from, to: period.to },
+    { query: { select: unwrapData, enabled: (heldCount ?? 0) > 0 } },
+  )
+  const latest = holds.data?.find((hold) => hold.status === 'HELD')
+  const description =
+    heldCount === undefined
+      ? failed
+        ? '지급보류 건수를 불러오지 못했어요'
+        : ''
+      : heldCount === 0
+        ? '보류된 정산이 없어요'
+        : latest
+          ? `${latest.holdCode} · ${HOLD_REASON[latest.reasonType]}`
+          : '보류 사유는 정산 내역에서 확인해요'
+  return (
+    <TodoRow
+      href="/seller/settlements"
+      title="지급보류 알림"
+      description={description}
+      count={
+        heldCount !== undefined ? (
+          <CountBadge count={heldCount} />
+        ) : failed ? (
+          <Badge tone="neutral">-</Badge>
+        ) : (
+          <Skeleton className="h-6 w-10" />
+        )
+      }
+    />
   )
 }
