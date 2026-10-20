@@ -19,6 +19,33 @@ final class CashApiExamples {
 		{ "status": 404, "message": "존재하지 않는 지갑입니다.", "data": null }
 		""";
 
+	static final String LEDGER_LIST_SUCCESS = """
+		{
+			"status": 200,
+			"message": "예치금 내역을 조회했습니다.",
+			"data": {
+				"content": [
+					{
+						"category": "CHARGE",
+						"ledgerType": "충전__PG결제_토스페이먼츠",
+						"amount": 10000,
+						"balanceAfter": 60000,
+						"createdAt": "2026-10-20T09:03:03.319058",
+						"refId": 1
+					}
+				],
+				"page": 0,
+				"size": 20,
+				"totalElements": 1,
+				"totalPages": 1
+			}
+		}
+		""";
+
+	static final String INVALID_PAGE = """
+		{ "status": 400, "code": "INVALID_REQUEST", "message": "한 번에 100개까지 조회할 수 있습니다.", "data": null }
+		""";
+
 	static final String CHARGE_CONFIRM_SUCCESS = """
 		{
 			"status": 200,
