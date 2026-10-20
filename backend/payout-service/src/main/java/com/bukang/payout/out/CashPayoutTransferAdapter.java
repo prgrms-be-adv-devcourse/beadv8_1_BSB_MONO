@@ -16,9 +16,9 @@ import com.bukang.payout.domain.PayoutStage;
 
 /**
  * 캐시 서비스의 정산 지급 내부 API를 HTTP로 부르는 어댑터 (PRO-252)
- * POST {캐시 서비스}/internal/v1/cash/payouts/{payoutId} {memberId, payoutAmount, feeAmount, stage} → 2xx면 성공
+ * POST {캐시 서비스}/internal/v1/cash/payouts/{payoutId} {sellerId, payoutStage, settlementAmount, feeAmount} → 2xx면 성공
  *
- * 캐시 서비스의 API는 김소희님이 만든다. 경로는 합의한 값이고, 요청 필드 이름과 응답은 아직 정해지지 않아 가정하고 먼저 둔다
+ * 캐시 서비스의 API는 김소희님이 만든다 (PRO-256, PR #198의 CashPayoutRequestDto). 필드 이름은 그쪽에 맞춘다
  * 응답 본문은 읽지 않는다. 같은 정산 ID로 다시 요청해도 캐시 서비스가 돈을 한 번만 옮기고 성공으로 답한다
  *
  * 결과를 둘로 나눈다. 지급 배치가 정산 내역을 되돌릴지(돈이 안 나감), 지급 중으로 둘지(모름)가 이것으로 갈린다
@@ -88,11 +88,13 @@ public class CashPayoutTransferAdapter implements PayoutTransferPort {
 		return factory;
 	}
 
-	// 캐시 서비스 요청 본문의 가정한 모양. 금액은 정산 쪽 타입(long) 그대로 보낸다
-	record TransferRequest(int memberId, long payoutAmount, long feeAmount, PayoutStage stage) {
+	// 캐시 서비스 요청 본문 (cash CashPayoutRequestDto). sellerId는 판매자 지갑의 주인(회원 ID)이다
+	// 금액은 정산 쪽 타입(long) 그대로 보낸다. JSON 숫자라 캐시 서비스의 Integer로 읽히고,
+	// int 범위를 넘으면 캐시 서비스가 400으로 거절해 정산 예정으로 남는다 (금액 타입 맞추기는 PRO-253)
+	record TransferRequest(int sellerId, PayoutStage payoutStage, long settlementAmount, long feeAmount) {
 		static TransferRequest from(PayoutTransfer transfer) {
-			return new TransferRequest(transfer.memberId(), transfer.payoutAmount(), transfer.feeAmount(),
-				transfer.stage());
+			return new TransferRequest(transfer.memberId(), transfer.stage(), transfer.payoutAmount(),
+				transfer.feeAmount());
 		}
 	}
 }

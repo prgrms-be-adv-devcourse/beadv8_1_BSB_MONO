@@ -50,7 +50,7 @@ class CashPayoutTransferAdapterTest {
 		server.expect(requestTo(URL))
 			.andExpect(method(HttpMethod.POST))
 			.andExpect(content().json("""
-				{ "memberId": 7, "payoutAmount": 47250, "feeAmount": 2750, "stage": "FINAL" }
+				{ "sellerId": 7, "payoutStage": "FINAL", "settlementAmount": 47250, "feeAmount": 2750 }
 				""", true))
 			.andRespond(withSuccess("""
 				{ "status": 200, "message": "정산금을 옮겼습니다.", "data": null }
