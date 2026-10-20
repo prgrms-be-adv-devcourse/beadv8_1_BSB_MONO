@@ -12,6 +12,7 @@ import {
   formatDDay,
   formatRaceDateTime,
   myRacesQueryOptions,
+  parseKstDateTime,
   toSellerRaceRow,
 } from '@/entities/race'
 import { shippableCount, useSellerKitSummary } from '@/entities/seller-kit'
@@ -215,13 +216,17 @@ function DashboardBody() {
   )
 }
 
-/** 판매 중이고 접수 마감이 CLOSING_SOON_DAYS일 안에 오는 대회, 마감이 가까운 순 */
-function closingSoon(races: productModel.SellerRaceDto[]): productModel.SellerRaceDto[] {
+/** 판매 중이고 접수 마감이 아직 안 지났으며 CLOSING_SOON_DAYS일 안에 오는 대회, 마감이 가까운 순 */
+function closingSoon(
+  races: productModel.SellerRaceDto[],
+  now: Date = new Date(),
+): productModel.SellerRaceDto[] {
   return races
     .filter((race) => {
       if (race.saleStatus !== 'ON_SALE' || !race.applicationCloseAt) return false
-      const days = daysUntil(race.applicationCloseAt)
-      return days >= 0 && days <= CLOSING_SOON_DAYS
+      // daysUntil은 날짜만 세므로, 오늘 이미 마감 시각이 지난 대회(판매 상태는 대회 다음 날에야 바뀐다)를 시각으로 뺀다
+      if (parseKstDateTime(race.applicationCloseAt) <= now) return false
+      return daysUntil(race.applicationCloseAt, now) <= CLOSING_SOON_DAYS
     })
     .sort((a, b) => (a.applicationCloseAt ?? '').localeCompare(b.applicationCloseAt ?? ''))
 }

@@ -348,4 +348,16 @@ describe('SellerApplicationPage 잠근 신청 내용', () => {
     expect(screen.queryByLabelText('계좌번호')).not.toBeInTheDocument()
     expect(screen.getByText('정산 계좌는 판매자 설정에서 등록해요')).toBeInTheDocument()
   })
+
+  it('반려된 신청은 상태에 맞는 안내와 다시 신청하는 링크를 보여 준다', async () => {
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'REJECTED' })))
+    renderWithClient(<SellerApplicationPage />)
+
+    expect(await screen.findByText(/반려된 신청이에요/)).toBeInTheDocument()
+    expect(screen.queryByText(/심사 중에는 고칠 수 없어요/)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '고쳐서 다시 신청하기' })).toHaveAttribute(
+      'href',
+      '/seller-apply',
+    )
+  })
 })

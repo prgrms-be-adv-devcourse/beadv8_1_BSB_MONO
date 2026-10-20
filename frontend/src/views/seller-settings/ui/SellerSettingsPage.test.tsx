@@ -63,4 +63,37 @@ describe('SellerSettingsPage', () => {
     expect(screen.queryByLabelText('계좌번호')).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
+
+  it('신청 내역이 없으면(404) 오류 대신 신청하러 가도록 안내한다', async () => {
+    let calls = 0
+    server.use(
+      http.get('*/api/v1/member/sellers/me', () => {
+        calls += 1
+        return HttpResponse.json(
+          {
+            status: 404,
+            code: 'SELLER_NOT_FOUND',
+            message: '판매자 신청 내역이 없습니다.',
+            data: null,
+          },
+          { status: 404 },
+        )
+      }),
+    )
+    setAccessToken('access-token')
+    // 화면이 재시도를 끄는지 보려고 기본 재시도를 켠 채로 그린다
+    const client = new QueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <SellerSettingsPage />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('아직 판매자 신청을 하지 않았어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '판매자 신청하러 가기' })).toHaveAttribute(
+      'href',
+      '/seller-apply',
+    )
+    expect(calls).toBe(1)
+  })
 })

@@ -8,7 +8,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 
 import { ConsoleCard } from '@/widgets/console-page'
-import { useAuthStatus } from '@/features/auth'
+import { loginHref, useAuthStatus } from '@/features/auth'
 import { formatSellerDate, SELLER_STATUS } from '@/entities/member'
 import { memberApi, unwrapData, type memberModel } from '@/shared/api'
 import { cn } from '@/shared/lib'
@@ -337,17 +337,25 @@ function SettlementAccountNotice() {
 // 피그마 V2 · S01-2 신청 내용 보기: 내가 낸 신청(GET /api/v1/member/sellers/me)을 S01 폼에 채우고 모든 칸을 잠근다.
 // 서버가 받지 않는 연락처 · 정산 계좌는 빈 칸으로 두지 않고 뺀다.
 export function SellerApplicationPage() {
+  const auth = useAuthStatus()
   const mine = memberApi.useFindMine({
-    query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated', retry: false },
+    query: { select: unwrapData, enabled: auth === 'authenticated', retry: false },
   })
 
   return (
     <FormBody
       width="w-160"
       title="신청 내용"
-      description="심사 중에는 고칠 수 없어요. 반려되면 이 값을 채운 채로 다시 신청할 수 있어요."
+      description={mine.data ? APPLICATION_NOTICE[mine.data.status] : undefined}
     >
-      {mine.data ? (
+      {auth === 'anonymous' ? (
+        <section className="flex flex-col items-start gap-3 rounded-lg bg-bg-surface p-5 inset-ring inset-ring-border-default">
+          <h2 className="text-heading-s">로그인이 필요해요</h2>
+          <Link href={loginHref('/seller-apply/mine')} className={buttonClassName()}>
+            로그인하러 가기
+          </Link>
+        </section>
+      ) : mine.data ? (
         <LockedApplication seller={mine.data} />
       ) : mine.isError ? (
         isNoApplication(mine.error) ? (
@@ -365,6 +373,13 @@ export function SellerApplicationPage() {
       )}
     </FormBody>
   )
+}
+
+// 상태마다 위 안내 문구가 다르다
+const APPLICATION_NOTICE: Record<memberModel.SellerDtoStatus, string> = {
+  PENDING: '심사 중에는 고칠 수 없어요. 반려되면 이 값을 채운 채로 다시 신청할 수 있어요.',
+  REJECTED: '반려된 신청이에요. 아래 값을 채운 채로 고쳐서 다시 신청할 수 있어요.',
+  APPROVED: '승인된 신청이에요. 판매자 정보는 판매자 설정에서도 볼 수 있어요.',
 }
 
 function LockedApplication({ seller }: { seller: memberModel.SellerDto }) {
@@ -418,7 +433,12 @@ function LockedApplication({ seller }: { seller: memberModel.SellerDto }) {
         <SettlementAccountNotice />
       </ConsoleCard>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {seller.status === 'REJECTED' && (
+          <Link href="/seller-apply" className={buttonClassName({ size: 'l' })}>
+            고쳐서 다시 신청하기
+          </Link>
+        )}
         <Link
           href="/seller-apply/result"
           className={buttonClassName({ variant: 'secondary', size: 'l' })}

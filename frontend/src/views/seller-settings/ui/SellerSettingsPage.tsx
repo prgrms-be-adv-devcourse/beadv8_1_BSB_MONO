@@ -1,22 +1,48 @@
 'use client'
 
+import Link from 'next/link'
+
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
-import { useAuthStatus } from '@/features/auth'
+import { loginHref, useAuthStatus } from '@/features/auth'
 import { formatSellerDate, SELLER_STATUS, SELLER_TYPE_LABEL } from '@/entities/member'
-import { memberApi, unwrapData, type memberModel } from '@/shared/api'
-import { Alert, Badge, Skeleton } from '@/shared/ui'
+import { ApiError, memberApi, unwrapData, type memberModel } from '@/shared/api'
+import { Alert, Badge, buttonClassName, EmptyState, Skeleton } from '@/shared/ui'
 
 // 피그마 V2 · S11 판매자 설정 (세미: 정산 계좌는 준비 중 안내)
 // 판매자 정보는 내 신청 조회(GET /api/v1/member/sellers/me)로 보여 준다. 바꾸려면 관리자 재확인이 필요해 보기 전용이다.
 export function SellerSettingsPage() {
+  const auth = useAuthStatus()
   const mine = memberApi.useFindMine({
-    query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated' },
+    // 신청 내역이 없는 404는 다시 불러도 같아서 재시도하지 않는다
+    query: { select: unwrapData, enabled: auth === 'authenticated', retry: false },
   })
 
   return (
     <ConsolePage title="설정" description="판매자 정보와 정산 계좌를 확인해요.">
-      {mine.data ? (
+      {auth === 'anonymous' ? (
+        <EmptyState
+          title="로그인이 필요해요"
+          action={
+            <Link
+              href={loginHref('/seller/settings')}
+              className={buttonClassName({ variant: 'secondary' })}
+            >
+              로그인하러 가기
+            </Link>
+          }
+        />
+      ) : mine.data ? (
         <SellerInfoCard seller={mine.data} />
+      ) : mine.isError && isNoApplication(mine.error) ? (
+        <EmptyState
+          title="아직 판매자 신청을 하지 않았어요"
+          description="신청이 승인되면 여기에서 판매자 정보를 볼 수 있어요."
+          action={
+            <Link href="/seller-apply" className={buttonClassName({ variant: 'secondary' })}>
+              판매자 신청하러 가기
+            </Link>
+          }
+        />
       ) : mine.isError ? (
         <Alert
           tone="danger"
@@ -71,4 +97,9 @@ function SellerInfoCard({ seller }: { seller: memberModel.SellerDto }) {
       </p>
     </ConsoleCard>
   )
+}
+
+/** 내 신청이 없을 때(404 SELLER_NOT_FOUND)는 오류가 아니라 "아직 신청 전"이다 */
+function isNoApplication(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'SELLER_NOT_FOUND'
 }

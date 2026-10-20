@@ -118,6 +118,22 @@ describe('SellerDashboardPage', () => {
     expect(await screen.findByText('4')).toBeInTheDocument()
   })
 
+  it('오늘 이미 마감 시각이 지난 대회는 접수 마감 임박에서 뺀다', async () => {
+    server.use(
+      http.get('*/api/v1/product/races/mine', () =>
+        HttpResponse.json({
+          status: 200,
+          message: 'ok',
+          data: [sellerRace(1, '방금 마감한 대회', 'ON_SALE', kstDateTimeFromNow(-60))],
+        }),
+      ),
+    )
+    renderPage()
+
+    expect(await screen.findByText('7일 안에 접수가 끝나는 대회가 없어요')).toBeInTheDocument()
+    expect(screen.queryByText(/방금 마감한 대회 ·/)).not.toBeInTheDocument()
+  })
+
   it('처리할 일이 없으면 0건과 없다는 문구를 보여 준다', async () => {
     server.use(
       http.get('*/api/v1/product/races/mine', () =>
@@ -142,6 +158,11 @@ describe('SellerDashboardPage', () => {
 function kstDateTimeAfterDays(days: number): string {
   const kst = new Date(Date.now() + 9 * 60 * 60 * 1000 + days * 24 * 60 * 60 * 1000)
   return `${kst.toISOString().slice(0, 10)}T18:00:00`
+}
+
+/** 지금부터 minutes분 뒤의 한국 시간 (시간대 없는 모양) */
+function kstDateTimeFromNow(minutes: number): string {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000 + minutes * 60 * 1000).toISOString().slice(0, 19)
 }
 
 function sellerRace(raceId: number, title: string, saleStatus: string, applicationCloseAt: string) {
