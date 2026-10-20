@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import com.bukang.common.shared.file.domain.FileKind;
 import com.bukang.common.shared.file.domain.FileType;
+import com.bukang.file.config.S3Properties;
 import com.bukang.file.domain.FileFormat;
 import com.bukang.file.domain.StoredFile;
 import com.bukang.file.domain.exception.FileAccessDeniedException;
@@ -15,26 +16,34 @@ import com.bukang.file.out.StoredFileRepository;
 import com.bukang.file.out.storage.FileStorage;
 import com.bukang.file.out.storage.StoredObject;
 
-import lombok.RequiredArgsConstructor;
-
 /**
  * 업로드 URL 발급과 업로드 확인.
  * 파일 본문은 브라우저가 presigned URL로 S3에 직접 올리므로, 서버는 올라간 뒤에 형식과 크기를 다시 확인한다.
  *
  * presigned URL은 만료 전까지 여러 번 쓸 수 있어서, 확인을 마친 뒤 같은 URL로 다른 내용을 덮어쓸 수 있다.
- * 그래서 브라우저는 업로드 경로(uploads/)에만 올리고, 서버가 확인할 때 확정 경로(files/)로 복사한 뒤 복사본을 검사한다.
+ * 그래서 브라우저는 업로드 경로({환경}/uploads/)에만 올리고, 서버가 확인할 때 확정 경로({환경}/files/)로 복사한 뒤 복사본을 검사한다.
  * 확정 경로에는 업로드 URL을 주지 않으므로 확인한 내용이 바뀌지 않는다.
  */
 @Service
-@RequiredArgsConstructor
 public class FileUploadUseCase {
-	// 업로드 경로에 남은 객체는 S3 수명 주기 규칙으로 정리할 수 있다
-	static final String UPLOAD_PREFIX = "uploads/";
-	static final String CONFIRMED_PREFIX = "files/";
+	// 업로드 경로에 남은 객체는 S3 수명 주기 규칙으로 정리할 수 있다 (환경마다 {환경}/uploads/로 하나씩)
+	private static final String UPLOAD_DIR = "uploads/";
+	private static final String CONFIRMED_DIR = "files/";
 	private static final long MEGABYTE = 1024L * 1024;
 
 	private final StoredFileRepository storedFileRepository;
 	private final FileStorage fileStorage;
+	// 환경 이름을 붙인 경로 (예: dev/uploads/, dev/files/)
+	private final String uploadPrefix;
+	private final String confirmedPrefix;
+
+	public FileUploadUseCase(StoredFileRepository storedFileRepository, FileStorage fileStorage,
+		S3Properties s3Properties) {
+		this.storedFileRepository = storedFileRepository;
+		this.fileStorage = fileStorage;
+		this.uploadPrefix = s3Properties.keyPrefix() + "/" + UPLOAD_DIR;
+		this.confirmedPrefix = s3Properties.keyPrefix() + "/" + CONFIRMED_DIR;
+	}
 
 	public StoredFile create(FileType fileType, String fileName, String contentType, long fileSize, int memberId) {
 		FileKind kind = fileType.getKind();
@@ -50,7 +59,7 @@ public class FileUploadUseCase {
 		}
 
 		// 키에는 원본 파일명을 넣지 않는다 (한글·특수문자, 같은 이름 충돌)
-		String uploadKey = UPLOAD_PREFIX + UUID.randomUUID() + "." + format.getExtension();
+		String uploadKey = uploadPrefix + UUID.randomUUID() + "." + format.getExtension();
 		return storedFileRepository.save(
 			StoredFile.pending(uploadKey, baseName(fileName), fileType, format, fileSize, memberId));
 	}
@@ -64,15 +73,16 @@ public class FileUploadUseCase {
 			return file;
 		}
 
-		// 브라우저가 업로드 경로(uploads/)에 실제로 올렸는지 확인한다
+		// 브라우저가 업로드 경로({환경}/uploads/)에 실제로 올렸는지 확인한다
 		String uploadKey = file.getS3Key();
 		if (fileStorage.head(uploadKey).isEmpty()) {
 			throw new InvalidFileException("업로드된 파일이 없습니다. 업로드 URL로 파일을 먼저 올려주세요.");
 		}
 
-		// 확정 경로로 옮긴다: uploads/abc.png → files/abc.png
+		// 확정 경로로 옮긴다: dev/uploads/abc.png → dev/files/abc.png
 		// S3에는 이동이 없어서 S3 안에서 복사한 뒤 원본을 지운다
-		String confirmedKey = CONFIRMED_PREFIX + uploadKey.substring(UPLOAD_PREFIX.length());
+		// 환경 이름을 붙이기 전에 발급한 키(uploads/abc.png)도 있으므로, 앞부분 길이로 자르지 않고 마지막 '/' 뒤 파일 이름만 쓴다
+		String confirmedKey = confirmedPrefix + uploadKey.substring(uploadKey.lastIndexOf('/') + 1);
 		fileStorage.copy(uploadKey, confirmedKey);
 		fileStorage.delete(uploadKey);
 

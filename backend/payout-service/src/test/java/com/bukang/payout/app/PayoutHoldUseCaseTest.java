@@ -48,7 +48,8 @@ class PayoutHoldUseCaseTest {
 	}
 
 	private PayoutPayUseCase payUseCase() {
-		return new PayoutPayUseCase(payoutRepository);
+		return new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
+		});
 	}
 
 	// 2026-09분: 지급 예정일 10/20

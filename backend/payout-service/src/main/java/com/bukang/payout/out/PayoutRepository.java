@@ -44,6 +44,15 @@ public interface PayoutRepository extends JpaRepository<Payout, Integer> {
 	// 지급 배치: 지급 예정일이 오늘이거나 지난 정산 내역 (지난 날을 놓쳐도 다음 실행에서 따라잡는다)
 	List<Payout> findByStatusAndScheduledPayDateLessThanEqual(PayoutStatus status, LocalDate date);
 
+	// 지급 배치 대상 ID (PRO-252): 지급 예정일이 된 정산 예정 + 지난 실행에서 결과를 모른 채 남은 지급 중(날짜 무관)
+	// 엔티티 대신 ID만 읽고, 한 건씩 새 트랜잭션에서 다시 읽어 그 사이 바뀐 상태(보류 등)를 보고 처리한다
+	@Query("""
+		select p.id from Payout p
+		where (p.status = :calculated and p.scheduledPayDate <= :today) or p.status = :paying
+		order by p.id
+		""")
+	List<Integer> findPayTargetIds(LocalDate today, PayoutStatus calculated, PayoutStatus paying);
+
 	// 판매자 정산 내역 조회: 정산 월(YYYY-MM)은 문자열이어도 자릿수가 같아 사전순 비교가 달 순서와 같다
 	// 유일 조건 (seller_id, race_id, payout_month)의 인덱스는 seller_id로 시작하므로 판매자 범위를 이 인덱스로 찾는다
 	List<Payout> findBySellerIdAndPayoutMonthBetweenOrderByPayoutMonthDescIdDesc(

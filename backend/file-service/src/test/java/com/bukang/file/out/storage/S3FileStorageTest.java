@@ -47,7 +47,7 @@ class S3FileStorageTest {
 	@BeforeAll
 	static void setUp() {
 		S3Properties properties = new S3Properties(
-			BUCKET, "ap-northeast-2", S3_MOCK.getHttpEndpoint(), null, true, "s3mock", "s3mock",
+			BUCKET, "test", "ap-northeast-2", S3_MOCK.getHttpEndpoint(), null, true, "s3mock", "s3mock",
 			Duration.ofMinutes(10), Duration.ofMinutes(30));
 		S3Config s3Config = new S3Config();
 		AwsCredentialsProvider credentials = s3Config.s3Credentials(properties);
