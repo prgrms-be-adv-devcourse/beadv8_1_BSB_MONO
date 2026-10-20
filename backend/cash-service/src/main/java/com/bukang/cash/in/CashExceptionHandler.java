@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.bukang.cash.domain.exception.PayoutTransferMismatchException;
+import com.bukang.cash.dto.CashPayoutResponseDto;
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.shared.member.web.MemberIdHeader;
 
@@ -56,5 +58,18 @@ public class CashExceptionHandler {
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
 			.body(RsData.of(HttpStatus.BAD_REQUEST, INVALID_REQUEST, "요청 값의 형식이 올바르지 않습니다.", null));
+	}
+
+	// 같은 정산 ID로 이전과 다른 값이 재요청되면, 지갑은 건드리지 않고 저장된 값을 데이터에 담아 409로 응답한다 (PRO-256 리뷰 반영)
+	// GlobalExceptionHandler의 BusinessException 처리보다 이 예외 타입이 더 구체적이라 이쪽이 먼저 적용된다
+	@ExceptionHandler(PayoutTransferMismatchException.class)
+	public ResponseEntity<RsData<CashPayoutResponseDto>> payoutTransferMismatchException(
+		PayoutTransferMismatchException exception
+	) {
+		CashPayoutResponseDto stored = CashPayoutResponseDto.alreadyPaid(
+			exception.getStoredSettlementAmount(), exception.getStoredFeeAmount());
+		return ResponseEntity
+			.status(HttpStatus.CONFLICT)
+			.body(RsData.of(HttpStatus.CONFLICT, exception.getMessage(), stored));
 	}
 }

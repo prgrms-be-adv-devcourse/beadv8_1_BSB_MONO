@@ -65,8 +65,12 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
           ? '매월 20일(휴일이면 다음 영업일)에 전월 정산 대상분을 지급해요. 보류가 풀리면 다음 20일 묶음에 넣어 지급해요.'
           : '매월 20일(휴일이면 다음 영업일)에 전월 1일~말일에 정산 대상이 된 건을 대회별로 묶어 지급해요.'
       }
-      // TODO(api): 정산 내역 엑셀 내려받기
-      actions={<Button variant="secondary">엑셀로 내려받기</Button>}
+      // TODO(api): 정산 내역 엑셀 내려받기 API가 없어 막아 둔다
+      actions={
+        <Button variant="secondary" disabled title="엑셀 내려받기는 준비 중이에요">
+          엑셀로 내려받기
+        </Button>
+      }
     >
       <div className="flex gap-6">
         {summary.data ? (
@@ -120,10 +124,11 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
               onValueChange={(next) => next && setPeriodValue(next)}
               className="flex-1"
             />
-            {/* TODO(api): ID로 찾기 API가 아직 없다 */}
+            {/* TODO(api): ID로 찾기 API가 아직 없어 막아 둔다 */}
             <TextField
               label="ID로 찾기"
-              helper="지급보류 ID·정산 ID·주문번호로 찾으면 기간과 관계없이 찾아요"
+              helper="ID로 찾기는 준비 중이에요"
+              disabled
               className="flex-1"
             />
           </div>
@@ -142,8 +147,16 @@ function MonthlyPayouts({ today }: { today: Date }) {
     <ConsoleCard
       title="대회별 월 정산"
       aside={
-        // TODO(api): 정산 ID로 찾기 API가 아직 없다
-        <button type="button" className={cn('rounded-sm text-label-m text-text-brand', FOCUS_RING)}>
+        // TODO(api): 정산 ID로 찾기 API가 아직 없어 막아 둔다
+        <button
+          type="button"
+          disabled
+          title="정산 ID로 찾기는 준비 중이에요"
+          className={cn(
+            'rounded-sm text-label-m text-text-brand disabled:cursor-not-allowed disabled:text-text-disabled',
+            FOCUS_RING,
+          )}
+        >
           정산 ID로 찾기
         </button>
       }

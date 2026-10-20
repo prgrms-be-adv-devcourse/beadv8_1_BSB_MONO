@@ -5,10 +5,16 @@ import { useId, useState, type ReactNode } from 'react'
 
 import { cn } from '@/shared/lib'
 
-import { FIELD_BOX, FIELD_HELPER, FIELD_LABEL } from '../field/field-styles'
-import { Select } from '../field/Select'
+import { FIELD_BOX, FIELD_BOX_FOCUS, FIELD_HELPER, FIELD_LABEL } from '../field/field-styles'
 import { Icon } from '../icon/icons'
-import { rangeDateText, singleDateText, timeItemsWith, timeOf, withTime } from './date-time'
+import {
+  dateTimeText,
+  formatTimeTyping,
+  padTime,
+  rangeDateText,
+  singleDateText,
+  timeOf,
+} from './date-time'
 import { DatePicker } from './DatePicker'
 import type { DateRange } from './selection'
 
@@ -32,19 +38,19 @@ export type DateTimeFieldProps = CommonProps &
     | {
         mode: 'single'
         defaultValue?: Date
-        /** 날짜와 시간을 둘 다 골랐을 때 그 시각, 하나라도 비면 undefined */
-        onValueChange?: (value: Date | undefined) => void
+        /** 'yyyy-MM-dd HH:mm' 글자. 시간은 친 그대로라 맞는 시각인지는 받는 쪽(폼 규칙)이 본다 */
+        onValueChange?: (value: string) => void
       }
     | {
         mode: 'range'
         defaultValue?: DateRange
-        /** 시작·끝 각각 날짜와 시간을 둘 다 골랐을 때만 값이 들어간다 */
-        onValueChange?: (value: DateRange) => void
+        /** 시작 · 끝 각각 'yyyy-MM-dd HH:mm' 글자 */
+        onValueChange?: (value: { from: string; to: string }) => void
       }
   )
 
 // 피그마 DateTimeField. 날짜 칸을 누르면 DatePicker가 팝오버로 열리고 '선택 완료'로 확정한다.
-// 시간은 옆의 Select(30분 단위 + 23:59)로 고른다. range는 시간 칸이 시작·끝 2개다.
+// 시간은 옆 칸에 HH:mm(24시간)으로 직접 친다. range는 시간 칸이 시작·끝 2개다.
 export function DateTimeField(props: DateTimeFieldProps) {
   const { label, helper, error, disabled, placeholder = '날짜를 골라 주세요', className } = props
   const labelId = useId()
@@ -56,7 +62,7 @@ export function DateTimeField(props: DateTimeFieldProps) {
     props.mode === 'single'
       ? { from: props.defaultValue, to: undefined }
       : (props.defaultValue ?? { from: undefined, to: undefined })
-  // 날짜(일)와 시간을 따로 들고 있다가, 둘 다 있을 때 합쳐서 알린다.
+  // 날짜(일)와 시간을 따로 들고 있다가, 바뀔 때마다 한 글자(yyyy-MM-dd HH:mm)로 합쳐 알린다.
   const [dates, setDates] = useState<DateRange>(initial)
   const [startTime, setStartTime] = useState(timeOf(initial.from))
   const [endTime, setEndTime] = useState(timeOf(initial.to))
@@ -64,11 +70,14 @@ export function DateTimeField(props: DateTimeFieldProps) {
   // 팝오버 안에서 고르는 중인 값. '선택 완료'를 눌러야 dates에 들어간다.
   const [draft, setDraft] = useState<DateRange>(initial)
 
-  function emit(next: DateRange, start: string | null, end: string | null) {
+  function emit(next: DateRange, start: string, end: string) {
     if (props.mode === 'single') {
-      props.onValueChange?.(withTime(next.from, start))
+      props.onValueChange?.(dateTimeText(next.from, start))
     } else {
-      props.onValueChange?.({ from: withTime(next.from, start), to: withTime(next.to, end) })
+      props.onValueChange?.({
+        from: dateTimeText(next.from, start),
+        to: dateTimeText(next.to, end),
+      })
     }
   }
 
@@ -87,7 +96,6 @@ export function DateTimeField(props: DateTimeFieldProps) {
     props.mode === 'single'
       ? dates.from && singleDateText(dates.from)
       : dates.from && rangeDateText(dates)
-  const items = timeItemsWith(startTime, endTime)
   const labelText = typeof label === 'string' ? label : '날짜'
 
   return (
@@ -166,36 +174,28 @@ export function DateTimeField(props: DateTimeFieldProps) {
             </Popover.Positioner>
           </Popover.Portal>
         </Popover.Root>
-        <Select
-          items={items}
+        <TimeInput
           value={startTime}
-          onValueChange={(time) => {
+          onChange={(time) => {
             setStartTime(time)
             emit(dates, time, endTime)
           }}
-          placeholder="시간"
           disabled={disabled}
           aria-label={props.mode === 'single' ? `${labelText} 시간` : `${labelText} 시작 시간`}
-          popupClassName="w-36"
-          className="w-28 shrink-0"
         />
         {props.mode === 'range' && (
           <>
             <span aria-hidden className="text-body-m text-text-secondary">
               ~
             </span>
-            <Select
-              items={items}
+            <TimeInput
               value={endTime}
-              onValueChange={(time) => {
+              onChange={(time) => {
                 setEndTime(time)
                 emit(dates, startTime, time)
               }}
-              placeholder="시간"
               disabled={disabled}
               aria-label={`${labelText} 끝 시간`}
-              popupClassName="w-36"
-              className="w-28 shrink-0"
             />
           </>
         )}
@@ -206,5 +206,37 @@ export function DateTimeField(props: DateTimeFieldProps) {
         </p>
       )}
     </div>
+  )
+}
+
+// 시간 칸. 칠 때마다 콜론을 넣어 알리고, 칸을 떠날 때 한 자리 시를 두 자리로 채운다.
+function TimeInput({
+  value,
+  onChange,
+  disabled,
+  'aria-label': ariaLabel,
+}: {
+  value: string
+  onChange: (value: string) => void
+  disabled?: boolean
+  'aria-label': string
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="시간"
+      maxLength={5}
+      value={value}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      onChange={(event) => onChange(formatTimeTyping(event.target.value))}
+      onBlur={() => {
+        const padded = padTime(value)
+        if (padded !== value) onChange(padded)
+      }}
+      className={cn(FIELD_BOX, FIELD_BOX_FOCUS, 'w-28 shrink-0')}
+    />
   )
 }

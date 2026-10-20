@@ -27,10 +27,12 @@ spring:
 
 # 운영은 기본값 없이 실제 AWS S3를 쓴다. 키를 비워 두면 SDK 기본 자격 증명 체인(EC2 역할 등)을 쓴다
 # compose 앱 컨테이너는 compose.yml에서 S3Mock 값을 넘긴다
+# 키 앞의 환경 이름(key-prefix)은 환경변수로 받지 않고 여기에 적는다. 운영 객체는 prod/uploads/…, prod/files/…에 쌓인다
 file:
   storage:
     s3:
       bucket: ${S3_BUCKET}
+      key-prefix: prod
       region: ${AWS_REGION}
       endpoint: ${S3_ENDPOINT:}
       public-endpoint: ${S3_PUBLIC_ENDPOINT:}

@@ -15,9 +15,9 @@
            브라우저                         file-service                       S3
 ① 발급      POST /api/v1/file/files   ──▶  형식·크기 검사, 파일 저장(PENDING)
            ◀── uploadUrl, headers, fileId
-② 업로드    PUT uploadUrl (파일 본문)  ─────────────────────────────────────▶  uploads/{uuid}.png
-③ 완료 확인 POST …/files/{id}/complete ──▶ uploads/ → files/ 복사, 실제 크기·앞부분 검사
-           ◀── 파일 정보 + 보기 URL         (UPLOADED)                          files/{uuid}.png
+② 업로드    PUT uploadUrl (파일 본문)  ─────────────────────────────────────▶  {환경}/uploads/{uuid}.png
+③ 완료 확인 POST …/files/{id}/complete ──▶ {환경}/uploads/ → {환경}/files/ 복사, 실제 크기·앞부분 검사
+           ◀── 파일 정보 + 보기 URL         (UPLOADED)                          {환경}/files/{uuid}.png
 
            product-service
 ④ 연결      PUT /internal/v1/file/refs/Race/5/files ──▶ 대회 5번에 붙임 (ACTIVE)
@@ -25,6 +25,8 @@
            누구나
 ⑤ 조회      GET /api/v1/file/files?refType=Race&refId=5 ──▶ 대회 5번 파일 + 보기 URL
 ```
+
+`{환경}`은 프로파일별 yaml의 `file.storage.s3.key-prefix`입니다(dev=`dev`, prod=`prod`). 로컬과 운영이 같은 버킷을 써도 경로가 나뉩니다.
 
 | 상태 | 뜻 | 바뀌는 때 |
 |---|---|---|
@@ -69,7 +71,7 @@
   "message": "업로드 URL을 발급했습니다.",
   "data": {
     "fileId": 1,
-    "uploadUrl": "https://{버킷}.s3.ap-northeast-2.amazonaws.com/uploads/3f2a….png?X-Amz-Signature=…",
+    "uploadUrl": "https://{버킷}.s3.ap-northeast-2.amazonaws.com/dev/uploads/3f2a….png?X-Amz-Signature=…",
     "method": "PUT",
     "headers": { "content-type": "image/png", "content-length": "204800" },
     "expiresAt": "2026-10-10T12:35:35Z"
@@ -110,7 +112,7 @@ await fetch(data.uploadUrl, {
 
 `POST /api/v1/file/files/{fileId}/complete` · 헤더 `X-Member-Id` 필수 (발급 때와 같은 회원)
 
-서버가 S3의 `uploads/` 객체를 `files/`로 복사하고, 복사본의 **실제 크기·Content-Type·앞부분(매직 바이트)**이 ①에서 신고한 값과 같은지 검사합니다.
+서버가 S3의 `{환경}/uploads/` 객체를 `{환경}/files/`로 복사하고, 복사본의 **실제 크기·Content-Type·앞부분(매직 바이트)**이 ①에서 신고한 값과 같은지 검사합니다.
 같으면 `UPLOADED`가 되고, 바로 미리보기에 쓸 수 있는 보기 URL(`url`, 30분)을 돌려줍니다.
 
 응답 `200` — `data`는 [파일 정보](#4-파일-정보-filedto)
@@ -123,7 +125,7 @@ await fetch(data.uploadUrl, {
 | 404 없거나 삭제됨 | 존재하지 않는 파일입니다. | |
 
 - 이미 확인한 파일을 다시 불러도 같은 결과를 돌려줍니다(멱등). 다시 시도하거나 버튼을 두 번 눌러도 안전합니다.
-- 확인을 마친 파일은 업로드 URL이 없는 `files/`로 옮겨지므로, 남은 시간 동안 같은 URL로 다시 올려도 확인한 파일은 바뀌지 않습니다.
+- 확인을 마친 파일은 업로드 URL이 없는 `{환경}/files/`로 옮겨지므로, 남은 시간 동안 같은 URL로 다시 올려도 확인한 파일은 바뀌지 않습니다.
 
 ### ④ 대상에 연결 (product-service → file-service)
 
@@ -292,8 +294,8 @@ fileClient.link(ref.getType(), ref.getId(), memberId, files);   // 3. owner는 �
 ## 7. 아직 안 된 것
 
 - **행 없이 남은 S3 객체**: 아래 경우에는 DB 행 없이 객체만 남고, 정리 배치가 지우지 못합니다.
-  - ③ 완료 확인 도중 서버가 죽음 (`files/` 사본이 남는다)
-  - ③이 끝난 뒤 같은 업로드 URL(만료 10분 전)로 다시 올림 (`uploads/` 객체가 남는다)
+  - ③ 완료 확인 도중 서버가 죽음 (`{환경}/files/` 사본이 남는다)
+  - ③이 끝난 뒤 같은 업로드 URL(만료 10분 전)로 다시 올림 (`{환경}/uploads/` 객체가 남는다)
   - 정리 배치의 S3 삭제 실패 (실패한 키는 로그에 남는다)
 - **정리 배치 여러 대 실행**: file-service를 여러 대로 늘리면 같은 시각에 배치가 겹치지 않게 막아야 합니다 (ShedLock 등).
 - **게이트웨이(PRO-20)**: 지금은 `X-Member-Id`를 아무 번호로나 보낼 수 있고, 내부 API(`/internal/**`)도 8083 포트로 직접 부를 수 있습니다.

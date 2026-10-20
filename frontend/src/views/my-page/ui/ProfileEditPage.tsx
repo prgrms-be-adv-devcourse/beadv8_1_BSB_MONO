@@ -8,10 +8,10 @@ import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { useAuthStatus } from '@/features/auth'
+import { BirthDateField } from '@/entities/member'
 import { memberApi, unwrapData, type memberModel } from '@/shared/api'
-import { BottomCta, Button, TextField } from '@/shared/ui'
+import { BottomCta, Button, PhoneField, TextField } from '@/shared/ui'
 
-import { toDotDate, toIsoDate } from '../model/member-format'
 import { modifyErrorMessage, profileSchema, type ProfileValues } from '../model/profile-schema'
 
 // 피그마 V2 · M30-1 회원 정보 수정
@@ -52,7 +52,7 @@ function ProfileForm({ member }: { member: memberModel.MemberDto }) {
     mode: 'onTouched',
     defaultValues: {
       name: member.name ?? '',
-      birth: member.birthDate ? toDotDate(member.birthDate) : '',
+      birth: member.birthDate ?? '',
       phone: member.phone ?? '',
       nickname: member.nickname ?? '',
     },
@@ -64,7 +64,7 @@ function ProfileForm({ member }: { member: memberModel.MemberDto }) {
       {
         data: {
           name: values.name,
-          birthDate: toIsoDate(values.birth),
+          birthDate: values.birth,
           phone: values.phone,
           nickname: values.nickname,
         },
@@ -97,18 +97,14 @@ function ProfileForm({ member }: { member: memberModel.MemberDto }) {
           error={errors.name?.message}
           {...register('name')}
         />
-        <TextField
+        <BirthDateField
           label="생년월일"
-          inputMode="numeric"
-          placeholder="1995.03.02"
           helper="만 14세 미만은 가입할 수 없어요"
           error={errors.birth?.message}
           {...register('birth')}
         />
-        <TextField
+        <PhoneField
           label="휴대폰 번호"
-          type="tel"
-          autoComplete="tel"
           placeholder="010-1234-5678"
           error={errors.phone?.message}
           {...register('phone')}

@@ -8,14 +8,12 @@ import {
 } from '@/entities/member'
 import { ApiError, memberZod } from '@/shared/api'
 
-import { toIsoDate } from './member-format'
-
 // 내 정보 수정 입력 검사. 규칙은 orval이 만든 memberZod.ModifyMeBody(백엔드 MemberModifyRequestDto)를 따르고,
 // 문구만 화면 말투로 바꾼다. 닉네임 칸 수는 명세에 없는 백엔드 커스텀 검증(@NicknameWidth)이라 entities/member 규칙을 쓴다.
 
 export const PROFILE_ERRORS = {
   name: '이름을 입력해 주세요.',
-  birth: '생년월일을 1995.03.02처럼 입력해 주세요.',
+  birth: '생년월일을 골라 주세요.',
   birthUnder14: BIRTH_UNDER_14_MESSAGE,
   phone: '휴대폰 번호를 010-1234-5678처럼 입력해 주세요.',
   nicknameChars: '닉네임은 한글 · 영문 · 숫자만 쓸 수 있어요.',
@@ -38,8 +36,7 @@ export const profileSchema = z.object({
     .string()
     .trim()
     .refine(
-      (value) =>
-        /^\d{4}\.\d{2}\.\d{2}$/.test(value) && body.birthDate.safeParse(toIsoDate(value)).success,
+      (value) => parseBirth(value) !== null && body.birthDate.safeParse(value).success,
       PROFILE_ERRORS.birth,
     )
     .refine((value) => {

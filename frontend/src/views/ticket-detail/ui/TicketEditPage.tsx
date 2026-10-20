@@ -17,6 +17,7 @@ import {
   Divider,
   FOCUS_RING,
   KeyValue,
+  PhoneField,
   Radio,
   RadioGroup,
   Section,
@@ -189,10 +190,10 @@ function ParticipantForm({
               error={errors.emergencyContactName?.message}
               {...register('emergencyContactName')}
             />
-            <TextField
+            <PhoneField
               label="연락처"
-              type="tel"
-              inputMode="tel"
+              // 비상 연락처라 브라우저가 본인 번호를 제안하지 않게 한다
+              autoComplete="off"
               error={errors.emergencyContactPhone?.message}
               {...register('emergencyContactPhone')}
             />

@@ -29,7 +29,7 @@ export const AUTH_ERRORS = {
   // 시안에 없는 문구. 가입 요청에서 필수 약관이 빠졌다는 서버 응답
   joinTermsRequired: '필수 약관에 동의해 주세요.',
   nameRequired: '이름을 입력해 주세요.',
-  birthFormat: '생년월일을 1995.03.02처럼 입력해 주세요.',
+  birthFormat: '생년월일을 골라 주세요.',
   birthUnder14: BIRTH_UNDER_14_MESSAGE,
   phoneFormat: '휴대폰 번호를 010-1234-5678처럼 입력해 주세요.',
   nicknameChars: '닉네임은 한글 · 영문 · 숫자만 쓸 수 있어요.',
