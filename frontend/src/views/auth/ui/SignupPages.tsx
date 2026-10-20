@@ -3,11 +3,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
 import { checkEmailAvailable, useLogin } from '@/features/auth'
+import { BirthDateField } from '@/entities/member'
 import { memberApi } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import {
@@ -17,6 +18,7 @@ import {
   Checkbox,
   FOCUS_RING,
   Icon,
+  PhoneField,
   Stepper,
   TextField,
 } from '@/shared/ui'
@@ -60,7 +62,7 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
     getValues,
     trigger,
     setError,
-    formState: { errors, isValid },
+    formState: { errors, isValid, isSubmitting },
   } = useForm<SignupAccountValues>({
     resolver: zodResolver(signupAccountSchema),
     mode: 'onTouched',
@@ -104,61 +106,69 @@ export function SignupAccountPage({ invalid = false }: { invalid?: boolean }) {
     if (await checkEmail()) router.push('/signup/profile')
   })
   // 약관 시트를 동의 없이 닫았다면 "다음"이 시트를 다시 연다. 동의해야 다음 단계로 간다.
-  const onNextClick = termsAgreed || invalid ? onNext : () => setTermsOpen(true)
+  // 입력 칸에서 Enter를 눌러도 같은 길로 오도록 form 제출에 묶는다. 버튼이 꺼져 있으면 Enter로도 제출되지 않는다.
+  const onFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    if (termsAgreed || invalid) return onNext(event)
+    event.preventDefault()
+    setTermsOpen(true)
+  }
 
   return (
     <>
       <AppHeader type="sub" title="가입하기" />
-      {agreed && (
-        <div className="bg-bg-surface px-4 pt-3 pb-1">
-          <Stepper steps={STEPS} current={1} />
-        </div>
-      )}
-      <CenterBody center={false}>
-        <StepIntro
-          title="계정을 만들어요"
-          description="이메일과 비밀번호를 정해요. 다음은 회원 정보예요."
-        />
-        <TextField
-          label="이메일"
-          type="email"
-          autoComplete="email"
-          placeholder="이메일을 입력해 주세요"
-          error={
-            errors.email?.message ??
-            (emailCheckFailed ? AUTH_ERRORS.emailCheckFailed : undefined) ??
-            (invalid ? AUTH_ERRORS.emailTaken : undefined)
+      <form noValidate onSubmit={onFormSubmit} className="contents">
+        {agreed && (
+          <div className="bg-bg-surface px-4 pt-3 pb-1">
+            <Stepper steps={STEPS} current={1} />
+          </div>
+        )}
+        <CenterBody center={false}>
+          <StepIntro
+            title="계정을 만들어요"
+            description="이메일과 비밀번호를 정해요. 다음은 회원 정보예요."
+          />
+          <TextField
+            label="이메일"
+            type="email"
+            autoComplete="email"
+            placeholder="이메일을 입력해 주세요"
+            error={
+              errors.email?.message ??
+              (emailCheckFailed ? AUTH_ERRORS.emailCheckFailed : undefined) ??
+              (invalid ? AUTH_ERRORS.emailTaken : undefined)
+            }
+            {...register('email', { onBlur: () => void checkEmail(true) })}
+          />
+          <TextField
+            label="비밀번호"
+            type="password"
+            autoComplete="new-password"
+            placeholder="비밀번호를 입력해 주세요"
+            helper="10자 이상"
+            error={errors.password?.message}
+            {...register('password', { onChange: revalidateConfirm })}
+          />
+          <TextField
+            label="비밀번호 확인"
+            type="password"
+            autoComplete="new-password"
+            placeholder="비밀번호를 한 번 더 입력해 주세요"
+            error={
+              errors.passwordConfirm?.message ??
+              (invalid ? AUTH_ERRORS.passwordMismatch : undefined)
+            }
+            {...register('passwordConfirm')}
+          />
+        </CenterBody>
+        <BottomCta
+          className="sticky bottom-0 z-10"
+          primary={
+            <Button type="submit" size="l" disabled={!isValid || invalid} loading={isSubmitting}>
+              다음
+            </Button>
           }
-          {...register('email', { onBlur: () => void checkEmail(true) })}
         />
-        <TextField
-          label="비밀번호"
-          type="password"
-          autoComplete="new-password"
-          placeholder="비밀번호를 입력해 주세요"
-          helper="10자 이상"
-          error={errors.password?.message}
-          {...register('password', { onChange: revalidateConfirm })}
-        />
-        <TextField
-          label="비밀번호 확인"
-          type="password"
-          autoComplete="new-password"
-          placeholder="비밀번호를 한 번 더 입력해 주세요"
-          error={
-            errors.passwordConfirm?.message ?? (invalid ? AUTH_ERRORS.passwordMismatch : undefined)
-          }
-          {...register('passwordConfirm')}
-        />
-      </CenterBody>
-      <BottomCta
-        className="sticky bottom-0 z-10"
-        primary={
-          <Button size="l" disabled={!isValid || invalid} onClick={onNextClick}>
-            다음
-          </Button>
-        }
-      />
+      </form>
       <BottomSheet
         open={termsOpen}
         onOpenChange={setTermsOpen}
@@ -243,7 +253,7 @@ function SignupProfileForm() {
     handleSubmit,
     subscribe,
     setError,
-    formState: { errors, isValid },
+    formState: { errors, isValid, isSubmitting },
   } = useForm<SignupProfileValues>({
     resolver: zodResolver(signupProfileSchema),
     mode: 'onTouched',
@@ -281,10 +291,14 @@ function SignupProfileForm() {
       },
     )
   })
-  const submitting = join.isPending || login.isPending
+  // 가입 → 자동 로그인 두 요청이 이어져 몇 초 걸릴 수 있다. 버튼에 Spinner를 띄워 멈춘 것처럼 보이지 않게 한다.
+  // loading 버튼은 클릭을 막으므로 Enter로도 다시 제출되지 않는다.
+  // 가입이 끝나면 로그인 결과와 상관없이 다른 화면으로 가므로, 이동할 때까지 계속 막아 두 번 가입하지 않게 한다.
+  // isSubmitting은 handleSubmit이 입력 검사를 하는 동안을 덮는다. 그 사이 Enter · 더블클릭으로 두 번 제출되지 않게 한다.
+  const submitting = isSubmitting || join.isPending || join.isSuccess
 
   return (
-    <>
+    <form noValidate onSubmit={onSubmit} className="contents">
       <AppHeader type="sub" title="가입하기" />
       <div className="bg-bg-surface px-4 pt-3 pb-1">
         <Stepper steps={STEPS} current={2} />
@@ -300,18 +314,14 @@ function SignupProfileForm() {
           error={errors.name?.message}
           {...register('name')}
         />
-        <TextField
+        <BirthDateField
           label="생년월일"
-          inputMode="numeric"
-          placeholder="1995.03.02"
           helper="만 14세 미만은 가입할 수 없어요"
           error={errors.birth?.message}
           {...register('birth')}
         />
-        <TextField
+        <PhoneField
           label="휴대폰 번호"
-          type="tel"
-          autoComplete="tel"
           placeholder="010-1234-5678"
           error={errors.phone?.message}
           {...register('phone')}
@@ -334,11 +344,11 @@ function SignupProfileForm() {
       <BottomCta
         className="sticky bottom-0 z-10"
         primary={
-          <Button size="l" disabled={!isValid || submitting} onClick={onSubmit}>
+          <Button type="submit" size="l" disabled={!isValid} loading={submitting}>
             가입 완료
           </Button>
         }
       />
-    </>
+    </form>
   )
 }

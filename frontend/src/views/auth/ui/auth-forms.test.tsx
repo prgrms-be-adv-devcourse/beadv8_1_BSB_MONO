@@ -169,7 +169,7 @@ describe('SignupProfilePage', () => {
     )
 
     await user.type(screen.getByLabelText('이름'), '김러너')
-    await user.type(screen.getByLabelText('생년월일'), '1995.03.02')
+    await user.type(screen.getByLabelText('생년월일'), '1995-03-02')
     await user.type(screen.getByLabelText('휴대폰 번호'), '010-1234-5678')
     await user.type(screen.getByLabelText('닉네임'), '곰')
     await user.tab()

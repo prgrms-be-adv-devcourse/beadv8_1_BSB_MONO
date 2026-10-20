@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
-import { BottomCta, Button, buttonClassName, EmptyState, TextField } from '@/shared/ui'
+import { BirthDateField } from '@/entities/member'
+import { BottomCta, Button, buttonClassName, EmptyState, PhoneField, TextField } from '@/shared/ui'
 
 import {
   findEmailSchema,
@@ -141,17 +142,9 @@ export function FindEmailPage() {
           error={errors.name?.message}
           {...register('name')}
         />
-        <TextField
-          label="생년월일"
-          inputMode="numeric"
-          placeholder="1995.03.02"
-          error={errors.birth?.message}
-          {...register('birth')}
-        />
-        <TextField
+        <BirthDateField label="생년월일" error={errors.birth?.message} {...register('birth')} />
+        <PhoneField
           label="휴대폰 번호"
-          type="tel"
-          autoComplete="tel"
           placeholder="010-1234-5678"
           error={errors.phone?.message}
           {...register('phone')}
