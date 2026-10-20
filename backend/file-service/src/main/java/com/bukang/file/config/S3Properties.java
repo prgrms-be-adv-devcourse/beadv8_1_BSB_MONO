@@ -7,6 +7,7 @@ import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * S3 접속 설정 (file.storage.s3)
@@ -21,6 +22,11 @@ import jakarta.validation.constraints.NotNull;
 public record S3Properties(
 	@NotBlank
 	String bucket,
+	// 키 앞에 붙이는 환경 이름 (dev, prod). dev와 prod가 같은 버킷을 쓰므로 dev/uploads/…, prod/files/…처럼 나눈다
+	// 프로파일별 yaml에 적는다. '/'가 들어가면 키 계층이 어긋나므로 소문자·숫자·하이픈만 받는다
+	@NotBlank
+	@Pattern(regexp = "[a-z0-9-]+")
+	String keyPrefix,
 	@NotBlank
 	String region,
 	String endpoint,

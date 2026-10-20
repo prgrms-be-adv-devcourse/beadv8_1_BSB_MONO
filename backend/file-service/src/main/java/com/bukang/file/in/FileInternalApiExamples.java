@@ -22,7 +22,7 @@ final class FileInternalApiExamples {
 					"refId": 1,
 					"fileType": "THUMBNAIL",
 					"sortNo": 0,
-					"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
+					"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/dev/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
 				},
 				{
 					"id": 2,
@@ -37,7 +37,7 @@ final class FileInternalApiExamples {
 					"refId": 1,
 					"fileType": "DETAIL",
 					"sortNo": 0,
-					"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/8c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
+					"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/dev/files/8c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
 				}
 			]
 		}

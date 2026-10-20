@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.UUID;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.common.shared.file.domain.FileType;
+import com.bukang.file.domain.FileFormat;
 import com.bukang.file.domain.FileStatus;
 import com.bukang.file.domain.StoredFile;
 import com.bukang.file.out.StoredFileRepository;
@@ -69,7 +72,8 @@ class ApiV1FileUploadTest {
 
 		StoredFile file = storedFileRepository.findById(fileId).orElseThrow();
 		assertThat(file.getStatus()).isEqualTo(FileStatus.PENDING);
-		assertThat(file.getS3Key()).startsWith("uploads/").endsWith(".png");
+		// 키 앞에 환경 이름(application-test.yaml의 key-prefix)이 붙는다
+		assertThat(file.getS3Key()).startsWith("test/uploads/").endsWith(".png");
 		assertThat(file.getOriginFileNm()).isEqualTo("race-thumbnail.png");
 		assertThat(file.getFileType()).isEqualTo(FileType.THUMBNAIL);
 		assertThat(file.getCreateUser()).isEqualTo(MEMBER_ID);
@@ -112,7 +116,7 @@ class ApiV1FileUploadTest {
 		ResultActions result = create(MEMBER_ID, FileType.INTRO_VIDEO, "race.mov", "video/quicktime", 100 * MEGABYTE)
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.data.headers.content-type").value("video/quicktime"));
-		assertThat(s3KeyOf(fileIdOf(result))).startsWith("uploads/").endsWith(".mov");
+		assertThat(s3KeyOf(fileIdOf(result))).startsWith("test/uploads/").endsWith(".mov");
 
 		create(MEMBER_ID, FileType.INTRO_VIDEO, "race.mp4", "video/mp4", 100 * MEGABYTE + 1)
 			.andExpect(status().isBadRequest())
@@ -165,9 +169,28 @@ class ApiV1FileUploadTest {
 
 		StoredFile file = storedFileRepository.findById(fileId).orElseThrow();
 		assertThat(file.getStatus()).isEqualTo(FileStatus.UPLOADED);
-		assertThat(file.getS3Key()).isEqualTo(uploadKey.replace("uploads/", "files/"));
+		assertThat(file.getS3Key()).isEqualTo(uploadKey.replace("test/uploads/", "test/files/"));
 		assertThat(fakeFileStorage.exists(uploadKey)).isFalse();
 		assertThat(fakeFileStorage.bodyOf(file.getS3Key())).containsExactly(TestImages.PNG);
+	}
+
+	@Test
+	@DisplayName("환경 이름을 붙이기 전에 발급한 업로드 키(uploads/…)도 파일 이름을 그대로 두고 환경 확정 경로로 옮긴다")
+	void completeUploadIssuedBeforeKeyPrefix() throws Exception {
+		String fileName = UUID.randomUUID() + ".png";
+		String legacyUploadKey = "uploads/" + fileName;
+		StoredFile pending = storedFileRepository.save(StoredFile.pending(
+			legacyUploadKey, "race.png", FileType.THUMBNAIL, FileFormat.PNG, TestImages.PNG.length, MEMBER_ID));
+		fakeFileStorage.upload(legacyUploadKey, TestImages.PNG, "image/png");
+
+		complete(MEMBER_ID, pending.getId())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.status").value("UPLOADED"));
+
+		// 앞부분 길이로 자르면 UUID 앞글자가 잘린 키가 된다. 파일 이름 전체가 남아야 한다
+		assertThat(s3KeyOf(pending.getId())).isEqualTo("test/files/" + fileName);
+		assertThat(fakeFileStorage.exists(legacyUploadKey)).isFalse();
+		assertThat(fakeFileStorage.bodyOf("test/files/" + fileName)).containsExactly(TestImages.PNG);
 	}
 
 	@Test
@@ -271,7 +294,7 @@ class ApiV1FileUploadTest {
 
 		assertThat(storedFileRepository.findById(fileId).orElseThrow().getStatus()).isEqualTo(FileStatus.DELETED);
 		assertThat(fakeFileStorage.exists(uploadKey)).isFalse();
-		assertThat(fakeFileStorage.exists(uploadKey.replace("uploads/", "files/"))).isFalse();
+		assertThat(fakeFileStorage.exists(uploadKey.replace("test/uploads/", "test/files/"))).isFalse();
 	}
 
 	@Test

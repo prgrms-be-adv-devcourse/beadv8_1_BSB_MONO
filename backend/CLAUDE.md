@@ -123,7 +123,8 @@ backend/
     └── in/                    QueueExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
 ```
 
-- 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).
+- 파일은 브라우저가 presigned PUT으로 S3 `{환경}/uploads/`에 직접 올리고, 완료 API가 `{환경}/files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).
+  `{환경}`은 `file.storage.s3.key-prefix`로, 프로파일별 yaml에 적는다(dev=`dev`, prod=`prod`, 테스트=`test`). 로컬과 운영이 같은 버킷을 써도 경로가 나뉜다.
 - 다른 서비스는 파일을 파일 ID로만 참조한다. 대상(대회 등)을 저장할 때 `/internal/v1/file/refs/{refType}/{refId}/files`를 동기 호출해 연결하고, `/internal/**`은 게이트웨이에 노출하지 않는다.
 - 회원 ID는 `X-Member-Id` 헤더로 받는다. 헤더 이름과 오류 문구는 common의 `shared/member/web/MemberIdHeader`를 쓴다. 게이트웨이의 `auth/JwtAuthenticationFilter`가 클라이언트가 보낸 이 헤더를 지우고, Access Token을 검사해 토큰 속 회원 ID로 다시 넣는다.
   토큰 없이 통과하는 주소는 `gateway`의 `application.yaml` `gateway.auth.public-paths`에 있다. 로그인 전에 쓰는 API를 추가하면 여기에도 추가한다(빠뜨리면 401로 막힌다).

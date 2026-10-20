@@ -74,7 +74,8 @@ public class S3Config {
 		boolean configuredKey = StringUtils.hasText(properties.accessKey());
 		String address = localEndpoint ? properties.endpoint() : awsAddress(properties);
 		String credentials = configuredKey ? "설정의 액세스 키" : "SDK 기본 자격 증명 체인";
-		log.info("S3 저장소: bucket={}, 주소={}, 자격 증명={}", properties.bucket(), address, credentials);
+		log.info("S3 저장소: bucket={}, 키 경로={}/, 주소={}, 자격 증명={}",
+			properties.bucket(), properties.keyPrefix(), address, credentials);
 
 		// 브라우저가 쓰는 presigned URL 주소가 앱이 붙는 주소와 다를 때만 남긴다 (compose 앱 컨테이너 + S3Mock)
 		String publicEndpoint = properties.publicEndpoint();

@@ -10,7 +10,7 @@ final class FileApiExamples {
 			"message": "업로드 URL을 발급했습니다.",
 			"data": {
 				"fileId": 1,
-				"uploadUrl": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20261009T122535Z&X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost&X-Amz-Expires=600&X-Amz-Credential=AKIA...%2F20261009%2Fap-northeast-2%2Fs3%2Faws4_request&X-Amz-Signature=...",
+				"uploadUrl": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/dev/uploads/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20261009T122535Z&X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost&X-Amz-Expires=600&X-Amz-Credential=AKIA...%2F20261009%2Fap-northeast-2%2Fs3%2Faws4_request&X-Amz-Signature=...",
 				"method": "PUT",
 				"headers": {
 					"content-length": "204800",
@@ -38,7 +38,7 @@ final class FileApiExamples {
 				"refId": null,
 				"fileType": "THUMBNAIL",
 				"sortNo": 0,
-				"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
+				"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/dev/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
 			}
 		}
 		""";
@@ -61,7 +61,7 @@ final class FileApiExamples {
 					"refId": 1,
 					"fileType": "THUMBNAIL",
 					"sortNo": 0,
-					"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
+					"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/dev/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
 				},
 				{
 					"id": 2,
@@ -76,7 +76,7 @@ final class FileApiExamples {
 					"refId": 1,
 					"fileType": "DETAIL",
 					"sortNo": 0,
-					"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/8c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
+					"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/dev/files/8c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
 				}
 			]
 		}
@@ -99,7 +99,7 @@ final class FileApiExamples {
 				"refId": 1,
 				"fileType": "THUMBNAIL",
 				"sortNo": 0,
-				"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
+				"url": "https://crewrun-file-dev.s3.ap-northeast-2.amazonaws.com/dev/files/3f2a9c1e-7b4d-4e8a-9c0f-1a2b3c4d5e6f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=1800&X-Amz-Signature=..."
 			}
 		}
 		""";
