@@ -38,7 +38,7 @@ public class CartFacade {
 
 	@Transactional
 	public CartDto removeItem(int cartItemId, int memberId) {
-		return cartUseCase.toDto(cartUseCase.removeItem(memberId, cartItemId, LocalDateTime.now()));
+		return cartUseCase.toDto(cartUseCase.removeItem(memberId, cartItemId));
 	}
 
 	// 항목마다 트랜잭션을 따로 커밋하므로(CartCheckoutUseCase) 바깥 트랜잭션 없이 부른다.

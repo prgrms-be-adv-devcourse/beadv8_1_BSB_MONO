@@ -34,13 +34,6 @@ public interface ParticipationRepository extends JpaRepository<Participation, In
 	List<Participation> findByMemberIdAndParticipationTypeAndStatusAndRaceCourseIdIn(int memberId,
 		ParticipationType participationType, ParticipationStatus status, Collection<Integer> raceCourseIds);
 
-	// 잠그기 전에 엔티티를 읽으면 잠근 뒤에도 옛 상태가 돌아오므로(영속성 컨텍스트) ID만 찾는다
-	@Query("select p.id from Participation p where p.memberId = :memberId and p.raceCourseId = :raceCourseId "
-		+ "and p.participationType = :participationType and p.status = :status")
-	List<Integer> findIdsByMemberIdAndRaceCourseIdAndTypeAndStatus(@Param("memberId") int memberId,
-		@Param("raceCourseId") int raceCourseId, @Param("participationType") ParticipationType participationType,
-		@Param("status") ParticipationStatus status);
-
 	// [결제하기]가 같은 신청서로 동시에 들어오면 한 요청씩 처리해, 상품 서비스에 자리를 두 번 잡지 않게 한다
 	// 결제·참가자 정보 수정도 이걸로 읽어, 서로 겹쳐도 한쪽이 바꾼 상태를 다른 쪽이 옛 값으로 덮지 않게 한다
 	@Lock(LockModeType.PESSIMISTIC_WRITE)

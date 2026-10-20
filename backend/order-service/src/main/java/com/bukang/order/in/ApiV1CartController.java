@@ -118,7 +118,7 @@ public class ApiV1CartController {
 
 	@DeleteMapping("/items/{cartItemId}")
 	@Operation(summary = "장바구니에서 빼기", description = "본인 장바구니의 항목을 빼고, 남은 장바구니를 돌려준다. "
-		+ "그 종목으로 저장한 결제 전 신청서(PENDING)도 함께 취소해, 같은 대회에 다시 신청할 수 있게 한다.")
+		+ "그 종목으로 저장한 결제 전 신청서(PENDING)는 남기며, 같은 대회에 다시 신청하면 새 신청서로 바뀐다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "빼기 성공",
 			content = @Content(examples = @ExampleObject(value = CartApiExamples.REMOVE_SUCCESS))),

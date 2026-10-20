@@ -1,9 +1,7 @@
 package com.bukang.order.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -61,8 +59,6 @@ class ApiV1CartCheckoutTest {
 	private static final int OTHER_MEMBER_ID = 2;
 	private static final int COURSE_ID = 10;
 	private static final int OTHER_COURSE_ID = 11;
-	// COURSE_ID와 같은 대회(100)의 다른 종목
-	private static final int SAME_RACE_COURSE_ID = 13;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -77,8 +73,7 @@ class ApiV1CartCheckoutTest {
 	@Autowired
 	private OrderRepository orderRepository;
 
-	// 잠근 뒤 상태를 다시 보는지 확인할 때 ID 조회만 바꾼다. 그 밖에는 진짜 저장소처럼 동작한다
-	@MockitoSpyBean
+	@Autowired
 	private ParticipationRepository participationRepository;
 
 	@Autowired
@@ -97,7 +92,6 @@ class ApiV1CartCheckoutTest {
 	void setUp() {
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, 100, 14, null));
 		raceCoursePort.put(StubRaceCoursePort.openCourse(OTHER_COURSE_ID, 101, 14, null));
-		raceCoursePort.put(StubRaceCoursePort.openCourse(SAME_RACE_COURSE_ID, 100, 14, null));
 	}
 
 	@AfterEach
@@ -153,58 +147,18 @@ class ApiV1CartCheckoutTest {
 	}
 
 	@Test
-	@DisplayName("장바구니에서 빼면 그 종목의 결제 전 신청서가 취소되어, 같은 대회에 다시 신청할 수 있다")
-	void removeCancelsPendingParticipation() throws Exception {
+	@DisplayName("장바구니에서 빼도 결제 전 신청서는 남고, 같은 대회에 다시 신청하면 새 신청서로 바뀐다")
+	void removeKeepsPendingAndReapplyReplaces() throws Exception {
 		int participationId = apply(MEMBER_ID, COURSE_ID);
 		int itemId = addToCartAndGetId(MEMBER_ID, COURSE_ID);
 
 		removeFromCart(MEMBER_ID, itemId).andExpect(status().isOk());
-
-		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.CANCELED);
-		int reapplied = apply(MEMBER_ID, COURSE_ID);
-		assertThat(statusOf(reapplied)).isEqualTo(ParticipationStatus.PENDING);
-	}
-
-	@Test
-	@DisplayName("결제 대기(자리 확보) 신청은 같은 종목을 다시 담았다 빼도 취소하지 않는다")
-	void removeKeepsAppliedParticipation() throws Exception {
-		addToCart(MEMBER_ID, COURSE_ID);
-		int participationId = apply(MEMBER_ID, COURSE_ID);
-		checkout(MEMBER_ID, newKey(), participationId).andExpect(status().isOk());
-		int itemId = addToCartAndGetId(MEMBER_ID, COURSE_ID);
-
-		mockMvc.perform(get("/api/v1/order/cart").header("X-Member-Id", MEMBER_ID))
-			.andExpect(jsonPath("$.data.items[0].participationId").doesNotExist());
-		removeFromCart(MEMBER_ID, itemId).andExpect(status().isOk());
-
-		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.APPLIED);
-	}
-
-	@Test
-	@DisplayName("장바구니에서 뺀 종목이 아닌 다른 종목의 결제 전 신청서는 취소하지 않는다")
-	void removeKeepsOtherCourseParticipation() throws Exception {
-		int itemId = addToCartAndGetId(MEMBER_ID, SAME_RACE_COURSE_ID);
-		int participationId = apply(MEMBER_ID, COURSE_ID);
-
-		removeFromCart(MEMBER_ID, itemId).andExpect(status().isOk());
-
+		// 프론트 메모리에 남은 신청서 ID가 그대로 쓸 수 있는 ID여야 한다
 		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.PENDING);
-	}
 
-	@Test
-	@DisplayName("결제 전 신청서를 찾은 뒤 잠그기 전에 결제 대기로 바뀌었으면, 잠근 뒤 다시 보고 취소하지 않는다")
-	void removeRechecksStatusAfterLock() throws Exception {
-		addToCart(MEMBER_ID, COURSE_ID);
-		int participationId = apply(MEMBER_ID, COURSE_ID);
-		checkout(MEMBER_ID, newKey(), participationId).andExpect(status().isOk());
-		int itemId = addToCartAndGetId(MEMBER_ID, COURSE_ID);
-		// 찾을 때는 결제 전이었다가 잠그기 전에 [결제하기]가 먼저 끝난 상황
-		doReturn(List.of(participationId)).when(participationRepository)
-			.findIdsByMemberIdAndRaceCourseIdAndTypeAndStatus(anyInt(), anyInt(), any(), any());
-
-		removeFromCart(MEMBER_ID, itemId).andExpect(status().isOk());
-
-		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.APPLIED);
+		int reapplied = apply(MEMBER_ID, COURSE_ID);
+		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.CANCELED);
+		assertThat(statusOf(reapplied)).isEqualTo(ParticipationStatus.PENDING);
 	}
 
 	@Test

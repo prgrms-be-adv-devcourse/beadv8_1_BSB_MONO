@@ -100,12 +100,9 @@ public class CartUseCase {
 		return new CartAddResult(item.toDto(pending), added);
 	}
 
-	/**
-	 * 항목을 빼고, 그 종목으로 저장한 결제 전 신청서(PENDING)도 취소한다 (PRO-122와 같은 취소)
-	 * 남겨 두면 한 대회 1건 제약(uk_participation_active) 때문에 같은 대회에 다시 신청할 수 없고, 결제 전 신청서는 기한이 없어 풀리지 않는다
-	 * 이미 결제 대기·결제된 신청은 주문 쪽에서 다루므로 건드리지 않는다
-	 */
-	public Cart removeItem(int memberId, int cartItemId, LocalDateTime now) {
+	// 항목만 뺀다. 그 종목으로 저장한 결제 전 신청서는 남겨 두고, 같은 대회에 다시 신청할 때 정리한다(ParticipationApplyUseCase)
+	// 여기서 취소하면 프론트가 메모리에 둔 신청서 ID가 취소된 ID가 되어, 같은 신청서를 다시 저장할 때 막힌다
+	public Cart removeItem(int memberId, int cartItemId) {
 		CartItem item = cartItemRepository.findById(cartItemId)
 			.orElseThrow(() -> new CartItemNotFoundException("장바구니에 없는 항목입니다."));
 		Cart cart = item.getCart();
@@ -113,24 +110,7 @@ public class CartUseCase {
 			throw new CartItemAccessDeniedException("본인의 장바구니 항목만 뺄 수 있습니다.");
 		}
 		cart.removeItem(item);
-		cancelPendingParticipations(memberId, item.getRaceCourseId(), now);
 		return cart;
-	}
-
-	// [결제하기]와 겹쳐도 한 요청씩 처리하도록 신청서를 잠근 뒤 상태를 다시 본다. 크루원 신청은 장바구니와 상관없어 건드리지 않는다
-	private void cancelPendingParticipations(int memberId, int raceCourseId, LocalDateTime now) {
-		List<Integer> ids = participationRepository.findIdsByMemberIdAndRaceCourseIdAndTypeAndStatus(memberId,
-			raceCourseId, ParticipationType.INDIVIDUAL, ParticipationStatus.PENDING);
-		try {
-			for (int id : ids) {
-				participationRepository.findByIdForUpdate(id)
-					.filter(participation -> participation.getStatus() == ParticipationStatus.PENDING)
-					.ifPresent(participation -> participation.cancelBeforePayment(now));
-			}
-		} catch (PessimisticLockingFailureException exception) {
-			// [결제하기]가 같은 신청서를 오래 잡고 있으면 잠금 대기 시간이 넘는다. 겹친 요청이라 다시 시도하라고 알린다
-			throw new CartConflictException("장바구니에서 빼는 요청이 결제와 겹쳤습니다. 다시 시도해주세요.");
-		}
 	}
 
 	// 장바구니 항목마다 그 종목으로 저장한 결제 전 신청서를 붙인다. 다른 기기·새로고침에서도 장바구니 결제에 보낼 신청서를 알 수 있다
