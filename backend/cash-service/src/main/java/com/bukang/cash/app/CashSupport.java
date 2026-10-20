@@ -1,13 +1,18 @@
 package com.bukang.cash.app;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
 import com.bukang.cash.config.CashWalletProperties;
+import com.bukang.cash.domain.exception.CashSellerNotFoundException;
 import com.bukang.cash.domain.exception.WalletNotFoundException;
 import com.bukang.cash.domain.payment.Payment;
 import com.bukang.cash.domain.wallet.Wallet;
+import com.bukang.cash.out.CashSellerRepository;
 import com.bukang.cash.out.PaymentRepository;
 import com.bukang.cash.out.WalletRepository;
 
@@ -19,6 +24,7 @@ public class CashSupport {
 	private final WalletRepository walletRepository;
 	private final PaymentRepository paymentRepository;
 	private final CashWalletProperties cashWalletProperties;
+	private final CashSellerRepository cashSellerRepository;
 
 	// 지갑 ID = 회원 ID. 지갑은 가입 이벤트로 만들어지므로, 없으면 조회 시점에 만들지 않고 404로 알린다
 	public Wallet findWalletByHolderId(int holderId) {
@@ -58,22 +64,32 @@ public class CashSupport {
 			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
 	}
 
-	// 고객 지갑·보관 지갑을 ID가 작은 쪽부터 비관적 락으로 잠근다 (교착 상태 방지, PRO-78)
+	// 여러 지갑을 회원 ID 오름차순으로 비관적 락으로 잠근다 (교착 상태 방지, PRO-78을 임의 개수로 확장, PRO-256)
 	// 지갑 ID가 회원 ID와 항상 같을 때만 올바르다. 지갑 ID가 자동 증가(BaseIdAndTime)라면
 	// 다른 회원의 지갑을 잠글 수 있으므로, 회원 ID로 잠그는 findByMemberIdForUpdate를 써야 한다.
+	public Map<Integer, Wallet> lockWallets(int... holderIds) {
+		Map<Integer, Wallet> locked = new LinkedHashMap<>();
+		Arrays.stream(holderIds)
+			.distinct()
+			.sorted()
+			.forEach(id -> locked.put(id, walletRepository.findByIdForUpdate(id)
+				.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."))));
+		return locked;
+	}
+
+	// 고객 지갑·보관 지갑을 함께 잠근다 (PRO-78)
 	public LockedWallets lockCustomerAndHoldingWallets(int customerId) {
 		int holdingMemberId = cashWalletProperties.holdingMemberId();
-		int firstId = Math.min(customerId, holdingMemberId);
-		int secondId = Math.max(customerId, holdingMemberId);
+		Map<Integer, Wallet> wallets = lockWallets(customerId, holdingMemberId);
+		return new LockedWallets(wallets.get(customerId), wallets.get(holdingMemberId));
+	}
 
-		Wallet first = walletRepository.findByIdForUpdate(firstId)
-			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
-		Wallet second = walletRepository.findByIdForUpdate(secondId)
-			.orElseThrow(() -> new WalletNotFoundException("존재하지 않는 지갑입니다."));
-
-		Wallet customerWallet = customerId == firstId ? first : second;
-		Wallet holdingWallet = holdingMemberId == firstId ? first : second;
-		return new LockedWallets(customerWallet, holdingWallet);
+	// 정산 지급 때 받는 sellerId는 판매자 신청서 ID라 회원 ID(= 지갑 ID)와 다르다.
+	// CashSeller 복제본으로 실제 지갑 주인(회원 ID)을 찾는다 (PRO-256 리뷰 반영)
+	public int resolveSellerMemberId(int sellerId) {
+		return cashSellerRepository.findById(sellerId)
+			.map(seller -> seller.getMember().getId())
+			.orElseThrow(() -> new CashSellerNotFoundException("존재하지 않는 판매자입니다. sellerId=%d".formatted(sellerId)));
 	}
 
 	public record LockedWallets(Wallet customerWallet, Wallet holdingWallet) {

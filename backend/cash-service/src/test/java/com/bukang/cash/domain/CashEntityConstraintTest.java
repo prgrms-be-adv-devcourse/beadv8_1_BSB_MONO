@@ -16,11 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 import com.bukang.cash.domain.charge.WalletCharge;
 import com.bukang.cash.domain.member.CashMember;
 import com.bukang.cash.domain.payment.Payment;
+import com.bukang.cash.domain.payout.PayoutTransfer;
+import com.bukang.cash.domain.payout.PayoutTransferType;
 import com.bukang.cash.domain.wallet.LedgerRefType;
 import com.bukang.cash.domain.wallet.Wallet;
 import com.bukang.cash.domain.wallet.WalletLedger;
 import com.bukang.cash.out.CashMemberRepository;
 import com.bukang.cash.out.PaymentRepository;
+import com.bukang.cash.out.PayoutTransferRepository;
 import com.bukang.cash.out.WalletChargeRepository;
 import com.bukang.cash.out.WalletLedgerRepository;
 import com.bukang.cash.out.WalletRepository;
@@ -40,6 +43,8 @@ class CashEntityConstraintTest {
 	private PaymentRepository paymentRepository;
 	@Autowired
 	private WalletLedgerRepository walletLedgerRepository;
+	@Autowired
+	private PayoutTransferRepository payoutTransferRepository;
 
 	private Wallet wallet;
 
@@ -85,6 +90,16 @@ class CashEntityConstraintTest {
 	void chargePgProviderRequired() {
 		assertThatThrownBy(() ->
 			walletChargeRepository.saveAndFlush(new WalletCharge(wallet, 10_000, null, "charge-key-2"))
+		).isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	@Test
+	@DisplayName("같은 정산 ID·이동 종류로 두 번째 정산 이동 기록은 저장되지 않는다")
+	void duplicatePayoutIdAndTransferType() {
+		payoutTransferRepository.saveAndFlush(new PayoutTransfer(500, 10, PayoutTransferType.SETTLEMENT, 90_000));
+
+		assertThatThrownBy(() ->
+			payoutTransferRepository.saveAndFlush(new PayoutTransfer(500, 10, PayoutTransferType.SETTLEMENT, 90_000))
 		).isInstanceOf(DataIntegrityViolationException.class);
 	}
 }
