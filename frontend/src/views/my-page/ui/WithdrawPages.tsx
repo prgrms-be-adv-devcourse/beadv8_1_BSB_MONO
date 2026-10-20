@@ -147,7 +147,7 @@ export function WithdrawDonePage() {
   return (
     <>
       <AppHeader type="sub" title="탈퇴 완료" close backHref="/" />
-      <main className="flex flex-1 flex-col gap-2 px-4 py-6">
+      <main className="flex flex-1 flex-col justify-center-safe gap-5 px-4 pt-6 pb-8">
         <h2 className="text-heading-l">탈퇴했어요</h2>
         <p className="text-body-s text-text-secondary">
           그동안 크루런과 함께 달려 주셔서 고마워요.

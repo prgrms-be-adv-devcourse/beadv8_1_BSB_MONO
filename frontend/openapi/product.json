@@ -756,6 +756,18 @@
               "format": "int32"
             },
             "example": 9001
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "중복 등록 방지 키. 같은 [등록하기] 재시도에는 같은 값을 보낸다 (예: UUID)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "example": "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43"
           }
         ],
         "requestBody": {

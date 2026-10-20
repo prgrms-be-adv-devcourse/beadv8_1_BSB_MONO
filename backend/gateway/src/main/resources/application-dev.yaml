@@ -7,6 +7,7 @@ gateway:
     file: http://localhost:8083
     order: http://localhost:8084
     product: http://localhost:8085
+    queue: http://localhost:8086
 
 # Access Token 검사용 서명 키. member-service가 발급할 때 쓰는 키와 같아야 한다
 jwt:

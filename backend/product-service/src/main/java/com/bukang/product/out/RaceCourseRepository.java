@@ -29,7 +29,8 @@ public interface RaceCourseRepository extends JpaRepository<RaceCourse, Integer>
 	@Query("update RaceCourse c set c.individualReserved = c.individualReserved + 1, c.modifyDate = :now "
 		+ "where c.id = :id and c.individualQuota + c.movedQuota - c.individualReserved - c.individualSold > 0 "
 		+ "and c.race.id in (select r.id from Race r where r.saleStatus in ("
-		+ "com.bukang.product.domain.RaceSaleStatus.SCHEDULED, com.bukang.product.domain.RaceSaleStatus.ON_SALE))")
+		+ "com.bukang.common.shared.race.domain.RaceSaleStatus.SCHEDULED, "
+		+ "com.bukang.common.shared.race.domain.RaceSaleStatus.ON_SALE))")
 	int reserveIndividual(@Param("id") int id, @Param("now") LocalDateTime now);
 
 	// 결제 대기 1 → 판매 1 (남은 자리는 그대로)

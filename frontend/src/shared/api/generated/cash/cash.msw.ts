@@ -52,7 +52,7 @@ export const getConfirmWalletChargeMockHandler = (overrideResponse?: RsDataCashC
 }
 
 export const getGetBalanceMockHandler = (overrideResponse?: RsDataWalletBalanceDto | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<RsDataWalletBalanceDto> | RsDataWalletBalanceDto), options?: RequestHandlerOptions) => {
-  return http.get('*/api/v1/cash/wallets/:holderId/balance', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+  return http.get('*/api/v1/cash/wallets/balance', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
 
 
     return HttpResponse.json(overrideResponse !== undefined

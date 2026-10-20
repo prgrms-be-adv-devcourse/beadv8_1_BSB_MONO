@@ -16,17 +16,17 @@ export type RaceBanner = {
 export const RACE_BANNERS: RaceBanner[] = [
   {
     id: 'cookierun',
-    image: '/mock/races/cookierun.png',
+    image: '/mock/races/cookierun.webp',
     title: '「접수 중」\n용감한 쿠키RUN in 서울',
     tags: '#함께뛰자  #5K  #10K',
   },
   {
     id: 'youth10k',
-    image: '/mock/races/youth10k.png',
+    image: '/mock/races/youth10k.webp',
     title: '긍정 하프 마라톤 YOUTH 10K\n10/12 (월) 18:00 접수 마감',
     tags: '#10K  #접수마감임박',
   },
-  { id: 'jtbc', image: '/mock/races/jtbc.png' },
+  { id: 'jtbc', image: '/mock/races/jtbc.webp' },
 ]
 
 // 판매자가 올리는 자주 묻는 질문 예시. 정책(1인 1건, 양도 불가, 예치금 환불)과 맞춘다.
@@ -62,10 +62,10 @@ export const RACE_DETAIL: RaceDetail = {
   id: 'cookierun',
   title: '2026 용감한 쿠키RUN in 서울',
   images: [
-    '/mock/races/cookierun.png',
-    '/mock/races/cookierun.png',
-    '/mock/races/cookierun.png',
-    '/mock/races/cookierun.png',
+    '/mock/races/cookierun.webp',
+    '/mock/races/cookierun.webp',
+    '/mock/races/cookierun.webp',
+    '/mock/races/cookierun.webp',
   ],
   heroTitle: '「10K · 5K 접수 중」',
   heroTags: '#함께뛰자  #5K  #10K',

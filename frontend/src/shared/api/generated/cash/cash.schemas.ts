@@ -34,12 +34,6 @@ export interface CashWithdrawalRequestDto {
      * @maxLength 50
      */
   accountHolder: string;
-  /**
-     * 환급 신청 고유 ID (멱등키)
-     * @minLength 0
-     * @maxLength 64
-     */
-  idempotencyKey: string;
 }
 
 /**

@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 
 import { AppHeader } from '@/widgets/app-header'
@@ -20,7 +20,7 @@ import {
   type RaceDetail,
   type RaceOption,
 } from '@/entities/race'
-import { ApiError, createIdempotencyKey, memberApi, orderApi, unwrapData } from '@/shared/api'
+import { ApiError, memberApi, orderApi, unwrapData, useIdempotencyKey } from '@/shared/api'
 import { cn, formatWon } from '@/shared/lib'
 import {
   Alert,
@@ -157,7 +157,7 @@ function ParticipantForm({
   const [agreed, setAgreed] = useState(false)
   const [replace, setReplace] = useState<ReplaceCart | null>(null)
   // 같은 참가 신청으로 바로 결제를 다시 누르면(두 번 클릭 · 실패 뒤 재시도) 같은 Idempotency-Key를 보낸다.
-  const orderAttempt = useRef<{ participationId: number; key: string } | null>(null)
+  const orderKey = useIdempotencyKey()
 
   // 참가 신청을 저장하고(이번에 이미 저장한 종목이면 참가자 정보만 고친다) 다음 단계로 넘어간다.
   const save = useMutation({
@@ -205,12 +205,9 @@ function ParticipantForm({
 
   /** 바로 결제: 참가 신청으로 주문을 만들어 자리를 잡는다. */
   async function createOrder(participationId: number) {
-    const key =
-      orderAttempt.current?.participationId === participationId
-        ? orderAttempt.current.key
-        : createIdempotencyKey()
-    orderAttempt.current = { participationId, key }
-    const order = unwrapData(await orderApi.create({ participationId }, { idempotencyKey: key }))
+    const order = unwrapData(
+      await orderApi.create({ participationId }, { idempotencyKey: orderKey(participationId) }),
+    )
     return order.id ?? 0
   }
 

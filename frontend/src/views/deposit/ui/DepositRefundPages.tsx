@@ -10,7 +10,7 @@ import { z } from 'zod'
 
 import { AppHeader } from '@/widgets/app-header'
 import { useMyBalance } from '@/entities/wallet'
-import { ApiError, cashApi, cashZod, unwrapData } from '@/shared/api'
+import { ApiError, cashApi, cashZod, createIdempotencyKey, unwrapData } from '@/shared/api'
 import {
   Alert,
   BottomCta,
@@ -50,7 +50,7 @@ const refundFormSchema = z.object({
 type RefundFormValues = z.infer<typeof refundFormSchema>
 
 /**
- * 같은 환급 신청인지 서버가 알아보는 키(idempotencyKey)와 그 키로 처음 보낸 입력값.
+ * 같은 환급 신청인지 서버가 알아보는 키(Idempotency-Key 헤더)와 그 키로 처음 보낸 입력값.
  * 처음 누를 때 한 번 만들고, 성공하거나 서버가 4xx로 거절할 때까지 다시 눌러도 같은 키 · 같은 값을 보낸다.
  * 네트워크 오류·5xx는 서버에서 처리됐는지 모르므로 같은 키로 다시 보내야 두 번 빠져나가지 않는다.
  * 이때 서버는 처음 결과를 돌려주므로, 입력을 고쳐 다시 보내면 완료 화면에 실제로 보내지 않은 계좌가 나온다.
@@ -63,7 +63,8 @@ function usePendingWithdrawal() {
   return {
     locked,
     /** 이번에 보낼 키와 값. 결과를 모르는 요청이 남아 있으면 그때의 키 · 값 */
-    take: (values: RefundFormValues) => (pending.current ??= { key: crypto.randomUUID(), values }),
+    take: (values: RefundFormValues) =>
+      (pending.current ??= { key: createIdempotencyKey(), values }),
     /** 결과를 모르는 채로 끝남: 다음에도 같은 키 · 값을 보낸다 */
     lock: () => setLocked(true),
     /** 성공하거나 서버가 확실히 거절함: 다음에는 새 키 · 지금 입력값 */
@@ -97,12 +98,14 @@ export function DepositRefundPage() {
   const withdraw = useMutation({
     mutationFn: async ({ key, values }: { key: string; values: RefundFormValues }) => {
       const result = unwrapData(
-        await cashApi.requestWithdrawal({
-          bankCode: values.bankCode,
-          accountNumber: values.accountNumber.replace(/\D/g, ''),
-          accountHolder: values.accountHolder.trim(),
-          idempotencyKey: key,
-        }),
+        await cashApi.requestWithdrawal(
+          {
+            bankCode: values.bankCode,
+            accountNumber: values.accountNumber.replace(/\D/g, ''),
+            accountHolder: values.accountHolder.trim(),
+          },
+          { idempotencyKey: key },
+        ),
       )
       return { result, values }
     },
@@ -240,7 +243,7 @@ export function DepositRefundDonePage() {
   return (
     <>
       <AppHeader type="sub" title="환급 완료" close backHref="/me/deposit" />
-      <main className="flex flex-1 flex-col gap-5 px-4 pt-6 pb-8">
+      <main className="flex flex-1 flex-col justify-center-safe gap-6 px-4 pt-6 pb-8">
         <div className="flex flex-col gap-2">
           <h2 className="text-heading-l">예치금을 돌려받았어요</h2>
           <p className="text-body-m text-text-secondary">

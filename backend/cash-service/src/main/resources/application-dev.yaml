@@ -28,5 +28,6 @@ logging:
 
 # 계좌번호·pgPaymentKey 암호화 키 (dev 전용 값, member-service와는 다른 값)
 crypto:
+  enabled: true # common global/crypto의 암호화 빈(TextEncryptor, EncryptedStringConverter)을 켠다
   password: IOqDAv1zFDK/FVo/sIReebOrto+TKARA7gfE8EQCPOA=
   salt: 25dc6e5c1bc8b786

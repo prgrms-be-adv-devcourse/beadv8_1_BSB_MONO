@@ -18,7 +18,11 @@ import type {
   RaceSummary,
 } from './types'
 
-type SummaryDto = productModel.RaceSummaryDto
+/**
+ * 목록 응답의 대표 이미지. 명세(RaceSummaryDto)에는 아직 없고, 목 모드의 MSW 응답만 실어 준다.
+ * 실제 백엔드 응답에는 이 칸이 없어 이미지는 비고 카드는 색 포스터로 보인다.
+ */
+type SummaryDto = productModel.RaceSummaryDto & { imageUrl?: string }
 type DetailDto = productModel.RaceDetailDto
 type FileDto = fileModel.FileDto
 
@@ -77,6 +81,7 @@ export function toRaceListItem(race: SummaryDto, now: Date = new Date()): RaceLi
   return {
     id: String(race.raceId),
     title: race.title ?? '',
+    image: race.imageUrl,
     posterLabel: courseNames(race.courses).join(' · '),
     badge: raceBadge(race, now),
     meta: race.raceDate ? `${formatRaceDate(race.raceDate)} · ${place}` : place,
@@ -92,6 +97,7 @@ export function toClosingSoonCards(race: SummaryDto): RaceSummary[] {
     id: String(race.raceId),
     option: String(course.raceCourseId),
     title: `${race.title ?? ''} (${course.name ?? ''})`,
+    image: race.imageUrl,
     posterLabel: course.name ?? '',
     schedule: `${dDay} · 남은 ${formatNumber(course.individualRemaining ?? 0)}자리`,
     place: `${course.name ?? ''} · ${race.location ?? ''}`,
@@ -118,6 +124,7 @@ export function toOpenRaceCard(race: SummaryDto, now: Date = new Date()): RaceSu
   return {
     id: String(race.raceId),
     title: race.title ?? '',
+    image: race.imageUrl,
     posterLabel: names.join(' · '),
     schedule: phaseSchedule(race, now),
     place: [names.join(' / '), race.location].filter(Boolean).join(' · '),

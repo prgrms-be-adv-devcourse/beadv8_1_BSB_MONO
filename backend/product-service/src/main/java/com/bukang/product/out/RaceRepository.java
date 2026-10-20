@@ -12,9 +12,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
-import com.bukang.product.domain.RaceSaleStatus;
 
 import jakarta.persistence.LockModeType;
 
@@ -23,6 +23,12 @@ import jakarta.persistence.LockModeType;
 public interface RaceRepository extends JpaRepository<Race, Integer> {
 	// 판매자의 대회 (최근 등록 순)
 	List<Race> findAllBySellerOrderByIdDesc(ProductSeller seller);
+
+	// 같은 이름의 대회가 있는지 (개발용 더미 대회를 한 번만 만들 때 ProductDataInit이 쓴다)
+	boolean existsByTitle(String title);
+
+	// 같은 판매자가 같은 Idempotency-Key로 등록한 대회 (uk_race_idempotency와 같은 기준)
+	Optional<Race> findBySellerAndIdempotencyKey(ProductSeller seller, String idempotencyKey);
 
 	// 대회 행을 잠그고 읽는다 (SELECT … FOR UPDATE). 수정·취소가 쓴다
 	// 같은 대회에서 겹치면 차례로 처리되어, 나중 요청이 최신 상태(예: 방금 취소됨)를 보고 막힌다
@@ -43,6 +49,29 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 	@Query("select r from Race r where r.id in :ids")
 	List<Race> findAllByIdForShare(@Param("ids") Collection<Integer> ids);
 
+	// 정산 대상 대회 조회는 거르는 날짜 칸(환불 마감일 LocalDate / 대회 일시 LocalDateTime)과 경계 · 정렬이 달라 두 쿼리로 둔다
+	// QueryDSL로 날짜 조건만 바꿔 끼우면 쿼리 2개치고 코드(커스텀 리포지토리)가 늘고,
+	// JPQL 하나로 합치면 날짜 인자를 4개나 받아야 해서 지금처럼 둔다. 필요하면 그때 리팩토링한다 (PRO-230)
+
+	// 정산 1차 대상: 환불 마감일이 [from, to](양 끝 포함)이고 판매 상태가 statuses 중 하나인 대회
+	@Query("""
+		select r from Race r
+		where r.refundDeadline between :from and :to and r.saleStatus in :statuses
+		order by r.refundDeadline, r.id
+		""")
+	List<Race> findPayoutTargetsByRefundDeadline(@Param("from") LocalDate from, @Param("to") LocalDate to,
+		@Param("statuses") Collection<RaceSaleStatus> statuses);
+
+	// 정산 최종 대상: 대회 일시가 [from, to)이고 판매 상태가 statuses 중 하나인 대회
+	// 날짜 기간을 받아 끝 날의 다음 날 0시 미만으로 자른다
+	@Query("""
+		select r from Race r
+		where r.raceDate >= :from and r.raceDate < :to and r.saleStatus in :statuses
+		order by r.raceDate, r.id
+		""")
+	List<Race> findPayoutTargetsByRaceDate(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+		@Param("statuses") Collection<RaceSaleStatus> statuses);
+
 	// 판매 상태 배치가 바꿀 대회 (판매 예정인데 판매 시작일이 된 대회)
 	@Query("select r.id from Race r where r.saleStatus = :status and r.saleOpenDate <= :today")
 	List<Integer> findIdsToOpen(@Param("status") RaceSaleStatus status, @Param("today") LocalDate today);
@@ -58,7 +87,8 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 
 	// 대회일이 지난 판매 예정·판매 중 대회 → 판매 종료
 	@Modifying(clearAutomatically = true)
-	@Query("update Race r set r.saleStatus = com.bukang.product.domain.RaceSaleStatus.CLOSED, r.modifyDate = :now "
+	@Query("update Race r set r.saleStatus = com.bukang.common.shared.race.domain.RaceSaleStatus.CLOSED, "
+		+ "r.modifyDate = :now "
 		+ "where r.id in :ids and r.saleStatus in :statuses and r.raceDate < :before")
 	int closeSale(@Param("ids") Collection<Integer> ids, @Param("statuses") Collection<RaceSaleStatus> statuses,
 		@Param("before") LocalDateTime before, @Param("now") LocalDateTime now);
@@ -67,7 +97,7 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 	// 엔티티를 고쳐 커밋 때 저장하지 않는 이유: 확인하고 저장하는 사이 상태 배치가 판매 종료로 바꾸면 그 상태를 덮어쓴다
 	//   조건부 UPDATE는 그 사이 상태가 바뀌었으면 0행이 되어 취소하지 않는다
 	@Modifying(clearAutomatically = true)
-	@Query("update Race r set r.saleStatus = com.bukang.product.domain.RaceSaleStatus.CANCELED, "
+	@Query("update Race r set r.saleStatus = com.bukang.common.shared.race.domain.RaceSaleStatus.CANCELED, "
 		+ "r.canceledAt = :now, r.modifyDate = :now "
 		+ "where r.id = :id and r.saleStatus in :statuses and r.raceDate >= :today")
 	int cancel(@Param("id") int id, @Param("statuses") Collection<RaceSaleStatus> statuses,
@@ -75,8 +105,9 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 
 	// 판매 시작일이 된 판매 예정 대회 → 판매 중
 	@Modifying(clearAutomatically = true)
-	@Query("update Race r set r.saleStatus = com.bukang.product.domain.RaceSaleStatus.ON_SALE, r.modifyDate = :now "
-		+ "where r.id in :ids and r.saleStatus = com.bukang.product.domain.RaceSaleStatus.SCHEDULED "
+	@Query("update Race r set r.saleStatus = com.bukang.common.shared.race.domain.RaceSaleStatus.ON_SALE, "
+		+ "r.modifyDate = :now "
+		+ "where r.id in :ids and r.saleStatus = com.bukang.common.shared.race.domain.RaceSaleStatus.SCHEDULED "
 		+ "and r.saleOpenDate <= :today")
 	int openSale(@Param("ids") Collection<Integer> ids, @Param("today") LocalDate today,
 		@Param("now") LocalDateTime now);

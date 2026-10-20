@@ -11,6 +11,8 @@ dependencies {
 	// RsData, GlobalExceptionHandler → spring-web / JsonConverter → Jackson / BaseEntity, ReplicaMember → JPA
 	api("org.springframework.boot:spring-boot-starter-webmvc")
 	api("org.springframework.boot:spring-boot-starter-data-jpa")
+	// 민감정보 암호화(global/crypto) → TextEncryptor. 인증·필터 없이 암호화 유틸만 있는 모듈이라 보안 설정이 켜지지 않는다
+	api("org.springframework.security:spring-security-crypto")
 
 	// 서비스 엔티티(Member, CashMember)의 Q클래스가 부모 클래스의 Q클래스(QBaseMember, QReplicaMember 등)를 참조하므로
 	// @MappedSuperclass가 있는 common에서도 Q클래스를 만들어 jar에 함께 넣는다

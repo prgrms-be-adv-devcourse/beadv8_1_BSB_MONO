@@ -8,9 +8,17 @@
 import * as zod from 'zod';
 
 /**
- * 회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. idempotencyKey를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
+ * 회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. Idempotency-Key 헤더를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
  * @summary 예치금 전액 환급 신청
  */
+export const requestWithdrawalHeaderIdempotencyKeyMax = 64;
+
+
+
+export const RequestWithdrawalHeader = zod.object({
+  "Idempotency-Key": zod.string().min(1).max(requestWithdrawalHeaderIdempotencyKeyMax).describe('중복 환급 방지 키. 같은 [환급 신청] 재시도에는 같은 값을 보낸다 (예: UUID)')
+})
+
 export const requestWithdrawalBodyBankCodeMin = 0;
 export const requestWithdrawalBodyBankCodeMax = 10;
 
@@ -20,16 +28,12 @@ export const requestWithdrawalBodyAccountNumberMax = 255;
 export const requestWithdrawalBodyAccountHolderMin = 0;
 export const requestWithdrawalBodyAccountHolderMax = 50;
 
-export const requestWithdrawalBodyIdempotencyKeyMin = 0;
-export const requestWithdrawalBodyIdempotencyKeyMax = 64;
-
 
 
 export const RequestWithdrawalBody = zod.object({
   "bankCode": zod.string().min(requestWithdrawalBodyBankCodeMin).max(requestWithdrawalBodyBankCodeMax).describe('은행 코드'),
   "accountNumber": zod.string().min(requestWithdrawalBodyAccountNumberMin).max(requestWithdrawalBodyAccountNumberMax).describe('계좌번호'),
-  "accountHolder": zod.string().min(requestWithdrawalBodyAccountHolderMin).max(requestWithdrawalBodyAccountHolderMax).describe('예금주명'),
-  "idempotencyKey": zod.string().min(requestWithdrawalBodyIdempotencyKeyMin).max(requestWithdrawalBodyIdempotencyKeyMax).describe('환급 신청 고유 ID (멱등키)')
+  "accountHolder": zod.string().min(requestWithdrawalBodyAccountHolderMin).max(requestWithdrawalBodyAccountHolderMax).describe('예금주명')
 }).describe('예치금 전액 환급 신청')
 
 export const RequestWithdrawalResponse = zod.object({
@@ -69,13 +73,9 @@ export const ConfirmWalletChargeResponse = zod.object({
 
 
 /**
- * 회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.
+ * 요청자 본인의 지갑 잔액을 조회한다.
  * @summary 지갑 잔액 조회
  */
-export const GetBalanceParams = zod.object({
-  "holderId": zod.int().describe('지갑 주인의 회원 ID')
-})
-
 export const GetBalanceResponse = zod.object({
   "status": zod.int().optional(),
   "message": zod.string().optional(),

@@ -30,9 +30,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.product.domain.CourseSurface;
 import com.bukang.product.domain.CourseType;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.support.ProductIntegrationTest;
 import com.bukang.product.support.RaceRequests.CourseBuilder;

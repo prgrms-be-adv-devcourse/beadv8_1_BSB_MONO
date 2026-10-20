@@ -34,7 +34,7 @@ public class CashWithdrawalUseCase {
 		Optional<WalletWithdrawal> existing = walletWithdrawalRepository.findByIdempotencyKey(idempotencyKey);
 		if (existing.isPresent()) {
 			if (existing.get().getWallet().getId() != customerWallet.getId()) {
-				throw new WithdrawalMemberMismatchException("이 idempotencyKey로 환급한 회원과 요청한 회원이 다릅니다.");
+				throw new WithdrawalMemberMismatchException("이 Idempotency-Key로 환급한 회원과 요청한 회원이 다릅니다.");
 			}
 			return toDto(existing.get(), customerWallet.getBalance());
 		}

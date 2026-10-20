@@ -64,7 +64,7 @@ export const getRequestWithdrawalUrl = () => {
 }
 
 /**
- * 회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. idempotencyKey를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
+ * 회원이 남은 예치금 전액을 환급 신청하면 한 트랜잭션에서 바로 완료 처리한다. Idempotency-Key 헤더를 멱등키로 써서 같은 요청이 여러 번 와도 한 번만 처리한다.
  * @summary 예치금 전액 환급 신청
  */
 export const requestWithdrawal = async (cashWithdrawalRequestDto: CashWithdrawalRequestDto, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCashWithdrawalDto> => {
@@ -233,21 +233,21 @@ export const useConfirmWalletCharge = <TError = RsData,
       return useMutation(getConfirmWalletChargeMutationOptions(options), queryClient);
     }
 
-export const getGetBalanceUrl = (holderId: number,) => {
+export const getGetBalanceUrl = () => {
 
 
 
 
-  return `/api/v1/cash/wallets/${holderId}/balance`
+  return `/api/v1/cash/wallets/balance`
 }
 
 /**
- * 회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.
+ * 요청자 본인의 지갑 잔액을 조회한다.
  * @summary 지갑 잔액 조회
  */
-export const getBalance = async (holderId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataWalletBalanceDto> => {
+export const getBalance = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataWalletBalanceDto> => {
 
-  return customFetch<RsDataWalletBalanceDto>(getGetBalanceUrl(holderId),
+  return customFetch<RsDataWalletBalanceDto>(getGetBalanceUrl(),
   {
     ...options,
     method: 'GET'
@@ -260,29 +260,29 @@ export const getBalance = async (holderId: number, options?: Parameters<typeof c
 
 
 
-export const getGetBalanceQueryKey = (holderId: number,) => {
+export const getGetBalanceQueryKey = () => {
     return [
-    `/api/v1/cash/wallets/${holderId}/balance`
+    `/api/v1/cash/wallets/balance`
     ] as const;
     }
 
 
-export const getGetBalanceQueryOptions = <TData = Awaited<ReturnType<typeof getBalance>>, TError = RsData>(holderId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+export const getGetBalanceQueryOptions = <TData = Awaited<ReturnType<typeof getBalance>>, TError = RsData>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetBalanceQueryKey(holderId);
+  const queryKey =  queryOptions?.queryKey ?? getGetBalanceQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBalance>>> = ({ signal }) => getBalance(holderId, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBalance>>> = ({ signal }) => getBalance({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: holderId !== null && holderId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
 export type GetBalanceQueryResult = NonNullable<Awaited<ReturnType<typeof getBalance>>>
@@ -290,7 +290,7 @@ export type GetBalanceQueryError = RsData
 
 
 export function useGetBalance<TData = Awaited<ReturnType<typeof getBalance>>, TError = RsData>(
- holderId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>> & Pick<
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getBalance>>,
           TError,
@@ -300,7 +300,7 @@ export function useGetBalance<TData = Awaited<ReturnType<typeof getBalance>>, TE
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetBalance<TData = Awaited<ReturnType<typeof getBalance>>, TError = RsData>(
- holderId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>> & Pick<
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getBalance>>,
           TError,
@@ -310,7 +310,7 @@ export function useGetBalance<TData = Awaited<ReturnType<typeof getBalance>>, TE
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 export function useGetBalance<TData = Awaited<ReturnType<typeof getBalance>>, TError = RsData>(
- holderId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
@@ -318,11 +318,11 @@ export function useGetBalance<TData = Awaited<ReturnType<typeof getBalance>>, TE
  */
 
 export function useGetBalance<TData = Awaited<ReturnType<typeof getBalance>>, TError = RsData>(
- holderId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getBalance>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
-  const queryOptions = getGetBalanceQueryOptions(holderId,options)
+  const queryOptions = getGetBalanceQueryOptions(options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

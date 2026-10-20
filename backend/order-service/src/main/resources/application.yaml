@@ -68,9 +68,12 @@ order:
     cash:
       mode: fake
       base-url: http://localhost:8081
-    # 대기열 입장 확인 (PRO-191). 대기열 내부 API(PRO-182)가 나오기 전이라 fake만 있다(http는 아직 없어 켜면 앱이 뜨지 않는다)
+    # 대기열 입장 확인 (PRO-191). http면 대기열 서비스 내부 API를 부른다(PRO-226). 로컬은 대기열을 안 띄워도 되게 fake
     queue:
       mode: fake
+      base-url: http://localhost:8086
+      # 대기열이 Redis를 2초까지 기다리므로 주문은 그보다 길게 기다린다
+      timeout: 3s
       # 가짜 대기열의 입장 시간(1~10분). 만료를 빨리 확인하려면 줄인다 (정책은 10분). 더미 페이지: http://localhost:8084/dev/queue-dummy
       fake-admission-minutes: 10
     # 판매자 키트 API의 판매자 ID 조회 (PRO-197). 실제 연결 전이라 fake(회원 ID = 판매자 ID)만 있다. 운영은 disabled

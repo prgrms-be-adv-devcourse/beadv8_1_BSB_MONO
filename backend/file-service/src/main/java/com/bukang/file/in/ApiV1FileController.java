@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.file.app.FileFacade;
 import com.bukang.file.dto.FileDto;
 import com.bukang.file.dto.FileUploadDto;
@@ -29,6 +30,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 @Tag(name = "File", description = "이미지 업로드 URL 발급, 업로드 완료 확인, 파일 조회 API")
@@ -50,13 +52,15 @@ public class ApiV1FileController {
 		@ApiResponse(responseCode = "201", description = "발급 성공",
 			content = @Content(examples = @ExampleObject(value = FileApiExamples.CREATE_SUCCESS))),
 		@ApiResponse(responseCode = "400",
-			description = "입력값 검증 실패, 요청 본문 형식 오류, 용도에 맞지 않는 형식, 크기 초과 또는 회원 ID 형식 오류",
+			description = "입력값 검증 실패, 요청 본문 형식 오류, 용도에 맞지 않는 형식, 크기 초과, 회원 ID 형식 오류 "
+				+ "또는 회원 ID가 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "입력값 검증 실패", value = FileApiExamples.CREATE_INVALID_INPUT),
 				@ExampleObject(name = "요청 본문 형식 오류", value = FileApiExamples.INVALID_BODY),
 				@ExampleObject(name = "용도에 맞지 않는 형식", value = FileApiExamples.UNSUPPORTED_TYPE),
 				@ExampleObject(name = "크기 초과", value = FileApiExamples.TOO_LARGE),
-				@ExampleObject(name = "회원 ID 형식 오류", value = FileApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "회원 ID 형식 오류", value = FileApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = FileApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -64,7 +68,7 @@ public class ApiV1FileController {
 	})
 	public ResponseEntity<RsData<FileUploadDto>> createUploadUrl(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id") int memberId,
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Valid @RequestBody FileUploadRequestDto request
 	) {
 		FileUploadDto upload = fileFacade.createUploadUrl(request, memberId);
@@ -103,9 +107,11 @@ public class ApiV1FileController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공",
 			content = @Content(examples = @ExampleObject(value = FileApiExamples.FIND_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "파일 ID·회원 ID 형식 오류",
-			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = FileApiExamples.INVALID_VALUE_TYPE))),
+		@ApiResponse(responseCode = "400", description = "파일 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "파일 ID·회원 ID 형식 오류", value = FileApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = FileApiExamples.INVALID_MEMBER_ID)
+			})),
 		@ApiResponse(responseCode = "403", description = "다른 회원이 올린, 연결 전 파일",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = FileApiExamples.NOT_LINKED))),
@@ -115,7 +121,8 @@ public class ApiV1FileController {
 	})
 	public ResponseEntity<RsData<FileDto>> findById(
 		@Parameter(description = "요청한 회원 ID (연결 전 파일을 볼 때 필요)", example = "1")
-		@RequestHeader(name = "X-Member-Id", required = false) Integer memberId,
+		@RequestHeader(name = MemberIdHeader.NAME, required = false)
+		@Positive(message = MemberIdHeader.INVALID_MESSAGE) Integer memberId,
 		@Parameter(description = "파일 ID", example = "1")
 		@PathVariable int fileId
 	) {
@@ -130,11 +137,13 @@ public class ApiV1FileController {
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "확인 성공",
 			content = @Content(examples = @ExampleObject(value = FileApiExamples.COMPLETE_SUCCESS))),
-		@ApiResponse(responseCode = "400", description = "업로드 안 됨, 신고한 형식·크기와 다름 또는 파일 ID·회원 ID 형식 오류",
+		@ApiResponse(responseCode = "400",
+			description = "업로드 안 됨, 신고한 형식·크기와 다름, 파일 ID·회원 ID 형식 오류 또는 회원 ID가 0 이하",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "업로드 안 됨", value = FileApiExamples.NOT_UPLOADED),
 				@ExampleObject(name = "신고한 형식·크기와 다름", value = FileApiExamples.CONTENT_MISMATCH),
-				@ExampleObject(name = "파일 ID·회원 ID 형식 오류", value = FileApiExamples.INVALID_VALUE_TYPE)
+				@ExampleObject(name = "파일 ID·회원 ID 형식 오류", value = FileApiExamples.INVALID_VALUE_TYPE),
+				@ExampleObject(name = "회원 ID가 0 이하", value = FileApiExamples.INVALID_MEMBER_ID)
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
@@ -148,7 +157,7 @@ public class ApiV1FileController {
 	})
 	public ResponseEntity<RsData<FileDto>> completeUpload(
 		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader("X-Member-Id")
+		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE)
 		int memberId,
 		@Parameter(description = "업로드 URL 발급 때 받은 파일 ID", example = "1")
 		@PathVariable

@@ -18,15 +18,17 @@
 | `file-service` | Spring Boot 앱 | 8083 | 대회 이미지 등 파일 저장 (S3, presigned URL) |
 | `order-service` | Spring Boot 앱 | 8084 | 참가 신청, 장바구니, 바로 결제 예매(자리 확보·결제 기한 10분), 주문 |
 | `product-service` | Spring Boot 앱 | 8085 | 대회(상품), 종목(참가권), 정원 (뼈대만 있음) |
+| `queue-service` | Spring Boot 앱 | 8086 | 예매 대기열 (뼈대만 있음) |
 
 인프라(`compose.yml`: MySQL, Kafka, Elasticsearch, Redis, 로컬 S3 대체재 S3Mock)는 모든 서비스가 공용으로 씁니다.
 
 - Java 25 (Gradle toolchain), Spring Boot 4.1.1, Gradle 9.7.1 (Kotlin DSL)
-- 루트 패키지: `com.bukang` (`group`은 `com`). 모듈별 패키지는 `com.bukang.common`, `com.bukang.member`, `com.bukang.cash`, `com.bukang.payout`, `com.bukang.file`, `com.bukang.order`, `com.bukang.product`
+- 루트 패키지: `com.bukang` (`group`은 `com`). 모듈별 패키지는 `com.bukang.common`, `com.bukang.member`, `com.bukang.cash`, `com.bukang.payout`, `com.bukang.file`, `com.bukang.order`, `com.bukang.product`, `com.bukang.queue`
   (모듈 폴더 이름은 케밥 케이스 `<도메인>-service`, Java 패키지는 하이픈을 쓸 수 없으므로 도메인 한 단어)
 - 공통 빌드 설정(Java 버전, Spring Boot BOM, Lombok, Checkstyle)은 루트 `build.gradle.kts`, 모듈별 의존성은 각 모듈의 `build.gradle.kts`에 있습니다.
 - 운영에서는 Nginx가 HTTP 요청을 받아 `/api`를 `gateway`(8000)로, 나머지를 프론트(`web`, Next.js 3000)로 넘기고, 게이트웨이가 경로를 보고 각 서비스로 보냅니다.
-  Nginx 설정은 `docker/nginx/default.conf`, 컨테이너는 `compose.yml`의 `nginx`·`web`입니다. Nginx도 주소를 자르지 않고 `/internal/`은 404로 막습니다.
+  Nginx 라우팅은 `docker/nginx/routes.conf`(로컬 `default.conf`와 운영 `*.conf.template`이 include), 컨테이너는 `compose.yml`의 `nginx`·`web`입니다.
+  운영(EC2)은 `compose.prod.yml`이 443과 Let's Encrypt 인증서(certbot 컨테이너)를 덧붙입니다. Nginx도 주소를 자르지 않고 `/internal/`은 404로 막습니다.
   게이트웨이는 주소 앞부분을 자르지 않고(StripPrefix 없음) `/internal/**`는 라우팅하지 않습니다. 새 서비스를 추가하면 `gateway`의 라우팅 규칙도 추가합니다.
   `gateway`는 WebFlux 기반이라 webmvc를 가져오는 `common`에 의존하지 않습니다.
 
@@ -36,13 +38,14 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 
 ```bash
 ./gradlew build                          # 전체 모듈 컴파일 + 테스트 + 패키징 (CI: .github/workflows/backend-ci.yml)
-./gradlew :gateway:bootRun               # 게이트웨이 실행 (8000, localhost:8080~8085로 라우팅)
+./gradlew :gateway:bootRun               # 게이트웨이 실행 (8000, localhost:8080~8086로 라우팅)
 ./gradlew :member-service:bootRun        # 회원 서비스 실행 (dev 프로파일, compose.yml 인프라 자동 실행)
 ./gradlew :cash-service:bootRun          # 캐시 서비스 실행 (8081)
 ./gradlew :payout-service:bootRun        # 정산 서비스 실행 (8082)
 ./gradlew :file-service:bootRun          # 파일 서비스 실행 (8083)
 ./gradlew :order-service:bootRun         # 주문 서비스 실행 (8084)
 ./gradlew :product-service:bootRun       # 상품 서비스 실행 (8085)
+./gradlew :queue-service:bootRun         # 대기열 서비스 실행 (8086)
 ./gradlew test                           # 전체 테스트 (test 프로파일, H2)
 ./gradlew :member-service:test           # 한 모듈만 테스트
 ./gradlew :member-service:test --tests "com.bukang.member.MemberApplicationTests"              # 단일 테스트 클래스
@@ -55,22 +58,26 @@ Windows에서는 `gradlew.bat`, Git Bash에서는 `./gradlew`를 사용합니다
 
 ```
 backend/
-├── settings.gradle.kts        include("common", "jwt", "gateway", "member-service", "cash-service", "payout-service", "file-service", "order-service", "product-service")
+├── settings.gradle.kts        include("common", "jwt", "gateway", "member-service", "cash-service", "payout-service", "file-service", "order-service", "product-service", "queue-service")
 ├── build.gradle.kts           모든 모듈 공통 설정
 ├── compose.yml                공용 인프라 (MySQL, Kafka, Elasticsearch, Redis) + 서비스별 앱 컨테이너 + nginx·web(프론트)
-├── docker/nginx/default.conf  Nginx 라우팅 (/api → gateway, 나머지 → web)
+├── compose.prod.yml           운영(EC2) 덮어쓰기: Nginx HTTPS + certbot (인증서 자동 발급·갱신)
+├── docker/nginx/              Nginx 설정 (routes.conf 라우팅: /api → gateway, 나머지 → web)
 ├── common/      com.bukang.common
 │   ├── global/                기술 공통 (도메인 지식 없음)
 │   │   ├── config/            LocalDevEnvironmentPostProcessor (compose.yml, .env 위치 탐색)
+│   │   ├── crypto/            민감정보 암호화 (AES, 블라인드 인덱스). crypto.enabled: true인 서비스(member, cash)에서만 빈 등록
 │   │   ├── exception/         BusinessException, GlobalExceptionHandler
 │   │   ├── jpa/entity/        BaseEntity, BaseIdAndTime, BaseManualIdAndTime
 │   │   ├── json/              JsonConverter
-│   │   └── rsdata/            RsData (공통 응답)
+│   │   ├── rsdata/            RsData (공통 응답)
+│   │   └── web/               IdempotencyKeyHeader (중복 요청 방지 키 헤더 이름·최대 길이·오류 문구)
 │   ├── shared/                서비스 간 계약 (도메인 지식 있음)
 │   │   ├── file/domain/       FileType·FileKind (파일 용도·종류), FileRef (파일 연결 대상, 엔티티로만 만듦)
 │   │   └── member/
 │   │       ├── domain/        BaseMember, ReplicaMember (공개 필드만)
-│   │       └── event/         MemberJoinedEvent
+│   │       ├── event/         MemberJoinedEvent
+│   │       └── web/           MemberIdHeader (게이트웨이가 넘겨주는 회원 ID 헤더 이름·오류 문구)
 │   └── standard/              프레임워크와 무관한 인터페이스
 │       ├── modeltype/         HasModelTypeCode
 │       └── resulttype/        ResultType
@@ -80,9 +87,9 @@ backend/
 │   ├── in/ app/ domain/ out/  컨트롤러 / Facade·UseCase / 엔티티·도메인 예외 / Repository
 │   ├── domain/                SourceMember, Member, exception/
 │   ├── security/              WebConfig, CustomUserDetailService, AuthExceptionHandler (JWT 발급 예정)
-│   ├── config/crypto/         민감정보 암호화 (AES, 블라인드 인덱스)
 │   └── dto/                   MemberDto, MemberJoinRequestDto, MemberLoginRequestDto, MemberSearchCondition
 ├── cash-service/    com.bukang.cash
+│   ├── in/                    CashExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
 │   └── domain/                CashMember extends ReplicaMember
 ├── payout-service/  com.bukang.payout
 │   ├── domain/                Payout, PayoutItem, PayoutHold, 상태·사유 enum
@@ -109,22 +116,28 @@ backend/
 │                              wallet/(WalletPort 예치금 결제·환원·환불), payout/(RefundEligibilityPort 환불 가능 여부)
 │                              상품(B)·예치금(D)은 연결 전이라 Fake*Adapter가 가짜 응답을 준다. 정산(E)은 order.clients.payout.mode가
 │                              http면 HttpRefundEligibilityAdapter(RestClient, 2초 제한, 실패 시 503)로 부른다 (prod=http, 그 밖=fake)
-└── product-service/ com.bukang.product
-    └── ProductApplication     (뼈대만 있음)
+├── product-service/ com.bukang.product
+│   └── ProductApplication     (뼈대만 있음)
+└── queue-service/   com.bukang.queue
+    ├── QueueApplication       (뼈대만 있음)
+    └── in/                    QueueExceptionHandler (헤더 누락·형식 오류를 RsData로 응답)
 ```
 
 - 파일은 브라우저가 presigned PUT으로 S3 `uploads/`에 직접 올리고, 완료 API가 `files/`로 옮긴 뒤 형식·크기를 확인한다 (README "파일 저장소" 참고).
 - 다른 서비스는 파일을 파일 ID로만 참조한다. 대상(대회 등)을 저장할 때 `/internal/v1/file/refs/{refType}/{refId}/files`를 동기 호출해 연결하고, `/internal/**`은 게이트웨이에 노출하지 않는다.
-- 회원 ID는 `X-Member-Id` 헤더로 받는다. 게이트웨이의 `auth/JwtAuthenticationFilter`가 클라이언트가 보낸 이 헤더를 지우고, Access Token을 검사해 토큰 속 회원 ID로 다시 넣는다.
+- 회원 ID는 `X-Member-Id` 헤더로 받는다. 헤더 이름과 오류 문구는 common의 `shared/member/web/MemberIdHeader`를 쓴다. 게이트웨이의 `auth/JwtAuthenticationFilter`가 클라이언트가 보낸 이 헤더를 지우고, Access Token을 검사해 토큰 속 회원 ID로 다시 넣는다.
   토큰 없이 통과하는 주소는 `gateway`의 `application.yaml` `gateway.auth.public-paths`에 있다. 로그인 전에 쓰는 API를 추가하면 여기에도 추가한다(빠뜨리면 401로 막힌다).
   서비스는 이 헤더를 그대로 믿으므로, `compose.yml`은 서비스 포트를 호스트에 열지 않는다. 서비스를 직접 부르며 확인할 때는 `bootRun`(dev)으로 띄운 서비스 포트(예: 8084)로 부른다.
+- 두 번 처리하면 안 되는 요청(대회 등록, 주문 생성, 장바구니 결제, 예치금 환급 신청)은 중복 요청 방지 키를 `Idempotency-Key` 헤더로 받는다.
+  헤더 이름·최대 길이(64)·오류 문구는 common의 `global/web/IdempotencyKeyHeader`를 쓴다.
 - 대상에 붙지 않은 파일(PENDING·UPLOADED·DELETED)은 마지막으로 바뀐 뒤 1일이 지나면 Spring Batch 정리 배치가 DB 행을 지우고 커밋한 뒤 S3 객체를 지운다.
   실행 기록은 DB의 `BATCH_` 테이블에 남는다 (`file-service/BATCH-ROADMAP.md`).
 
 - `common`은 실행 앱이 아니라 jar 라이브러리입니다. 각 서비스는 `implementation(project(":common"))`으로 의존합니다.
   서비스의 `@SpringBootApplication(scanBasePackages = {"com.bukang.<서비스>", "com.bukang.common"})`로 common의 빈도 등록합니다.
 - **서비스끼리는 서로 의존하지 않습니다.** 다른 서비스의 클래스가 필요하면 `common`에 올릴지(계약: 이벤트, 공개 필드) 먼저 검토합니다.
-  `common`에는 특정 서비스 전용 코드(Spring Security, 회원 엔티티 등)를 넣지 않습니다.
+  `common`에는 특정 서비스 전용 코드(Spring Security 인증·필터, 회원 엔티티 등)를 넣지 않습니다.
+  단, 암호화 유틸(`spring-security-crypto`)은 `global/crypto`에 두고, yaml에 `crypto.enabled: true`를 넣은 서비스에서만 빈을 만듭니다(`@ConditionalOnProperty`).
 - `common` 안에서 `global`(기술 공통)은 `shared`(서비스 간 계약)를 참조하지 않습니다. 의존 방향은 `shared` → `global` → `standard`입니다.
 - 다른 서비스가 회원 정보를 가져야 하면 `ReplicaMember`를 상속한 엔티티에 Kafka 이벤트(`MemberJoinedEvent`)로 복제해 보관합니다.
   `BaseMember`(원본·복제본 공통)에는 공개 정보(nickname)만 두고, 비밀번호·이메일·실명·휴대폰 번호·생년월일은 `SourceMember`에만 둡니다.

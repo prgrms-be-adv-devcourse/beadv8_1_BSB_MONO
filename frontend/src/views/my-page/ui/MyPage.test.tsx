@@ -112,3 +112,38 @@ describe('MyPage 회원 정보', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('회원 정보를 불러오지 못했어요')
   })
 })
+
+describe('MyPage 참가 대회 수', () => {
+  const renderPage = () => {
+    setAccessToken('access-token')
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MyPage />
+      </QueryClientProvider>,
+    )
+  }
+
+  it('내 참가권 화면과 같은 목록(주문 API)의 개수를 보여 준다', async () => {
+    renderPage()
+
+    // 목의 주문 목록에서 참가권이 되는 것은 결제한 주문 1개다
+    expect(await screen.findByText('1개')).toBeInTheDocument()
+  })
+
+  it('참가권이 없으면(방금 가입한 회원) 0개로 보여 준다', async () => {
+    server.use(
+      http.get('*/api/v1/order/orders', () =>
+        HttpResponse.json({
+          status: 200,
+          message: '주문 내역을 조회했습니다.',
+          data: { orders: [], page: 0, size: 100, totalElements: 0, totalPages: 0 },
+        }),
+      ),
+    )
+    renderPage()
+
+    expect(await screen.findByText('0개')).toBeInTheDocument()
+  })
+})

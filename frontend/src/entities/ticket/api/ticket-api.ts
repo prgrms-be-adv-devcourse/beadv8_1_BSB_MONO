@@ -64,11 +64,28 @@ export function myTicketsQueryOptions() {
   })
 }
 
-/** 주문 상세 (GET /api/v1/order/orders/{orderId}) */
+/**
+ * 내 참가 대회 수(마이 화면). 내 참가권 화면이 보여 주는 카드(참가 예정 + 지난 대회)와 같은 목록을 센다.
+ * 같은 쿼리 키라 두 화면이 같은 데이터를 쓴다. enabled가 false면 부르지 않는다.
+ */
+export function myTicketCountQueryOptions(enabled: boolean) {
+  return queryOptions({
+    ...myTicketsQueryOptions(),
+    select: (tickets: MyTicket[]) => tickets.length,
+    enabled,
+  })
+}
+
+/**
+ * 주문 상세 (GET /api/v1/order/orders/{orderId}).
+ * 결제 · 완료 화면(orderApi.useFindById1)과 같은 캐시 키를 쓰므로 캐시에는 응답 그대로(RsData) 넣고,
+ * 꺼낼 때만 select로 주문을 만든다. 모양이 다르면 결제 직후 참가권을 열 때 주문을 못 읽는다.
+ */
 export function orderQueryOptions(orderId: number) {
   return queryOptions({
-    queryKey: orderApi.getFindById1QueryKey(orderId),
-    queryFn: ({ signal }) => fetchOrder(orderId, signal),
+    ...orderApi.getFindById1QueryOptions<orderModel.OrderDto, Error>(orderId, {
+      query: { select: unwrapData },
+    }),
   })
 }
 

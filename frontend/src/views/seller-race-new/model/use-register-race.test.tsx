@@ -78,6 +78,45 @@ describe('useRegisterRace', () => {
     expect(new Set(fileIds).size).toBe(fileIds.length)
   })
 
+  it('Idempotency-Key 헤더를 보내고, 실패 뒤 같은 입력으로 다시 보내면 같은 키 · 입력이 바뀌면 새 키를 쓴다', async () => {
+    const keys: (string | null)[] = []
+    server.use(
+      http.post('*/api/v1/product/races', ({ request }) => {
+        keys.push(request.headers.get('Idempotency-Key'))
+        if (keys.length === 1) {
+          return HttpResponse.json(
+            { status: 500, message: '잠시 후 다시 시도해주세요.', data: null },
+            { status: 500 },
+          )
+        }
+        return HttpResponse.json(
+          {
+            status: 201,
+            message: '대회를 등록했습니다.',
+            data: {
+              raceId: 7,
+              saleStatus: 'SCHEDULED',
+              saleOpenDate: '2026-10-20',
+              courseIds: [1],
+            },
+          },
+          { status: 201 },
+        )
+      }),
+    )
+    const { result } = renderHook(() => useRegisterRace(), { wrapper })
+    act(() => result.current.mutate({ values, images }))
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    act(() => result.current.mutate({ values, images }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    act(() => result.current.mutate({ values: { ...values, title: '다른 대회' }, images }))
+    await waitFor(() => expect(keys).toHaveLength(3))
+
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/)
+    expect(keys[1]).toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
+  })
+
   it('승인되지 않은 판매자면(403) 서버 문구를 담은 오류가 된다', async () => {
     server.use(
       http.post('*/api/v1/product/races', () =>

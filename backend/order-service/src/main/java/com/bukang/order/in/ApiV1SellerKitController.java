@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.order.app.SellerKitFacade;
 import com.bukang.order.domain.KitDeliveryStatus;
 import com.bukang.order.dto.KitShipmentRequestDto;

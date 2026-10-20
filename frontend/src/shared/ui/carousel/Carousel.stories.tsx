@@ -16,7 +16,7 @@ const meta = {
     children: { control: false },
   },
   render: (args) => (
-    <div className="max-w-[480px] bg-bg-default">
+    <div className="max-w-(--layout-app-max-width) bg-bg-default">
       <Carousel {...args}>
         <CarouselSlide
           image={<Placeholder className="bg-bg-brand" />}

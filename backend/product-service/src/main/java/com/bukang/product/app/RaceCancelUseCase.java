@@ -5,11 +5,11 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.common.shared.race.event.RaceCancelEvent;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
-import com.bukang.product.domain.RaceSaleStatus;
 import com.bukang.product.domain.exception.RaceAccessDeniedException;
 import com.bukang.product.domain.exception.RaceChangeNotAllowedException;
 import com.bukang.product.domain.exception.RaceNotFoundException;
@@ -55,6 +55,7 @@ public class RaceCancelUseCase {
 		// 조건부 UPDATE가 영속성 컨텍스트를 비웠으므로 바뀐 상태를 다시 읽어 검색 문서를 만든다
 		Race canceled = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new);
 		RaceCancelEvent event = new RaceCancelEvent(raceId, seller.getId(), canceled.getCanceledAt());
-		return new RaceCancelResult(RaceSaveResult.of(canceled, List.of(), null), event, releasedHolds);
+		// 취소는 종목 메시지를 보내지 않는다. 대기열은 대회 메시지의 판매 상태(CANCELED)로 진입을 막는다
+		return new RaceCancelResult(RaceSaveResult.of(canceled, List.of(), null, List.of()), event, releasedHolds);
 	}
 }

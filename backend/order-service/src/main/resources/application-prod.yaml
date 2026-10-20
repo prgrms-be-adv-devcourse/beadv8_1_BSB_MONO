@@ -30,9 +30,11 @@ order:
     cash:
       mode: http
       base-url: http://bukang-cash-service:8081
-    # 대기열 입장 확인은 대기열 내부 API(PRO-182)가 나오기 전이라 운영도 가짜다(결제 페이지를 열면 입장, 10분). http 어댑터는 아직 없다
+    # 대기열 입장 확인은 실제 대기열 서비스에 묻는다 (PRO-226). 프론트가 대기 화면에서 등록·순번 조회를 한 뒤 묻는다(PRO-251)
+    # 대기열 대회 복제본에 없는 대회는 줄을 설 수 없어 결제까지 못 간다. 막히면 mode를 fake(누구나 입장)로 되돌린다 (PRO-248)
     queue:
-      mode: fake
+      mode: http
+      base-url: http://bukang-queue-service:8086
     # 판매자 ID 조회를 실제로 붙이기 전까지 운영에서는 판매자 키트 API를 막는다 (가짜는 누구나 판매자로 봄, PRO-197)
     seller:
       mode: disabled
