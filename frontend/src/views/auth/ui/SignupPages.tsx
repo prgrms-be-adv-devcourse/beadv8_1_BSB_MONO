@@ -253,7 +253,7 @@ function SignupProfileForm() {
     handleSubmit,
     subscribe,
     setError,
-    formState: { errors, isValid },
+    formState: { errors, isValid, isSubmitting },
   } = useForm<SignupProfileValues>({
     resolver: zodResolver(signupProfileSchema),
     mode: 'onTouched',
@@ -294,7 +294,8 @@ function SignupProfileForm() {
   // 가입 → 자동 로그인 두 요청이 이어져 몇 초 걸릴 수 있다. 버튼에 Spinner를 띄워 멈춘 것처럼 보이지 않게 한다.
   // loading 버튼은 클릭을 막으므로 Enter로도 다시 제출되지 않는다.
   // 가입이 끝나면 로그인 결과와 상관없이 다른 화면으로 가므로, 이동할 때까지 계속 막아 두 번 가입하지 않게 한다.
-  const submitting = join.isPending || join.isSuccess
+  // isSubmitting은 handleSubmit이 입력 검사를 하는 동안을 덮는다. 그 사이 Enter · 더블클릭으로 두 번 제출되지 않게 한다.
+  const submitting = isSubmitting || join.isPending || join.isSuccess
 
   return (
     <form noValidate onSubmit={onSubmit} className="contents">
