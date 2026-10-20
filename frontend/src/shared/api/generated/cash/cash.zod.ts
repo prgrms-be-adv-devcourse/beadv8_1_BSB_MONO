@@ -73,13 +73,9 @@ export const ConfirmWalletChargeResponse = zod.object({
 
 
 /**
- * 회원 ID로 지갑을 찾아 현재 예치금 잔액을 조회한다.
+ * 요청자 본인의 지갑 잔액을 조회한다.
  * @summary 지갑 잔액 조회
  */
-export const GetBalanceParams = zod.object({
-  "holderId": zod.int().describe('지갑 주인의 회원 ID')
-})
-
 export const GetBalanceResponse = zod.object({
   "status": zod.int().optional(),
   "message": zod.string().optional(),

@@ -25,14 +25,14 @@ function renderPage() {
 }
 
 describe('DepositPage 잔액', () => {
-  it('내 회원 ID로 지갑 잔액을 불러와 보여 준다', async () => {
-    const holderIds: string[] = []
+  it('회원 ID 없이(경로에 ID 없이) 내 지갑 잔액을 불러와 보여 준다', async () => {
+    let balanceCalls = 0
     server.use(
       http.get('*/api/v1/member/members/me', () =>
         HttpResponse.json({ status: 200, message: '조회 성공', data: { id: 7, nickname: '러너' } }),
       ),
-      http.get('*/api/v1/cash/wallets/:holderId/balance', ({ params }) => {
-        holderIds.push(String(params.holderId))
+      http.get('*/api/v1/cash/wallets/balance', () => {
+        balanceCalls += 1
         return HttpResponse.json({
           status: 200,
           message: '잔액 조회 성공',
@@ -43,12 +43,12 @@ describe('DepositPage 잔액', () => {
     renderPage()
 
     expect(await screen.findByText('₩12,000')).toBeInTheDocument()
-    expect(holderIds).toEqual(['7'])
+    expect(balanceCalls).toBe(1)
   })
 
   it('지갑이 없으면(404) 잔액 대신 - 와 안내를 보여 준다', async () => {
     server.use(
-      http.get('*/api/v1/cash/wallets/:holderId/balance', () =>
+      http.get('*/api/v1/cash/wallets/balance', () =>
         HttpResponse.json(
           { status: 404, message: '존재하지 않는 지갑입니다.', data: null },
           { status: 404 },

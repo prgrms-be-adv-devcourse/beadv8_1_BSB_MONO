@@ -341,7 +341,7 @@ describe('방금 가입한 회원과 시연용 기존 회원', () => {
     })
     const orders = await get('/api/v1/order/orders?page=0&size=100', cookie)
     expect(orders.data.orders).toEqual([])
-    const balance = await get('/api/v1/cash/wallets/2/balance', cookie)
+    const balance = await get('/api/v1/cash/wallets/balance', cookie)
     expect(balance.data.balance).toBe(0)
     const notices = await get('/api/v1/notification/notifications', cookie)
     expect(notices.data).toEqual([])
@@ -352,7 +352,7 @@ describe('방금 가입한 회원과 시연용 기존 회원', () => {
     expect(me.data).toMatchObject({ email: 'runner1@crewrun.com', nickname: '러너1' })
     const orders = await get('/api/v1/order/orders?page=0&size=100')
     expect((orders.data.orders as unknown[]).length).toBeGreaterThan(0)
-    const balance = await get('/api/v1/cash/wallets/1/balance')
+    const balance = await get('/api/v1/cash/wallets/balance')
     expect(balance.data.balance).toBe(5000)
     const notices = await get('/api/v1/notification/notifications')
     expect(notices.data).toHaveLength(4)
@@ -446,7 +446,7 @@ describe('새 회원 쿠키 저장소가 둘일 때', () => {
     const a = browser()
     const b = browser()
     await signUp(a, 'a@example.com', '에이')
-    expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(0)
+    expect((await a.data('GET', '/api/v1/cash/wallets/balance')).balance).toBe(0)
 
     const charge = await a.data('POST', '/api/v1/cash/charges/confirm', {
       paymentKey: 'pk',
@@ -454,12 +454,12 @@ describe('새 회원 쿠키 저장소가 둘일 때', () => {
       amount: 50_000,
     })
     expect(charge.balance).toBe(50_000)
-    expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(50_000)
+    expect((await a.data('GET', '/api/v1/cash/wallets/balance')).balance).toBe(50_000)
 
     await signUp(b, 'b@example.com', '비')
-    expect((await b.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(0)
+    expect((await b.data('GET', '/api/v1/cash/wallets/balance')).balance).toBe(0)
     // 시연용 기존 회원(쿠키 없음)의 잔액에도 영향이 없다
-    expect((await browser().data('GET', '/api/v1/cash/wallets/1/balance')).balance).toBe(5000)
+    expect((await browser().data('GET', '/api/v1/cash/wallets/balance')).balance).toBe(5000)
   })
 
   it('새 회원의 결제와 환급은 자기 잔액만 줄인다', async () => {
@@ -472,7 +472,7 @@ describe('새 회원 쿠키 저장소가 둘일 때', () => {
     })
     const pay = await a.call('POST', '/api/v1/order/orders/1/payment')
     expect(pay.status).toBe(200)
-    expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(10_000)
+    expect((await a.data('GET', '/api/v1/cash/wallets/balance')).balance).toBe(10_000)
 
     const refund = await a.data(
       'POST',
@@ -481,7 +481,7 @@ describe('새 회원 쿠키 저장소가 둘일 때', () => {
       { 'Idempotency-Key': 'k-c' },
     )
     expect(refund.withdrawnAmount).toBe(10_000)
-    expect((await a.data('GET', '/api/v1/cash/wallets/2/balance')).balance).toBe(0)
+    expect((await a.data('GET', '/api/v1/cash/wallets/balance')).balance).toBe(0)
   })
 
   it('정보를 고친 뒤 로그아웃하고 다시 로그인해도 고친 값이 남는다', async () => {
