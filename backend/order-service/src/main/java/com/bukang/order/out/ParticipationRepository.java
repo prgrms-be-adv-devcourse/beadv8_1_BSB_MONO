@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.domain.ParticipationType;
 
 import jakarta.persistence.LockModeType;
 
@@ -27,15 +28,16 @@ public interface ParticipationRepository extends JpaRepository<Participation, In
 	// 티셔츠 사이즈를 고른 최근 신청 (티셔츠가 없는 종목은 사이즈를 남기지 않으므로 다음 신청서에 채울 때 쓴다)
 	Optional<Participation> findFirstByMemberIdAndParticipantTshirtSizeIsNotNullOrderByIdDesc(int memberId);
 
-	// 장바구니 종목으로 저장한 신청서 (idx_participation_member 인덱스). 한 대회에 살아 있는 신청은 1건이라 종목마다 많아야 1건이다
-	List<Participation> findByMemberIdAndStatusAndRaceCourseIdIn(int memberId, ParticipationStatus status,
-		Collection<Integer> raceCourseIds);
+	// 장바구니 종목으로 저장한 개인 신청서 (idx_participation_member 인덱스). 한 대회에 살아 있는 신청은 1건이라 종목마다 많아야 1건이다
+	List<Participation> findByMemberIdAndParticipationTypeAndStatusAndRaceCourseIdIn(int memberId,
+		ParticipationType participationType, ParticipationStatus status, Collection<Integer> raceCourseIds);
 
 	// 잠그기 전에 엔티티를 읽으면 잠근 뒤에도 옛 상태가 돌아오므로(영속성 컨텍스트) ID만 찾는다
 	@Query("select p.id from Participation p where p.memberId = :memberId and p.raceCourseId = :raceCourseId "
-		+ "and p.status = :status")
-	List<Integer> findIdsByMemberIdAndRaceCourseIdAndStatus(@Param("memberId") int memberId,
-		@Param("raceCourseId") int raceCourseId, @Param("status") ParticipationStatus status);
+		+ "and p.participationType = :participationType and p.status = :status")
+	List<Integer> findIdsByMemberIdAndRaceCourseIdAndTypeAndStatus(@Param("memberId") int memberId,
+		@Param("raceCourseId") int raceCourseId, @Param("participationType") ParticipationType participationType,
+		@Param("status") ParticipationStatus status);
 
 	// [결제하기]가 같은 신청서로 동시에 들어오면 한 요청씩 처리해, 상품 서비스에 자리를 두 번 잡지 않게 한다
 	// 결제·참가자 정보 수정도 이걸로 읽어, 서로 겹쳐도 한쪽이 바꾼 상태를 다른 쪽이 옛 값으로 덮지 않게 한다

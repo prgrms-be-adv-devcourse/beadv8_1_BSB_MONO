@@ -15,6 +15,7 @@ import com.bukang.order.domain.Cart;
 import com.bukang.order.domain.CartItem;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.domain.ParticipationType;
 import com.bukang.order.domain.exception.ApplicationPeriodException;
 import com.bukang.order.domain.exception.CartConflictException;
 import com.bukang.order.domain.exception.CartItemAccessDeniedException;
@@ -116,14 +117,19 @@ public class CartUseCase {
 		return cart;
 	}
 
-	// [결제하기]와 겹쳐도 한 요청씩 처리하도록 신청서를 잠근 뒤 상태를 다시 본다
+	// [결제하기]와 겹쳐도 한 요청씩 처리하도록 신청서를 잠근 뒤 상태를 다시 본다. 크루원 신청은 장바구니와 상관없어 건드리지 않는다
 	private void cancelPendingParticipations(int memberId, int raceCourseId, LocalDateTime now) {
-		List<Integer> ids = participationRepository.findIdsByMemberIdAndRaceCourseIdAndStatus(memberId, raceCourseId,
-			ParticipationStatus.PENDING);
-		for (int id : ids) {
-			participationRepository.findByIdForUpdate(id)
-				.filter(participation -> participation.getStatus() == ParticipationStatus.PENDING)
-				.ifPresent(participation -> participation.cancelBeforePayment(now));
+		List<Integer> ids = participationRepository.findIdsByMemberIdAndRaceCourseIdAndTypeAndStatus(memberId,
+			raceCourseId, ParticipationType.INDIVIDUAL, ParticipationStatus.PENDING);
+		try {
+			for (int id : ids) {
+				participationRepository.findByIdForUpdate(id)
+					.filter(participation -> participation.getStatus() == ParticipationStatus.PENDING)
+					.ifPresent(participation -> participation.cancelBeforePayment(now));
+			}
+		} catch (PessimisticLockingFailureException exception) {
+			// [결제하기]가 같은 신청서를 오래 잡고 있으면 잠금 대기 시간이 넘는다. 겹친 요청이라 다시 시도하라고 알린다
+			throw new CartConflictException("장바구니에서 빼는 요청이 결제와 겹쳤습니다. 다시 시도해주세요.");
 		}
 	}
 
@@ -137,8 +143,8 @@ public class CartUseCase {
 		if (raceCourseIds.isEmpty()) {
 			return Map.of();
 		}
-		return participationRepository.findByMemberIdAndStatusAndRaceCourseIdIn(memberId, ParticipationStatus.PENDING,
-				raceCourseIds).stream()
+		return participationRepository.findByMemberIdAndParticipationTypeAndStatusAndRaceCourseIdIn(memberId,
+				ParticipationType.INDIVIDUAL, ParticipationStatus.PENDING, raceCourseIds).stream()
 			.collect(Collectors.toMap(Participation::getRaceCourseId, Function.identity(),
 				(first, second) -> first));
 	}
