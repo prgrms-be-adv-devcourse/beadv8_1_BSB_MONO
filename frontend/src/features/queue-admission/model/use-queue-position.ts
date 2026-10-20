@@ -88,9 +88,9 @@ export function useQueuePosition(raceId: number | undefined, raceCourseId: numbe
   const status = position.data ?? register.data
   return {
     /** 이제 입장 확인(주문 서비스)을 물어도 되는지 */
-    /** 줄서기를 줄을 서지 못한 등록 오류의 HTTP 상태(403 · 404 · 503 등). 아니면 undefined. 응답을 못 받은 오류는 0 */
-    skippedStatus: skipped ? (registerStatus ?? 0) : undefined,
     canEnter: alreadyActive || position.data?.canEnter === true,
+    /** 줄을 서지 못한 등록 오류의 HTTP 상태(403 · 404 · 503 등). 아니면 undefined. 응답을 못 받은 오류는 0 */
+    skippedStatus: skipped ? (registerStatus ?? 0) : undefined,
     /** 내 순번(1부터) · 내 앞 인원. 아직 모르면 undefined */
     rank: status && !status.canEnter ? status.myRank : undefined,
     ahead: status && !status.canEnter ? status.ahead : undefined,
