@@ -89,6 +89,58 @@ export interface CashWithdrawalDto {
   balance: number;
 }
 
+export type WalletLedgerItemDtoCategory = typeof WalletLedgerItemDtoCategory[keyof typeof WalletLedgerItemDtoCategory];
+
+
+export const WalletLedgerItemDtoCategory = {
+  CHARGE: 'CHARGE',
+  PAYMENT: 'PAYMENT',
+  REFUND: 'REFUND',
+  WITHDRAWAL: 'WITHDRAWAL',
+  PAYOUT: 'PAYOUT',
+} as const;
+
+export type WalletLedgerItemDtoLedgerType = typeof WalletLedgerItemDtoLedgerType[keyof typeof WalletLedgerItemDtoLedgerType];
+
+
+export const WalletLedgerItemDtoLedgerType = {
+  충전__PG결제_토스페이먼츠: '충전__PG결제_토스페이먼츠',
+  출금__통장입금: '출금__통장입금',
+  사용__주문결제: '사용__주문결제',
+  임시보관__주문결제: '임시보관__주문결제',
+  정산지급__상품판매_수수료: '정산지급__상품판매_수수료',
+  정산수령__상품판매_수수료: '정산수령__상품판매_수수료',
+  정산지급__상품판매_대금: '정산지급__상품판매_대금',
+  정산수령__상품판매_대금: '정산수령__상품판매_대금',
+  환불__주문취소: '환불__주문취소',
+  임시보관반환__주문취소: '임시보관반환__주문취소',
+  출금취소__통장입금: '출금취소__통장입금',
+} as const;
+
+/**
+ * 예치금 내역 한 줄. amount는 부호가 있다(출금·결제는 음수)
+ */
+export interface WalletLedgerItemDto {
+  category: WalletLedgerItemDtoCategory;
+  ledgerType: WalletLedgerItemDtoLedgerType;
+  amount: number;
+  balanceAfter: number;
+  createdAt: string;
+  refId: number;
+}
+
+/**
+ * 예치금 내역 한 페이지. 최신순
+ */
+export interface PageDtoWalletLedgerItemDto {
+  content: WalletLedgerItemDto[];
+  /** 0부터 센다 */
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface RsDataCashWithdrawalDto {
   status?: number;
   message?: string;
@@ -106,4 +158,39 @@ export interface RsDataWalletBalanceDto {
   message?: string;
   data?: WalletBalanceDto;
 }
+
+export interface RsDataPageDtoWalletLedgerItemDto {
+  status?: number;
+  message?: string;
+  data?: PageDtoWalletLedgerItemDto;
+}
+
+export type GetLedgersParams = {
+/**
+ * 탭 필터. 생략하면 전체
+ */
+category?: GetLedgersCategory;
+/**
+ * 페이지 번호 (0부터)
+ * @minimum 0
+ */
+page?: number;
+/**
+ * 페이지 크기 (1~100)
+ * @minimum 1
+ * @maximum 100
+ */
+size?: number;
+};
+
+export type GetLedgersCategory = typeof GetLedgersCategory[keyof typeof GetLedgersCategory];
+
+
+export const GetLedgersCategory = {
+  CHARGE: 'CHARGE',
+  PAYMENT: 'PAYMENT',
+  REFUND: 'REFUND',
+  WITHDRAWAL: 'WITHDRAWAL',
+  PAYOUT: 'PAYOUT',
+} as const;
 

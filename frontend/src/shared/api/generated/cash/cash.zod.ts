@@ -84,3 +84,41 @@ export const GetBalanceResponse = zod.object({
   "balance": zod.int().optional()
 }).optional().describe('지갑 잔액 조회 응답')
 })
+
+
+/**
+ * 요청자 본인 지갑의 내역을 최신순으로 조회한다. category로 탭(CHARGE/PAYMENT/REFUND/WITHDRAWAL/PAYOUT)을 필터링할 수 있고, 생략하면 전체를 돌려준다.
+ * @summary 예치금 내역 조회
+ */
+export const getLedgersQueryPageDefault = 0;
+export const getLedgersQueryPageMin = 0;
+
+export const getLedgersQuerySizeDefault = 20;
+export const getLedgersQuerySizeMax = 100;
+
+
+
+export const GetLedgersQueryParams = zod.object({
+  "category": zod.enum(['CHARGE', 'PAYMENT', 'REFUND', 'WITHDRAWAL', 'PAYOUT']).optional().describe('탭 필터. 생략하면 전체'),
+  "page": zod.int().min(getLedgersQueryPageMin).default(getLedgersQueryPageDefault).describe('페이지 번호 (0부터)'),
+  "size": zod.int().min(1).max(getLedgersQuerySizeMax).default(getLedgersQuerySizeDefault).describe('페이지 크기 (1~100)')
+})
+
+export const GetLedgersResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "content": zod.array(zod.object({
+  "category": zod.enum(['CHARGE', 'PAYMENT', 'REFUND', 'WITHDRAWAL', 'PAYOUT']),
+  "ledgerType": zod.enum(['충전__PG결제_토스페이먼츠', '출금__통장입금', '사용__주문결제', '임시보관__주문결제', '정산지급__상품판매_수수료', '정산수령__상품판매_수수료', '정산지급__상품판매_대금', '정산수령__상품판매_대금', '환불__주문취소', '임시보관반환__주문취소', '출금취소__통장입금']),
+  "amount": zod.int(),
+  "balanceAfter": zod.int(),
+  "createdAt": zod.iso.datetime({"offset":true}),
+  "refId": zod.int()
+}).describe('예치금 내역 한 줄. amount는 부호가 있다(출금·결제는 음수)')),
+  "page": zod.int().describe('0부터 센다'),
+  "size": zod.int(),
+  "totalElements": zod.int(),
+  "totalPages": zod.int()
+}).optional().describe('예치금 내역 한 페이지. 최신순')
+})
