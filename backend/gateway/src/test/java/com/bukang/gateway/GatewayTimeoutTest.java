@@ -119,21 +119,21 @@ class GatewayTimeoutTest {
 	}
 
 	@Test
-	@DisplayName("정산 서비스 라우트만 응답 시간 제한이 60초로 늘어나 있다")
-	void payoutRouteHasLongerResponseTimeout() {
+	@DisplayName("정산 배치 수동 실행 라우트만 5분으로 늘어나 있고, 나머지 정산 API는 기본 제한을 쓴다")
+	void payoutDevBatchRouteHasLongerResponseTimeout() {
+		Route devBatch = routeLocator.getRoutes()
+			.filter(route -> route.getId().equals("payout-dev-batch"))
+			.blockFirst();
 		Route payout = routeLocator.getRoutes()
 			.filter(route -> route.getId().equals("payout-service"))
 			.blockFirst();
-		Route order = routeLocator.getRoutes()
-			.filter(route -> route.getId().equals("order-service"))
-			.blockFirst();
 
-		assertThat(payout).isNotNull();
+		assertThat(devBatch).isNotNull();
 		// NettyRoutingFilter처럼 숫자나 문자열 모두 ms 단위 숫자로 읽는다
-		Object payoutTimeout = payout.getMetadata().get(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR);
-		assertThat(Long.parseLong(String.valueOf(payoutTimeout))).isEqualTo(60000L);
-		assertThat(order).isNotNull();
-		assertThat(order.getMetadata()).doesNotContainKey(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR);
+		Object devBatchTimeout = devBatch.getMetadata().get(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR);
+		assertThat(Long.parseLong(String.valueOf(devBatchTimeout))).isEqualTo(300000L);
+		assertThat(payout).isNotNull();
+		assertThat(payout.getMetadata()).doesNotContainKey(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR);
 	}
 
 	@Test

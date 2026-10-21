@@ -51,14 +51,20 @@ spring:
               uri: ${gateway.services.cash}
               predicates:
                 - Path=/api/v1/cash/**
+            # dev의 정산 배치 수동 실행 API만 응답 시간 제한을 5분(ms 단위 숫자)으로 늘린다. prod에는 그 API가 없다
+            # 정산 대상일 배치는 주문 서비스를 최대 30초 기다리고, 지급 배치는 정산 내역마다 캐시 서비스를 불러 건수만큼 길어진다
+            # Nginx를 거치면 Nginx의 기본 응답 대기(60초)에 먼저 걸리므로, 오래 걸리는 배치는 게이트웨이(8000)로 바로 부른다
+            # 아래 payout-service(/api/v1/payout/**)보다 먼저 맞아야 하므로 그 위에 둔다
+            - id: payout-dev-batch
+              uri: ${gateway.services.payout}
+              predicates:
+                - Path=/api/v1/payout/dev/batches/**
+              metadata:
+                response-timeout: 300000
             - id: payout-service
               uri: ${gateway.services.payout}
               predicates:
                 - Path=/api/v1/payout/**
-              # 이 라우트만 응답 시간 제한을 60초(ms 단위 숫자)로 늘린다
-              # dev의 정산 배치 수동 실행 API가 주문 서비스를 최대 30초 기다리기 때문이다. prod에는 그 API가 없다
-              metadata:
-                response-timeout: 60000
             - id: file-service
               uri: ${gateway.services.file}
               predicates:
