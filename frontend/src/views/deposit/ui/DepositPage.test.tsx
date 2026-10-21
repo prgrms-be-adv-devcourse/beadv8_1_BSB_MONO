@@ -157,6 +157,33 @@ describe('DepositPage 내역', () => {
     expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument()
   })
 
+  it('더 보기 사이 새 내역이 생겨 줄이 밀려도 같은 거래는 한 줄만 보여 준다', async () => {
+    const newer: Ledger = {
+      ...charge,
+      balanceAfter: 70000,
+      createdAt: '2026-10-06T09:00:00',
+      refId: 2,
+    }
+    server.use(
+      http.get('*/api/v1/cash/wallets/ledgers', ({ request }) => {
+        const page = new URL(request.url).searchParams.get('page')
+        // 0페이지 뒤 새 내역(newer)이 생겨 0페이지 끝 줄(payment)이 1페이지 첫 줄로 밀렸다
+        return page === '1'
+          ? ledgerPage([payment, charge], 1, 2)
+          : ledgerPage([newer, payment], 0, 2)
+      }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('결제 · 주문 #12')
+
+    await user.click(screen.getByRole('button', { name: '더 보기' }))
+
+    await screen.findByText('10/5 14:21')
+    expect(screen.getAllByText('결제 · 주문 #12')).toHaveLength(1)
+    expect(screen.getAllByRole('listitem')).toHaveLength(3)
+  })
+
   it('정산 입금은 + 와 정산 라벨로 보여 준다 (MSW 기본 목)', async () => {
     renderPage()
 

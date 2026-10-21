@@ -36,3 +36,25 @@ export function formatLedgerTime(createdAt: string) {
   const [, month, day, hour, minute] = m
   return `${Number(month)}/${Number(day)} ${hour}:${minute}`
 }
+
+/**
+ * 내역 한 줄을 가리키는 키. 응답에 장부 id가 없어 유형 · 참조 id · 시각 · 금액 · 거래 뒤 잔액을 묶는다.
+ * 거래 뒤 잔액까지 같은 두 줄은 한 지갑 안에서 사실상 생기지 않는다.
+ */
+export function ledgerKey(row: WalletLedger) {
+  return [row.ledgerType, row.refId, row.createdAt, row.amount, row.balanceAfter].join('|')
+}
+
+/**
+ * 페이지를 이어 붙이며 같은 줄을 한 번만 남긴다. 서버가 최신순 offset으로 자르므로
+ * 0페이지를 받은 뒤 새 내역이 생기면 전체가 한 칸씩 밀려 다음 페이지 첫 줄이 앞 페이지 끝 줄과 겹친다.
+ */
+export function uniqueLedgers(rows: WalletLedger[]) {
+  const seen = new Set<string>()
+  return rows.filter((row) => {
+    const key = ledgerKey(row)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}

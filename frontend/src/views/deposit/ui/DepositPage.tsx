@@ -9,7 +9,13 @@ import { LedgerCategory, useMyBalance, walletLedgersQueryOptions } from '@/entit
 import { formatWon } from '@/shared/lib'
 import { Alert, Button, buttonClassName, Chip, EmptyState, KeyValue, Skeleton } from '@/shared/ui'
 
-import { formatLedgerAmount, formatLedgerTime, ledgerTitle } from '../lib/ledger'
+import {
+  formatLedgerAmount,
+  formatLedgerTime,
+  ledgerKey,
+  ledgerTitle,
+  uniqueLedgers,
+} from '../lib/ledger'
 
 type Filter = 'all' | LedgerCategory
 
@@ -30,7 +36,7 @@ export function DepositPage({ refunding = false }: { refunding?: boolean }) {
     ...walletLedgersQueryOptions(filter === 'all' ? undefined : filter),
     enabled: loggedIn,
   })
-  const rows = ledgers.data?.pages.flatMap((p) => p.content) ?? []
+  const rows = uniqueLedgers(ledgers.data?.pages.flatMap((p) => p.content) ?? [])
 
   return (
     <>
@@ -116,7 +122,7 @@ export function DepositPage({ refunding = false }: { refunding?: boolean }) {
             <ul className="flex flex-col">
               {rows.map((row) => (
                 <li
-                  key={`${row.ledgerType}-${row.refId}-${row.createdAt}`}
+                  key={ledgerKey(row)}
                   className="flex items-center justify-between gap-2 border-b border-border-default py-3"
                 >
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
