@@ -209,7 +209,8 @@ export const ApplyResponse = zod.object({
   "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
   "requestedAt": zod.iso.datetime({"offset":true}),
   "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
-  "rejectReason": zod.string().nullish()
+  "rejectReason": zod.string().nullish(),
+  "resultCheckedAt": zod.iso.datetime({"offset":true}).nullish().describe('신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null')
 }).optional()
 })
 
@@ -244,7 +245,8 @@ export const RejectResponse = zod.object({
   "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
   "requestedAt": zod.iso.datetime({"offset":true}),
   "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
-  "rejectReason": zod.string().nullish()
+  "rejectReason": zod.string().nullish(),
+  "resultCheckedAt": zod.iso.datetime({"offset":true}).nullish().describe('신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null')
 }).optional()
 })
 
@@ -270,7 +272,31 @@ export const ApproveResponse = zod.object({
   "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
   "requestedAt": zod.iso.datetime({"offset":true}),
   "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
-  "rejectReason": zod.string().nullish()
+  "rejectReason": zod.string().nullish(),
+  "resultCheckedAt": zod.iso.datetime({"offset":true}).nullish().describe('신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null')
+}).optional()
+})
+
+
+/**
+ * X-Member-Id 헤더의 회원이 가장 최근 판매자 신청의 승인·반려 결과를 봤다고 기록한다. 이미 기록했으면 처음 시각을 그대로 두고 200이다. 심사 중인 신청은 기록하지 않는다.
+ * @summary 내 판매자 신청 결과 확인
+ */
+export const CheckMyResultResponse = zod.object({
+  "status": zod.int().optional(),
+  "message": zod.string().optional(),
+  "data": zod.object({
+  "id": zod.int(),
+  "memberId": zod.int(),
+  "sellerType": zod.enum(['BUSINESS', 'INDIVIDUAL']),
+  "businessName": zod.string().nullish(),
+  "businessNumber": zod.string().nullish(),
+  "representativeName": zod.string(),
+  "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  "requestedAt": zod.iso.datetime({"offset":true}),
+  "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
+  "rejectReason": zod.string().nullish(),
+  "resultCheckedAt": zod.iso.datetime({"offset":true}).nullish().describe('신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null')
 }).optional()
 })
 
@@ -292,7 +318,8 @@ export const FindMineResponse = zod.object({
   "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
   "requestedAt": zod.iso.datetime({"offset":true}),
   "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
-  "rejectReason": zod.string().nullish()
+  "rejectReason": zod.string().nullish(),
+  "resultCheckedAt": zod.iso.datetime({"offset":true}).nullish().describe('신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null')
 }).optional()
 })
 
@@ -318,6 +345,7 @@ export const FindAllResponse = zod.object({
   "status": zod.enum(['PENDING', 'APPROVED', 'REJECTED']),
   "requestedAt": zod.iso.datetime({"offset":true}),
   "reviewedAt": zod.iso.datetime({"offset":true}).nullish(),
-  "rejectReason": zod.string().nullish()
+  "rejectReason": zod.string().nullish(),
+  "resultCheckedAt": zod.iso.datetime({"offset":true}).nullish().describe('신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null')
 })).optional()
 })

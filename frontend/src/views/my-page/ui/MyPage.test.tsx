@@ -147,3 +147,117 @@ describe('MyPage 참가 대회 수', () => {
     expect(await screen.findByText('0개')).toBeInTheDocument()
   })
 })
+
+describe('MyPage 판매자 메뉴', () => {
+  const mineResponds = (
+    status: 'PENDING' | 'REJECTED' | 'APPROVED',
+    resultCheckedAt?: string | null,
+  ) =>
+    server.use(
+      memberMock.getFindMineMockHandler({
+        status: 200,
+        message: '판매자 신청 내역을 조회했습니다.',
+        data: {
+          id: 1,
+          memberId: 1,
+          sellerType: 'BUSINESS',
+          businessName: '크루런 스포츠',
+          businessNumber: '123-45-67890',
+          representativeName: '김러너',
+          status,
+          requestedAt: '2026-10-05T21:25:35',
+          resultCheckedAt,
+        },
+      }),
+    )
+
+  const renderPage = () => {
+    setAccessToken('access-token')
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MyPage />
+      </QueryClientProvider>,
+    )
+  }
+
+  const sellerLink = (name: RegExp) => screen.findByRole('link', { name })
+
+  it('승인 결과를 아직 안 봤으면(resultCheckedAt null) 판매자 센터가 결과 화면으로 간다', async () => {
+    mineResponds('APPROVED', null)
+    renderPage()
+
+    expect(await sellerLink(/판매자 센터/)).toHaveAttribute('href', '/seller-apply/result')
+  })
+
+  it('서버가 resultCheckedAt을 주지 않아도(#220 전) 안 본 것으로 보고 결과 화면으로 간다', async () => {
+    mineResponds('APPROVED', undefined)
+    renderPage()
+
+    expect(await sellerLink(/판매자 센터/)).toHaveAttribute('href', '/seller-apply/result')
+  })
+
+  it('승인 결과를 이미 봤으면 판매자 센터가 판매자 홈으로 바로 간다', async () => {
+    mineResponds('APPROVED', '2026-10-06T12:30:41')
+    renderPage()
+
+    expect(await sellerLink(/판매자 센터/)).toHaveAttribute('href', '/seller')
+  })
+
+  it.each([
+    ['PENDING', null],
+    ['REJECTED', null],
+    ['REJECTED', '2026-10-06T12:30:41'],
+  ] as const)(
+    '%s(resultCheckedAt %s)이면 판매자 등록 신청 줄이 결과 화면으로 간다',
+    async (status, resultCheckedAt) => {
+      mineResponds(status, resultCheckedAt)
+      renderPage()
+
+      // 불러오기 전에도 같은 링크라, 응답이 반영될 때까지 판매자 센터가 끝내 안 나오는지도 본다
+      await vi.waitFor(async () =>
+        expect(await sellerLink(/판매자 등록 신청/)).toHaveAttribute(
+          'href',
+          '/seller-apply/result',
+        ),
+      )
+      expect(screen.queryByRole('link', { name: /판매자 센터/ })).not.toBeInTheDocument()
+    },
+  )
+
+  it('신청한 적이 없으면(404 SELLER_NOT_FOUND) 판매자 등록 신청 줄이 신청 화면으로 간다', async () => {
+    server.use(
+      http.get('*/api/v1/member/sellers/me', () =>
+        HttpResponse.json(
+          {
+            status: 404,
+            code: 'SELLER_NOT_FOUND',
+            message: '판매자 신청 내역이 없습니다.',
+            data: null,
+          },
+          { status: 404 },
+        ),
+      ),
+    )
+    renderPage()
+
+    await vi.waitFor(async () =>
+      expect(await sellerLink(/판매자 등록 신청/)).toHaveAttribute('href', '/seller-apply'),
+    )
+  })
+
+  it('신청 상태를 불러오지 못하면 줄은 그대로 두고 결과 화면으로 보낸다', async () => {
+    let called = false
+    server.use(
+      http.get('*/api/v1/member/sellers/me', () => {
+        called = true
+        return HttpResponse.error()
+      }),
+    )
+    renderPage()
+
+    await vi.waitFor(() => expect(called).toBe(true))
+    expect(await sellerLink(/판매자 등록 신청/)).toHaveAttribute('href', '/seller-apply/result')
+  })
+})

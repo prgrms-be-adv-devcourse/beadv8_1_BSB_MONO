@@ -23,6 +23,8 @@ public class SellerDto {
 	private final LocalDateTime requestedAt;
 	private final LocalDateTime reviewedAt;
 	private final String rejectReason;
+	// 신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null
+	private final LocalDateTime resultCheckedAt;
 
 	public static SellerDto from(Seller seller) {
 		return new SellerDto(
@@ -35,7 +37,8 @@ public class SellerDto {
 			seller.getStatus(),
 			seller.getRequestedAt(),
 			seller.getReviewedAt(),
-			seller.getRejectReason()
+			seller.getRejectReason(),
+			seller.getResultCheckedAt()
 		);
 	}
 }

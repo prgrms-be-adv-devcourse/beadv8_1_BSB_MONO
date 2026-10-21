@@ -42,7 +42,12 @@ public class CartItem extends BaseIdAndTime {
 		this.raceCourseId = raceCourseId;
 	}
 
-	public CartItemDto toDto() {
-		return new CartItemDto(getId(), getCreateDate(), raceCourseId);
+	// pendingParticipation은 이 종목으로 저장한 결제 전 신청서. 없으면 null
+	public CartItemDto toDto(Participation pendingParticipation) {
+		if (pendingParticipation == null) {
+			return new CartItemDto(getId(), getCreateDate(), raceCourseId, null, null, null);
+		}
+		return new CartItemDto(getId(), getCreateDate(), raceCourseId, pendingParticipation.getId(),
+			pendingParticipation.getRaceId(), pendingParticipation.getParticipant().getName());
 	}
 }

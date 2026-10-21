@@ -64,8 +64,3 @@ export function applyErrorMessage(error: unknown): string {
   }
   return SELLER_API_ERRORS.unavailable
 }
-
-/** 내 신청이 없을 때(404 SELLER_NOT_FOUND)는 오류가 아니라 "아직 신청 전"이다. */
-export function isNoApplication(error: unknown): boolean {
-  return error instanceof ApiError && error.code === 'SELLER_NOT_FOUND'
-}

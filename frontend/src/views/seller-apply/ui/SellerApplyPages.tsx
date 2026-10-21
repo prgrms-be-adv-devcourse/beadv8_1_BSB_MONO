@@ -4,12 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 
 import { ConsoleCard } from '@/widgets/console-page'
 import { loginHref, useAuthStatus } from '@/features/auth'
-import { formatSellerDate, SELLER_STATUS } from '@/entities/member'
+import { formatSellerDate, isNoApplication, SELLER_STATUS } from '@/entities/member'
 import { memberApi, unwrapData, type memberModel } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import {
@@ -28,7 +28,6 @@ import {
 
 import {
   applyErrorMessage,
-  isNoApplication,
   SELLER_API_ERRORS,
   toApplyRequest,
   toApplyStatus,
@@ -281,7 +280,10 @@ function resultCard(seller: memberModel.SellerDto): ResultCard {
 
 // 피그마 V2 · S01-1 판매자 등록 신청 · 결과 (심사 중 · 반려 · 승인 중 내 신청 상태에 맞는 카드 하나)
 // 내 신청 조회(GET /api/v1/member/sellers/me)로 상태를 가져온다. 신청 내역이 없으면(404 SELLER_NOT_FOUND) 신청하러 가도록 안내한다.
+// 승인 · 반려 결과를 처음 보여 주면 결과 확인(POST /api/v1/member/sellers/me/result-check)을 한 번 부른다.
+// 그 뒤로 마이의 "판매자 센터"는 판매자 홈으로 바로 간다. 실패하면(409 심사 중 포함) 화면은 그대로 두고 다음 방문 때 다시 부른다.
 export function SellerApplyResultPage() {
+  const queryClient = useQueryClient()
   const mine = memberApi.useFindMine({
     query: {
       select: unwrapData,
@@ -290,6 +292,23 @@ export function SellerApplyResultPage() {
       retry: false,
     },
   })
+  const checkResult = memberApi.useCheckMyResult({
+    mutation: {
+      // 마이의 판매자 메뉴가 바로 바뀌게 내 신청을 다시 불러온다
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: memberApi.getFindMineQueryKey() }),
+    },
+  })
+  const { mutate: checkMyResult } = checkResult
+  const checked = useRef(false)
+  // 서버가 아직 resultCheckedAt을 주지 않으면(undefined) 안 본 것으로 친다
+  const unchecked =
+    (mine.data?.status === 'APPROVED' || mine.data?.status === 'REJECTED') &&
+    !mine.data.resultCheckedAt
+  useEffect(() => {
+    if (!unchecked || checked.current) return
+    checked.current = true
+    checkMyResult()
+  }, [unchecked, checkMyResult])
 
   return (
     <FormBody width="w-180" title="판매자 등록 신청 결과">

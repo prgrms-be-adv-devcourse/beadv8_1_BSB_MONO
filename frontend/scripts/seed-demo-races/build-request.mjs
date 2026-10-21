@@ -49,9 +49,9 @@ export function idempotencyKeyOf(race) {
  * fileIds는 종목 순서대로 대표 이미지 파일 ID다 (한 파일은 한 종목에만 연결되므로 종목마다 따로 올린다).
  * 드라이런처럼 아직 올리지 않았으면 비워 두고, 그 자리는 0으로 채운다.
  * @param {(typeof import('./races.mjs').DEMO_RACES)[number]} race
- * @param {{ now: number, fileIds?: number[] }} options
+ * @param {{ now?: number, fileIds?: number[] }} options now는 쓰지 않는다(접수 시작이 races.mjs에 고정)
  */
-export function buildRaceRequest(race, { now, fileIds = [] }) {
+export function buildRaceRequest(race, { fileIds = [] }) {
   return {
     title: race.title,
     description: race.description,
@@ -62,7 +62,7 @@ export function buildRaceRequest(race, { now, fileIds = [] }) {
     // 크루 예매(최종 범위)는 없다
     crewSaleStartAt: null,
     crewSaleEndAt: null,
-    individualOpenAt: earliestOpenAt(now),
+    individualOpenAt: race.applicationOpenAt,
     applicationCloseAt: race.applicationCloseAt,
     // 환불 기준일은 접수 마감 날짜 (목과 같다)
     refundDeadline: race.applicationCloseAt.slice(0, 10),
@@ -194,9 +194,4 @@ export function validateRaceRequest(request, { now, requireFiles = true }) {
     }
   }
   return errors
-}
-
-/** 접수 시작이 발표 날(onDate)보다 늦으면 그날 대회가 "오픈 예정"으로 보인다 */
-export function opensBy(now, onDate) {
-  return earliestOpenAt(now).slice(0, 10) <= onDate
 }

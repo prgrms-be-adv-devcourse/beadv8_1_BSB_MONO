@@ -1,7 +1,7 @@
 // 운영 서버에 넣을 데모 대회 8개.
 // 이름 · 장소 · 종목 · 참가비 · 정원 · 이미지는 프론트 목(src/shared/mocks/races.ts)과 같다.
-// 날짜는 목과 달리 달력 날짜로 고정한다: 10/22 발표 날에 모두 "접수 중"이 되도록,
-// 접수 마감은 10/25~11/10 사이, 대회 일시는 그 뒤 11월 주말로 잡았다. (접수 시작은 실행일로 계산한다)
+// 날짜는 목과 달리 달력 날짜로 고정한다: 접수 시작 · 접수 마감 · 대회 일시 모두 2027년 3~6월 안에 있고,
+// 접수 시작 < 접수 마감 < 대회 일시(주말 오전) 순서다. 접수 시작은 서버 규칙(실행일 + 2일 이후)을 지나야 등록된다.
 //
 // slug는 Idempotency-Key(seed-demo-<slug>)에 쓰므로 한 번 운영에 넣은 뒤에는 바꾸지 않는다.
 
@@ -31,8 +31,9 @@ export const DEMO_RACES = [
     location: '서울숲 일대',
     regionSido: '서울특별시',
     regionSigungu: '성동구',
-    applicationCloseAt: '2026-10-31T18:00:00',
-    raceDate: '2026-11-01T08:00:00',
+    applicationOpenAt: '2027-03-02T00:00:00',
+    applicationCloseAt: '2027-03-19T18:00:00',
+    raceDate: '2027-03-27T08:00:00',
     image: 'cookierun.webp',
     courses: [
       { name: '10K', courseType: 'KM_10', price: 45000, quota: 600 },
@@ -46,8 +47,9 @@ export const DEMO_RACES = [
     location: '올림픽공원 평화의 광장',
     regionSido: '서울특별시',
     regionSigungu: '송파구',
-    applicationCloseAt: '2026-10-25T18:00:00',
-    raceDate: '2026-11-07T08:00:00',
+    applicationOpenAt: '2027-03-08T00:00:00',
+    applicationCloseAt: '2027-04-02T18:00:00',
+    raceDate: '2027-04-10T08:00:00',
     image: 'youth10k.webp',
     courses: [{ name: '10K', courseType: 'KM_10', price: 40000, quota: 1000 }],
   },
@@ -58,8 +60,9 @@ export const DEMO_RACES = [
     location: '광화문광장',
     regionSido: '서울특별시',
     regionSigungu: '종로구',
-    applicationCloseAt: '2026-11-05T18:00:00',
-    raceDate: '2026-11-15T08:00:00',
+    applicationOpenAt: '2027-03-01T00:00:00',
+    applicationCloseAt: '2027-03-12T18:00:00',
+    raceDate: '2027-03-21T08:00:00',
     image: 'seoul-international-marathon.webp',
     courses: [
       { name: '10K', courseType: 'KM_10', price: 50000, quota: 2000 },
@@ -73,8 +76,9 @@ export const DEMO_RACES = [
     location: '잠실종합운동장',
     regionSido: '서울특별시',
     regionSigungu: '송파구',
-    applicationCloseAt: '2026-10-27T23:00:00',
-    raceDate: '2026-11-22T08:00:00',
+    applicationOpenAt: '2027-04-05T00:00:00',
+    applicationCloseAt: '2027-05-07T18:00:00',
+    raceDate: '2027-05-16T08:00:00',
     image: 'jtbc.webp',
     courses: [
       { name: '풀', courseType: 'FULL', price: 90000, quota: 3000 },
@@ -89,8 +93,9 @@ export const DEMO_RACES = [
     location: '광안리 해수욕장',
     regionSido: '부산광역시',
     regionSigungu: '수영구',
-    applicationCloseAt: '2026-11-02T18:00:00',
-    raceDate: '2026-11-14T08:00:00',
+    applicationOpenAt: '2027-04-12T00:00:00',
+    applicationCloseAt: '2027-05-14T18:00:00',
+    raceDate: '2027-05-23T08:00:00',
     image: 'busan-beach-run.webp',
     courses: [
       { name: '5K', courseType: 'KM_5', price: 30000, quota: 800 },
@@ -104,8 +109,9 @@ export const DEMO_RACES = [
     location: '조천운동장 일대',
     regionSido: '제주특별자치도',
     regionSigungu: '제주시',
-    applicationCloseAt: '2026-11-10T18:00:00',
-    raceDate: '2026-11-29T08:00:00',
+    applicationOpenAt: '2027-05-03T00:00:00',
+    applicationCloseAt: '2027-05-28T18:00:00',
+    raceDate: '2027-06-06T08:00:00',
     image: 'jeju-trail-run.webp',
     courses: [
       { name: '10K', courseType: 'KM_10', price: 48000, quota: 400 },
@@ -115,13 +121,14 @@ export const DEMO_RACES = [
   {
     slug: 'daegu-marathon',
     title: '대구마라톤',
-    // 목은 "곧 접수를 시작해요"(오픈 예정)였지만, 데모에서는 발표 날 접수 중이라 문구를 뺐다
+    // 목은 "곧 접수를 시작해요"(오픈 예정)였지만, 데모에서는 문구를 뺐다
     description: '대구스타디움을 출발해 도심을 달리는 마라톤',
     location: '대구스타디움',
     regionSido: '대구광역시',
     regionSigungu: '수성구',
-    applicationCloseAt: '2026-11-07T18:00:00',
-    raceDate: '2026-11-21T08:00:00',
+    applicationOpenAt: '2027-05-10T00:00:00',
+    applicationCloseAt: '2027-06-04T18:00:00',
+    raceDate: '2027-06-12T08:00:00',
     image: 'daegu-marathon.webp',
     courses: [
       { name: '풀', courseType: 'FULL', price: 90000, quota: 700 },
@@ -131,13 +138,14 @@ export const DEMO_RACES = [
   {
     slug: 'chuncheon-marathon',
     title: '춘천마라톤',
-    // 목은 "접수가 끝났어요"(마감)였지만, 데모에서는 발표 날 접수 중이라 문구를 뺐다
+    // 목은 "접수가 끝났어요"(마감)였지만, 데모에서는 문구를 뺐다
     description: '의암호를 따라 달리는 가을 마라톤',
     location: '공지천 일대',
     regionSido: '강원특별자치도',
     regionSigungu: '춘천시',
-    applicationCloseAt: '2026-10-29T18:00:00',
-    raceDate: '2026-11-08T08:00:00',
+    applicationOpenAt: '2027-05-24T00:00:00',
+    applicationCloseAt: '2027-06-17T18:00:00',
+    raceDate: '2027-06-26T08:00:00',
     image: 'chuncheon-lake-run.webp',
     courses: [
       { name: '풀', courseType: 'FULL', price: 80000, quota: 500 },

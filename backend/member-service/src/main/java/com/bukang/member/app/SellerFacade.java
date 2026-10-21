@@ -26,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 public class SellerFacade {
 	private final SellerApplyUseCase sellerApplyUseCase;
 	private final SellerReviewUseCase sellerReviewUseCase;
+	private final SellerResultCheckUseCase sellerResultCheckUseCase;
 	private final AdminVerifyUseCase adminVerifyUseCase;
 	private final SellerRepository sellerRepository;
 	private final MemberRepository memberRepository;
@@ -46,6 +47,11 @@ public class SellerFacade {
 		return sellerRepository.findFirstByMemberIdOrderByIdDesc(memberId)
 			.map(SellerDto::from)
 			.orElseThrow(() -> new SellerNotFoundException("판매자 신청 내역이 없습니다."));
+	}
+
+	@Transactional
+	public SellerDto checkMyResult(int memberId) {
+		return SellerDto.from(sellerResultCheckUseCase.check(memberId, LocalDateTime.now()));
 	}
 
 	// 다른 서비스(정산)가 회원 ID로 판매자 ID를 찾는다. 탈퇴했거나 없는 회원은 404, 신청이 없으면 빈 칸으로 돌려준다
