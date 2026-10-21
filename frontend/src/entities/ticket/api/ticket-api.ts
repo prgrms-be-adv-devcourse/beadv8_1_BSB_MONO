@@ -65,13 +65,15 @@ export function myTicketsQueryOptions() {
 }
 
 /**
- * 내 참가 대회 수(마이 화면). 내 참가권 화면이 보여 주는 카드(참가 예정 + 지난 대회)와 같은 목록을 센다.
- * 같은 쿼리 키라 두 화면이 같은 데이터를 쓴다. enabled가 false면 부르지 않는다.
+ * 내 참가 대회 수(마이 화면). 내 참가권 화면과 같은 목록에서 취소한 참가권만 빼고 센다 (참가 확정 + 끝난 대회).
+ * 결제 대기 · 기한 만료 주문은 목록에 처음부터 없다. 같은 쿼리 키라 두 화면이 같은 데이터를 쓴다.
+ * enabled가 false면 부르지 않는다.
  */
 export function myTicketCountQueryOptions(enabled: boolean) {
   return queryOptions({
     ...myTicketsQueryOptions(),
-    select: (tickets: MyTicket[]) => tickets.length,
+    select: (tickets: MyTicket[]) =>
+      tickets.filter((t) => t.itemStatus !== orderModel.OrderItemDtoStatus.CANCELED).length,
     enabled,
   })
 }
