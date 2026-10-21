@@ -17,6 +17,13 @@ spring:
     gateway:
       server:
         webflux:
+          # 서비스로 넘긴 요청의 시간 제한. 꺼진 서비스나 멈춘 서비스를 기다리느라 게이트웨이 연결이 쌓이지 않게 한다
+          # 연결 시간 초과·연결 거부는 503, 응답 시간 초과는 504로 응답한다 (GatewayErrorHandler)
+          httpclient:
+            # 서비스와 연결을 맺기까지 기다리는 시간(ms 단위 숫자)
+            connect-timeout: 2000
+            # 요청을 보낸 뒤 응답을 받기까지 기다리는 시간
+            response-timeout: 10s
           # 주소 앞부분을 자르지 않는다(StripPrefix 없음). 서비스 주소와 쿠키 경로가 게이트웨이 주소와 그대로 맞아야 한다
           # /internal/**는 규칙을 만들지 않는다. 맞는 규칙이 없으면 게이트웨이가 404로 응답한다
           # 서비스 주소(gateway.services.*)는 프로파일별 yaml에 있다 (dev: localhost, prod: 컨테이너 이름)
@@ -39,6 +46,10 @@ spring:
               uri: ${gateway.services.payout}
               predicates:
                 - Path=/api/v1/payout/**
+              # 이 라우트만 응답 시간 제한을 60초(ms 단위 숫자)로 늘린다
+              # dev의 정산 배치 수동 실행 API가 주문 서비스를 최대 30초 기다리기 때문이다. prod에는 그 API가 없다
+              metadata:
+                response-timeout: 60000
             - id: file-service
               uri: ${gateway.services.file}
               predicates:
