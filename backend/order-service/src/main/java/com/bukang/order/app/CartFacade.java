@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.bukang.order.domain.Cart;
 import com.bukang.order.dto.CartCheckoutDto;
 import com.bukang.order.dto.CartCheckoutRequestDto;
 import com.bukang.order.dto.CartDto;
@@ -27,7 +26,7 @@ public class CartFacade {
 	// 장바구니를 아직 만들지 않은 회원은 빈 장바구니로 보여 준다 (조회만으로는 만들지 않는다)
 	public CartDto findCart(int memberId) {
 		return cartRepository.findByMemberId(memberId)
-			.map(Cart::toDto)
+			.map(cartUseCase::toDto)
 			.orElseGet(() -> new CartDto(memberId, List.of()));
 	}
 
@@ -39,7 +38,7 @@ public class CartFacade {
 
 	@Transactional
 	public CartDto removeItem(int cartItemId, int memberId) {
-		return cartUseCase.removeItem(memberId, cartItemId).toDto();
+		return cartUseCase.toDto(cartUseCase.removeItem(memberId, cartItemId));
 	}
 
 	// 항목마다 트랜잭션을 따로 커밋하므로(CartCheckoutUseCase) 바깥 트랜잭션 없이 부른다.

@@ -46,6 +46,8 @@ public class ApiV1ParticipationController {
 	@Operation(summary = "참가 신청서 작성",
 		description = "결제 전에 참가자 정보와 개인정보 제3자 제공 동의를 받아 참가 신청을 자리 확보 전(PENDING) 상태로 저장한다. "
 			+ "종목의 접수 기간, 대회 당일 만 나이 제한, 같은 대회에 살아 있는 신청이 있는지(한 사람 한 대회 1건)를 확인한다. "
+			+ "같은 대회에 결제 전(PENDING) 신청서가 남아 있으면 그 신청서를 취소하고 새로 저장한다(다른 종목이어도). "
+			+ "결제 대기·결제 완료 신청이 있으면 409다. "
 			+ "키트가 있는 종목은 배송 주소가 필수이고, 키트가 없는 종목은 배송 주소를 저장하지 않는다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "201", description = "저장 성공",
@@ -71,10 +73,12 @@ public class ApiV1ParticipationController {
 		@ApiResponse(responseCode = "404", description = "없는 종목",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = ParticipationApiExamples.COURSE_NOT_FOUND))),
-		@ApiResponse(responseCode = "409", description = "같은 대회에 이미 신청함 또는 접수 기간이 아님",
+		@ApiResponse(responseCode = "409", description = "같은 대회에 결제 대기·결제 완료 신청이 있음, 접수 기간이 아님, "
+			+ "남은 결제 전 신청서를 [결제하기]가 처리 중이라 잠시 뒤 다시 시도",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "이미 신청함", value = ParticipationApiExamples.DUPLICATE_PARTICIPATION),
-				@ExampleObject(name = "접수 기간 아님", value = ParticipationApiExamples.NOT_ACCEPTING)
+				@ExampleObject(name = "접수 기간 아님", value = ParticipationApiExamples.NOT_ACCEPTING),
+				@ExampleObject(name = "잠시 뒤 다시 시도", value = ParticipationApiExamples.APPLY_RETRY)
 			}))
 	})
 	public ResponseEntity<RsData<ParticipationDto>> apply(

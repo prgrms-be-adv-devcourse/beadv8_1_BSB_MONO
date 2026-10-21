@@ -1,6 +1,8 @@
 package com.bukang.order.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -9,6 +11,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +29,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -30,11 +40,13 @@ import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
+import com.bukang.order.support.StubSeatHoldPort;
+import com.bukang.order.support.StubSeatHoldPortConfig;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(StubRaceCoursePortConfig.class)
+@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class})
 class ApiV1ParticipationTest {
 	private static final String BASE_URL = "/api/v1/order/participations";
 	private static final int MEMBER_ID = 1;
@@ -46,8 +58,12 @@ class ApiV1ParticipationTest {
 	@Autowired
 	private MockMvc mockMvc;
 
-	@Autowired
+	// 새 신청서 저장만 일부러 실패시킬 때 쓴다. 그 밖에는 진짜 저장소처럼 동작한다
+	@MockitoSpyBean
 	private ParticipationRepository participationRepository;
+
+	@Autowired
+	private StubSeatHoldPort seatHoldPort;
 
 	@Autowired
 	private StubRaceCoursePort raceCoursePort;
@@ -61,6 +77,7 @@ class ApiV1ParticipationTest {
 	void tearDown() {
 		participationRepository.deleteAll();
 		raceCoursePort.clear();
+		seatHoldPort.clear();
 	}
 
 	@Test
@@ -220,22 +237,129 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
-	@DisplayName("같은 회원이 같은 대회에 살아 있는 신청을 두 건 가질 수 없다")
-	void applyTwice() throws Exception {
+	@DisplayName("같은 대회에 결제 전 신청서가 남아 있으면 그 신청서를 취소하고 새 신청서를 받는다 (같은 대회의 다른 종목이어도)")
+	void applyReplacesPendingParticipation() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+
+		// 주문 생성이 실패했거나 결제 없이 떠나 결제 전 신청서가 남은 뒤, 신청서 화면에 다시 들어와 저장한 상황
+		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
+		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("박러너", "1990-01-01", "M"), true))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.data.status").value("PENDING"))
+			.andExpect(jsonPath("$.data.raceCourseId").value(COURSE_ID + 1))
+			.andExpect(jsonPath("$.data.participant.name").value("박러너"));
+
+		Participation replaced = participationRepository.findById(first).orElseThrow();
+		assertThat(replaced.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
+		assertThat(replaced.getActiveFlag()).isNull();
+		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
+
+		// 다른 회원은 따로 신청할 수 있다
+		apply(OTHER_MEMBER_ID, applyBody(COURSE_ID, participant("최러너", "1990-01-01", "M"), true))
+			.andExpect(status().isCreated());
+		assertThat(activeCount(OTHER_MEMBER_ID)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("다시 신청한 내용이 잘못되면(나이 제한 밖) 400이고, 남아 있던 결제 전 신청서는 취소하지 않는다")
+	void invalidApplyKeepsPendingParticipation() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+		String birth = LocalDate.now().minusYears(12).toString();
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김어린", birth, "S"), true))
+			.andExpect(status().isBadRequest());
+
+		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.PENDING);
+		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("남은 결제 전 신청서를 교체로 취소하면, 커밋 뒤 상품에 그 신청서의 자리를 풀어 달라고 한 번 알린다")
+	void replaceReleasesSeatOfCanceledParticipation() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isCreated());
 
-		// 같은 대회의 다른 종목이어도 막는다
-		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
-		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "L"), true))
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.message").value("이미 이 대회에 신청했습니다."))
-			.andExpect(jsonPath("$.code").value("ORDER_DUPLICATE_PARTICIPATION"));
+		// [결제하기]에서 상품은 자리를 잡았는데 주문이 롤백됐을 수 있어, 자리를 잡았는지 몰라도 보낸다(상품은 멱등)
+		assertThat(seatHoldPort.releasedParticipations()).containsExactly(first);
+	}
 
-		// 다른 회원은 신청할 수 있다
-		apply(OTHER_MEMBER_ID, applyBody(COURSE_ID, participant("박러너", "1990-01-01", "M"), true))
+	@Test
+	@DisplayName("교체 중 새 신청서 저장이 실패해 롤백되면 자리 해제를 보내지 않고, 남은 신청서도 그대로다")
+	void replaceRollbackDoesNotReleaseSeat() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+		doThrow(new IllegalStateException("저장 실패 (테스트)"))
+			.when(participationRepository).saveAndFlush(any(Participation.class));
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+			.andExpect(status().isInternalServerError());
+
+		// 보낸 뒤 롤백되면 살아 있는 신청서의 자리만 풀려, 그 신청서로 다시 결제할 수 없게 된다
+		assertThat(seatHoldPort.releasedParticipations()).isEmpty();
+		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.PENDING);
+	}
+
+	@Test
+	@DisplayName("자리 해제 알림을 보내지 못해도 교체는 커밋되어 201이다")
+	void replaceSucceedsEvenIfReleaseFails() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+		seatHoldPort.failRelease(true);
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isCreated());
-		assertThat(participationRepository.count()).isEqualTo(2);
+
+		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.CANCELED);
+		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("같은 대회에 결제 대기·결제 완료 신청이 있으면 409이고, 그 신청은 그대로다")
+	void applyTwiceWhenAppliedOrConfirmed() throws Exception {
+		for (ParticipationStatus status : new ParticipationStatus[] {ParticipationStatus.APPLIED,
+			ParticipationStatus.CONFIRMED}) {
+			int id = applyAndGetId(MEMBER_ID);
+			moveTo(id, status);
+
+			apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value("이미 이 대회에 신청했습니다."))
+				.andExpect(jsonPath("$.code").value("ORDER_DUPLICATE_PARTICIPATION"));
+
+			assertThat(participationRepository.findById(id).orElseThrow().getStatus()).isEqualTo(status);
+			assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
+			participationRepository.deleteAll();
+		}
+	}
+
+	@Test
+	@DisplayName("같은 회원이 같은 대회에 동시에 신청해도 살아 있는 신청은 1건만 남는다")
+	void applyConcurrently() throws Exception {
+		applyAndGetId(MEMBER_ID);
+		int threads = 4;
+		ExecutorService executor = Executors.newFixedThreadPool(threads);
+		CountDownLatch start = new CountDownLatch(1);
+		List<Future<Integer>> results = new ArrayList<>();
+		for (int i = 0; i < threads; i++) {
+			results.add(executor.submit(() -> {
+				start.await();
+				return apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+					.andReturn().getResponse().getStatus();
+			}));
+		}
+		start.countDown();
+		List<Integer> statuses = new ArrayList<>();
+		for (Future<Integer> result : results) {
+			statuses.add(result.get(30, TimeUnit.SECONDS));
+		}
+		executor.shutdown();
+
+		// 늦은 쪽은 새 신청서를 다시 취소하고 받거나(201), 먼저 끝난 신청과 겹쳐 409로 끝난다
+		assertThat(statuses).contains(201).allMatch(code -> code == 201 || code == 409);
+		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
 	}
 
 	@Test
@@ -446,6 +570,8 @@ class ApiV1ParticipationTest {
 		assertThat(canceled.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
 		assertThat(canceled.getActiveFlag()).isNull();
 		assertThat(canceled.getCanceledAt()).isNotNull();
+		// 자리만 잡히고 주문이 롤백된 신청서일 수 있어, 커밋 뒤 상품에 자리를 풀어 달라고 알린다
+		assertThat(seatHoldPort.releasedParticipations()).containsExactly(id);
 
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
 		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "L"), true))
@@ -498,6 +624,13 @@ class ApiV1ParticipationTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 끝난 신청입니다(현재 상태: 취소)."))
 			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_CANCELABLE"));
+	}
+
+	private long activeCount(int memberId) {
+		return participationRepository.findAll().stream()
+			.filter(participation -> participation.getMemberId() == memberId)
+			.filter(participation -> Boolean.TRUE.equals(participation.getActiveFlag()))
+			.count();
 	}
 
 	private ResultActions apply(int memberId, String body) throws Exception {
