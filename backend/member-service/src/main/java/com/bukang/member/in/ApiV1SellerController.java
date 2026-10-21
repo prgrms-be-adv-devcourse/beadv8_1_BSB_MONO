@@ -26,7 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-@Tag(name = "Seller", description = "판매자 등록 신청, 내 신청 조회 API")
+@Tag(name = "Seller", description = "판매자 등록 신청, 내 신청 조회, 신청 결과 확인 API")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/member/sellers")
@@ -84,5 +84,30 @@ public class ApiV1SellerController {
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "판매자 신청 내역을 조회했습니다.", sellerFacade.findMine(memberId)));
+	}
+
+	@PostMapping("/me/result-check")
+	@Operation(summary = "내 판매자 신청 결과 확인",
+		description = "X-Member-Id 헤더의 회원이 가장 최근 판매자 신청의 승인·반려 결과를 봤다고 기록한다. "
+			+ "이미 기록했으면 처음 시각을 그대로 두고 200이다. 심사 중인 신청은 기록하지 않는다.")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "기록 성공 (이미 기록했어도 200)",
+			content = @Content(examples = @ExampleObject(value = SellerApiExamples.CHECK_RESULT_SUCCESS))),
+		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = SellerApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "404", description = "판매자 신청 내역 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = SellerApiExamples.MY_SELLER_NOT_FOUND))),
+		@ApiResponse(responseCode = "409", description = "가장 최근 신청이 아직 심사 중",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = SellerApiExamples.NOT_REVIEWED)))
+	})
+	public ResponseEntity<RsData<SellerDto>> checkMyResult(
+		@Parameter(description = "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
+		@RequestHeader(MemberIdHeader.NAME) int memberId
+	) {
+		return ResponseEntity.ok()
+			.body(RsData.of(HttpStatus.OK, "판매자 신청 결과를 확인했습니다.", sellerFacade.checkMyResult(memberId)));
 	}
 }

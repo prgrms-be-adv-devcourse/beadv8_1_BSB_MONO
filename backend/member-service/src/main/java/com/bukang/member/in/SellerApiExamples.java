@@ -18,7 +18,8 @@ final class SellerApiExamples {
 				"status": "PENDING",
 				"requestedAt": "2026-10-05T21:25:35",
 				"reviewedAt": null,
-				"rejectReason": null
+				"rejectReason": null,
+				"resultCheckedAt": null
 			}
 		}
 		""";
@@ -37,7 +38,8 @@ final class SellerApiExamples {
 				"status": "REJECTED",
 				"requestedAt": "2026-10-05T21:25:35",
 				"reviewedAt": "2026-10-06T10:12:08",
-				"rejectReason": "사업자등록번호를 확인할 수 없습니다."
+				"rejectReason": "사업자등록번호를 확인할 수 없습니다.",
+				"resultCheckedAt": null
 			}
 		}
 		""";
@@ -57,7 +59,8 @@ final class SellerApiExamples {
 					"status": "PENDING",
 					"requestedAt": "2026-10-05T21:25:35",
 					"reviewedAt": null,
-					"rejectReason": null
+					"rejectReason": null,
+					"resultCheckedAt": null
 				}
 			]
 		}
@@ -77,7 +80,8 @@ final class SellerApiExamples {
 				"status": "APPROVED",
 				"requestedAt": "2026-10-05T21:25:35",
 				"reviewedAt": "2026-10-06T10:12:08",
-				"rejectReason": null
+				"rejectReason": null,
+				"resultCheckedAt": null
 			}
 		}
 		""";
@@ -96,7 +100,28 @@ final class SellerApiExamples {
 				"status": "REJECTED",
 				"requestedAt": "2026-10-05T21:25:35",
 				"reviewedAt": "2026-10-06T10:12:08",
-				"rejectReason": "사업자등록번호를 확인할 수 없습니다."
+				"rejectReason": "사업자등록번호를 확인할 수 없습니다.",
+				"resultCheckedAt": null
+			}
+		}
+		""";
+
+	static final String CHECK_RESULT_SUCCESS = """
+		{
+			"status": 200,
+			"message": "판매자 신청 결과를 확인했습니다.",
+			"data": {
+				"id": 1,
+				"memberId": 1,
+				"sellerType": "BUSINESS",
+				"businessName": "크루런 스포츠",
+				"businessNumber": "123-45-67890",
+				"representativeName": "김러너",
+				"status": "APPROVED",
+				"requestedAt": "2026-10-05T21:25:35",
+				"reviewedAt": "2026-10-06T10:12:08",
+				"rejectReason": null,
+				"resultCheckedAt": "2026-10-06T12:30:41"
 			}
 		}
 		""";
@@ -139,6 +164,10 @@ final class SellerApiExamples {
 
 	static final String ALREADY_REVIEWED = """
 		{ "status": 409, "code": "SELLER_ALREADY_REVIEWED", "message": "이미 심사한 판매자 신청입니다.", "data": null }
+		""";
+
+	static final String NOT_REVIEWED = """
+		{ "status": 409, "code": "SELLER_NOT_REVIEWED", "message": "아직 심사 중인 판매자 신청입니다.", "data": null }
 		""";
 
 	private SellerApiExamples() {

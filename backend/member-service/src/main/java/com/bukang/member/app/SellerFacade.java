@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class SellerFacade {
 	private final SellerApplyUseCase sellerApplyUseCase;
 	private final SellerReviewUseCase sellerReviewUseCase;
+	private final SellerResultCheckUseCase sellerResultCheckUseCase;
 	private final AdminVerifyUseCase adminVerifyUseCase;
 	private final SellerRepository sellerRepository;
 
@@ -42,6 +43,11 @@ public class SellerFacade {
 		return sellerRepository.findFirstByMemberIdOrderByIdDesc(memberId)
 			.map(SellerDto::from)
 			.orElseThrow(() -> new SellerNotFoundException("판매자 신청 내역이 없습니다."));
+	}
+
+	@Transactional
+	public SellerDto checkMyResult(int memberId) {
+		return SellerDto.from(sellerResultCheckUseCase.check(memberId, LocalDateTime.now()));
 	}
 
 	// status가 null이면 전체를 최근 신청부터 돌려준다

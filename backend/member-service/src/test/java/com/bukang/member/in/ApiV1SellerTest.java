@@ -47,6 +47,7 @@ import com.bukang.member.out.TermsAgreementRepository;
 class ApiV1SellerTest {
 	private static final String SELLERS = "/api/v1/member/sellers";
 	private static final String MY_SELLER = "/api/v1/member/sellers/me";
+	private static final String RESULT_CHECK = "/api/v1/member/sellers/me/result-check";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -246,6 +247,89 @@ class ApiV1SellerTest {
 		mockMvc.perform(get(MY_SELLER).header(MemberIdHeader.NAME, memberId))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("SELLER_NOT_FOUND"));
+	}
+
+	@Test
+	@DisplayName("승인된 신청의 결과를 확인하면 200과 확인 시각을 받고, 내 신청 조회에도 나온다")
+	void checkResultRecordsTime() throws Exception {
+		int sellerId = applyDirectly(memberId);
+		sellerFacade.approve(adminId, sellerId);
+
+		mockMvc.perform(get(MY_SELLER).header(MemberIdHeader.NAME, memberId))
+			.andExpect(jsonPath("$.data.resultCheckedAt").isEmpty());
+
+		mockMvc.perform(post(RESULT_CHECK).header(MemberIdHeader.NAME, memberId))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value(200))
+			.andExpect(jsonPath("$.message").value("판매자 신청 결과를 확인했습니다."))
+			.andExpect(jsonPath("$.data.id").value(sellerId))
+			.andExpect(jsonPath("$.data.status").value("APPROVED"))
+			.andExpect(jsonPath("$.data.resultCheckedAt").isNotEmpty());
+
+		LocalDateTime saved = sellerRepository.findById(sellerId).orElseThrow().getResultCheckedAt();
+		assertThat(saved).isNotNull();
+		mockMvc.perform(get(MY_SELLER).header(MemberIdHeader.NAME, memberId))
+			.andExpect(jsonPath("$.data.resultCheckedAt").isNotEmpty());
+	}
+
+	@Test
+	@DisplayName("결과 확인을 다시 보내도 200이고 처음 시각을 그대로 둔다")
+	void checkResultTwiceKeepsFirstTime() throws Exception {
+		int sellerId = applyDirectly(memberId);
+		sellerFacade.reject(adminId, sellerId, "서류 확인 불가");
+		mockMvc.perform(post(RESULT_CHECK).header(MemberIdHeader.NAME, memberId))
+			.andExpect(status().isOk());
+		LocalDateTime first = sellerRepository.findById(sellerId).orElseThrow().getResultCheckedAt();
+
+		mockMvc.perform(post(RESULT_CHECK).header(MemberIdHeader.NAME, memberId))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.status").value("REJECTED"));
+
+		assertThat(sellerRepository.findById(sellerId).orElseThrow().getResultCheckedAt()).isEqualTo(first);
+	}
+
+	@Test
+	@DisplayName("심사 중인 신청의 결과 확인은 409 SELLER_NOT_REVIEWED이고 기록하지 않는다")
+	void checkResultFailsWhilePending() throws Exception {
+		int sellerId = applyDirectly(memberId);
+
+		mockMvc.perform(post(RESULT_CHECK).header(MemberIdHeader.NAME, memberId))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("SELLER_NOT_REVIEWED"))
+			.andExpect(jsonPath("$.message").value("아직 심사 중인 판매자 신청입니다."));
+
+		assertThat(sellerRepository.findById(sellerId).orElseThrow().getResultCheckedAt()).isNull();
+	}
+
+	@Test
+	@DisplayName("반려 뒤 다시 신청하면 결과 확인은 새 신청서 기준이라 다시 비어 있다")
+	void reapplyStartsWithEmptyResultCheck() throws Exception {
+		int rejectedId = applyDirectly(memberId);
+		sellerFacade.reject(adminId, rejectedId, "서류 확인 불가");
+		mockMvc.perform(post(RESULT_CHECK).header(MemberIdHeader.NAME, memberId))
+			.andExpect(status().isOk());
+		int secondId = applyDirectly(memberId);
+
+		mockMvc.perform(get(MY_SELLER).header(MemberIdHeader.NAME, memberId))
+			.andExpect(jsonPath("$.data.id").value(secondId))
+			.andExpect(jsonPath("$.data.resultCheckedAt").isEmpty());
+		assertThat(sellerRepository.findById(rejectedId).orElseThrow().getResultCheckedAt()).isNotNull();
+	}
+
+	@Test
+	@DisplayName("신청한 적이 없으면 결과 확인은 404 SELLER_NOT_FOUND다")
+	void checkResultFailsWithoutApplication() throws Exception {
+		mockMvc.perform(post(RESULT_CHECK).header(MemberIdHeader.NAME, memberId))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("SELLER_NOT_FOUND"))
+			.andExpect(jsonPath("$.message").value("판매자 신청 내역이 없습니다."));
+	}
+
+	@Test
+	@DisplayName("회원 ID 헤더 없이 결과 확인을 보내면 401이다")
+	void checkResultFailsWithoutHeader() throws Exception {
+		mockMvc.perform(post(RESULT_CHECK))
+			.andExpect(status().isUnauthorized());
 	}
 
 	@Test
