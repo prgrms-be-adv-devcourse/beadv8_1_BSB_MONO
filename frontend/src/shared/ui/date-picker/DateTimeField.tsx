@@ -8,6 +8,7 @@ import { cn } from '@/shared/lib'
 import { FIELD_BOX, FIELD_BOX_FOCUS, FIELD_HELPER, FIELD_LABEL } from '../field/field-styles'
 import { Icon } from '../icon/icons'
 import {
+  dateText,
   dateTimeText,
   formatTimeTyping,
   padTime,
@@ -30,6 +31,8 @@ type CommonProps = {
   isDateDisabled?: (date: Date) => boolean
   startMonth?: Date
   endMonth?: Date
+  /** false면 시간 칸 없이 날짜만 고르고 'yyyy-MM-dd'로 알린다 (기본 true) */
+  withTime?: boolean
   className?: string
 }
 
@@ -50,9 +53,17 @@ export type DateTimeFieldProps = CommonProps &
   )
 
 // 피그마 DateTimeField. 날짜 칸을 누르면 DatePicker가 팝오버로 열리고 '선택 완료'로 확정한다.
-// 시간은 옆 칸에 HH:mm(24시간)으로 직접 친다. range는 시간 칸이 시작·끝 2개다.
+// 시간은 옆 칸에 HH:mm(24시간)으로 직접 친다. range는 시간 칸이 시작·끝 2개다. withTime={false}면 시간 칸이 없다.
 export function DateTimeField(props: DateTimeFieldProps) {
-  const { label, helper, error, disabled, placeholder = '날짜를 골라 주세요', className } = props
+  const {
+    label,
+    helper,
+    error,
+    disabled,
+    placeholder = '날짜를 골라 주세요',
+    withTime = true,
+    className,
+  } = props
   const labelId = useId()
   const valueId = useId()
   const descriptionId = useId()
@@ -71,12 +82,14 @@ export function DateTimeField(props: DateTimeFieldProps) {
   const [draft, setDraft] = useState<DateRange>(initial)
 
   function emit(next: DateRange, start: string, end: string) {
+    const text = (date: Date | undefined, time: string) =>
+      withTime ? dateTimeText(date, time) : dateText(date)
     if (props.mode === 'single') {
-      props.onValueChange?.(dateTimeText(next.from, start))
+      props.onValueChange?.(text(next.from, start))
     } else {
       props.onValueChange?.({
-        from: dateTimeText(next.from, start),
-        to: dateTimeText(next.to, end),
+        from: text(next.from, start),
+        to: text(next.to, end),
       })
     }
   }
@@ -92,7 +105,7 @@ export function DateTimeField(props: DateTimeFieldProps) {
     emit(next, startTime, endTime)
   }
 
-  const dateText =
+  const shownDate =
     props.mode === 'single'
       ? dates.from && singleDateText(dates.from)
       : dates.from && rangeDateText(dates)
@@ -138,9 +151,9 @@ export function DateTimeField(props: DateTimeFieldProps) {
             />
             <span
               id={valueId}
-              className={cn('min-w-0 flex-1 truncate', !dateText && 'text-text-tertiary')}
+              className={cn('min-w-0 flex-1 truncate', !shownDate && 'text-text-tertiary')}
             >
-              {dateText || placeholder}
+              {shownDate || placeholder}
             </span>
           </Popover.Trigger>
           <Popover.Portal>
@@ -174,29 +187,33 @@ export function DateTimeField(props: DateTimeFieldProps) {
             </Popover.Positioner>
           </Popover.Portal>
         </Popover.Root>
-        <TimeInput
-          value={startTime}
-          onChange={(time) => {
-            setStartTime(time)
-            emit(dates, time, endTime)
-          }}
-          disabled={disabled}
-          aria-label={props.mode === 'single' ? `${labelText} 시간` : `${labelText} 시작 시간`}
-        />
-        {props.mode === 'range' && (
+        {withTime && (
           <>
-            <span aria-hidden className="text-body-m text-text-secondary">
-              ~
-            </span>
             <TimeInput
-              value={endTime}
+              value={startTime}
               onChange={(time) => {
-                setEndTime(time)
-                emit(dates, startTime, time)
+                setStartTime(time)
+                emit(dates, time, endTime)
               }}
               disabled={disabled}
-              aria-label={`${labelText} 끝 시간`}
+              aria-label={props.mode === 'single' ? `${labelText} 시간` : `${labelText} 시작 시간`}
             />
+            {props.mode === 'range' && (
+              <>
+                <span aria-hidden className="text-body-m text-text-secondary">
+                  ~
+                </span>
+                <TimeInput
+                  value={endTime}
+                  onChange={(time) => {
+                    setEndTime(time)
+                    emit(dates, startTime, time)
+                  }}
+                  disabled={disabled}
+                  aria-label={`${labelText} 끝 시간`}
+                />
+              </>
+            )}
           </>
         )}
       </div>

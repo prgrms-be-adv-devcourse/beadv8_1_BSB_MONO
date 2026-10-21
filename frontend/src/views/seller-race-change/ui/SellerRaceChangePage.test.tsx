@@ -29,7 +29,7 @@ function renderPage(confirmOpen = false) {
 }
 
 describe('SellerRaceChangePage 일정 변경', () => {
-  it('새 대회일로 대회 전체를 PUT 한다', async () => {
+  it('새 대회일(날짜만)로 대회 전체를 PUT 하고, 시각은 지금 대회 시각을 그대로 둔다', async () => {
     let body: productModel.RaceSaveRequestDto | undefined
     server.use(
       http.put('*/api/v1/product/races/:raceId', async ({ request }) => {
@@ -43,9 +43,9 @@ describe('SellerRaceChangePage 일정 변경', () => {
     )
     renderPage()
     const field = await screen.findByLabelText('새 대회일')
-    expect(field).toHaveValue('2026-11-01 08:00')
+    expect(field).toHaveValue('2026-11-01')
     await userEvent.clear(field)
-    await userEvent.type(field, '2026-11-08 08:00')
+    await userEvent.type(field, '2026-11-08')
     await userEvent.click(screen.getByRole('button', { name: '일정 변경 알리기' }))
 
     expect(await screen.findByText('대회 일정을 바꿨어요')).toBeInTheDocument()
@@ -75,7 +75,7 @@ describe('SellerRaceChangePage 일정 변경', () => {
     renderPage()
     const field = await screen.findByLabelText('새 대회일')
     await userEvent.clear(field)
-    await userEvent.type(field, '2026-10-25 08:00')
+    await userEvent.type(field, '2026-10-25')
     await userEvent.click(screen.getByRole('button', { name: '일정 변경 알리기' }))
     expect(
       await screen.findByText('접수 마감 일시는 대회 일시보다 늦을 수 없습니다.'),

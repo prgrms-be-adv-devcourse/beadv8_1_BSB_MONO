@@ -28,6 +28,11 @@ export function dateTimeText(date: Date | undefined, time: string): string {
   return day || time ? `${day} ${time}` : ''
 }
 
+/** 시간 없이 날짜만 고를 때 폼에 넘기는 글자 'yyyy-MM-dd'. 날짜가 비면 ''. */
+export function dateText(date: Date | undefined): string {
+  return date ? format(date, 'yyyy-MM-dd') : ''
+}
+
 export function timeOf(date: Date | undefined): string {
   return date ? format(date, 'HH:mm') : ''
 }

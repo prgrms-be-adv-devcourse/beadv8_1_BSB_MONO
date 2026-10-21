@@ -1,7 +1,7 @@
 import { addDays, format } from 'date-fns'
 import { z } from 'zod'
 
-import { parseRaceDateInput, parseRaceDateTimeInput } from '@/entities/race'
+import { parseRaceDateInput } from '@/entities/race'
 import { productModel, productZod } from '@/shared/api'
 
 export const RACE_FORM_ERRORS = {
@@ -13,13 +13,10 @@ export const RACE_FORM_ERRORS = {
   sidoMax: `시·도는 ${productZod.registerBodyRegionSidoMax}자 이하로 입력해 주세요.`,
   sigunguRequired: '시·군·구를 입력해 주세요.',
   sigunguMax: `시·군·구는 ${productZod.registerBodyRegionSigunguMax}자 이하로 입력해 주세요.`,
-  // 달력 칸에서 날짜를 고르고, 옆 칸에 시간을 친다
+  // 달력 칸에서 날짜만 고른다. 시각은 보낼 때 RACE_DEFAULT_TIMES로 붙인다
   dateRequired: '날짜를 골라 주세요.',
-  timeRequired: '시간을 입력해 주세요.',
-  timeFormat: '시간을 18:30처럼 24시간(00:00~23:45)으로 입력해 주세요.',
-  timeQuarter: '15분 단위(00·15·30·45분)로 입력해 주세요.',
-  closeAfterOpen: '접수 마감은 접수 시작보다 늦어야 해요.',
-  closeBeforeRace: '접수 마감은 대회 일시보다 늦을 수 없어요.',
+  closeAfterOpen: '접수 마감일은 접수 시작일보다 빠를 수 없어요.',
+  closeBeforeRace: '접수 마감은 대회 전날까지 정할 수 있어요.',
   refundBeforeRace: '환불 기한은 대회 날짜보다 늦을 수 없어요.',
   coursesRequired: '종목을 1개 이상 추가해 주세요.',
   coverRequired: '대표 이미지를 올려 주세요.',
@@ -51,33 +48,22 @@ export type RaceCourseInput = Omit<productModel.RaceCourseSaveRequestDto, 'image
 // 종목 한 줄은 orval이 만든 요청 스키마에서 이미지만 뺀 모양 (이미지는 등록할 때 올려서 붙인다)
 const courseSchema = productZod.RegisterBody.shape.courses.element.omit({ images: true })
 
-// 시는 00~23, 분은 00 · 15 · 30 · 45만 받는다
-const TIME_FORMAT = /^([01]\d|2[0-3]):([0-5]\d)$/
-const QUARTER_MINUTES = new Set(['00', '15', '30', '45'])
+/**
+ * 판매자는 날짜만 고르고, 서버(LocalDateTime)에는 아래 시각을 붙여 보낸다.
+ * - 접수 시작: 그날 00:00부터 판다
+ * - 접수 마감: 그날 23:59:59까지 받는다 (환불 기한 '그날 23:59:59까지'와 같은 하루 끝 기준)
+ * - 대회: 시작 시각을 받지 않으므로 00:00으로 두고, 화면은 00:00을 날짜만으로 보여 준다
+ */
+export const RACE_DEFAULT_TIMES = {
+  raceDate: '00:00:00',
+  individualOpenAt: '00:00:00',
+  applicationCloseAt: '23:59:59',
+} as const
 
-/** 시간 칸 하나('HH:mm')의 규칙 */
-export const raceTimeSchema = z
+/** 날짜 칸('yyyy-MM-dd') */
+const date = z
   .string()
-  .min(1, RACE_FORM_ERRORS.timeRequired)
-  .regex(TIME_FORMAT, RACE_FORM_ERRORS.timeFormat)
-  .refine((time) => QUARTER_MINUTES.has(time.slice(3)), RACE_FORM_ERRORS.timeQuarter)
-
-/** 날짜 · 시간 칸('yyyy-MM-dd HH:mm'). 날짜가 비면 날짜를, 아니면 시간 규칙을 알린다 */
-const dateTime = z.string().superRefine((value, ctx) => {
-  const [date = '', time = ''] = value.split(' ')
-  if (!date) {
-    ctx.addIssue({ code: 'custom', message: RACE_FORM_ERRORS.dateRequired })
-    return
-  }
-  const timeResult = raceTimeSchema.safeParse(time)
-  if (!timeResult.success) {
-    ctx.addIssue({ code: 'custom', message: timeResult.error.issues[0].message })
-    return
-  }
-  if (parseRaceDateTimeInput(value) === null) {
-    ctx.addIssue({ code: 'custom', message: RACE_FORM_ERRORS.dateRequired })
-  }
-})
+  .refine((value) => parseRaceDateInput(value) !== null, RACE_FORM_ERRORS.dateRequired)
 
 /**
  * 대회 등록 폼 규칙. 칸끼리의 순서는 서버(RaceRequestValidator · Race)와 같게 본다.
@@ -106,34 +92,35 @@ export function createRaceFormSchema({ today }: { today?: Date } = {}) {
         .trim()
         .min(1, RACE_FORM_ERRORS.sigunguRequired)
         .max(productZod.registerBodyRegionSigunguMax, RACE_FORM_ERRORS.sigunguMax),
-      raceDate: dateTime,
-      individualOpenAt: dateTime,
-      applicationCloseAt: dateTime,
-      // 서버는 날짜만 받지만 칸 모양이 같아 시간도 같은 규칙으로 본다
-      refundDeadline: dateTime,
+      raceDate: date,
+      individualOpenAt: date,
+      applicationCloseAt: date,
+      refundDeadline: date,
       courses: z.array(courseSchema).min(1, RACE_FORM_ERRORS.coursesRequired),
     })
     .superRefine((values, ctx) => {
-      // 형식이 맞는 칸끼리만 순서를 본다. 시간대 없는 ISO 문자열이라 글자 비교가 곧 시각 비교다
-      const raceDate = parseRaceDateTimeInput(values.raceDate)
-      const openAt = parseRaceDateTimeInput(values.individualOpenAt)
-      const closeAt = parseRaceDateTimeInput(values.applicationCloseAt)
-      const refund = parseRaceDateInput(values.refundDeadline.slice(0, 10))
-      if (openAt && closeAt && closeAt <= openAt) {
+      // 형식이 맞는 칸끼리만 순서를 본다. 'yyyy-MM-dd' 글자라 글자 비교가 곧 날짜 비교다
+      const raceDate = parseRaceDateInput(values.raceDate)
+      const openAt = parseRaceDateInput(values.individualOpenAt)
+      const closeAt = parseRaceDateInput(values.applicationCloseAt)
+      const refund = parseRaceDateInput(values.refundDeadline)
+      // 같은 날이면 00:00 시작 ~ 23:59:59 마감이라 하루짜리 접수가 된다
+      if (openAt && closeAt && closeAt < openAt) {
         ctx.addIssue({
           code: 'custom',
           path: ['applicationCloseAt'],
           message: RACE_FORM_ERRORS.closeAfterOpen,
         })
       }
-      if (closeAt && raceDate && closeAt > raceDate) {
+      // 마감이 대회 날 23:59:59면 대회(00:00)보다 늦어 서버가 막는다. 그래서 대회 전날까지만 받는다
+      if (closeAt && raceDate && closeAt >= raceDate) {
         ctx.addIssue({
           code: 'custom',
           path: ['applicationCloseAt'],
           message: RACE_FORM_ERRORS.closeBeforeRace,
         })
       }
-      if (refund && raceDate && refund > raceDate.slice(0, 10)) {
+      if (refund && raceDate && refund > raceDate) {
         ctx.addIssue({
           code: 'custom',
           path: ['refundDeadline'],
@@ -143,7 +130,7 @@ export function createRaceFormSchema({ today }: { today?: Date } = {}) {
       // 세미는 크루 예매가 없어 개인 예매 오픈(접수 시작) 날짜가 판매 시작일이다
       if (today && openAt) {
         const earliest = earliestSaleOpenDate(today)
-        if (openAt.slice(0, 10) < format(earliest, 'yyyy-MM-dd')) {
+        if (openAt < format(earliest, 'yyyy-MM-dd')) {
           ctx.addIssue({
             code: 'custom',
             path: ['individualOpenAt'],
@@ -210,17 +197,17 @@ export function toRaceSaveRequest(
   values: RaceFormValues,
   images: productModel.RaceImageRequestDto[][],
 ): productModel.RaceSaveRequestDto {
-  const dateTime = (text: string) => parseRaceDateTimeInput(text) ?? text
+  const at = (text: string, time: string) => `${parseRaceDateInput(text) ?? text}T${time}`
   return {
     title: values.title.trim(),
     location: values.location.trim(),
     regionSido: values.regionSido.trim(),
     regionSigungu: values.regionSigungu.trim(),
-    raceDate: dateTime(values.raceDate),
-    individualOpenAt: dateTime(values.individualOpenAt),
-    applicationCloseAt: dateTime(values.applicationCloseAt),
-    // 환불 기한은 날짜만 보낸다 (칸의 시간은 보내지 않는다)
-    refundDeadline: parseRaceDateInput(values.refundDeadline.slice(0, 10)) ?? values.refundDeadline,
+    raceDate: at(values.raceDate, RACE_DEFAULT_TIMES.raceDate),
+    individualOpenAt: at(values.individualOpenAt, RACE_DEFAULT_TIMES.individualOpenAt),
+    applicationCloseAt: at(values.applicationCloseAt, RACE_DEFAULT_TIMES.applicationCloseAt),
+    // 환불 기한은 서버도 날짜(LocalDate)로 받는다
+    refundDeadline: parseRaceDateInput(values.refundDeadline) ?? values.refundDeadline,
     crewMinCount: CREW_MIN_COUNT,
     // 세미는 크루 예매가 없어 크루 예매 기간을 비우고 크루 몫 정원은 0으로 보낸다
     courses: values.courses.map((course, i) => ({

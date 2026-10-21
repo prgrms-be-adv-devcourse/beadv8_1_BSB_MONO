@@ -9,9 +9,14 @@ export function parseKstDateTime(value: string): Date {
   return new Date(`${value}+09:00`)
 }
 
-/** 2026-11-01T08:00:00 → 11/1 (일) 08:00 */
+/**
+ * 2026-11-01T08:00:00 → 11/1 (일) 08:00
+ * 판매자는 날짜만 고르고 대회 · 접수 시작은 00:00으로 저장되므로, 00:00이면 날짜만 보여 준다(11/1 (일)).
+ */
 export function formatRaceDateTime(value: string): string {
-  return format(parseISO(value), 'M/d (EEE) HH:mm', { locale: ko })
+  const date = parseISO(value)
+  const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0
+  return format(date, hasTime ? 'M/d (EEE) HH:mm' : 'M/d (EEE)', { locale: ko })
 }
 
 /** 2026-11-01(T…) → 11/1 (일) */
@@ -32,8 +37,7 @@ export function formatDDay(value: string, now?: Date): string {
   return days === 0 ? 'D-DAY' : `D-${days}`
 }
 
-// 판매자 입력 칸은 "2026-11-01 08:00"처럼 쓰고, 백엔드에는 시간대 없는 한국 시간으로 보낸다.
-const DATE_TIME_INPUT = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/
+// 판매자 입력 칸은 "2026-11-01"처럼 날짜만 쓴다. 시각은 보내는 쪽이 붙인다.
 const DATE_INPUT = /^(\d{4})-(\d{2})-(\d{2})$/
 
 function isRealDate(year: string, month: string, day: string): boolean {
@@ -45,24 +49,10 @@ function isRealDate(year: string, month: string, day: string): boolean {
   )
 }
 
-/** 입력 "2026-11-01 08:00" → "2026-11-01T08:00:00". 형식이 틀리거나 없는 날이면 null */
-export function parseRaceDateTimeInput(text: string): string | null {
-  const match = DATE_TIME_INPUT.exec(text.trim())
-  if (!match) return null
-  const [, year, month, day, hour, minute] = match
-  if (!isRealDate(year, month, day) || Number(hour) > 23 || Number(minute) > 59) return null
-  return `${year}-${month}-${day}T${hour}:${minute}:00`
-}
-
 /** 입력 "2026-10-31" → "2026-10-31". 형식이 틀리거나 없는 날이면 null */
 export function parseRaceDateInput(text: string): string | null {
   const match = DATE_INPUT.exec(text.trim())
   if (!match) return null
   const [, year, month, day] = match
   return isRealDate(year, month, day) ? `${year}-${month}-${day}` : null
-}
-
-/** "2026-11-01T08:00:00" → 입력 칸 값 "2026-11-01 08:00" */
-export function toRaceDateTimeInput(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 16)}`
 }
