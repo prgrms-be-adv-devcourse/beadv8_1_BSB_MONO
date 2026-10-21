@@ -1,46 +1,36 @@
 'use client'
 
+import { useInfiniteQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { useMyBalance } from '@/entities/wallet'
+import { LedgerCategory, useMyBalance, walletLedgersQueryOptions } from '@/entities/wallet'
 import { formatWon } from '@/shared/lib'
-import { Alert, buttonClassName, Chip, KeyValue, Skeleton } from '@/shared/ui'
+import { Alert, Button, buttonClassName, Chip, EmptyState, KeyValue, Skeleton } from '@/shared/ui'
 
-type Kind = 'all' | 'charge' | 'pay' | 'refund'
-type History = { title: string; at: string; amount: string; kind: Exclude<Kind, 'all'> }
+import { formatLedgerAmount, formatLedgerTime, ledgerTitle } from '../lib/ledger'
 
-// TODO(api): 예치금 내역 API가 생기면 바꾼다. 시안 예시 값. (잔액은 API로 불러온다)
-const HISTORY: History[] = [
-  { title: '결제 · 쿠키RUN 10K', at: '10/5 14:22', amount: '− ₩45,000', kind: 'pay' },
-  { title: '충전 · 토스페이먼츠', at: '10/5 14:21', amount: '+ ₩10,000', kind: 'charge' },
-  { title: '결제 · 춘천 10K', at: '10/2 11:30', amount: '− ₩45,000', kind: 'pay' },
-  { title: '환불 · 가을 트레일 21K 취소', at: '9/30 09:10', amount: '+ ₩60,000', kind: 'refund' },
-  { title: '결제 · 가을 트레일 21K', at: '9/12 20:05', amount: '− ₩60,000', kind: 'pay' },
-  { title: '충전 · 토스페이먼츠', at: '9/1 18:40', amount: '+ ₩85,000', kind: 'charge' },
-]
+type Filter = 'all' | LedgerCategory
 
-const REFUNDING: History = {
-  title: '환급 신청 · 국민은행',
-  at: '10/6 14:20 · 처리 중',
-  amount: '− ₩5,000',
-  kind: 'refund',
-}
-
-const FILTERS: { value: Kind; label: string }[] = [
+// 정산 입금(PAYOUT)은 판매자에게만 생기고 탭은 따로 두지 않는다. 전체 탭에만 나온다.
+const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: '전체' },
-  { value: 'charge', label: '충전' },
-  { value: 'pay', label: '결제' },
-  { value: 'refund', label: '환불 · 환급' },
+  { value: LedgerCategory.CHARGE, label: '충전' },
+  { value: LedgerCategory.PAYMENT, label: '결제' },
+  { value: LedgerCategory.REFUND, label: '환불' },
+  { value: LedgerCategory.WITHDRAWAL, label: '환급' },
 ]
 
 // 피그마 V2 · M17 예치금 (+ M17-1 돌려받는 중)
 export function DepositPage({ refunding = false }: { refunding?: boolean }) {
-  const [kind, setKind] = useState<Kind>('all')
-  const { balance, isPending, isError } = useMyBalance()
-  const history = refunding ? [REFUNDING, ...HISTORY] : HISTORY
-  const rows = kind === 'all' ? history : history.filter((h) => h.kind === kind)
+  const [filter, setFilter] = useState<Filter>('all')
+  const { balance, isPending, isError, loggedIn } = useMyBalance()
+  const ledgers = useInfiniteQuery({
+    ...walletLedgersQueryOptions(filter === 'all' ? undefined : filter),
+    enabled: loggedIn,
+  })
+  const rows = ledgers.data?.pages.flatMap((p) => p.content) ?? []
 
   return (
     <>
@@ -99,25 +89,56 @@ export function DepositPage({ refunding = false }: { refunding?: boolean }) {
           <h2 className="text-heading-s">내역</h2>
           <div className="flex flex-wrap gap-2">
             {FILTERS.map((f) => (
-              <Chip key={f.value} selected={kind === f.value} onClick={() => setKind(f.value)}>
+              <Chip key={f.value} selected={filter === f.value} onClick={() => setFilter(f.value)}>
                 {f.label}
               </Chip>
             ))}
           </div>
-          <ul className="flex flex-col">
-            {rows.map((row) => (
-              <li
-                key={`${row.title}-${row.at}`}
-                className="flex items-center justify-between gap-2 border-b border-border-default py-3"
-              >
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <p className="text-label-m">{row.title}</p>
-                  <p className="text-caption text-text-tertiary">{row.at}</p>
-                </div>
-                <p className="text-label-strong tabular-nums">{row.amount}</p>
-              </li>
-            ))}
-          </ul>
+          {ledgers.isPending ? (
+            <div className="flex flex-col gap-3 py-3" aria-label="내역 불러오는 중">
+              <Skeleton shape="rect" className="h-10 w-full" />
+              <Skeleton shape="rect" className="h-10 w-full" />
+              <Skeleton shape="rect" className="h-10 w-full" />
+            </div>
+          ) : ledgers.isError ? (
+            <EmptyState
+              title="내역을 불러오지 못했어요"
+              description="잠시 뒤 다시 시도해 주세요."
+              action={
+                <Button variant="secondary" onClick={() => void ledgers.refetch()}>
+                  다시 불러오기
+                </Button>
+              }
+            />
+          ) : rows.length === 0 ? (
+            <EmptyState title="아직 내역이 없어요" />
+          ) : (
+            <ul className="flex flex-col">
+              {rows.map((row) => (
+                <li
+                  key={`${row.ledgerType}-${row.refId}-${row.createdAt}`}
+                  className="flex items-center justify-between gap-2 border-b border-border-default py-3"
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <p className="text-label-m">{ledgerTitle(row)}</p>
+                    <p className="text-caption text-text-tertiary">
+                      {formatLedgerTime(row.createdAt)}
+                    </p>
+                  </div>
+                  <p className="text-label-strong tabular-nums">{formatLedgerAmount(row.amount)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {ledgers.hasNextPage && (
+            <Button
+              variant="secondary"
+              onClick={() => void ledgers.fetchNextPage()}
+              disabled={ledgers.isFetchingNextPage}
+            >
+              {ledgers.isFetchingNextPage ? '불러오는 중' : '더 보기'}
+            </Button>
+          )}
         </section>
 
         <section className="flex flex-col gap-3 rounded-lg bg-bg-subtle p-5">
