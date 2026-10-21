@@ -11,5 +11,6 @@ export {
   HOLD_STATUS,
   PAYOUT_STAGE,
   PAYOUT_STATUS,
+  payoutStatusLabel,
   RECORD_TYPE,
 } from './model/labels'

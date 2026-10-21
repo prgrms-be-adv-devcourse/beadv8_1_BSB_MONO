@@ -130,7 +130,7 @@ export const PayoutsResponse = zod.object({
   "feeAmount": zod.int(),
   "advanceDeductionAmount": zod.int().describe('1차 정산금 차감 (최종에서 뺀 1차 지급액 − 회수액, 1차는 0)'),
   "payoutAmount": zod.int(),
-  "status": zod.enum(['CALCULATED', 'HELD', 'PAID', 'CANCELED']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, CANCELED: 취소)'),
+  "status": zod.enum(['CALCULATED', 'HELD', 'PAYING', 'PAID', 'CANCELED']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAYING: 지급 중, PAID: 지급 완료, CANCELED: 취소)'),
   "settledAt": zod.iso.datetime({"offset":true}),
   "scheduledPayDate": zod.iso.date(),
   "paidAt": zod.iso.datetime({"offset":true}).nullish()
@@ -168,7 +168,7 @@ export const ItemsResponse = zod.object({
   "payoutCode": zod.string(),
   "raceId": zod.int(),
   "raceName": zod.string(),
-  "payoutStatus": zod.enum(['CALCULATED', 'HELD', 'PAID', 'CANCELED']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, CANCELED: 취소)'),
+  "payoutStatus": zod.enum(['CALCULATED', 'HELD', 'PAYING', 'PAID', 'CANCELED']).describe('정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAYING: 지급 중, PAID: 지급 완료, CANCELED: 취소)'),
   "scheduledPayDate": zod.iso.date()
 })),
   "page": zod.int(),

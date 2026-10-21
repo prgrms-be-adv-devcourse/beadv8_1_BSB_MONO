@@ -55,7 +55,7 @@ export const PayoutStage = {
 } as const;
 
 /**
- * 정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, CANCELED: 취소)
+ * 정산 상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAYING: 지급 중, PAID: 지급 완료, CANCELED: 취소)
  */
 export type PayoutStatus = typeof PayoutStatus[keyof typeof PayoutStatus];
 
@@ -63,6 +63,7 @@ export type PayoutStatus = typeof PayoutStatus[keyof typeof PayoutStatus];
 export const PayoutStatus = {
   CALCULATED: 'CALCULATED',
   HELD: 'HELD',
+  PAYING: 'PAYING',
   PAID: 'PAID',
   CANCELED: 'CANCELED',
 } as const;

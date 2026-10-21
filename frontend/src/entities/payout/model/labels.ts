@@ -8,8 +8,18 @@ type Label = { label: string; tone: BadgeTone }
 export const PAYOUT_STATUS: Record<payoutModel.PayoutStatus, Label> = {
   CALCULATED: { label: '지급 예정', tone: 'neutral' },
   HELD: { label: '지급보류', tone: 'warning' },
+  PAYING: { label: '지급 중', tone: 'neutral' },
   PAID: { label: '지급 완료', tone: 'success' },
   CANCELED: { label: '취소', tone: 'neutral' },
+}
+
+/**
+ * 정산 상태 배지 문구. 백엔드에 상태가 먼저 생겨 매핑에 없는 값이 오면 화면이 깨지지 않게 원래 값을 그대로 보여 준다.
+ */
+export function payoutStatusLabel(status: string): Label {
+  return Object.hasOwn(PAYOUT_STATUS, status)
+    ? PAYOUT_STATUS[status as payoutModel.PayoutStatus]
+    : { label: status, tone: 'neutral' }
 }
 
 export const PAYOUT_STAGE: Record<payoutModel.PayoutStage, string> = {

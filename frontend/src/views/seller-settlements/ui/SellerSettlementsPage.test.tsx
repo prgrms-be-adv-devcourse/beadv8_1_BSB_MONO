@@ -66,6 +66,49 @@ describe('SellerSettlementsPage', () => {
     expect(within(row).getByText('취소')).toBeInTheDocument()
   })
 
+  it('월별 정산: 지급 중과 모르는 상태 값을 깨지지 않고 보여 준다', async () => {
+    const mock = payoutMock.getPayoutsResponseMock()
+    const base = mock.data?.[0]
+    if (!base) throw new Error('월별 정산 목 데이터가 비었어요')
+    server.use(
+      http.get('*/api/v1/payout/seller/payouts', () =>
+        HttpResponse.json({
+          ...mock,
+          data: [
+            { ...base, id: 1, payoutCode: 'ST-1', status: 'PAYING' },
+            { ...base, id: 2, payoutCode: 'ST-2', status: 'SOMETHING_NEW' },
+          ],
+        }),
+      ),
+    )
+    renderPage()
+
+    expect(await screen.findByText('지급 중')).toBeInTheDocument()
+    expect(screen.getByText('SOMETHING_NEW')).toBeInTheDocument()
+  })
+
+  it('건별 정산: 지급 중 상태를 보여 준다', async () => {
+    const mock = payoutMock.getItemsResponseMock()
+    const page = mock.data
+    if (!page) throw new Error('건별 정산 목 데이터가 비었어요')
+    server.use(
+      http.get('*/api/v1/payout/seller/payout-items', () =>
+        HttpResponse.json({
+          ...mock,
+          data: {
+            ...page,
+            content: page.content.map((item) => ({ ...item, payoutStatus: 'PAYING' })),
+          },
+        }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(screen.getByRole('tab', { name: '건별 정산' }))
+    expect(await screen.findByText('지급 중')).toBeInTheDocument()
+  })
+
   it('건별 정산: 기간을 바꾸면 그 기간으로 다시 조회한다', async () => {
     const requests: string[] = []
     server.use(

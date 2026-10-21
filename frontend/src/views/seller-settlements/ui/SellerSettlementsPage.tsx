@@ -11,7 +11,7 @@ import {
   HOLD_REASON,
   HOLD_STATUS,
   PAYOUT_STAGE,
-  PAYOUT_STATUS,
+  payoutStatusLabel,
   recentPayoutMonths,
   RECORD_TYPE,
   type DetailPeriod,
@@ -217,9 +217,7 @@ function MonthlyPayouts({ today }: { today: Date }) {
               {
                 key: 'status',
                 header: '상태',
-                render: (r) => (
-                  <Badge tone={PAYOUT_STATUS[r.status].tone}>{PAYOUT_STATUS[r.status].label}</Badge>
-                ),
+                render: (r) => <PayoutStatusBadge status={r.status} />,
               },
             ]}
           />
@@ -285,11 +283,7 @@ function PayoutItemList({ period }: { period: DetailPeriod }) {
                 key: 'status',
                 header: '상태',
                 width: 'w-30',
-                render: (r) => (
-                  <Badge tone={PAYOUT_STATUS[r.payoutStatus].tone}>
-                    {PAYOUT_STATUS[r.payoutStatus].label}
-                  </Badge>
-                ),
+                render: (r) => <PayoutStatusBadge status={r.payoutStatus} />,
               },
             ]}
           />
@@ -398,4 +392,9 @@ function QueryRows<Row>({
     return <EmptyState title={emptyTitle} description="조회 기간을 바꿔 다시 찾아보세요." />
   }
   return children(query.data)
+}
+
+function PayoutStatusBadge({ status }: { status: string }) {
+  const { label, tone } = payoutStatusLabel(status)
+  return <Badge tone={tone}>{label}</Badge>
 }
