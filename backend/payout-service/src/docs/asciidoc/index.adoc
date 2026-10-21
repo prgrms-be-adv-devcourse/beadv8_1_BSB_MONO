@@ -97,7 +97,8 @@ include::{snippets}/payout-recovery-complete-conflict/http-response.adoc[]
 [[payout-seller]]
 == 정산 조회 (판매자)
 
-`X-Member-Id`를 판매자 ID로 보고 그 판매자의 기록만 돌려준다.
+`X-Member-Id`(회원 ID)를 회원 서비스에 물어 판매자 ID(판매자 신청서 ID)로 바꾸고, 그 판매자의 기록만 돌려준다.
+승인된 판매자가 아니면(신청 없음 · 대기 · 반려) 403, 존재하지 않거나 탈퇴한 회원은 404, 회원 서비스에 묻지 못하면 503이다.
 조회 기간은 나중에 바뀌지 않는 날짜로 자른다: 정산 내역은 정산 월, 건별 정산은 정산 대상일, 지급보류는 보류한 날.
 지급 예정일은 보류를 풀면 바뀌므로 기간 기준으로 쓰지 않는다.
 
@@ -149,6 +150,15 @@ include::{snippets}/payout-seller-missing-period/http-response.adoc[]
 
 .회원 ID 헤더 없음 (401)
 include::{snippets}/payout-seller-unauthorized/http-response.adoc[]
+
+.승인된 판매자가 아님 (403)
+include::{snippets}/payout-seller-forbidden/http-response.adoc[]
+
+.존재하지 않거나 탈퇴한 회원 (404)
+include::{snippets}/payout-seller-member-not-found/http-response.adoc[]
+
+.회원 서비스에서 판매자 정보를 확인하지 못함 (503)
+include::{snippets}/payout-seller-lookup-unavailable/http-response.adoc[]
 
 [[payout-internal]]
 == 내부 API (서비스 간 호출 전용)

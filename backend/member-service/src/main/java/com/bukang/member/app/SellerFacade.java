@@ -8,9 +8,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.member.domain.Seller;
+import com.bukang.member.domain.exception.MemberNotFoundException;
 import com.bukang.member.domain.exception.SellerNotFoundException;
+import com.bukang.member.dto.MemberSellerDto;
 import com.bukang.member.dto.SellerApplyRequestDto;
 import com.bukang.member.dto.SellerDto;
+import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.SellerRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ public class SellerFacade {
 	private final SellerResultCheckUseCase sellerResultCheckUseCase;
 	private final AdminVerifyUseCase adminVerifyUseCase;
 	private final SellerRepository sellerRepository;
+	private final MemberRepository memberRepository;
 
 	@Transactional
 	public SellerDto apply(int memberId, SellerApplyRequestDto request) {
@@ -48,6 +52,16 @@ public class SellerFacade {
 	@Transactional
 	public SellerDto checkMyResult(int memberId) {
 		return SellerDto.from(sellerResultCheckUseCase.check(memberId, LocalDateTime.now()));
+	}
+
+	// 다른 서비스(정산)가 회원 ID로 판매자 ID를 찾는다. 탈퇴했거나 없는 회원은 404, 신청이 없으면 빈 칸으로 돌려준다
+	// 대기·승인 신청이 있으면 다시 신청할 수 없으므로(SellerApplyUseCase) 승인된 신청이 있으면 가장 최근 신청이 그것이다
+	public MemberSellerDto findSellerOfMember(int memberId) {
+		memberRepository.findActiveById(memberId)
+			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."));
+		return sellerRepository.findFirstByMemberIdOrderByIdDesc(memberId)
+			.map(MemberSellerDto::from)
+			.orElse(MemberSellerDto.NONE);
 	}
 
 	// status가 null이면 전체를 최근 신청부터 돌려준다
