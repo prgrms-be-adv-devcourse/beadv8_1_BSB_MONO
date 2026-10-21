@@ -1,6 +1,8 @@
 package com.bukang.order.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -27,6 +29,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -37,11 +40,13 @@ import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
+import com.bukang.order.support.StubSeatHoldPort;
+import com.bukang.order.support.StubSeatHoldPortConfig;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(StubRaceCoursePortConfig.class)
+@Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class})
 class ApiV1ParticipationTest {
 	private static final String BASE_URL = "/api/v1/order/participations";
 	private static final int MEMBER_ID = 1;
@@ -53,8 +58,12 @@ class ApiV1ParticipationTest {
 	@Autowired
 	private MockMvc mockMvc;
 
-	@Autowired
+	// 새 신청서 저장만 일부러 실패시킬 때 쓴다. 그 밖에는 진짜 저장소처럼 동작한다
+	@MockitoSpyBean
 	private ParticipationRepository participationRepository;
+
+	@Autowired
+	private StubSeatHoldPort seatHoldPort;
 
 	@Autowired
 	private StubRaceCoursePort raceCoursePort;
@@ -68,6 +77,7 @@ class ApiV1ParticipationTest {
 	void tearDown() {
 		participationRepository.deleteAll();
 		raceCoursePort.clear();
+		seatHoldPort.clear();
 	}
 
 	@Test
@@ -261,6 +271,48 @@ class ApiV1ParticipationTest {
 
 		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.PENDING);
+		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("남은 결제 전 신청서를 교체로 취소하면, 커밋 뒤 상품에 그 신청서의 자리를 풀어 달라고 한 번 알린다")
+	void replaceReleasesSeatOfCanceledParticipation() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+			.andExpect(status().isCreated());
+
+		// [결제하기]에서 상품은 자리를 잡았는데 주문이 롤백됐을 수 있어, 자리를 잡았는지 몰라도 보낸다(상품은 멱등)
+		assertThat(seatHoldPort.releasedParticipations()).containsExactly(first);
+	}
+
+	@Test
+	@DisplayName("교체 중 새 신청서 저장이 실패해 롤백되면 자리 해제를 보내지 않고, 남은 신청서도 그대로다")
+	void replaceRollbackDoesNotReleaseSeat() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+		doThrow(new IllegalStateException("저장 실패 (테스트)"))
+			.when(participationRepository).saveAndFlush(any(Participation.class));
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+			.andExpect(status().isInternalServerError());
+
+		// 보낸 뒤 롤백되면 살아 있는 신청서의 자리만 풀려, 그 신청서로 다시 결제할 수 없게 된다
+		assertThat(seatHoldPort.releasedParticipations()).isEmpty();
+		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.PENDING);
+	}
+
+	@Test
+	@DisplayName("자리 해제 알림을 보내지 못해도 교체는 커밋되어 201이다")
+	void replaceSucceedsEvenIfReleaseFails() throws Exception {
+		int first = applyAndGetId(MEMBER_ID);
+		seatHoldPort.failRelease(true);
+
+		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
+			.andExpect(status().isCreated());
+
+		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.CANCELED);
 		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
 	}
 
@@ -518,6 +570,8 @@ class ApiV1ParticipationTest {
 		assertThat(canceled.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
 		assertThat(canceled.getActiveFlag()).isNull();
 		assertThat(canceled.getCanceledAt()).isNotNull();
+		// 자리만 잡히고 주문이 롤백된 신청서일 수 있어, 커밋 뒤 상품에 자리를 풀어 달라고 알린다
+		assertThat(seatHoldPort.releasedParticipations()).containsExactly(id);
 
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
 		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "L"), true))

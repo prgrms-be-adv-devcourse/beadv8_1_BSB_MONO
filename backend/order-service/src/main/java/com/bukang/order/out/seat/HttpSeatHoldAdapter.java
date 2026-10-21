@@ -45,7 +45,7 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 	static final String RESTORE_PATH = "/internal/v1/product/holds/{participationId}/restore";
 	static final String UNAVAILABLE_MESSAGE = "상품 서비스에 연결하지 못했습니다. 잠시 뒤 다시 시도해주세요.";
 	static final String HOLD_REJECTED_MESSAGE = "자리를 확보할 수 없는 신청입니다.";
-	// 자리 해제 메시지를 브로커가 받았는지 기다리는 최대 시간 (만료 처리 한 건이 이보다 오래 붙잡히지 않게)
+	// 자리 해제 메시지를 브로커가 받았는지 기다리는 최대 시간 (만료 처리·결제 전 취소 한 건이 이보다 오래 붙잡히지 않게)
 	static final Duration RELEASE_TIMEOUT = Duration.ofSeconds(3);
 
 	private static final ParameterizedTypeReference<RsData<HoldBody>> HOLD_TYPE = new ParameterizedTypeReference<>() {
@@ -142,7 +142,7 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 	}
 
 	private ExternalServiceUnavailableException releaseFailed(int participationId, Exception exception) {
-		log.warn("자리 해제 메시지를 보내지 못해 만료를 다음에 다시 합니다. participationId={}, cause={}",
+		log.warn("자리 해제 메시지를 보내지 못했습니다. participationId={}, cause={}",
 			participationId, exception.toString());
 		return new ExternalServiceUnavailableException(UNAVAILABLE_MESSAGE);
 	}
