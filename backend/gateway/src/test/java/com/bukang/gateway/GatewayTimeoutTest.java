@@ -136,6 +136,18 @@ class GatewayTimeoutTest {
 		assertThat(order.getMetadata()).doesNotContainKey(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR);
 	}
 
+	@Test
+	@DisplayName("예치금 충전 확정 라우트는 Toss 승인 대기보다 긴 30초로 늘어나 있다")
+	void chargeConfirmRouteHasLongerResponseTimeout() {
+		Route chargeConfirm = routeLocator.getRoutes()
+			.filter(route -> route.getId().equals("cash-charge-confirm"))
+			.blockFirst();
+
+		assertThat(chargeConfirm).isNotNull();
+		Object timeout = chargeConfirm.getMetadata().get(RouteMetadataUtils.RESPONSE_TIMEOUT_ATTR);
+		assertThat(Long.parseLong(String.valueOf(timeout))).isEqualTo(30000L);
+	}
+
 	private static void respondOk(HttpExchange exchange) throws IOException {
 		byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
 		exchange.sendResponseHeaders(200, body.length);

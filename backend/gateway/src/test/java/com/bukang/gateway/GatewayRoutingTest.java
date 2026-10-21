@@ -83,6 +83,7 @@ class GatewayRoutingTest {
 		"/api/v1/member/members/1, member",
 		"/api/v1/auth/login, member",
 		"/api/v1/cash/wallets, cash",
+		"/api/v1/cash/charges/confirm, cash",
 		"/api/v1/payout/payouts, payout",
 		"/api/v1/file/files/1, file",
 		"/api/v1/order/orders?page=0, order",
