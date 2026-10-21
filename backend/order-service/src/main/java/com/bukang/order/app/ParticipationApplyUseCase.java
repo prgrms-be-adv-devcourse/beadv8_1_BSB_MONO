@@ -4,11 +4,14 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.ParticipantInfo;
 import com.bukang.order.domain.Participation;
+import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.domain.ParticipationType;
 import com.bukang.order.domain.exception.AgeRestrictionException;
 import com.bukang.order.domain.exception.ApplicationPeriodException;
 import com.bukang.order.domain.exception.DuplicateParticipationException;
@@ -49,9 +52,7 @@ public class ParticipationApplyUseCase {
 		}
 		checkAge(course, participant);
 		ParticipantInfo checked = checkTshirtSize(course, checkShippingAddress(course, participant));
-		if (participationRepository.existsByRaceIdAndMemberIdAndActiveFlagTrue(course.raceId(), memberId)) {
-			throw new DuplicateParticipationException("이미 이 대회에 신청했습니다.");
-		}
+		replacePendingParticipation(course.raceId(), memberId, now);
 		Participation participation = Participation.individual(
 			memberId, course.raceId(), course.raceCourseId(), checked, now);
 		try {
@@ -64,6 +65,36 @@ public class ParticipationApplyUseCase {
 			}
 			throw exception;
 		}
+	}
+
+	/**
+	 * 같은 대회에 결제 전(PENDING) 개인 신청서가 남아 있으면 취소하고 새로 받는다. 결제 대기·결제된 신청이 있으면 409다
+	 * 신청서 화면은 [바로 결제]·[장바구니 담기] 때마다 신청서를 먼저 저장하는데, 주문 생성이 실패하거나(대기열 입장 끝 등)
+	 * 결제 없이 떠나면 결제 전 신청서는 기한이 없어 남는다. 프론트는 그 ID를 메모리에만 두므로, 막으면 그 대회에 다시 신청할 수 없다
+	 * 잠근 뒤 상태를 다시 본다. [결제하기]가 먼저 잠가 결제 대기로 바꿨으면 409, 그사이 끝난 신청이면 그대로 새로 받는다
+	 */
+	private void replacePendingParticipation(int raceId, int memberId, LocalDateTime now) {
+		Optional<Integer> activeId = participationRepository.findActiveIdByRaceIdAndMemberId(raceId, memberId);
+		if (activeId.isEmpty()) {
+			return;
+		}
+		Optional<Participation> active;
+		try {
+			active = participationRepository.findByIdForUpdate(activeId.get());
+		} catch (PessimisticLockingFailureException exception) {
+			throw new ParticipationChangeRetryException("이전 신청서를 처리하고 있습니다. 잠시 뒤 다시 시도해주세요.");
+		}
+		if (active.isEmpty() || !active.get().getStatus().isActive()) {
+			return;
+		}
+		Participation participation = active.get();
+		if (participation.getStatus() != ParticipationStatus.PENDING
+			|| participation.getParticipationType() != ParticipationType.INDIVIDUAL) {
+			throw new DuplicateParticipationException("이미 이 대회에 신청했습니다.");
+		}
+		participation.cancelBeforePayment(now);
+		// Hibernate는 INSERT를 UPDATE보다 먼저 보내므로, 취소를 먼저 반영해야 새 신청서가 유니크 제약에 걸리지 않는다
+		participationRepository.flush();
 	}
 
 	private boolean isActiveParticipationConflict(DataIntegrityViolationException exception) {

@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
+import { useBookingFlow } from '@/features/booking'
 import { isQueueNotAdmitted, QUEUE_NOT_ADMITTED_CODE } from '@/features/queue-admission'
 import { ApiError, orderApi, unwrapData, useIdempotencyKey, type orderModel } from '@/shared/api'
 import { formatWon } from '@/shared/lib'
@@ -75,10 +76,13 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
   const [failure, setFailure] = useState<CheckoutResult | null>(null)
   // 같은 참가 신청으로 다시 누르면(두 번 클릭 · 실패 뒤 재시도) 같은 Idempotency-Key를 보낸다.
   const checkoutKey = useIdempotencyKey()
+  const forgetApplications = useBookingFlow((s) => s.forgetApplications)
 
   const remove = useMutation({
-    mutationFn: async (cartItemId: number) => unwrapData(await orderApi.removeItem(cartItemId)),
-    onSuccess: (cart) => {
+    mutationFn: async (line: CartLine) => unwrapData(await orderApi.removeItem(line.cartItemId)),
+    onSuccess: (cart, line) => {
+      // 빼면 서버가 그 종목의 결제 전 신청서를 취소한다. 다시 신청할 때 취소된 신청서를 고치지 않게 잊는다
+      forgetApplications([String(line.raceCourseId)])
       queryClient.setQueryData(orderApi.getFindCartQueryKey(), {
         status: 200,
         message: '',
@@ -175,8 +179,8 @@ function CartContent({ initialQueueDialogOpen }: { initialQueueDialogOpen: boole
                   ? failure
                   : undefined
               }
-              removing={remove.isPending && remove.variables === line.cartItemId}
-              onRemove={() => remove.mutate(line.cartItemId)}
+              removing={remove.isPending && remove.variables?.cartItemId === line.cartItemId}
+              onRemove={() => remove.mutate(line)}
             />
           ))}
         </ul>
@@ -252,11 +256,12 @@ function CartLineCard({
         </div>
         {application ? (
           <p className="text-body-s text-text-secondary">
-            참가자 {application.participantName} · 수량 1 (고정)
+            {application.participantName ? `참가자 ${application.participantName} · ` : ''}수량 1
+            (고정)
             {race ? ` · 접수 마감 ${race.dDay}` : ''}
           </p>
         ) : (
-          // 이 기기에서 저장한 참가 신청이 없으면 결제에 보낼 참가 신청 ID를 알 수 없다
+          // 장바구니에 붙은 참가 신청이 없으면(신청서 없이 담음) 결제에 보낼 참가 신청 ID를 알 수 없다
           <p className="text-body-s text-text-secondary">
             신청서를 찾을 수 없어 결제할 수 없어요. 빼고 다시 담아 주세요.
           </p>

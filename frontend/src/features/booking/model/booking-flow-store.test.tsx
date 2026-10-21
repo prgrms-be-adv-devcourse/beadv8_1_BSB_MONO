@@ -18,6 +18,7 @@ function renderBookingFlow(initialState: BookingFlowInitial = {}) {
       selection: useBookingFlow((s) => s.selection),
       applications: useBookingFlow((s) => s.applications),
       submitApplication: useBookingFlow((s) => s.submitApplication),
+      forgetApplications: useBookingFlow((s) => s.forgetApplications),
     }),
     { wrapper },
   )
@@ -40,5 +41,17 @@ describe('submitApplication', () => {
       '7': earlier,
       '1': { raceId: '1', optionId: '1', participationId: 11, participantName: '김러너' },
     })
+  })
+})
+
+describe('forgetApplications', () => {
+  it('장바구니에서 뺀 종목의 참가 신청만 지우고 다른 종목은 그대로 둔다', () => {
+    const removed = { raceId: '1', optionId: '1', participationId: 11, participantName: '김러너' }
+    const kept = { raceId: '2', optionId: '7', participationId: 3, participantName: '김러너' }
+    const { result } = renderBookingFlow({ applications: { '1': removed, '7': kept } })
+
+    act(() => result.current.forgetApplications(['1']))
+
+    expect(result.current.applications).toEqual({ '7': kept })
   })
 })

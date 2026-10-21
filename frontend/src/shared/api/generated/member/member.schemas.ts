@@ -235,6 +235,11 @@ export interface SellerDto {
   reviewedAt?: string | null;
   /** @nullable */
   rejectReason?: string | null;
+  /**
+     * 신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null
+     * @nullable
+     */
+  resultCheckedAt?: string | null;
 }
 
 export interface RsDataMemberDto {

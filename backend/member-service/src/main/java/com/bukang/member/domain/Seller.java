@@ -12,6 +12,7 @@ import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.member.domain.exception.SellerAlreadyReviewedException;
+import com.bukang.member.domain.exception.SellerNotReviewedException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -84,6 +85,10 @@ public class Seller extends BaseEntity {
 	@Column(name = "reviewed_by")
 	private Integer reviewedBy;
 
+	// 신청자가 승인·반려 결과를 처음 본 시각. 아직 안 봤으면 null. 화면 표시용이라 이벤트에는 넣지 않는다
+	@Column(name = "result_checked_at")
+	private LocalDateTime resultCheckedAt;
+
 	// 비사업자는 상호·사업자등록번호를 보내도 버린다 (BE-020 결정 4)
 	public Seller(
 		Member member,
@@ -133,6 +138,16 @@ public class Seller extends BaseEntity {
 		this.status = SellerStatus.REJECTED;
 		this.rejectReason = WITHDRAWN_REJECT_REASON;
 		publishChangedEvent();
+	}
+
+	// 심사가 끝난 신청만 결과를 봤다고 남긴다. 다시 불러도 처음 본 시각을 그대로 둔다
+	public void checkResult(LocalDateTime now) {
+		if (status == SellerStatus.PENDING) {
+			throw new SellerNotReviewedException("아직 심사 중인 판매자 신청입니다.");
+		}
+		if (resultCheckedAt == null) {
+			this.resultCheckedAt = now;
+		}
 	}
 
 	private void review(int adminId, LocalDateTime now) {

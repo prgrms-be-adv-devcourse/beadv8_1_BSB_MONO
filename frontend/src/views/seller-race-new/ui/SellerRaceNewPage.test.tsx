@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
@@ -66,15 +66,48 @@ describe('SellerRaceNewPage', () => {
     expect(requested).toBe(false)
   })
 
-  it('접수 마감이 대회 일시보다 늦으면 알려 준다', async () => {
+  it('대회와 같은 날 접수 마감 시간이 대회 시각보다 늦으면 알려 준다', async () => {
     renderPage()
     await pickDates('대회 일시', [25])
     await typeTime('대회 일시 시간', '0800')
-    await pickDates('접수 기간', [20, 28])
+    // 대회일 뒤 날짜는 달력에서 고를 수 없으므로, 같은 날(10/25) 18:00으로 마감한다
+    await pickDates('접수 기간', [20, 25])
     await typeTime('접수 기간 시작 시간', '1000')
     await typeTime('접수 기간 끝 시간', '1800')
     await userEvent.click(screen.getByRole('button', { name: '등록하기' }))
     expect(await screen.findByText(RACE_FORM_ERRORS.closeBeforeRace)).toBeInTheDocument()
+  })
+
+  it('등록하기를 누르기 전에도 순서 오류를 칸 아래에 보여 주고, 대회 일시를 바꾸면 다시 계산한다', async () => {
+    renderPage()
+    await pickDates('대회 일시', [25])
+    await typeTime('대회 일시 시간', '0800')
+    await pickDates('접수 기간', [20, 24])
+    await typeTime('접수 기간 시작 시간', '1000')
+    await typeTime('접수 기간 끝 시간', '1800')
+    expect(screen.queryByText(RACE_FORM_ERRORS.closeBeforeRace)).not.toBeInTheDocument()
+
+    // 대회를 접수 마감(10/24) 전날로 당기면 접수 칸에 바로 오류가 생긴다
+    await pickDates('대회 일시', [23])
+    expect(await screen.findByText(RACE_FORM_ERRORS.closeBeforeRace)).toBeInTheDocument()
+
+    // 다시 뒤로 미루면 오류가 사라진다
+    await pickDates('대회 일시', [26])
+    await waitFor(() =>
+      expect(screen.queryByText(RACE_FORM_ERRORS.closeBeforeRace)).not.toBeInTheDocument(),
+    )
+  })
+
+  it('접수 기간 달력에서 이틀 뒤 전 날과 대회일 뒤 날은 고를 수 없다', async () => {
+    renderPage()
+    await pickDates('대회 일시', [25])
+    const group = screen.getByRole('group', { name: '접수 기간' })
+    await userEvent.click(within(group).getAllByRole('button')[0])
+    // 오늘은 10/1(테스트 고정), 이틀 뒤는 10/3
+    expect(screen.getByRole('button', { name: /10월 2일/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /10월 3일/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /10월 25일/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /10월 26일/ })).toBeDisabled()
   })
 
   it('시간 칸은 숫자만 쳐도 콜론을 넣고, 15분 단위가 아니면 알려 준다', async () => {

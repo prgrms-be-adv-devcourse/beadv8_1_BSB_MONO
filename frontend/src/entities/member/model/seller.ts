@@ -1,4 +1,4 @@
-import type { memberModel } from '@/shared/api'
+import { ApiError, type memberModel } from '@/shared/api'
 import type { BadgeTone } from '@/shared/ui'
 
 // 판매자 신청(GET /api/v1/member/sellers/me) 값을 화면에 보여 주는 규칙. 신청 결과 · 신청 내용 · 판매자 설정이 같이 쓴다.
@@ -22,4 +22,9 @@ export const SELLER_TYPE_LABEL: Record<memberModel.SellerDtoSellerType, string> 
 export function formatSellerDate(value: string): string {
   const [year, month, day] = value.slice(0, 10).split('-').map(Number)
   return `${year}. ${month}. ${day}.`
+}
+
+/** 내 신청이 없을 때(404 SELLER_NOT_FOUND)는 오류가 아니라 "아직 신청 전"이다. */
+export function isNoApplication(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'SELLER_NOT_FOUND'
 }

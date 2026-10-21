@@ -302,6 +302,172 @@
           }
         }
       }
+    },
+    "/api/v1/cash/wallets/ledgers": {
+      "get": {
+        "tags": [
+          "Cash"
+        ],
+        "summary": "예치금 내역 조회",
+        "description": "요청자 본인 지갑의 내역을 최신순으로 조회한다. category로 탭(CHARGE/PAYMENT/REFUND/WITHDRAWAL/PAYOUT)을 필터링할 수 있고, 생략하면 전체를 돌려준다.",
+        "operationId": "getLedgers",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "조회할 회원 ID (게이트웨이가 Access Token에서 넣어준다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "exclusiveMinimum": 0
+            },
+            "example": 3
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "탭 필터. 생략하면 전체",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CHARGE",
+                "PAYMENT",
+                "REFUND",
+                "WITHDRAWAL",
+                "PAYOUT"
+              ]
+            },
+            "example": "CHARGE"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "페이지 번호 (0부터)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0,
+              "minimum": 0
+            },
+            "example": 0
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "페이지 크기 (1~100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1
+            },
+            "example": 20
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공 (내역이 없으면 빈 목록)",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "예치금 내역을 조회했습니다.",
+                  "data": {
+                    "content": [
+                      {
+                        "category": "CHARGE",
+                        "ledgerType": "충전__PG결제_토스페이먼츠",
+                        "amount": 10000,
+                        "balanceAfter": 60000,
+                        "createdAt": "2026-10-20T09:03:03.319058",
+                        "refId": 1
+                      }
+                    ],
+                    "page": 0,
+                    "size": 20,
+                    "totalElements": 1,
+                    "totalPages": 1
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "페이지·회원 ID·category 형식 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "examples": {
+                  "페이지 크기 초과": {
+                    "description": "페이지 크기 초과",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "한 번에 100개까지 조회할 수 있습니다.",
+                      "data": null
+                    }
+                  },
+                  "값 형식 오류": {
+                    "description": "값 형식 오류",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "요청 값의 형식이 올바르지 않습니다.",
+                      "data": null
+                    }
+                  },
+                  "회원 ID가 0 이하": {
+                    "description": "회원 ID가 0 이하",
+                    "value": {
+                      "status": 400,
+                      "code": "INVALID_REQUEST",
+                      "message": "회원 ID가 올바르지 않습니다.",
+                      "data": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "지갑 없음 (회원 가입 이벤트가 아직 처리되지 않았거나 없는 회원)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "message": "존재하지 않는 지갑입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

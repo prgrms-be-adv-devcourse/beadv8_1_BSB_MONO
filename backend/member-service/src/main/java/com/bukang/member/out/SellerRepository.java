@@ -31,6 +31,11 @@ public interface SellerRepository extends JpaRepository<Seller, Integer> {
 	@Query("select s from Seller s where s.id = :id")
 	Optional<Seller> findByIdForUpdate(@Param("id") int id);
 
+	// 결과 확인을 남길 가장 최근 신청. 잠가서 같은 요청이 동시에 와도 처음 기록한 시각을 덮어쓰지 않게 한다
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select s from Seller s where s.member.id = :memberId order by s.id desc limit 1")
+	Optional<Seller> findLatestByMemberIdForUpdate(@Param("memberId") int memberId);
+
 	// 탈퇴할 때 반려할 대기 중 신청. 잠가서 같은 신청을 동시에 승인하면 뒤 요청이 409가 되게 한다 (PRO-217)
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select s from Seller s where s.member.id = :memberId and s.status = :status")

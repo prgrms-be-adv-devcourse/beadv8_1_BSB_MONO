@@ -284,6 +284,107 @@ describe('SellerApplyResultPage 상태별 카드', () => {
   })
 })
 
+describe('SellerApplyResultPage 결과 확인 기록', () => {
+  const countResultChecks = (
+    respond: () => Response = () => HttpResponse.json(sellerResponse({})),
+  ) => {
+    const calls = { count: 0 }
+    server.use(
+      http.post('*/api/v1/member/sellers/me/result-check', () => {
+        calls.count += 1
+        return respond()
+      }),
+    )
+    return calls
+  }
+
+  it.each(['APPROVED', 'REJECTED'] as const)(
+    '%s 결과를 처음 보여 주면 result-check를 한 번 부르고 내 신청을 다시 불러온다',
+    async (status) => {
+      let mineCalls = 0
+      server.use(
+        http.get('*/api/v1/member/sellers/me', () => {
+          mineCalls += 1
+          return HttpResponse.json(
+            sellerResponse({
+              status,
+              resultCheckedAt: mineCalls === 1 ? null : '2026-10-06T12:30:41',
+            }),
+          )
+        }),
+      )
+      const calls = countResultChecks()
+      renderWithClient(<SellerApplyResultPage />)
+
+      await screen.findAllByRole('heading', { level: 2 })
+      await waitFor(() => expect(calls.count).toBe(1))
+      // 다시 불러온 응답에는 시각이 있어 또 부르지 않는다
+      await waitFor(() => expect(mineCalls).toBe(2))
+      expect(calls.count).toBe(1)
+    },
+  )
+
+  it('서버가 resultCheckedAt을 주지 않아도(#220 전) 부른다', async () => {
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'APPROVED' })))
+    const calls = countResultChecks()
+    renderWithClient(<SellerApplyResultPage />)
+
+    await waitFor(() => expect(calls.count).toBe(1))
+  })
+
+  it('이미 확인한 결과면 부르지 않는다', async () => {
+    server.use(
+      memberMock.getFindMineMockHandler(
+        sellerResponse({ status: 'APPROVED', resultCheckedAt: '2026-10-06T12:30:41' }),
+      ),
+    )
+    const calls = countResultChecks()
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(await screen.findByText('판매자로 승인됐어요')).toBeInTheDocument()
+    expect(calls.count).toBe(0)
+  })
+
+  it('심사 중이면 부르지 않는다', async () => {
+    server.use(
+      memberMock.getFindMineMockHandler(
+        sellerResponse({ status: 'PENDING', resultCheckedAt: null }),
+      ),
+    )
+    const calls = countResultChecks()
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(await screen.findByText('관리자가 신청 내용을 확인하고 있어요')).toBeInTheDocument()
+    expect(calls.count).toBe(0)
+  })
+
+  it.each([
+    [
+      '409 SELLER_NOT_REVIEWED',
+      () => errorResponse(409, 'SELLER_NOT_REVIEWED', '아직 심사 중인 판매자 신청입니다.'),
+    ],
+    ['404(#220 전 백엔드)', () => new HttpResponse(null, { status: 404 })],
+    ['500', () => new HttpResponse(null, { status: 500 })],
+  ])(
+    'result-check가 %s로 실패해도 결과 카드를 그대로 보여 주고 다시 부르지 않는다',
+    async (_, respond) => {
+      server.use(
+        memberMock.getFindMineMockHandler(
+          sellerResponse({ status: 'APPROVED', resultCheckedAt: null }),
+        ),
+      )
+      const calls = countResultChecks(respond)
+      renderWithClient(<SellerApplyResultPage />)
+
+      expect(await screen.findByText('판매자로 승인됐어요')).toBeInTheDocument()
+      await waitFor(() => expect(calls.count).toBe(1))
+      expect(screen.getByRole('link', { name: '판매자 홈으로' })).toHaveAttribute('href', '/seller')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(calls.count).toBe(1)
+    },
+  )
+})
+
 describe('SellerApplyPage 정산 계좌', () => {
   it('서버가 받지 않는 계좌 칸 대신 판매자 설정에서 등록한다고 안내한다', () => {
     renderWithClient(<SellerApplyPage />)
