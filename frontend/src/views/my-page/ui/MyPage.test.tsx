@@ -147,3 +147,143 @@ describe('MyPage 참가 대회 수', () => {
     expect(await screen.findByText('0개')).toBeInTheDocument()
   })
 })
+
+describe('MyPage 판매자 메뉴', () => {
+  const MEMBER_ID = 7
+  const SEEN_KEY = `members:${MEMBER_ID}:seller-approval-seen`
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    server.use(
+      memberMock.getFindMeMockHandler({
+        status: 200,
+        message: '내 정보를 조회했습니다.',
+        data: {
+          id: MEMBER_ID,
+          nickname: '달리는곰',
+          email: 'bear@crewrun.kr',
+          phone: '01098765432',
+          name: '김곰',
+          birthDate: '1990-01-31',
+        },
+      }),
+    )
+  })
+
+  const mineResponds = (status: 'PENDING' | 'REJECTED' | 'APPROVED') =>
+    server.use(
+      memberMock.getFindMineMockHandler({
+        status: 200,
+        message: '판매자 신청 내역을 조회했습니다.',
+        data: {
+          // 신청서 ID는 회원 ID와 일부러 다르게 둔다
+          id: 99,
+          memberId: MEMBER_ID,
+          sellerType: 'BUSINESS',
+          businessName: '크루런 스포츠',
+          businessNumber: '123-45-67890',
+          representativeName: '김러너',
+          status,
+          requestedAt: '2026-10-05T21:25:35',
+        },
+      }),
+    )
+
+  const renderPage = () => {
+    setAccessToken('access-token')
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MyPage />
+      </QueryClientProvider>,
+    )
+  }
+
+  // 회원 정보가 화면에 뜬 뒤(회원 ID를 안 뒤) 판매자 줄을 본다
+  const sellerLink = async (name: RegExp) => {
+    await screen.findByText('달리는곰')
+    return screen.findByRole('link', { name })
+  }
+
+  it('승인됐지만 이 브라우저에서 승인 결과를 아직 안 봤으면 판매자 센터가 결과 화면으로 간다', async () => {
+    mineResponds('APPROVED')
+    renderPage()
+
+    expect(await sellerLink(/판매자 센터/)).toHaveAttribute('href', '/seller-apply/result')
+  })
+
+  it('승인 결과를 이미 봤으면(회원 ID 키) 판매자 센터가 판매자 홈으로 바로 간다', async () => {
+    window.localStorage.setItem(SEEN_KEY, 'true')
+    mineResponds('APPROVED')
+    renderPage()
+
+    await vi.waitFor(async () =>
+      expect(await sellerLink(/판매자 센터/)).toHaveAttribute('href', '/seller'),
+    )
+  })
+
+  it('다른 회원이 본 기록(신청서 ID 99 키 포함)으로는 바로 가지 않는다', async () => {
+    window.localStorage.setItem('members:99:seller-approval-seen', 'true')
+    window.localStorage.setItem('members:1:seller-approval-seen', 'true')
+    mineResponds('APPROVED')
+    renderPage()
+
+    expect(await sellerLink(/판매자 센터/)).toHaveAttribute('href', '/seller-apply/result')
+  })
+
+  it('localStorage를 읽지 못하면 결과 화면으로 보낸다', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError')
+    })
+    mineResponds('APPROVED')
+    renderPage()
+
+    expect(await sellerLink(/판매자 센터/)).toHaveAttribute('href', '/seller-apply/result')
+    getItem.mockRestore()
+  })
+
+  it.each(['PENDING', 'REJECTED'] as const)(
+    '%s(심사 중 · 반려)이면 판매자 등록 신청 줄이 결과 화면으로 간다',
+    async (status) => {
+      mineResponds(status)
+      renderPage()
+
+      await vi.waitFor(async () =>
+        expect(await sellerLink(/판매자 등록 신청/)).toHaveAttribute(
+          'href',
+          '/seller-apply/result',
+        ),
+      )
+      expect(screen.queryByRole('link', { name: /판매자 센터/ })).not.toBeInTheDocument()
+    },
+  )
+
+  it('신청한 적이 없으면(404 SELLER_NOT_FOUND) 판매자 등록 신청 줄이 신청 화면으로 간다', async () => {
+    server.use(
+      http.get('*/api/v1/member/sellers/me', () =>
+        HttpResponse.json(
+          {
+            status: 404,
+            code: 'SELLER_NOT_FOUND',
+            message: '판매자 신청 내역이 없습니다.',
+            data: null,
+          },
+          { status: 404 },
+        ),
+      ),
+    )
+    renderPage()
+
+    await vi.waitFor(async () =>
+      expect(await sellerLink(/판매자 등록 신청/)).toHaveAttribute('href', '/seller-apply'),
+    )
+  })
+
+  it('신청 상태를 불러오지 못하면 줄은 그대로 두고 결과 화면으로 보낸다', async () => {
+    server.use(http.get('*/api/v1/member/sellers/me', () => HttpResponse.error()))
+    renderPage()
+
+    expect(await sellerLink(/판매자 등록 신청/)).toHaveAttribute('href', '/seller-apply/result')
+  })
+})

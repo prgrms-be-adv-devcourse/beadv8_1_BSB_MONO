@@ -284,6 +284,56 @@ describe('SellerApplyResultPage 상태별 카드', () => {
   })
 })
 
+describe('SellerApplyResultPage 승인 결과 봤음 기록', () => {
+  const MEMBER_ID = 7
+  const SEEN_KEY = `members:${MEMBER_ID}:seller-approval-seen`
+
+  beforeEach(() => {
+    window.localStorage.clear()
+    server.use(
+      memberMock.getFindMeMockHandler({
+        status: 200,
+        message: '내 정보를 조회했습니다.',
+        data: { id: MEMBER_ID, nickname: '달리는곰', email: 'bear@crewrun.kr' },
+      }),
+    )
+  })
+
+  it('승인 카드를 보여 주면 회원 ID 키로 봤다고 남긴다(신청서 ID 키가 아니다)', async () => {
+    server.use(
+      memberMock.getFindMineMockHandler(
+        sellerResponse({ id: 99, memberId: MEMBER_ID, status: 'APPROVED' }),
+      ),
+    )
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(await screen.findByText('판매자로 승인됐어요')).toBeInTheDocument()
+    await waitFor(() => expect(window.localStorage.getItem(SEEN_KEY)).toBe('true'))
+    expect(window.localStorage.getItem('members:99:seller-approval-seen')).toBeNull()
+  })
+
+  it.each(['PENDING', 'REJECTED'] as const)('%s 카드는 봤다고 남기지 않는다', async (status) => {
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status })))
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(await screen.findAllByRole('heading', { level: 2 })).toHaveLength(1)
+    expect(window.localStorage.getItem(SEEN_KEY)).toBeNull()
+  })
+
+  it('localStorage에 쓰지 못해도 승인 카드는 그대로 보여 준다', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'APPROVED' })))
+    renderWithClient(<SellerApplyResultPage />)
+
+    expect(await screen.findByText('판매자로 승인됐어요')).toBeInTheDocument()
+    await waitFor(() => expect(setItem).toHaveBeenCalled())
+    expect(screen.getByRole('link', { name: '판매자 홈으로' })).toHaveAttribute('href', '/seller')
+    setItem.mockRestore()
+  })
+})
+
 describe('SellerApplyPage 정산 계좌', () => {
   it('서버가 받지 않는 계좌 칸 대신 판매자 설정에서 등록한다고 안내한다', () => {
     renderWithClient(<SellerApplyPage />)

@@ -4,12 +4,17 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 
 import { ConsoleCard } from '@/widgets/console-page'
 import { loginHref, useAuthStatus } from '@/features/auth'
-import { formatSellerDate, SELLER_STATUS } from '@/entities/member'
+import {
+  formatSellerDate,
+  isNoApplication,
+  markSellerApprovalSeen,
+  SELLER_STATUS,
+} from '@/entities/member'
 import { memberApi, unwrapData, type memberModel } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import {
@@ -28,7 +33,6 @@ import {
 
 import {
   applyErrorMessage,
-  isNoApplication,
   SELLER_API_ERRORS,
   toApplyRequest,
   toApplyStatus,
@@ -281,15 +285,24 @@ function resultCard(seller: memberModel.SellerDto): ResultCard {
 
 // 피그마 V2 · S01-1 판매자 등록 신청 · 결과 (심사 중 · 반려 · 승인 중 내 신청 상태에 맞는 카드 하나)
 // 내 신청 조회(GET /api/v1/member/sellers/me)로 상태를 가져온다. 신청 내역이 없으면(404 SELLER_NOT_FOUND) 신청하러 가도록 안내한다.
+// 승인 카드를 보여 주면 이 회원은 승인 결과를 봤다고 남긴다. 그 뒤로 마이의 "판매자 센터"는 판매자 홈으로 바로 간다.
 export function SellerApplyResultPage() {
+  const authenticated = useAuthStatus() === 'authenticated'
   const mine = memberApi.useFindMine({
     query: {
       select: unwrapData,
-      enabled: useAuthStatus() === 'authenticated',
+      enabled: authenticated,
       // 신청 내역이 없는 404는 다시 불러도 같아서 재시도하지 않는다.
       retry: false,
     },
   })
+  // 키에는 신청서 ID가 아니라 회원 ID(내 정보 조회의 id)를 쓴다
+  const memberId = memberApi.useFindMe({ query: { select: unwrapData, enabled: authenticated } })
+    .data?.id
+  const approved = mine.data?.status === 'APPROVED'
+  useEffect(() => {
+    if (approved && memberId !== undefined) markSellerApprovalSeen(memberId)
+  }, [approved, memberId])
 
   return (
     <FormBody width="w-180" title="판매자 등록 신청 결과">
