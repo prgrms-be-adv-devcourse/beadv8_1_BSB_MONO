@@ -40,17 +40,34 @@ describe('SellerSettlementsPage', () => {
     renderPage()
 
     const finalRow = (await screen.findByText('ST-20260926-0002')).closest('tr')!
-    expect(within(finalRow).getByText('최종')).toBeInTheDocument()
+    expect(within(finalRow).getByText('최종 · 9월')).toBeInTheDocument()
     expect(within(finalRow).getByText('₩5,500')).toBeInTheDocument()
     expect(within(finalRow).getByText('₩40,000')).toBeInTheDocument()
     expect(within(finalRow).getByText('₩54,500')).toBeInTheDocument()
     expect(within(finalRow).getByText('지급 예정')).toBeInTheDocument()
 
     const firstRow = screen.getByText('ST-20260916-0001').closest('tr')!
-    expect(within(firstRow).getByText('1차')).toBeInTheDocument()
+    expect(within(firstRow).getByText('1차 · 9월')).toBeInTheDocument()
     expect(within(firstRow).getAllByText('–')).toHaveLength(2)
     expect(within(firstRow).getByText('₩40,000')).toBeInTheDocument()
     expect(within(firstRow).getByText('지급 예정')).toBeInTheDocument()
+  })
+
+  it('월별 정산: 1차와 최종이 다른 달이면 구분 칸에 각자의 정산 월을 보여 준다', async () => {
+    const mock = payoutMock.getPayoutsResponseMock()
+    const [final, first] = mock.data ?? []
+    if (!final || !first) throw new Error('월별 정산 목 데이터가 비었어요')
+    server.use(
+      http.get('*/api/v1/payout/seller/payouts', () =>
+        HttpResponse.json({ ...mock, data: [{ ...final, payoutMonth: '2026-10' }, first] }),
+      ),
+    )
+    renderPage()
+
+    const finalRow = (await screen.findByText('ST-20260926-0002')).closest('tr')!
+    expect(within(finalRow).getByText('최종 · 10월')).toBeInTheDocument()
+    const firstRow = screen.getByText('ST-20260916-0001').closest('tr')!
+    expect(within(firstRow).getByText('1차 · 9월')).toBeInTheDocument()
   })
 
   it('월별 정산: 취소된 정산은 취소로 보인다', async () => {

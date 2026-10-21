@@ -173,8 +173,10 @@ function MonthlyPayouts({ today }: { today: Date }) {
               {
                 key: 'stage',
                 header: '구분',
-                width: 'w-15',
-                render: (r) => PAYOUT_STAGE[r.payoutStage],
+                width: 'w-24',
+                // 1차와 최종은 서로 다른 달에 속할 수 있어, 정산 월 열 대신 구분 칸에 월을 함께 쓴다
+                render: (r) =>
+                  `${PAYOUT_STAGE[r.payoutStage]} · ${Number(r.payoutMonth.slice(5, 7))}월`,
               },
               {
                 key: 'sales',
