@@ -6,11 +6,11 @@ import { useBookingFlow, type BookingApplication } from '@/features/booking'
 import { raceDetailQueryOptions, type RaceDetail, type RaceOption } from '@/entities/race'
 import { orderApi, unwrapData, type orderModel } from '@/shared/api'
 
-/** 장바구니 한 줄. 장바구니 API는 종목 ID만 주므로 이번에 저장한 참가 신청과 대회 상세를 붙인다. */
+/** 장바구니 한 줄. 장바구니 항목에 붙은 결제 전 참가 신청과 대회 상세를 붙인다. */
 export type CartLine = {
   cartItemId: number
   raceCourseId: number
-  /** 이 기기에서 저장한 참가 신청. 없으면(다른 기기에서 담음 · 새로고침) 결제에 보낼 참가 신청 ID를 모른다 */
+  /** 결제에 보낼 참가 신청. 없으면(신청서 없이 담음) 결제할 수 없다 */
   application?: BookingApplication
   race?: RaceDetail
   option?: RaceOption
@@ -22,9 +22,9 @@ export function useCartLines() {
   const applications = useBookingFlow((s) => s.applications)
   const items: orderModel.CartItemDto[] = cart.data?.items ?? []
 
-  const raceIds = [
-    ...new Set(items.flatMap((item) => applications[String(item.raceCourseId)]?.raceId ?? [])),
-  ]
+  const applicationOf = (item: orderModel.CartItemDto) =>
+    fromCart(item) ?? applications[String(item.raceCourseId)]
+  const raceIds = [...new Set(items.flatMap((item) => applicationOf(item)?.raceId ?? []))]
   const races = useQueries({
     queries: raceIds.map((raceId) => raceDetailQueryOptions(raceId)),
   })
@@ -33,7 +33,7 @@ export function useCartLines() {
   const lines: CartLine[] | undefined = cart.data
     ? items.map((item) => {
         const raceCourseId = item.raceCourseId ?? 0
-        const application = applications[String(raceCourseId)]
+        const application = applicationOf(item)
         const race = application ? raceById.get(application.raceId) : undefined
         return {
           cartItemId: item.id ?? 0,
@@ -49,5 +49,20 @@ export function useCartLines() {
     lines,
     isError: cart.isError,
     racesLoading: races.some((r) => r.isPending),
+  }
+}
+
+/**
+ * 장바구니 API가 붙여 주는 결제 전 참가 신청. 서버 값이라 새로고침 · 다른 기기에서도 있다.
+ * 백엔드가 이 값을 주기 전(배포 전)이나 신청서 없이 담았으면 undefined이고, 그때는 이 기기의 메모리 값을 쓴다.
+ */
+function fromCart(item: orderModel.CartItemDto): BookingApplication | undefined {
+  const { participationId, raceId, raceCourseId } = item
+  if (participationId == null || raceId == null || raceCourseId === undefined) return undefined
+  return {
+    raceId: String(raceId),
+    optionId: String(raceCourseId),
+    participationId,
+    participantName: item.participantName ?? '',
   }
 }
