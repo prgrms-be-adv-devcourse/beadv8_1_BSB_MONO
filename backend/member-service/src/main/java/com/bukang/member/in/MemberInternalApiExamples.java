@@ -1,9 +1,33 @@
 package com.bukang.member.in;
 
 /**
- * 내부 API(InternalV1MemberController)의 Swagger 응답 예시
+ * InternalV1MemberController의 Swagger 응답 예시 (실제 응답 메시지와 같게 유지한다)
  */
 final class MemberInternalApiExamples {
+	static final String SELLER_APPROVED = """
+		{
+			"status": 200,
+			"message": "회원의 판매자 신청을 조회했습니다.",
+			"data": { "sellerId": 3, "status": "APPROVED" }
+		}
+		""";
+
+	static final String SELLER_PENDING = """
+		{
+			"status": 200,
+			"message": "회원의 판매자 신청을 조회했습니다.",
+			"data": { "sellerId": 4, "status": "PENDING" }
+		}
+		""";
+
+	static final String SELLER_NONE = """
+		{
+			"status": 200,
+			"message": "회원의 판매자 신청을 조회했습니다.",
+			"data": { "sellerId": null, "status": null }
+		}
+		""";
+
 	static final String ADMIN = """
 		{ "status": 200, "message": "관리자 여부를 조회했습니다.", "data": { "admin": true } }
 		""";

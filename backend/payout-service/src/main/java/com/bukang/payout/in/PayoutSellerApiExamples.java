@@ -148,6 +148,18 @@ final class PayoutSellerApiExamples {
 		{ "status": 401, "message": "로그인이 필요합니다.", "data": null }
 		""";
 
+	static final String SELLER_NOT_APPROVED = """
+		{ "status": 403, "message": "승인된 판매자만 정산을 조회할 수 있습니다.", "data": null }
+		""";
+
+	static final String MEMBER_NOT_FOUND = """
+		{ "status": 404, "message": "존재하지 않는 회원입니다.", "data": null }
+		""";
+
+	static final String SELLER_LOOKUP_UNAVAILABLE = """
+		{ "status": 503, "message": "판매자 정보를 확인하지 못했습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
+		""";
+
 	private PayoutSellerApiExamples() {
 	}
 }
