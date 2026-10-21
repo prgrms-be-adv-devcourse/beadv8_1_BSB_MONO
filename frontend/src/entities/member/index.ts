@@ -14,6 +14,5 @@ export {
   NICKNAME_PATTERN,
   nicknameWidth,
 } from './model/nickname'
-export { hasSeenSellerApproval, markSellerApprovalSeen } from './lib/seller-approval-seen'
 export { formatSellerDate, isNoApplication, SELLER_STATUS, SELLER_TYPE_LABEL } from './model/seller'
 export { BirthDateField, type BirthDateFieldProps } from './ui/BirthDateField'

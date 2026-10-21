@@ -284,54 +284,105 @@ describe('SellerApplyResultPage 상태별 카드', () => {
   })
 })
 
-describe('SellerApplyResultPage 승인 결과 봤음 기록', () => {
-  const MEMBER_ID = 7
-  const SEEN_KEY = `members:${MEMBER_ID}:seller-approval-seen`
-
-  beforeEach(() => {
-    window.localStorage.clear()
+describe('SellerApplyResultPage 결과 확인 기록', () => {
+  const countResultChecks = (
+    respond: () => Response = () => HttpResponse.json(sellerResponse({})),
+  ) => {
+    const calls = { count: 0 }
     server.use(
-      memberMock.getFindMeMockHandler({
-        status: 200,
-        message: '내 정보를 조회했습니다.',
-        data: { id: MEMBER_ID, nickname: '달리는곰', email: 'bear@crewrun.kr' },
+      http.post('*/api/v1/member/sellers/me/result-check', () => {
+        calls.count += 1
+        return respond()
       }),
     )
+    return calls
+  }
+
+  it.each(['APPROVED', 'REJECTED'] as const)(
+    '%s 결과를 처음 보여 주면 result-check를 한 번 부르고 내 신청을 다시 불러온다',
+    async (status) => {
+      let mineCalls = 0
+      server.use(
+        http.get('*/api/v1/member/sellers/me', () => {
+          mineCalls += 1
+          return HttpResponse.json(
+            sellerResponse({
+              status,
+              resultCheckedAt: mineCalls === 1 ? null : '2026-10-06T12:30:41',
+            }),
+          )
+        }),
+      )
+      const calls = countResultChecks()
+      renderWithClient(<SellerApplyResultPage />)
+
+      await screen.findAllByRole('heading', { level: 2 })
+      await waitFor(() => expect(calls.count).toBe(1))
+      // 다시 불러온 응답에는 시각이 있어 또 부르지 않는다
+      await waitFor(() => expect(mineCalls).toBe(2))
+      expect(calls.count).toBe(1)
+    },
+  )
+
+  it('서버가 resultCheckedAt을 주지 않아도(#220 전) 부른다', async () => {
+    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'APPROVED' })))
+    const calls = countResultChecks()
+    renderWithClient(<SellerApplyResultPage />)
+
+    await waitFor(() => expect(calls.count).toBe(1))
   })
 
-  it('승인 카드를 보여 주면 회원 ID 키로 봤다고 남긴다(신청서 ID 키가 아니다)', async () => {
+  it('이미 확인한 결과면 부르지 않는다', async () => {
     server.use(
       memberMock.getFindMineMockHandler(
-        sellerResponse({ id: 99, memberId: MEMBER_ID, status: 'APPROVED' }),
+        sellerResponse({ status: 'APPROVED', resultCheckedAt: '2026-10-06T12:30:41' }),
       ),
     )
+    const calls = countResultChecks()
     renderWithClient(<SellerApplyResultPage />)
 
     expect(await screen.findByText('판매자로 승인됐어요')).toBeInTheDocument()
-    await waitFor(() => expect(window.localStorage.getItem(SEEN_KEY)).toBe('true'))
-    expect(window.localStorage.getItem('members:99:seller-approval-seen')).toBeNull()
+    expect(calls.count).toBe(0)
   })
 
-  it.each(['PENDING', 'REJECTED'] as const)('%s 카드는 봤다고 남기지 않는다', async (status) => {
-    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status })))
+  it('심사 중이면 부르지 않는다', async () => {
+    server.use(
+      memberMock.getFindMineMockHandler(
+        sellerResponse({ status: 'PENDING', resultCheckedAt: null }),
+      ),
+    )
+    const calls = countResultChecks()
     renderWithClient(<SellerApplyResultPage />)
 
-    expect(await screen.findAllByRole('heading', { level: 2 })).toHaveLength(1)
-    expect(window.localStorage.getItem(SEEN_KEY)).toBeNull()
+    expect(await screen.findByText('관리자가 신청 내용을 확인하고 있어요')).toBeInTheDocument()
+    expect(calls.count).toBe(0)
   })
 
-  it('localStorage에 쓰지 못해도 승인 카드는 그대로 보여 준다', async () => {
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('QuotaExceededError')
-    })
-    server.use(memberMock.getFindMineMockHandler(sellerResponse({ status: 'APPROVED' })))
-    renderWithClient(<SellerApplyResultPage />)
+  it.each([
+    [
+      '409 SELLER_NOT_REVIEWED',
+      () => errorResponse(409, 'SELLER_NOT_REVIEWED', '아직 심사 중인 판매자 신청입니다.'),
+    ],
+    ['404(#220 전 백엔드)', () => new HttpResponse(null, { status: 404 })],
+    ['500', () => new HttpResponse(null, { status: 500 })],
+  ])(
+    'result-check가 %s로 실패해도 결과 카드를 그대로 보여 주고 다시 부르지 않는다',
+    async (_, respond) => {
+      server.use(
+        memberMock.getFindMineMockHandler(
+          sellerResponse({ status: 'APPROVED', resultCheckedAt: null }),
+        ),
+      )
+      const calls = countResultChecks(respond)
+      renderWithClient(<SellerApplyResultPage />)
 
-    expect(await screen.findByText('판매자로 승인됐어요')).toBeInTheDocument()
-    await waitFor(() => expect(setItem).toHaveBeenCalled())
-    expect(screen.getByRole('link', { name: '판매자 홈으로' })).toHaveAttribute('href', '/seller')
-    setItem.mockRestore()
-  })
+      expect(await screen.findByText('판매자로 승인됐어요')).toBeInTheDocument()
+      await waitFor(() => expect(calls.count).toBe(1))
+      expect(screen.getByRole('link', { name: '판매자 홈으로' })).toHaveAttribute('href', '/seller')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(calls.count).toBe(1)
+    },
+  )
 })
 
 describe('SellerApplyPage 정산 계좌', () => {

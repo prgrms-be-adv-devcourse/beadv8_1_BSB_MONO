@@ -82,6 +82,14 @@
           }
         }
       }
+    },
+    "checkMyResult": {
+      "200": {
+        "wrapper": "RsDataSellerDto",
+        "data": {
+          "$ref": "#/components/schemas/SellerDto"
+        }
+      }
     }
   },
   "schemas": {
@@ -202,6 +210,12 @@
         "rejectReason": {
           "type": "string",
           "nullable": true
+        },
+        "resultCheckedAt": {
+          "type": "string",
+          "format": "date-time",
+          "nullable": true,
+          "description": "신청자가 결과를 처음 본 시각. 아직 안 봤거나 심사 중이면 null"
         }
       },
       "required": [

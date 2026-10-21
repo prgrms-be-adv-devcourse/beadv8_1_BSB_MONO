@@ -8,7 +8,7 @@ import type { ReactNode } from 'react'
 import { AppHeader } from '@/widgets/app-header'
 import { BottomNav } from '@/widgets/bottom-nav'
 import { useAuthStatus, useLogout } from '@/features/auth'
-import { hasSeenSellerApproval, isNoApplication } from '@/entities/member'
+import { isNoApplication } from '@/entities/member'
 import { myTicketCountQueryOptions } from '@/entities/ticket'
 import { useMyBalance } from '@/entities/wallet'
 import { memberApi, unwrapData } from '@/shared/api'
@@ -106,7 +106,7 @@ export function MyPage() {
         </section>
 
         <MenuCard>
-          <SellerMenuRow memberId={member?.id} />
+          <SellerMenuRow />
         </MenuCard>
 
         <section className="flex flex-col rounded-lg bg-bg-subtle px-4 pt-4 pb-2">
@@ -142,20 +142,19 @@ function MenuCard({ children }: { children: ReactNode }) {
 }
 
 // 피그마 M30(신청 전 · 심사 중 · 반려) / M30-2(승인 후)의 판매자 줄.
-// - 승인: "판매자 센터". 이 브라우저에서 승인 결과를 처음 보는 회원이면 결과 화면을 한 번 거친다.
+// - 승인: "판매자 센터". 결과를 아직 안 봤으면(resultCheckedAt 없음) 결과 화면을 한 번 거친다.
 // - 심사 중 · 반려: 결과 화면 / 신청 전(404): 신청 화면
 // - 불러오는 중 · 오류: 줄은 그대로 두고 결과 화면으로 보낸다(결과 화면이 상태를 다시 안내한다).
-function SellerMenuRow({ memberId }: { memberId?: number }) {
+function SellerMenuRow() {
   const mine = memberApi.useFindMine({
     // 신청 전 404는 다시 불러도 같아서 재시도하지 않는다
     query: { select: unwrapData, enabled: useAuthStatus() === 'authenticated', retry: false },
   })
   if (mine.data?.status === 'APPROVED') {
-    // 회원 ID를 모르면 "봤음"을 확인할 수 없으니 결과 화면으로 보낸다
-    const seen = memberId !== undefined && hasSeenSellerApproval(memberId)
+    // 서버가 아직 resultCheckedAt을 주지 않으면(undefined) 안 본 것으로 친다
     return (
       <MenuRow
-        href={seen ? '/seller' : '/seller-apply/result'}
+        href={mine.data.resultCheckedAt ? '/seller' : '/seller-apply/result'}
         icon="Dashboard"
         label="판매자 센터"
         description="대회 등록 · 판매 현황 · 정산을 관리해요"
