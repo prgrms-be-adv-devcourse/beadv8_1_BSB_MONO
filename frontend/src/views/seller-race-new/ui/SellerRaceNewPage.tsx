@@ -1,12 +1,13 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { isBefore, startOfToday } from 'date-fns'
+import { isAfter, isBefore, parseISO, startOfToday } from 'date-fns'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
+import { parseRaceDateTimeInput } from '@/entities/race'
 import { ApiError } from '@/shared/api'
 import { cn, formatNumber, formatWon } from '@/shared/lib'
 import {
@@ -27,10 +28,11 @@ import {
 } from '@/shared/ui'
 
 import {
+  createRaceFormSchema,
+  earliestSaleOpenDate,
   MAX_INTRO_IMAGES,
   RACE_FORM_DEFAULTS,
   RACE_FORM_ERRORS,
-  raceFormSchema,
   type RaceCourseInput,
   type RaceFormValues,
 } from '../model/race-form'
@@ -41,6 +43,17 @@ const FORM_ID = 'seller-race-new'
 // 지난 날은 대회 일시·접수 기간·환불 기한으로 고를 수 없다
 const today = startOfToday()
 const isPast = (date: Date) => isBefore(date, today)
+// 접수 시작(판매 시작일)은 오늘로부터 이틀 뒤부터
+const saleOpenEarliest = earliestSaleOpenDate(today)
+const raceFormSchema = createRaceFormSchema({ today })
+
+// 대회 일시와 순서를 비교하는 칸들. 한 칸이 바뀌면 다 쓴 나머지 칸도 다시 검사한다
+const ORDERED_FIELDS = ['individualOpenAt', 'applicationCloseAt', 'refundDeadline'] as const
+
+/** 'yyyy-MM-dd …' 글자의 날짜 (날짜를 아직 안 골랐으면 undefined) */
+function dayOf(text: string): Date | undefined {
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? parseISO(text.slice(0, 10)) : undefined
+}
 
 const KITS = [
   {
@@ -83,6 +96,7 @@ export function SellerRaceNewPage() {
     register,
     handleSubmit,
     setValue,
+    trigger,
     formState: { errors, isSubmitted },
   } = useForm<RaceFormValues>({
     resolver: zodResolver(raceFormSchema),
@@ -90,6 +104,20 @@ export function SellerRaceNewPage() {
     defaultValues: RACE_FORM_DEFAULTS,
   })
   const courses = useWatch({ control, name: 'courses' })
+  const schedule = useWatch({
+    control,
+    name: ['raceDate', 'individualOpenAt', 'applicationCloseAt', 'refundDeadline'],
+  })
+  const [raceDateText] = schedule
+  const raceDay = dayOf(raceDateText)
+  // 순서 오류는 서로 다른 칸을 비교해서 생긴다. 대회 일시를 나중에 바꿔도 접수 · 환불 칸 오류가 다시 계산되도록,
+  // 일정 칸 중 하나가 바뀌면 날짜와 시간을 다 쓴 칸을 모두 다시 검사한다(등록하기를 누르기 전에도 칸 아래에 보인다)
+  const scheduleKey = schedule.join('|')
+  useEffect(() => {
+    const [, ...ordered] = scheduleKey.split('|')
+    const ready = ORDERED_FIELDS.filter((_, i) => parseRaceDateTimeInput(ordered[i]) !== null)
+    if (ready.length > 0) void trigger([...ready])
+  }, [scheduleKey, trigger])
   const [cover, setCover] = useState<ImageUploadValue[]>([])
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverError, setCoverError] = useState<string>()
@@ -225,7 +253,10 @@ export function SellerRaceNewPage() {
               label="접수 기간"
               helper="이날부터 판매 중으로 보여요 · 오늘로부터 이틀 뒤부터"
               error={errors.individualOpenAt?.message ?? errors.applicationCloseAt?.message}
-              isDateDisabled={isPast}
+              isDateDisabled={(date) =>
+                isBefore(date, saleOpenEarliest) ||
+                (raceDay !== undefined && isAfter(date, raceDay))
+              }
               startMonth={today}
               onValueChange={(range) => {
                 setValue('individualOpenAt', range.from, {
@@ -323,7 +354,9 @@ export function SellerRaceNewPage() {
                 label="환불 기한"
                 helper="이 날짜(23:59)까지 취소하면 전액 환불, 그 뒤 개인 사정 환불은 안 돼요. 결제 전에 구매자에게 보여 줘요."
                 error={errors.refundDeadline?.message}
-                isDateDisabled={isPast}
+                isDateDisabled={(date) =>
+                  isPast(date) || (raceDay !== undefined && isAfter(date, raceDay))
+                }
                 startMonth={today}
                 onValueChange={field.onChange}
               />
