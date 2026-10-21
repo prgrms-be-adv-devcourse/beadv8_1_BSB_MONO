@@ -13,9 +13,7 @@ import {
   formatRaceDateTime,
   isRaceEditable,
   myRacesQueryOptions,
-  parseRaceDateTimeInput,
   raceForEditQueryOptions,
-  toRaceDateTimeInput,
   type RaceForEdit,
 } from '@/entities/race'
 import { ApiError } from '@/shared/api'
@@ -36,6 +34,7 @@ import {
   refundUntil,
   rescheduleNotice,
   rescheduleSchema,
+  toRescheduledRaceDate,
   type RescheduleValues,
 } from '../model/reschedule-form'
 
@@ -122,9 +121,12 @@ function ChangeContent({
   } = useForm<RescheduleValues>({
     resolver: zodResolver(rescheduleSchema(currentRaceDate)),
     mode: 'onTouched',
-    defaultValues: { raceDate: toRaceDateTimeInput(currentRaceDate) },
+    defaultValues: { raceDate: currentRaceDate.slice(0, 10) },
   })
-  const nextRaceDate = parseRaceDateTimeInput(useWatch({ control, name: 'raceDate' }) ?? '')
+  const nextRaceDate = toRescheduledRaceDate(
+    useWatch({ control, name: 'raceDate' }) ?? '',
+    currentRaceDate,
+  )
   const error = update.error ?? cancel.error
 
   return (
@@ -183,7 +185,8 @@ function ChangeContent({
               update.mutate(
                 {
                   ...request,
-                  raceDate: parseRaceDateTimeInput(values.raceDate) ?? currentRaceDate,
+                  raceDate:
+                    toRescheduledRaceDate(values.raceDate, currentRaceDate) ?? currentRaceDate,
                 },
                 { onSuccess: () => toast({ message: '대회 일정을 바꿨어요', tone: 'success' }) },
               )
@@ -192,7 +195,7 @@ function ChangeContent({
             <KeyValue label="지금 대회일" value={formatRaceDateTime(currentRaceDate)} />
             <TextField
               label="새 대회일"
-              placeholder="2026-12-13 08:00"
+              placeholder="2026-12-13"
               disabled={!editable}
               error={errors.raceDate?.message}
               {...register('raceDate')}

@@ -1,23 +1,32 @@
 import { addDays, format } from 'date-fns'
 import { z } from 'zod'
 
-import { formatRaceDate, parseRaceDateTimeInput } from '@/entities/race'
+import { formatRaceDate, parseRaceDateInput } from '@/entities/race'
 
 export const RESCHEDULE_ERRORS = {
-  dateTimeFormat: '2026-12-13 08:00처럼 입력해 주세요.',
-  sameDate: '지금 대회 일시와 같아요.',
+  dateFormat: '2026-12-13처럼 입력해 주세요.',
+  sameDate: '지금 대회일과 같아요.',
 } as const
 
 /** 일정이 바뀐 날부터 전액 환불을 허용하는 기간 (백엔드 scheduleChangedAt 기준 7일) */
 export const SCHEDULE_CHANGE_REFUND_DAYS = 7
 
+/**
+ * 새 대회일 칸('yyyy-MM-dd') → 서버에 보낼 일시. 날짜만 바꾸고 시각은 지금 대회 일시의 것을 그대로 둔다.
+ * 형식이 틀리면 null
+ */
+export function toRescheduledRaceDate(text: string, currentRaceDate: string): string | null {
+  const day = parseRaceDateInput(text)
+  return day ? `${day}${currentRaceDate.slice(10)}` : null
+}
+
 export function rescheduleSchema(currentRaceDate: string) {
   return z.object({
     raceDate: z
       .string()
-      .refine((value) => parseRaceDateTimeInput(value) !== null, RESCHEDULE_ERRORS.dateTimeFormat)
+      .refine((value) => parseRaceDateInput(value) !== null, RESCHEDULE_ERRORS.dateFormat)
       .refine(
-        (value) => parseRaceDateTimeInput(value) !== currentRaceDate,
+        (value) => parseRaceDateInput(value) !== currentRaceDate.slice(0, 10),
         RESCHEDULE_ERRORS.sameDate,
       ),
   })
