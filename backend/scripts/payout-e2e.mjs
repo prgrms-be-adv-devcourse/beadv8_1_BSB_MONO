@@ -126,21 +126,21 @@ sql(`update order_order_item set race_date = case race_id
 	when ${A} then '${raceDateA} 08:00:00' when ${C} then '${raceDateC} 08:00:00' when ${B} then '${raceDateB} 08:00:00' end
 	where race_id in (${A}, ${C}, ${B})`);
 
-// ── 2. 판매 내역 (배치와 같은 범위) ───────────────────────────────
-const soldRes = await call('GET', `${ORDER}/internal/v1/order/sold-entries?from=${raceDateC}&to=${raceDateA}`);
-const sold = soldRes.json.data;
+// ── 2. 판매 내역 (배치처럼 대회 ID로 묻는다) ─────────────────────
+const soldOf = async raceId => (await call('GET', `${ORDER}/internal/v1/order/sold-entries?raceId=${raceId}`)).json.data;
+const soldA = await soldOf(A);
+const soldC = await soldOf(C);
+const sold = [...soldA, ...soldC];
 const soldIds = sold.map(e => e.orderItemId);
 check('A: 결제한 2장이 나옴', soldIds.includes(a1.itemId) && soldIds.includes(a2.itemId));
 check('A: 결제 전(ORDERED) 제외', !soldIds.includes(aUnpaid.itemId));
 check('A: 결제 후 취소(CANCELED) 제외', !soldIds.includes(aCanceled.itemId));
-check('C: 범위 첫날 대회 포함', soldIds.includes(c1.itemId));
-check('B: 범위 밖 대회 제외', !soldIds.includes(b1.itemId));
+check('C: 그 대회 참가권만 나옴', soldC.length === 1 && soldC[0].orderItemId === c1.itemId);
+check('A: 다른 대회(B) 참가권 제외', !soldIds.includes(b1.itemId));
 const priceOf = itemId => sold.find(e => e.orderItemId === itemId).price;
 
-const reversed = await call('GET', `${ORDER}/internal/v1/order/sold-entries?from=${raceDateA}&to=${raceDateC}`);
-check('판매 내역: 시작일 > 종료일이면 400', reversed.http === 400, `HTTP ${reversed.http}`);
-const tooLong = await call('GET', `${ORDER}/internal/v1/order/sold-entries?from=${addDays(today, -31)}&to=${today}`);
-check('판매 내역: 32일이면 400', tooLong.http === 400, `HTTP ${tooLong.http}`);
+const missingRaceId = await call('GET', `${ORDER}/internal/v1/order/sold-entries`);
+check('판매 내역: 대회 ID가 없으면 400', missingRaceId.http === 400, `HTTP ${missingRaceId.http}`);
 
 // ── 3. 정산 생성 배치 (오늘 실행) ─────────────────────────────────
 const first = (await call('POST', `${PAYOUT}/api/v1/payout/dev/batches/create?today=${today}`)).json.data;

@@ -4,7 +4,7 @@
 실제 앱 두 개(주문 8084, 정산 8082)를 띄워 API로 확인한다. 스크립트는 [`payout-e2e.mjs`](payout-e2e.mjs)다.
 
 단위·통합 테스트(`PayoutCreateUseCaseTest`, `OrderSoldEntryAdapterTest` 등)는 서비스 하나 안에서 확인하고,
-이 시나리오는 두 서비스 사이의 계약(`GET /internal/v1/order/sold-entries?from=&to=`)이 실제로 맞물리는지 본다.
+이 시나리오는 두 서비스 사이의 계약(`GET /internal/v1/order/sold-entries?raceId=`)이 실제로 맞물리는지 본다.
 
 ## 준비
 
@@ -48,8 +48,8 @@ node scripts/payout-e2e.mjs         # backend/에서 실행. Node 18 이상 (fet
 | # | 단계 | 호출 | 기대 결과 |
 |---|---|---|---|
 | 1 | 데이터 만들기 | 주문 `POST /participations`, `/orders`, `/orders/{id}/payment`, `/items/{id}/cancel` | A 4건, C 1건, B 1건 주문 |
-| 2 | 판매 내역 | 주문 `GET /internal/v1/order/sold-entries?from=오늘-7&to=오늘-1` | A의 결제 2장과 C만 나온다. 결제 전 · 취소 · B는 빠진다 |
-| 2-1 | 판매 내역 입력 검증 | 시작일 > 종료일, 32일 | 둘 다 400 |
+| 2 | 판매 내역 | 주문 `GET /internal/v1/order/sold-entries?raceId=A`, `raceId=C` | A의 결제 2장과 C만 나온다. 결제 전 · 취소 · B는 빠진다 |
+| 2-1 | 판매 내역 입력 검증 | 대회 ID 없음 | 400 |
 | 3 | 정산 생성 배치 | 정산 `POST /api/v1/payout/dev/batches/create?today=오늘` | 범위 오늘-7 ~ 오늘-1, A · C 생성, 실패 0. 다시 돌리면 생성 0 (중복 정산 없음) |
 | 4 | 판매자 정산 내역 | 정산 `GET /api/v1/payout/seller/payouts` (`X-Member-Id: 1`) | A: 매출 120,000 / 수수료 6,600 / 지급액 113,400, C: 60,000 / 3,300 / 56,700. 둘 다 CALCULATED, B는 없음 |
 | 4-1 | 정산 항목 | `GET /seller/payout-items` | 참가권 1장 = 1행. 정산 대상일은 A 오늘, C 대회 다음 날. 결제 전 · 취소분은 없음 |

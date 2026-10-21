@@ -8,7 +8,23 @@ type Label = { label: string; tone: BadgeTone }
 export const PAYOUT_STATUS: Record<payoutModel.PayoutStatus, Label> = {
   CALCULATED: { label: '지급 예정', tone: 'neutral' },
   HELD: { label: '지급보류', tone: 'warning' },
+  PAYING: { label: '지급 중', tone: 'neutral' },
   PAID: { label: '지급 완료', tone: 'success' },
+  CANCELED: { label: '취소', tone: 'neutral' },
+}
+
+/**
+ * 정산 상태 배지 문구. 백엔드에 상태가 먼저 생겨 매핑에 없는 값이 오면 화면이 깨지지 않게 원래 값을 그대로 보여 준다.
+ */
+export function payoutStatusLabel(status: string): Label {
+  return Object.hasOwn(PAYOUT_STATUS, status)
+    ? PAYOUT_STATUS[status as payoutModel.PayoutStatus]
+    : { label: status, tone: 'neutral' }
+}
+
+export const PAYOUT_STAGE: Record<payoutModel.PayoutStage, string> = {
+  FIRST: '1차',
+  FINAL: '최종',
 }
 
 export const HOLD_STATUS: Record<payoutModel.PayoutHoldStatus, Label> = {
@@ -22,8 +38,19 @@ export const HOLD_REASON: Record<payoutModel.PayoutHoldReason, string> = {
 }
 
 export const RECORD_TYPE: Record<payoutModel.PayoutRecordType, string> = {
+  ADVANCE_PAID: '선금',
   SALE: '판매',
-  REFUND: '환불',
+  FEE: '수수료',
+  ADVANCE_OFFSET: '선지급 차감',
+  RECOVERY_REQUESTED: '회수 요청',
+  RECEIVABLE_ADDED: '갚을 돈 추가',
+  RECOVERY_OFFSET: '회수 상계',
+  RECOVERY_RECEIVED: '회수 입금',
+  ADVANCE_PAID_CANCELED: '선금 취소',
+  SALE_CANCELED: '판매 취소',
+  FEE_CANCELED: '수수료 취소',
+  ADVANCE_OFFSET_CANCELED: '선지급 차감 취소',
+  RECOVERY_OFFSET_CANCELED: '회수 상계 취소',
 }
 
 /** 관리자 보류 걸기 사유 고르기 */

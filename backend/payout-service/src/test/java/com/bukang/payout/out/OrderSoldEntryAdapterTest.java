@@ -25,8 +25,7 @@ import org.springframework.web.client.RestClientException;
  */
 class OrderSoldEntryAdapterTest {
 	private static final String BASE_URL = "http://order-service";
-	private static final String URL =
-		BASE_URL + "/internal/v1/order/sold-entries?from=2026-09-22&to=2026-09-28";
+	private static final String URL = BASE_URL + "/internal/v1/order/sold-entries?raceId=5";
 
 	private MockRestServiceServer server;
 	private OrderSoldEntryAdapter adapter;
@@ -39,7 +38,7 @@ class OrderSoldEntryAdapterTest {
 	}
 
 	@Test
-	@DisplayName("기간을 쿼리로 보내고, RsData.data 배열을 SoldEntry로 바꾼다")
+	@DisplayName("대회 ID를 쿼리로 보내고, RsData.data 배열을 SoldEntry로 바꾼다")
 	void mapsSoldEntries() {
 		server.expect(requestTo(URL))
 			.andExpect(method(HttpMethod.GET))
@@ -49,16 +48,16 @@ class OrderSoldEntryAdapterTest {
 					"message": "판매 내역을 조회했습니다.",
 					"data": [
 						{ "orderItemId": 1, "sellerId": 3, "raceId": 5, "raceDate": "2026-09-22", "price": 60000 },
-						{ "orderItemId": 4, "sellerId": 3, "raceId": 7, "raceDate": "2026-09-28", "price": 55000 }
+						{ "orderItemId": 4, "sellerId": 4, "raceId": 5, "raceDate": "2026-09-22", "price": 55000 }
 					]
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		List<SoldEntry> entries = adapter.findSoldEntries(LocalDate.of(2026, 9, 22), LocalDate.of(2026, 9, 28));
+		List<SoldEntry> entries = adapter.findSoldEntries(5);
 
 		assertThat(entries).containsExactly(
 			new SoldEntry(1, 3, 5, null, LocalDate.of(2026, 9, 22), 60_000L),
-			new SoldEntry(4, 3, 7, null, LocalDate.of(2026, 9, 28), 55_000L)
+			new SoldEntry(4, 4, 5, null, LocalDate.of(2026, 9, 22), 55_000L)
 		);
 		server.verify();
 	}
@@ -78,7 +77,7 @@ class OrderSoldEntryAdapterTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		assertThat(adapter.findSoldEntries(LocalDate.of(2026, 9, 22), LocalDate.of(2026, 9, 28)))
+		assertThat(adapter.findSoldEntries(5))
 			.containsExactly(new SoldEntry(1, 3, 5, 11, LocalDate.of(2026, 9, 22), 60_000L));
 	}
 
@@ -90,15 +89,15 @@ class OrderSoldEntryAdapterTest {
 				{ "status": 200, "message": "판매 내역을 조회했습니다.", "data": [] }
 				""", MediaType.APPLICATION_JSON));
 
-		assertThat(adapter.findSoldEntries(LocalDate.of(2026, 9, 22), LocalDate.of(2026, 9, 28))).isEmpty();
+		assertThat(adapter.findSoldEntries(5)).isEmpty();
 	}
 
 	@Test
-	@DisplayName("주문 서비스가 오류로 응답하면 예외를 던진다 (배치는 그날 실행을 실패로 남기고, 다음 실행이 되돌아보기로 따라잡는다)")
+	@DisplayName("주문 서비스가 오류로 응답하면 예외를 던진다 (배치는 그 대회를 실패로 남기고, 다음 실행이 되돌아보기로 따라잡는다)")
 	void throwsOnServerError() {
 		server.expect(requestTo(URL)).andRespond(withServerError());
 
-		assertThatThrownBy(() -> adapter.findSoldEntries(LocalDate.of(2026, 9, 22), LocalDate.of(2026, 9, 28)))
+		assertThatThrownBy(() -> adapter.findSoldEntries(5))
 			.isInstanceOf(RestClientException.class);
 	}
 }
