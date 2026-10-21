@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.shared.member.web.MemberIdHeader;
+import com.bukang.payout.app.PayoutAdminVerifyUseCase;
 import com.bukang.payout.app.PayoutHoldUseCase;
 import com.bukang.payout.dto.PayoutHoldDto;
 import com.bukang.payout.dto.PayoutHoldRequestDto;
@@ -33,8 +34,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 관리자의 지급보류 걸기 · 풀기
- * 회원 ID는 X-Member-Id 헤더를 그대로 믿는다. 관리자인지는 여기서 검사하지 않고,
- * 게이트웨이가 토큰을 검사해 헤더를 넣어 줄 때(PRO-20) 관리자 경로로 막는다
+ * 회원 ID는 게이트웨이가 토큰에서 꺼내 넣은 X-Member-Id 헤더를 믿는다. 게이트웨이는 역할을 보지 않으므로,
+ * UseCase보다 먼저 회원 서비스에 물어 관리자가 아니면 403으로 막는다 (PRO-265)
  */
 @Tag(name = "Payout", description = "지급보류 걸기, 지급보류 풀기 API (관리자)")
 @RestController
@@ -44,6 +45,7 @@ public class ApiV1PayoutHoldController {
 	// 서버 시간대와 상관없이 한국 날짜로 해제일을 판단한다 (지급 배치와 같은 기준)
 	private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
+	private final PayoutAdminVerifyUseCase payoutAdminVerifyUseCase;
 	private final PayoutHoldUseCase payoutHoldUseCase;
 
 	// ResponseEntity.created()의 201은 springdoc이 추론하지 못하므로 응답 코드를 직접 명시한다
@@ -67,24 +69,33 @@ public class ApiV1PayoutHoldController {
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = PayoutApiExamples.LOGIN_REQUIRED))),
-		@ApiResponse(responseCode = "404", description = "없는 정산 내역",
+		@ApiResponse(responseCode = "403", description = "관리자가 아님",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutApiExamples.PAYOUT_NOT_FOUND))),
+				examples = @ExampleObject(value = PayoutApiExamples.NOT_ADMIN))),
+		@ApiResponse(responseCode = "404", description = "헤더의 회원(없거나 탈퇴) 또는 정산 내역이 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "정산 내역 없음", value = PayoutApiExamples.PAYOUT_NOT_FOUND),
+				@ExampleObject(name = "회원 없음", value = PayoutApiExamples.MEMBER_NOT_FOUND)
+			})),
 		@ApiResponse(responseCode = "409", description = "이미 보류 중, 이미 지급 완료, 대회 취소로 닫힘 또는 다른 요청과 동시 수정",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "이미 보류 중", value = PayoutApiExamples.ALREADY_HELD),
 				@ExampleObject(name = "이미 지급 완료", value = PayoutApiExamples.ALREADY_PAID),
 				@ExampleObject(name = "대회 취소로 닫힘", value = PayoutApiExamples.HOLD_CANCELED_PAYOUT),
 				@ExampleObject(name = "동시 수정", value = PayoutApiExamples.CONCURRENT_UPDATE)
-			}))
+			})),
+		@ApiResponse(responseCode = "503", description = "회원 서비스가 응답하지 않아 관리자인지 확인하지 못함",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutApiExamples.MEMBER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<PayoutHoldDto>> hold(
-		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
 		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "정산 내역 ID", example = "1")
 		@PathVariable int payoutId,
 		@Valid @RequestBody PayoutHoldRequestDto request
 	) {
+		payoutAdminVerifyUseCase.verify(memberId);
 		PayoutHoldDto hold = payoutHoldUseCase.hold(
 			payoutId, request.getReasonType(), request.getReason(), memberId, LocalDateTime.now(ZONE));
 		return ResponseEntity.created(URI.create("/api/v1/payout/holds/" + hold.getId()))
@@ -107,22 +118,31 @@ public class ApiV1PayoutHoldController {
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
 				examples = @ExampleObject(value = PayoutApiExamples.LOGIN_REQUIRED))),
-		@ApiResponse(responseCode = "404", description = "없는 지급보류",
+		@ApiResponse(responseCode = "403", description = "관리자가 아님",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutApiExamples.HOLD_NOT_FOUND))),
+				examples = @ExampleObject(value = PayoutApiExamples.NOT_ADMIN))),
+		@ApiResponse(responseCode = "404", description = "헤더의 회원(없거나 탈퇴) 또는 지급보류가 없음",
+			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
+				@ExampleObject(name = "지급보류 없음", value = PayoutApiExamples.HOLD_NOT_FOUND),
+				@ExampleObject(name = "회원 없음", value = PayoutApiExamples.MEMBER_NOT_FOUND)
+			})),
 		@ApiResponse(responseCode = "409", description = "이미 해제됨, 대회 취소로 닫힌 정산 내역 또는 다른 요청과 동시 수정",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
 				@ExampleObject(name = "이미 해제됨", value = PayoutApiExamples.ALREADY_RELEASED),
 				@ExampleObject(name = "대회 취소로 닫힘", value = PayoutApiExamples.RELEASE_CANCELED_PAYOUT),
 				@ExampleObject(name = "동시 수정", value = PayoutApiExamples.CONCURRENT_UPDATE)
-			}))
+			})),
+		@ApiResponse(responseCode = "503", description = "회원 서비스가 응답하지 않아 관리자인지 확인하지 못함",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutApiExamples.MEMBER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<PayoutHoldDto>> release(
-		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
 		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "지급보류 ID (보류 걸기 응답의 id)", example = "1")
 		@PathVariable int holdId
 	) {
+		payoutAdminVerifyUseCase.verify(memberId);
 		PayoutHoldDto hold = payoutHoldUseCase.release(holdId, memberId, LocalDateTime.now(ZONE));
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "지급보류를 풀었습니다.", hold));
 	}

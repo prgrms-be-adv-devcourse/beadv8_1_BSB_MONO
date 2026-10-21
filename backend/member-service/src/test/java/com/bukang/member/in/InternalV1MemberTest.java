@@ -30,13 +30,14 @@ import com.bukang.member.out.MemberRepository;
 import com.bukang.member.out.SellerRepository;
 import com.bukang.member.out.TermsAgreementRepository;
 
-// 회원 ID로 판매자 ID를 찾는 내부 API (정산 서비스가 판매자 정산 조회 때 부른다)
+// 정산 서비스가 부르는 회원 내부 API: 회원 ID로 판매자 ID 찾기, 관리자 여부 조회
 // 회원 ID와 판매자 ID가 같은 번호가 되지 않게, 판매자 신청을 한 번 더 만들어 번호를 어긋나게 둔다
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class InternalV1MemberTest {
 	private static final String SELLER_OF_MEMBER = "/internal/v1/member/members/{memberId}/seller";
+	private static final String ADMIN_OF_MEMBER = "/internal/v1/member/members/{memberId}/admin";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -149,6 +150,44 @@ class InternalV1MemberTest {
 	@DisplayName("없는 회원이면 404다")
 	void unknownMember() throws Exception {
 		findSellerOf(memberId + 1000)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+	}
+
+	// 관리자 여부 조회 (정산 서비스가 관리자 API를 받을 때 부른다, PRO-265)
+	@Test
+	@DisplayName("관리자면 admin=true를 돌려준다")
+	void admin() throws Exception {
+		mockMvc.perform(get(ADMIN_OF_MEMBER, adminId))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("관리자 여부를 조회했습니다."))
+			.andExpect(jsonPath("$.data.admin").value(true));
+	}
+
+	@Test
+	@DisplayName("일반 회원이면 403이 아니라 200 admin=false를 돌려준다")
+	void notAdmin() throws Exception {
+		mockMvc.perform(get(ADMIN_OF_MEMBER, memberId))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.admin").value(false));
+	}
+
+	@Test
+	@DisplayName("탈퇴한 관리자는 없는 회원으로 보고 404 MEMBER_NOT_FOUND를 돌려준다")
+	void withdrawnAdminIsNotFound() throws Exception {
+		Member admin = memberRepository.findById(adminId).orElseThrow();
+		admin.withdraw(LocalDateTime.now());
+		memberRepository.saveAndFlush(admin);
+
+		mockMvc.perform(get(ADMIN_OF_MEMBER, adminId))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+	}
+
+	@Test
+	@DisplayName("없는 회원의 관리자 여부를 물으면 404 MEMBER_NOT_FOUND를 돌려준다")
+	void unknownMemberAdminIsNotFound() throws Exception {
+		mockMvc.perform(get(ADMIN_OF_MEMBER, memberId + 1000))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
 	}

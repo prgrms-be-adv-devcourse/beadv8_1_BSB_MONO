@@ -66,6 +66,20 @@ final class PayoutApiExamples {
 		{ "status": 401, "message": "로그인이 필요합니다.", "data": null }
 		""";
 
+	// 관리자 API(지급보류 걸기·풀기, 회수 완료) 공통 (PRO-265)
+	static final String NOT_ADMIN = """
+		{ "status": 403, "code": "PAYOUT_NOT_ADMIN", "message": "관리자만 이용할 수 있습니다.", "data": null }
+		""";
+
+	static final String MEMBER_NOT_FOUND = """
+		{ "status": 404, "code": "PAYOUT_MEMBER_NOT_FOUND", "message": "존재하지 않는 회원입니다.", "data": null }
+		""";
+
+	static final String MEMBER_UNAVAILABLE = """
+		{ "status": 503, "code": "PAYOUT_MEMBER_UNAVAILABLE",
+			"message": "회원 서비스에 연결하지 못해 관리자인지 확인하지 못했습니다. 잠시 뒤 다시 시도해주세요.", "data": null }
+		""";
+
 	static final String PAYOUT_NOT_FOUND = """
 		{ "status": 404, "message": "정산 내역을 찾을 수 없습니다.", "data": null }
 		""";

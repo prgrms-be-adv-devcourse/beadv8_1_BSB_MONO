@@ -9,6 +9,7 @@ import com.bukang.member.domain.Member;
 import com.bukang.member.domain.exception.MemberNotFoundException;
 import com.bukang.member.dto.AuthTokens;
 import com.bukang.member.dto.EmailAvailabilityResponseDto;
+import com.bukang.member.dto.MemberAdminDto;
 import com.bukang.member.dto.MemberDto;
 import com.bukang.member.dto.MemberJoinRequestDto;
 import com.bukang.member.dto.MemberLoginRequestDto;
@@ -30,6 +31,7 @@ public class MemberFacade {
 	private final TokenIssueUseCase tokenIssueUseCase;
 	private final TokenReissueUseCase tokenReissueUseCase;
 	private final LogoutUseCase logoutUseCase;
+	private final AdminVerifyUseCase adminVerifyUseCase;
 
 	@Transactional
 	public MemberDto join(MemberJoinRequestDto memberJoinDto) {
@@ -78,6 +80,10 @@ public class MemberFacade {
 		memberRepository.findByEmail(email)
 			.orElseThrow(() -> new MemberNotFoundException("존재하지 않는 회원입니다."))
 			.grantAdmin();
+	}
+
+	public MemberAdminDto checkAdmin(int memberId) {
+		return new MemberAdminDto(adminVerifyUseCase.isAdmin(memberId));
 	}
 
 	public boolean existsByEmail(String email) {

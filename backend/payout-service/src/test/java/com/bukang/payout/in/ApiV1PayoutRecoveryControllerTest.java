@@ -1,6 +1,7 @@
 package com.bukang.payout.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
 import static org.springframework.restdocs.headers.HeaderDocumentation.requestHeaders;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
@@ -15,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,12 +27,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.restdocs.payload.JsonFieldType;
 import org.springframework.restdocs.snippet.Snippet;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.payout.domain.PayoutRecovery;
 import com.bukang.payout.domain.PayoutRecoveryReason;
 import com.bukang.payout.domain.PayoutRecoveryStatus;
+import com.bukang.payout.out.MemberAdminPort;
 import com.bukang.payout.out.PayoutRecoveryRepository;
 import com.bukang.payout.support.RestDocsConfig;
 
@@ -42,6 +46,7 @@ import com.bukang.payout.support.RestDocsConfig;
 @ActiveProfiles("test")
 class ApiV1PayoutRecoveryControllerTest {
 	private static final int ADMIN_ID = 99;
+	private static final int MEMBER_ID = 8;
 
 	private static final Snippet ERROR_RESPONSE = responseFields(
 		fieldWithPath("status").description("HTTP 상태 코드"),
@@ -56,6 +61,15 @@ class ApiV1PayoutRecoveryControllerTest {
 
 	@Autowired
 	private PayoutRecoveryRepository payoutRecoveryRepository;
+
+	// 회원 서비스 대신 관리자 여부를 정한다. 정하지 않은 회원은 일반 회원(false)이다
+	@MockitoBean
+	private MemberAdminPort memberAdminPort;
+
+	@BeforeEach
+	void setUp() {
+		given(memberAdminPort.isAdmin(ADMIN_ID)).willReturn(true);
+	}
 
 	@AfterEach
 	void tearDown() {
@@ -86,7 +100,7 @@ class ApiV1PayoutRecoveryControllerTest {
 			.andExpect(jsonPath("$.data.status").value("COMPLETED"))
 			.andExpect(jsonPath("$.data.completedBy").value(ADMIN_ID))
 			.andDo(document("payout-recovery-complete",
-				requestHeaders(headerWithName("X-Member-Id").description("입금을 확인한 관리자 회원 ID (게이트웨이가 넣어 줄 예정)")),
+				requestHeaders(headerWithName("X-Member-Id").description("입금을 확인한 관리자 회원 ID (게이트웨이가 토큰에서 꺼내 넣는다)")),
 				pathParameters(parameterWithName("recoveryId").description("완료할 회수 ID")),
 				responseFields(
 					fieldWithPath("status").description("HTTP 상태 코드"),
@@ -128,6 +142,22 @@ class ApiV1PayoutRecoveryControllerTest {
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.message").value("이미 완료된 회수입니다."))
 			.andDo(document("payout-recovery-complete-conflict", ERROR_RESPONSE));
+	}
+
+	@Test
+	@DisplayName("일반 회원이 회수를 완료하면 403 PAYOUT_NOT_ADMIN이고, 회수는 그대로다")
+	void nonAdminCannotComplete() throws Exception {
+		PayoutRecovery recovery = saveRecovery();
+
+		mockMvc.perform(post("/api/v1/payout/recoveries/{recoveryId}/complete", recovery.getId())
+				.header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("PAYOUT_NOT_ADMIN"))
+			.andExpect(jsonPath("$.message").value("관리자만 이용할 수 있습니다."))
+			.andDo(document("payout-recovery-complete-forbidden", ERROR_RESPONSE));
+		PayoutRecovery reloaded = payoutRecoveryRepository.findById(recovery.getId()).orElseThrow();
+		assertThat(reloaded.getStatus()).isEqualTo(PayoutRecoveryStatus.REQUESTED);
+		assertThat(reloaded.getCompletedBy()).isNull();
 	}
 
 	@Test
