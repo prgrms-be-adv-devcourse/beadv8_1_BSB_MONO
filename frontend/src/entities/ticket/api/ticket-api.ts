@@ -1,4 +1,4 @@
-import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { ApiError, orderApi, orderModel, unwrapData } from '@/shared/api'
 
@@ -89,16 +89,23 @@ export function orderQueryOptions(orderId: number) {
   })
 }
 
-/** 참가 신청 (GET /api/v1/order/participations/{participationId}). 참가자 정보가 들어 있다. */
+/**
+ * 참가 신청 (GET /api/v1/order/participations/{participationId}). 참가자 정보가 들어 있다.
+ * 주문 상세처럼 결제 · 완료 화면(orderApi.useFindById)과 같은 캐시 키라 캐시에는 응답 그대로 넣는다.
+ */
 export function participationQueryOptions(participationId: number) {
   return queryOptions({
-    queryKey: orderApi.getFindByIdQueryKey(participationId),
-    queryFn: async ({ signal }) => unwrapData(await orderApi.findById(participationId, { signal })),
+    ...orderApi.getFindByIdQueryOptions<orderModel.ParticipationDto, Error>(participationId, {
+      query: { select: unwrapData },
+    }),
   })
 }
 
-/** 주문 · 참가 신청 · 예치금 캐시를 지운다 (취소 · 수정 뒤 목록 · 상세 · 잔액을 새로 받게) */
-function invalidateTicketQueries(queryClient: ReturnType<typeof useQueryClient>) {
+/**
+ * 주문 · 참가 신청 · 예치금 캐시를 지운다 (결제 · 취소 · 수정 뒤 목록 · 상세 · 잔액을 새로 받게).
+ * 기본 staleTime(1분) 동안은 다시 받지 않으므로, 서버 값이 바뀐 뒤에는 꼭 불러야 옛 주문 · 잔액이 남지 않는다.
+ */
+export function invalidateTicketQueries(queryClient: QueryClient) {
   return queryClient.invalidateQueries({
     predicate: ({ queryKey }) =>
       typeof queryKey[0] === 'string' &&
@@ -115,12 +122,7 @@ export function useCancelTicket() {
   return useMutation({
     mutationFn: async ({ orderId, orderItemId }: { orderId: number; orderItemId: number }) =>
       unwrapData(await orderApi.cancelItem(orderId, orderItemId)),
-    onSuccess: (order) => {
-      if (order.id !== undefined) {
-        queryClient.setQueryData(orderApi.getFindById1QueryKey(order.id), order)
-      }
-      return invalidateTicketQueries(queryClient)
-    },
+    onSuccess: () => invalidateTicketQueries(queryClient),
   })
 }
 
@@ -135,12 +137,7 @@ export function useChangeParticipant() {
       participationId: number
       body: orderModel.ParticipantInfoRequestDto
     }) => unwrapData(await orderApi.changeParticipant(participationId, body)),
-    onSuccess: (participation) => {
-      if (participation.id !== undefined) {
-        queryClient.setQueryData(orderApi.getFindByIdQueryKey(participation.id), participation)
-      }
-      return invalidateTicketQueries(queryClient)
-    },
+    onSuccess: () => invalidateTicketQueries(queryClient),
   })
 }
 

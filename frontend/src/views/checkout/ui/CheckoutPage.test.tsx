@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { cashApi, orderApi } from '@/shared/api'
 import { orderMock, server } from '@/shared/testing'
 
 import { CheckoutPage, type CheckoutState } from './CheckoutPage'
@@ -166,6 +167,53 @@ describe('결제 화면', () => {
 
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout/complete?orderId=1'))
     expect(paid).toBe(true)
+  })
+
+  it('결제하면 결제 전 주문 · 잔액 · 내 참가권 캐시를 지워 다음 화면이 결제한 값을 받는다', async () => {
+    let paid = false
+    server.use(
+      http.get('*/api/v1/order/orders/:orderId', () =>
+        HttpResponse.json(orderResponse({ status: paid ? 'PAID' : 'CREATED' })),
+      ),
+      http.post('*/api/v1/order/orders/:orderId/payment', () => {
+        paid = true
+        return HttpResponse.json(orderMock.getPayResponseMock())
+      }),
+      http.get('*/api/v1/cash/wallets/balance', () =>
+        HttpResponse.json({
+          status: 200,
+          message: '잔액 조회 성공',
+          data: { holderId: 1, balance: paid ? 55000 : 100000 },
+        }),
+      ),
+    )
+    // 앱처럼 1분 동안은 다시 받지 않는다 (shared/api/query-client.ts)
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 60_000 } },
+    })
+    // 결제 전에 열어 둔 내 참가권 목록 (지금은 화면에 없다)
+    const ticketsKey = [...orderApi.getFindMineQueryKey({ page: 0, size: 100 }), 'tickets']
+    client.setQueryData(ticketsKey, [])
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <QueryClientProvider client={client}>
+        <CheckoutPage orderId={1} />
+      </QueryClientProvider>,
+    )
+
+    const pay = await screen.findByRole('button', { name: '₩45,000 결제' })
+    await agree(user)
+    await user.click(pay)
+
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout/complete?orderId=1'))
+    // 넘어갈 때는 이미 결제한 주문 · 잔액을 받아 두었다
+    expect(client.getQueryData(orderApi.getFindById1QueryKey(1))).toMatchObject({
+      data: { status: 'PAID' },
+    })
+    expect(client.getQueryData(cashApi.getGetBalanceQueryKey())).toMatchObject({
+      data: { balance: 55000 },
+    })
+    expect(client.getQueryState(ticketsKey)?.isInvalidated).toBe(true)
   })
 
   it('잔액이 모자라 보이면 충전하고 결제 버튼을 보여 주고, 누르면 결제 API부터 부른다', async () => {
