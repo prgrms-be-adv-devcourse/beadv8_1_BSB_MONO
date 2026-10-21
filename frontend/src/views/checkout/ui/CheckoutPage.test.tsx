@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { BookingFlowProvider } from '@/features/booking'
 import { orderMock, server } from '@/shared/testing'
 
 import { CheckoutPage, type CheckoutState } from './CheckoutPage'
@@ -43,6 +42,15 @@ function orderResponse(
   } as const
 }
 
+/** 주문의 참가 신청(명세 예시 1번)에 적힌 참가자 이름. 배송지 받는 사람(김러너)과 다르게 둔다 */
+function participationResponse() {
+  const example = orderMock.getFindByIdResponseMock()
+  return {
+    ...example,
+    data: { ...example.data, participant: { ...example.data!.participant, name: '이달림' } },
+  }
+}
+
 const balanceHandler = (balance: number) =>
   http.get('*/api/v1/cash/wallets/balance', () =>
     HttpResponse.json({ status: 200, message: '잔액 조회 성공', data: { holderId: 1, balance } }),
@@ -61,15 +69,7 @@ function renderCheckout(
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <BookingFlowProvider
-        initialState={{
-          applications: {
-            '1': { raceId: '1', optionId: '1', participationId: 1, participantName: '이달림' },
-          },
-        }}
-      >
-        <CheckoutPage state={state} orderId={state ? undefined : 1} {...props} />
-      </BookingFlowProvider>
+      <CheckoutPage state={state} orderId={state ? undefined : 1} {...props} />
     </QueryClientProvider>,
   )
 }
@@ -87,7 +87,11 @@ describe('결제 화면', () => {
     replace.mockClear()
     requestCharge.mockReset()
     requestCharge.mockResolvedValue('redirecting')
-    server.use(orderMock.getFindById1MockHandler(orderResponse()), balanceHandler(100_000))
+    server.use(
+      orderMock.getFindById1MockHandler(orderResponse()),
+      orderMock.getFindByIdMockHandler(participationResponse()),
+      balanceHandler(100_000),
+    )
   })
   afterEach(() => {
     vi.useRealTimers()

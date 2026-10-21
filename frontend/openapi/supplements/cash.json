@@ -23,6 +23,14 @@
           "$ref": "#/components/schemas/CashWithdrawalDto"
         }
       }
+    },
+    "getLedgers": {
+      "200": {
+        "wrapper": "RsDataPageDtoWalletLedgerItemDto",
+        "data": {
+          "$ref": "#/components/schemas/PageDtoWalletLedgerItemDto"
+        }
+      }
     }
   },
   "schemas": {
@@ -74,6 +82,98 @@
           "format": "int32"
         },
         "balance": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "PageDtoWalletLedgerItemDto": {
+      "type": "object",
+      "description": "예치금 내역 한 페이지. 최신순",
+      "required": [
+        "content",
+        "page",
+        "size",
+        "totalElements",
+        "totalPages"
+      ],
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/WalletLedgerItemDto"
+          }
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32",
+          "description": "0부터 센다"
+        },
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalElements": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "totalPages": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "WalletLedgerItemDto": {
+      "type": "object",
+      "description": "예치금 내역 한 줄. amount는 부호가 있다(출금·결제는 음수)",
+      "required": [
+        "category",
+        "ledgerType",
+        "amount",
+        "balanceAfter",
+        "createdAt",
+        "refId"
+      ],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "CHARGE",
+            "PAYMENT",
+            "REFUND",
+            "WITHDRAWAL",
+            "PAYOUT"
+          ]
+        },
+        "ledgerType": {
+          "type": "string",
+          "enum": [
+            "충전__PG결제_토스페이먼츠",
+            "출금__통장입금",
+            "사용__주문결제",
+            "임시보관__주문결제",
+            "정산지급__상품판매_수수료",
+            "정산수령__상품판매_수수료",
+            "정산지급__상품판매_대금",
+            "정산수령__상품판매_대금",
+            "환불__주문취소",
+            "임시보관반환__주문취소",
+            "출금취소__통장입금"
+          ]
+        },
+        "amount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "balanceAfter": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "refId": {
           "type": "integer",
           "format": "int32"
         }

@@ -20,7 +20,7 @@
     },
     {
       "name": "Seller",
-      "description": "판매자 등록 신청, 내 신청 조회 API"
+      "description": "판매자 등록 신청, 내 신청 조회, 신청 결과 확인 API"
     }
   ],
   "paths": {
@@ -813,7 +813,8 @@
                     "status": "PENDING",
                     "requestedAt": "2026-10-05T21:25:35",
                     "reviewedAt": null,
-                    "rejectReason": null
+                    "rejectReason": null,
+                    "resultCheckedAt": null
                   }
                 }
               }
@@ -959,7 +960,8 @@
                     "status": "REJECTED",
                     "requestedAt": "2026-10-05T21:25:35",
                     "reviewedAt": "2026-10-06T10:12:08",
-                    "rejectReason": "사업자등록번호를 확인할 수 없습니다."
+                    "rejectReason": "사업자등록번호를 확인할 수 없습니다.",
+                    "resultCheckedAt": null
                   }
                 }
               }
@@ -1125,7 +1127,8 @@
                     "status": "APPROVED",
                     "requestedAt": "2026-10-05T21:25:35",
                     "reviewedAt": "2026-10-06T10:12:08",
-                    "rejectReason": null
+                    "rejectReason": null,
+                    "resultCheckedAt": null
                   }
                 }
               }
@@ -1211,6 +1214,102 @@
         }
       }
     },
+    "/api/v1/member/sellers/me/result-check": {
+      "post": {
+        "tags": [
+          "Seller"
+        ],
+        "summary": "내 판매자 신청 결과 확인",
+        "description": "X-Member-Id 헤더의 회원이 가장 최근 판매자 신청의 승인·반려 결과를 봤다고 기록한다. 이미 기록했으면 처음 시각을 그대로 두고 200이다. 심사 중인 신청은 기록하지 않는다.",
+        "operationId": "checkMyResult",
+        "parameters": [
+          {
+            "name": "X-Member-Id",
+            "in": "header",
+            "description": "로그인한 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "기록 성공 (이미 기록했어도 200)",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 200,
+                  "message": "판매자 신청 결과를 확인했습니다.",
+                  "data": {
+                    "id": 1,
+                    "memberId": 1,
+                    "sellerType": "BUSINESS",
+                    "businessName": "크루런 스포츠",
+                    "businessNumber": "123-45-67890",
+                    "representativeName": "김러너",
+                    "status": "APPROVED",
+                    "requestedAt": "2026-10-05T21:25:35",
+                    "reviewedAt": "2026-10-06T10:12:08",
+                    "rejectReason": null,
+                    "resultCheckedAt": "2026-10-06T12:30:41"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "회원 ID 헤더 없음 (로그인하지 않은 요청)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 401,
+                  "message": "로그인이 필요합니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "판매자 신청 내역 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 404,
+                  "code": "SELLER_NOT_FOUND",
+                  "message": "판매자 신청 내역이 없습니다.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "가장 최근 신청이 아직 심사 중",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RsData"
+                },
+                "example": {
+                  "status": 409,
+                  "code": "SELLER_NOT_REVIEWED",
+                  "message": "아직 심사 중인 판매자 신청입니다.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/member/sellers/me": {
       "get": {
         "tags": [
@@ -1250,7 +1349,8 @@
                     "status": "REJECTED",
                     "requestedAt": "2026-10-05T21:25:35",
                     "reviewedAt": "2026-10-06T10:12:08",
-                    "rejectReason": "사업자등록번호를 확인할 수 없습니다."
+                    "rejectReason": "사업자등록번호를 확인할 수 없습니다.",
+                    "resultCheckedAt": null
                   }
                 }
               }
@@ -1345,7 +1445,8 @@
                       "status": "PENDING",
                       "requestedAt": "2026-10-05T21:25:35",
                       "reviewedAt": null,
-                      "rejectReason": null
+                      "rejectReason": null,
+                      "resultCheckedAt": null
                     }
                   ]
                 }

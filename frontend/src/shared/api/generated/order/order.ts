@@ -1277,7 +1277,7 @@ export const getFindCartUrl = () => {
 }
 
 /**
- * 회원별로 서버에 저장한 장바구니를 최근에 담은 항목부터 돌려준다. 담은 적이 없으면 빈 목록이다.
+ * 회원별로 서버에 저장한 장바구니를 돌려준다. 장바구니에는 한 종목만 담기므로 항목은 하나다. 담은 적이 없으면 빈 목록이다. 항목마다 그 종목으로 저장한 결제 전 신청서(PENDING)의 ID·대회 ID·참가자 이름을 붙인다(장바구니 결제에 보낼 신청서). 신청서 없이 담았으면 세 값은 null이다.
  * @summary 내 장바구니 조회
  */
 export const findCart = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataCartDto> => {
@@ -1379,7 +1379,7 @@ export const getRemoveItemUrl = (cartItemId: number,) => {
 }
 
 /**
- * 본인 장바구니의 항목을 빼고, 남은 장바구니를 돌려준다.
+ * 본인 장바구니의 항목을 빼고, 남은 장바구니를 돌려준다. 그 종목으로 저장한 결제 전 신청서(PENDING)도 함께 취소해, 같은 대회에 다시 신청할 수 있게 한다.
  * @summary 장바구니에서 빼기
  */
 export const removeItem = async (cartItemId: number, options?: Parameters<typeof customFetch>[1]): Promise<RsDataCartDto> => {

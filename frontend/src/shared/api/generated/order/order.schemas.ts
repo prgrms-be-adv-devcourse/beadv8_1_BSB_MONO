@@ -329,6 +329,12 @@ export interface CartItemDto {
   id?: number;
   createDate?: string;
   raceCourseId?: number;
+  /** @nullable */
+  participationId?: number | null;
+  /** @nullable */
+  raceId?: number | null;
+  /** @nullable */
+  participantName?: string | null;
 }
 
 /**

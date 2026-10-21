@@ -499,6 +499,26 @@
         "raceCourseId": {
           "type": "integer",
           "format": "int32"
+        },
+        "participationId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "raceId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "participantName": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "description": "장바구니 항목"

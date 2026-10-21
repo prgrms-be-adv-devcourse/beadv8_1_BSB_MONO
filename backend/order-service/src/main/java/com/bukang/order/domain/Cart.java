@@ -5,6 +5,7 @@ import static lombok.AccessLevel.PROTECTED;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
@@ -77,7 +78,9 @@ public class Cart extends BaseIdAndTime {
 		items.remove(item);
 	}
 
-	public CartDto toDto() {
-		return new CartDto(memberId, items.stream().map(CartItem::toDto).toList());
+	// pendingByCourse는 종목 ID → 그 종목으로 저장한 결제 전 신청서
+	public CartDto toDto(Map<Integer, Participation> pendingByCourse) {
+		return new CartDto(memberId,
+			items.stream().map(item -> item.toDto(pendingByCourse.get(item.getRaceCourseId()))).toList());
 	}
 }

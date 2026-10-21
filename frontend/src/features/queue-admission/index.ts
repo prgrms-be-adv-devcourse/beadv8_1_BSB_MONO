@@ -2,6 +2,7 @@ export {
   admissionExpiredHref,
   isQueueNotAdmitted,
   QUEUE_NOT_ADMITTED_CODE,
+  skippedNotice,
 } from './lib/queue-error'
 export {
   ADMISSION_POLL_MS,

@@ -3,6 +3,7 @@ package com.bukang.order.in;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -122,6 +123,56 @@ class ApiV1CartCheckoutTest {
 		assertThat(orderRepository.count()).isEqualTo(1);
 		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.APPLIED);
 		assertThat(cartCourseIds(MEMBER_ID)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("새로고침·다른 기기에서도 장바구니 조회 응답에 담긴 신청서 ID만으로 결제할 수 있다")
+	void checkoutWithParticipationIdFromCart() throws Exception {
+		int participationId = apply(MEMBER_ID, COURSE_ID);
+		addToCart(MEMBER_ID, COURSE_ID);
+
+		// 프론트 메모리에 남은 값 없이, 서버 장바구니만 다시 불러온 상황
+		String cart = mockMvc.perform(get("/api/v1/order/cart").header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.items[0].participationId").value(participationId))
+			.andExpect(jsonPath("$.data.items[0].raceId").value(100))
+			.andExpect(jsonPath("$.data.items[0].participantName").value("김러너"))
+			.andReturn().getResponse().getContentAsString();
+		int fromCart = JsonPath.read(cart, "$.data.items[0].participationId");
+
+		checkout(MEMBER_ID, newKey(), fromCart)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"));
+		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.APPLIED);
+	}
+
+	@Test
+	@DisplayName("장바구니에서 빼도 결제 전 신청서는 남고, 같은 대회에 다시 신청하면 새 신청서로 바뀐다")
+	void removeKeepsPendingAndReapplyReplaces() throws Exception {
+		int participationId = apply(MEMBER_ID, COURSE_ID);
+		int itemId = addToCartAndGetId(MEMBER_ID, COURSE_ID);
+
+		removeFromCart(MEMBER_ID, itemId).andExpect(status().isOk());
+		// 프론트 메모리에 남은 신청서 ID가 그대로 쓸 수 있는 ID여야 한다
+		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.PENDING);
+
+		int reapplied = apply(MEMBER_ID, COURSE_ID);
+		assertThat(statusOf(participationId)).isEqualTo(ParticipationStatus.CANCELED);
+		assertThat(statusOf(reapplied)).isEqualTo(ParticipationStatus.PENDING);
+	}
+
+	@Test
+	@DisplayName("결제 전 신청서가 남은 채로 신청서를 다시 저장하면, 새 신청서로 결제까지 할 수 있다")
+	void applyAgainWithLeftoverPendingThenCheckout() throws Exception {
+		int leftover = apply(MEMBER_ID, COURSE_ID);
+		int again = apply(MEMBER_ID, COURSE_ID);
+		addToCart(MEMBER_ID, COURSE_ID);
+
+		checkout(MEMBER_ID, newKey(), again)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.results[0].outcome").value("CREATED"));
+		assertThat(statusOf(leftover)).isEqualTo(ParticipationStatus.CANCELED);
+		assertThat(statusOf(again)).isEqualTo(ParticipationStatus.APPLIED);
 	}
 
 	@Test
@@ -379,6 +430,20 @@ class ApiV1CartCheckoutTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"raceCourseId\": %d}".formatted(raceCourseId)))
 			.andExpect(status().isCreated());
+	}
+
+	private int addToCartAndGetId(int memberId, int raceCourseId) throws Exception {
+		String body = mockMvc.perform(post("/api/v1/order/cart/items")
+				.header("X-Member-Id", memberId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"raceCourseId\": %d}".formatted(raceCourseId)))
+			.andExpect(status().isCreated())
+			.andReturn().getResponse().getContentAsString();
+		return JsonPath.read(body, "$.data.id");
+	}
+
+	private ResultActions removeFromCart(int memberId, int cartItemId) throws Exception {
+		return mockMvc.perform(delete("/api/v1/order/cart/items/" + cartItemId).header("X-Member-Id", memberId));
 	}
 
 	private int apply(int memberId, int raceCourseId) throws Exception {

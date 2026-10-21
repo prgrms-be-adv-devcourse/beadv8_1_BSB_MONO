@@ -1,5 +1,7 @@
 import { http, HttpResponse } from 'msw'
 
+import type { WalletLedgerItemDto } from '@/shared/api/generated/cash/cash.schemas'
+
 import { freshBalanceOf, freshMemberOf, issueMockBalanceCookie } from './mock-member'
 
 /**
@@ -50,6 +52,79 @@ export function payFromMockWallet(
   return { shortage: 0, next }
 }
 
+type MockLedger = Omit<WalletLedgerItemDto, 'balanceAfter'>
+
+/**
+ * 예치금 내역 목. 시안(M17)의 예시를 장부 모양으로 옮기고, 더 보기를 볼 수 있게 지난 충전을 더 붙였다.
+ * 최신순이다. 잔액(balanceAfter)은 가장 오래된 줄부터 더해 만든다. 충전·결제를 해도 내역은 늘지 않는다(목 단순화).
+ */
+const MOCK_LEDGERS: WalletLedgerItemDto[] = withBalanceAfter([
+  {
+    category: 'PAYMENT',
+    ledgerType: '사용__주문결제',
+    amount: -45_000,
+    createdAt: '2026-10-05T14:22:00',
+    refId: 12,
+  },
+  {
+    category: 'CHARGE',
+    ledgerType: '충전__PG결제_토스페이먼츠',
+    amount: 10_000,
+    createdAt: '2026-10-05T14:21:00',
+    refId: 31,
+  },
+  {
+    category: 'PAYOUT',
+    ledgerType: '정산수령__상품판매_대금',
+    amount: 40_000,
+    createdAt: '2026-10-03T10:00:00',
+    refId: 4,
+  },
+  {
+    category: 'PAYMENT',
+    ledgerType: '사용__주문결제',
+    amount: -45_000,
+    createdAt: '2026-10-02T11:30:00',
+    refId: 11,
+  },
+  {
+    category: 'WITHDRAWAL',
+    ledgerType: '출금__통장입금',
+    amount: -5_000,
+    createdAt: '2026-10-01T09:00:00',
+    refId: 2,
+  },
+  {
+    category: 'REFUND',
+    ledgerType: '환불__주문취소',
+    amount: 60_000,
+    createdAt: '2026-09-30T09:10:00',
+    refId: 10,
+  },
+  {
+    category: 'PAYMENT',
+    ledgerType: '사용__주문결제',
+    amount: -60_000,
+    createdAt: '2026-09-12T20:05:00',
+    refId: 10,
+  },
+  ...Array.from({ length: 20 }, (_, i): MockLedger => ({
+    category: 'CHARGE',
+    ledgerType: '충전__PG결제_토스페이먼츠',
+    amount: 10_000,
+    createdAt: `2026-09-${String(10 - Math.floor(i / 2)).padStart(2, '0')}T${i % 2 ? '09' : '18'}:40:00`,
+    refId: 30 - i,
+  })),
+])
+
+function withBalanceAfter(rows: MockLedger[]): WalletLedgerItemDto[] {
+  let balanceAfter = 0
+  return rows
+    .toReversed()
+    .map((row) => ({ ...row, balanceAfter: (balanceAfter += row.amount) }))
+    .toReversed()
+}
+
 /** 환급 결과(Idempotency-Key 헤더 = 멱등키). 같은 키로 다시 오면 처음 결과를 돌려준다 */
 const withdrawals = new Map<string, number>()
 
@@ -84,6 +159,36 @@ export const walletHandlers = [
       },
       { headers: balanceCookieHeaders(cookies, 0) },
     )
+  }),
+  /** 예치금 내역 목. 진짜 서버처럼 category로 거르고 page · size(최대 100)로 자른다 */
+  http.get('*/api/v1/cash/wallets/ledgers', ({ request }) => {
+    const params = new URL(request.url).searchParams
+    const category = params.get('category')
+    const page = Number(params.get('page') ?? 0)
+    const size = Number(params.get('size') ?? 20)
+    if (size > 100) {
+      return HttpResponse.json(
+        {
+          status: 400,
+          code: 'INVALID_REQUEST',
+          message: '한 번에 100개까지 조회할 수 있습니다.',
+          data: null,
+        },
+        { status: 400 },
+      )
+    }
+    const all = category ? MOCK_LEDGERS.filter((l) => l.category === category) : MOCK_LEDGERS
+    return HttpResponse.json({
+      status: 200,
+      message: '예치금 내역을 조회했습니다.',
+      data: {
+        content: all.slice(page * size, (page + 1) * size),
+        page,
+        size,
+        totalElements: all.length,
+        totalPages: Math.ceil(all.length / size),
+      },
+    })
   }),
   http.get('*/api/v1/cash/wallets/balance', ({ request, cookies }) =>
     HttpResponse.json({

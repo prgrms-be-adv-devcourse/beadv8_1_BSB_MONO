@@ -27,9 +27,11 @@ import type {
 import type {
   CashChargeConfirmRequestDto,
   CashWithdrawalRequestDto,
+  GetLedgersParams,
   RsData,
   RsDataCashChargeDto,
   RsDataCashWithdrawalDto,
+  RsDataPageDtoWalletLedgerItemDto,
   RsDataWalletBalanceDto
 } from './cash.schemas';
 
@@ -323,6 +325,115 @@ export function useGetBalance<TData = Awaited<ReturnType<typeof getBalance>>, TE
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetBalanceQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetLedgersUrl = (params?: GetLedgersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/cash/wallets/ledgers?${stringifiedParams}` : `/api/v1/cash/wallets/ledgers`
+}
+
+/**
+ * 요청자 본인 지갑의 내역을 최신순으로 조회한다. category로 탭(CHARGE/PAYMENT/REFUND/WITHDRAWAL/PAYOUT)을 필터링할 수 있고, 생략하면 전체를 돌려준다.
+ * @summary 예치금 내역 조회
+ */
+export const getLedgers = async (params?: GetLedgersParams, options?: Parameters<typeof customFetch>[1]): Promise<RsDataPageDtoWalletLedgerItemDto> => {
+
+  return customFetch<RsDataPageDtoWalletLedgerItemDto>(getGetLedgersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLedgersQueryKey = (params?: GetLedgersParams,) => {
+    return [
+    `/api/v1/cash/wallets/ledgers`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetLedgersQueryOptions = <TData = Awaited<ReturnType<typeof getLedgers>>, TError = RsData>(params?: GetLedgersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLedgers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLedgersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLedgers>>> = ({ signal }) => getLedgers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLedgers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetLedgersQueryResult = NonNullable<Awaited<ReturnType<typeof getLedgers>>>
+export type GetLedgersQueryError = RsData
+
+
+export function useGetLedgers<TData = Awaited<ReturnType<typeof getLedgers>>, TError = RsData>(
+ params: undefined |  GetLedgersParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLedgers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getLedgers>>,
+          TError,
+          Awaited<ReturnType<typeof getLedgers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetLedgers<TData = Awaited<ReturnType<typeof getLedgers>>, TError = RsData>(
+ params?: GetLedgersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLedgers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getLedgers>>,
+          TError,
+          Awaited<ReturnType<typeof getLedgers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetLedgers<TData = Awaited<ReturnType<typeof getLedgers>>, TError = RsData>(
+ params?: GetLedgersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLedgers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary 예치금 내역 조회
+ */
+
+export function useGetLedgers<TData = Awaited<ReturnType<typeof getLedgers>>, TError = RsData>(
+ params?: GetLedgersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getLedgers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetLedgersQueryOptions(params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

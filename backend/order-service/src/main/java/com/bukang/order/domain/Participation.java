@@ -6,6 +6,7 @@ import static lombok.AccessLevel.PROTECTED;
 import java.time.LocalDateTime;
 
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
+import com.bukang.order.domain.event.ParticipationCanceledBeforePaymentEvent;
 import com.bukang.order.domain.exception.ParticipationNotCancelableException;
 import com.bukang.order.domain.exception.ParticipationNotEditableException;
 import com.bukang.order.domain.exception.ParticipationNotPayableException;
@@ -172,6 +173,8 @@ public class Participation extends BaseIdAndTime {
 			case PENDING -> {
 				changeStatus(ParticipationStatus.CANCELED);
 				this.canceledAt = canceledAt;
+				// [결제하기]에서 자리만 잡히고 주문은 롤백됐을 수 있어, 커밋 뒤 상품에 자리를 풀어 달라고 알린다
+				publishEvent(new ParticipationCanceledBeforePaymentEvent(getId()));
 			}
 			case APPLIED -> throw new ParticipationNotCancelableException(
 				"결제 대기 중인 신청은 취소할 수 없습니다. 결제하지 않으면 결제 기한이 지난 뒤 자동으로 풀립니다.");

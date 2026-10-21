@@ -1020,6 +1020,81 @@ export const useApprove = <TError = RsData,
       return useMutation(getApproveMutationOptions(options), queryClient);
     }
 
+export const getCheckMyResultUrl = () => {
+
+
+
+
+  return `/api/v1/member/sellers/me/result-check`
+}
+
+/**
+ * X-Member-Id 헤더의 회원이 가장 최근 판매자 신청의 승인·반려 결과를 봤다고 기록한다. 이미 기록했으면 처음 시각을 그대로 두고 200이다. 심사 중인 신청은 기록하지 않는다.
+ * @summary 내 판매자 신청 결과 확인
+ */
+export const checkMyResult = async ( options?: Parameters<typeof customFetch>[1]): Promise<RsDataSellerDto> => {
+
+  return customFetch<RsDataSellerDto>(getCheckMyResultUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCheckMyResultMutationKey = () => ['checkMyResult'] as const;
+
+export const getCheckMyResultMutationOptions = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkMyResult>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkMyResult>>, TError,void, TContext> => {
+
+const mutationKey = getCheckMyResultMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkMyResult>>, void> = () => {
+
+
+          return  checkMyResult(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckMyResultMutationResult = NonNullable<Awaited<ReturnType<typeof checkMyResult>>>
+
+    export type CheckMyResultMutationError = RsData
+
+
+    /**
+ * @summary 내 판매자 신청 결과 확인
+ */
+export const useCheckMyResult = <TError = RsData,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkMyResult>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof checkMyResult>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCheckMyResultMutationOptions(options), queryClient);
+    }
+
 export const getFindMineUrl = () => {
 
 

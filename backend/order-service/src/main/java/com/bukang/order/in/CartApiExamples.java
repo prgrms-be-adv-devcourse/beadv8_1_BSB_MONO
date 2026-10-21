@@ -11,7 +11,14 @@ final class CartApiExamples {
 			"data": {
 				"memberId": 1,
 				"items": [
-					{ "id": 1, "createDate": "2026-10-12T10:15:30", "raceCourseId": 1 }
+					{
+						"id": 1,
+						"createDate": "2026-10-12T10:15:30",
+						"raceCourseId": 1,
+						"participationId": 5,
+						"raceId": 1,
+						"participantName": "김러너"
+					}
 				]
 			}
 		}
@@ -25,7 +32,14 @@ final class CartApiExamples {
 		{
 			"status": 201,
 			"message": "장바구니에 담았습니다.",
-			"data": { "id": 1, "createDate": "2026-10-12T10:15:30", "raceCourseId": 1 }
+			"data": {
+				"id": 1,
+				"createDate": "2026-10-12T10:15:30",
+				"raceCourseId": 1,
+				"participationId": 5,
+				"raceId": 1,
+				"participantName": "김러너"
+			}
 		}
 		""";
 
@@ -33,7 +47,14 @@ final class CartApiExamples {
 		{
 			"status": 200,
 			"message": "이미 장바구니에 담긴 참가권입니다.",
-			"data": { "id": 1, "createDate": "2026-10-12T10:15:30", "raceCourseId": 1 }
+			"data": {
+				"id": 1,
+				"createDate": "2026-10-12T10:15:30",
+				"raceCourseId": 1,
+				"participationId": 5,
+				"raceId": 1,
+				"participantName": "김러너"
+			}
 		}
 		""";
 
