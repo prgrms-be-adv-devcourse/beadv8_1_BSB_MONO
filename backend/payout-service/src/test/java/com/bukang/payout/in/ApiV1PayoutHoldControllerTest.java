@@ -2,6 +2,7 @@ package com.bukang.payout.in;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
 import static org.springframework.restdocs.headers.HeaderDocumentation.requestHeaders;
 import static org.springframework.restdocs.headers.HeaderDocumentation.responseHeaders;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,12 +35,17 @@ import org.springframework.restdocs.payload.FieldDescriptor;
 import org.springframework.restdocs.payload.JsonFieldType;
 import org.springframework.restdocs.snippet.Snippet;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
+import com.bukang.payout.domain.PayoutHoldStatus;
 import com.bukang.payout.domain.PayoutStatus;
+import com.bukang.payout.domain.exception.PayoutMemberNotFoundException;
+import com.bukang.payout.domain.exception.PayoutMemberUnavailableException;
+import com.bukang.payout.out.MemberAdminPort;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
 import com.bukang.payout.support.RestDocsConfig;
@@ -52,9 +59,10 @@ import com.jayway.jsonpath.JsonPath;
 @ActiveProfiles("test")
 class ApiV1PayoutHoldControllerTest {
 	private static final int ADMIN_ID = 99;
+	private static final int MEMBER_ID = 8;
 
 	private static final HeaderDescriptor MEMBER_ID_HEADER =
-		headerWithName("X-Member-Id").description("요청한 관리자 회원 ID (게이트웨이가 넣어 줄 예정)");
+		headerWithName("X-Member-Id").description("요청한 관리자 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)");
 
 	// 성공·실패 응답 모두 RsData {status, message, data} 형식이다
 	private static final FieldDescriptor[] HOLD_RESPONSE = {
@@ -90,6 +98,15 @@ class ApiV1PayoutHoldControllerTest {
 
 	@Autowired
 	private PayoutHoldRepository payoutHoldRepository;
+
+	// 회원 서비스 대신 관리자 여부를 정한다. 정하지 않은 회원은 일반 회원(false)이다
+	@MockitoBean
+	private MemberAdminPort memberAdminPort;
+
+	@BeforeEach
+	void setUp() {
+		given(memberAdminPort.isAdmin(ADMIN_ID)).willReturn(true);
+	}
 
 	@AfterEach
 	void tearDown() {
@@ -261,6 +278,84 @@ class ApiV1PayoutHoldControllerTest {
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."));
 		assertThat(statusOf(payout)).isEqualTo(PayoutStatus.CALCULATED);
+	}
+
+	@Test
+	@DisplayName("일반 회원이 보류를 걸면 403 PAYOUT_NOT_ADMIN이고, 보류가 생기지 않는다")
+	void nonAdminCannotHold() throws Exception {
+		Payout payout = savePayout();
+
+		mockMvc.perform(post("/api/v1/payout/payouts/{payoutId}/holds", payout.getId())
+				.header("X-Member-Id", MEMBER_ID)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"reasonType": "ACCOUNT_NOT_REGISTERED"}
+					"""))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("PAYOUT_NOT_ADMIN"))
+			.andExpect(jsonPath("$.message").value("관리자만 이용할 수 있습니다."))
+			.andDo(document("payout-hold-create-forbidden", ERROR_RESPONSE));
+		assertThat(statusOf(payout)).isEqualTo(PayoutStatus.CALCULATED);
+		assertThat(payoutHoldRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("일반 회원이 보류를 풀면 403이고, 보류는 그대로다")
+	void nonAdminCannotRelease() throws Exception {
+		Payout payout = savePayout();
+		int holdId = holdIdOf(holdAccount(payout.getId()));
+
+		mockMvc.perform(post("/api/v1/payout/holds/{holdId}/release", holdId)
+				.header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("PAYOUT_NOT_ADMIN"))
+			.andDo(document("payout-hold-release-forbidden", ERROR_RESPONSE));
+		assertThat(payoutHoldRepository.findById(holdId).orElseThrow().getStatus()).isEqualTo(PayoutHoldStatus.HELD);
+		assertThat(statusOf(payout)).isEqualTo(PayoutStatus.HELD);
+	}
+
+	@Test
+	@DisplayName("일반 회원이 없는 정산 내역에 보류를 걸어도 404가 아니라 403이다 (관리자 확인이 먼저다)")
+	void nonAdminGetsForbiddenBeforeNotFound() throws Exception {
+		mockMvc.perform(post("/api/v1/payout/payouts/{payoutId}/holds", 9999)
+				.header("X-Member-Id", MEMBER_ID)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"reasonType": "ACCOUNT_NOT_REGISTERED"}
+					"""))
+			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	@DisplayName("헤더의 회원이 없거나 탈퇴했으면 404 PAYOUT_MEMBER_NOT_FOUND이고, 보류가 생기지 않는다")
+	void unknownMemberIsNotFound() throws Exception {
+		Payout payout = savePayout();
+		given(memberAdminPort.isAdmin(MEMBER_ID)).willThrow(new PayoutMemberNotFoundException());
+
+		mockMvc.perform(post("/api/v1/payout/payouts/{payoutId}/holds", payout.getId())
+				.header("X-Member-Id", MEMBER_ID)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"reasonType": "ACCOUNT_NOT_REGISTERED"}
+					"""))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("PAYOUT_MEMBER_NOT_FOUND"));
+		assertThat(payoutHoldRepository.count()).isZero();
+	}
+
+	@Test
+	@DisplayName("회원 서비스가 응답하지 않으면 503 PAYOUT_MEMBER_UNAVAILABLE이고, 관리자여도 보류가 생기지 않는다")
+	void memberServiceUnavailable() throws Exception {
+		Payout payout = savePayout();
+		given(memberAdminPort.isAdmin(ADMIN_ID))
+			.willThrow(new PayoutMemberUnavailableException(new IllegalStateException("타임아웃")));
+
+		holdAccount(payout.getId())
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.code").value("PAYOUT_MEMBER_UNAVAILABLE"))
+			.andDo(document("payout-hold-create-member-unavailable", ERROR_RESPONSE));
+		assertThat(statusOf(payout)).isEqualTo(PayoutStatus.CALCULATED);
+		assertThat(payoutHoldRepository.count()).isZero();
 	}
 
 	@Test
