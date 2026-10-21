@@ -26,22 +26,15 @@
 // 서버가 같은 판매자의 같은 키를 보면 새로 만들지 않고 처음 대회를 200으로 돌려준다.
 // (다시 돌리면 이미지는 새로 올라가지만 어디에도 연결되지 않아, 파일 정리 배치가 지운다)
 //
-// 날짜: 접수 시작은 실행일 + 2일 00:00(서버가 허용하는 가장 이른 시각), 접수 마감 · 대회 일시는 races.mjs에 고정.
-// 10/22 발표 날에 "접수 중"이 되려면 10/20(화) 안에 실행해야 한다. 늦으면 경고를 띄운다.
+// 날짜: 접수 시작 · 접수 마감 · 대회 일시를 모두 races.mjs에 2027년 3~6월로 고정한다.
+// 서버는 접수 시작이 실행일 + 2일 이후여야 받는다. 실행이 그보다 늦어 어긋나면 등록 전에 이 스크립트가 막는다.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import {
-  buildRaceRequest,
-  earliestOpenAt,
-  idempotencyKeyOf,
-  opensBy,
-  validateRaceRequest,
-} from './build-request.mjs'
+import { buildRaceRequest, idempotencyKeyOf, validateRaceRequest } from './build-request.mjs'
 import { DEMO_RACES } from './races.mjs'
 
-const PRESENTATION_DATE = '2026-10-22'
 const IMAGE_DIR = new URL('../../public/mock/races/', import.meta.url)
 
 const dryRun = process.argv.includes('--dry-run')
@@ -160,11 +153,6 @@ function printDryRun() {
 }
 
 async function main() {
-  if (!opensBy(now, PRESENTATION_DATE)) {
-    console.warn(
-      `경고: 접수 시작이 ${earliestOpenAt(now)}라 발표 날(${PRESENTATION_DATE})에는 "오픈 예정"으로 보입니다.\n`,
-    )
-  }
   if (dryRun) {
     printDryRun()
     return
@@ -180,7 +168,19 @@ async function main() {
     return
   }
 
-  console.log(`대상 서버: ${baseUrl}, 접수 시작: ${earliestOpenAt(now)}`)
+  // 로그인 · 이미지 업로드 전에 날짜 · 값이 서버 규칙에 맞는지 먼저 본다
+  const problems = DEMO_RACES.flatMap((race) =>
+    validateRaceRequest(buildRaceRequest(race, { now }), { now, requireFiles: false }).map(
+      (error) => `${race.title}: ${error}`,
+    ),
+  )
+  if (problems.length > 0) {
+    console.error(`서버 규칙에 맞지 않아 등록하지 않습니다:\n${problems.join('\n')}`)
+    process.exitCode = 1
+    return
+  }
+
+  console.log(`대상 서버: ${baseUrl}`)
   let token
   try {
     token = await login(email, password)
