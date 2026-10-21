@@ -36,3 +36,4 @@ payout:
     order: http://bukang-order-service:8084
     cash: http://bukang-cash-service:8081
     product: http://bukang-product-service:8085
+    member: http://bukang-member-service:8080

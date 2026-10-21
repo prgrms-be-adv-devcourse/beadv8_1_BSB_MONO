@@ -36,3 +36,4 @@ payout:
   services:
     order: http://localhost:8084
     product: http://localhost:8085
+    member: http://localhost:8080
