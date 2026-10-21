@@ -1,7 +1,6 @@
 import { MyPage } from '@/views/my-page'
 
-// ?preview=seller 로 M30-2(판매자 승인 후)를 볼 수 있다
-export default async function Page({ searchParams }: PageProps<'/me'>) {
-  const { preview } = await searchParams
-  return <MyPage seller={preview === 'seller'} />
+// 판매자 메뉴(M30 · M30-2)는 내 판매자 신청 상태로 정한다
+export default function Page() {
+  return <MyPage />
 }
