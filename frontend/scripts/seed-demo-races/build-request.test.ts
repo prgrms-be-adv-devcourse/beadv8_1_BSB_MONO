@@ -6,7 +6,6 @@ import {
   IDEMPOTENCY_KEY_MAX_LENGTH,
   idempotencyKeyOf,
   kstDate,
-  opensBy,
   validateRaceRequest,
 } from './build-request.mjs'
 import { DEMO_RACES } from './races.mjs'
@@ -31,11 +30,6 @@ describe('날짜 계산', () => {
     expect(earliestOpenAt(NOW)).toBe('2026-10-22T00:00:00')
     expect(earliestOpenAt(Date.parse('2026-10-30T23:00:00+09:00'))).toBe('2026-11-01T00:00:00')
   })
-
-  it('10/20에 돌리면 발표 날(10/22)에 접수가 열려 있고, 10/21에 돌리면 아니다', () => {
-    expect(opensBy(NOW, '2026-10-22')).toBe(true)
-    expect(opensBy(Date.parse('2026-10-21T09:00:00+09:00'), '2026-10-22')).toBe(false)
-  })
 })
 
 describe('데모 대회 요청 본문', () => {
@@ -46,14 +40,39 @@ describe('데모 대회 요청 본문', () => {
     }
   })
 
-  it('10/22에 접수 중이고, 접수 마감은 10/25~11/10, 대회는 11월이다', () => {
+  it('접수 시작 · 마감 · 대회 일시가 모두 2027년 3~6월이고 순서가 맞다', () => {
     for (const request of requests) {
-      expect(request.individualOpenAt).toBe('2026-10-22T00:00:00')
-      expect(request.applicationCloseAt >= '2026-10-25T00:00:00').toBe(true)
-      expect(request.applicationCloseAt <= '2026-11-10T23:59:59').toBe(true)
-      expect(request.raceDate.slice(0, 7)).toBe('2026-11')
-      expect(request.raceDate > request.applicationCloseAt).toBe(true)
+      for (const field of ['individualOpenAt', 'applicationCloseAt', 'raceDate'] as const) {
+        expect(request[field] >= '2027-03-01T00:00:00', `${request.title} ${field}`).toBe(true)
+        expect(request[field] <= '2027-06-30T23:59:59', `${request.title} ${field}`).toBe(true)
+      }
+      expect(request.individualOpenAt < request.applicationCloseAt).toBe(true)
+      expect(request.applicationCloseAt < request.raceDate).toBe(true)
     }
+  })
+
+  it('접수 시작은 races.mjs에 고정한 값이라 실행일이 바뀌어도 같다', () => {
+    const later = buildRaceRequest(DEMO_RACES[0], { now: Date.parse('2026-12-01T09:00:00+09:00') })
+    expect(later.individualOpenAt).toBe(requests[0].individualOpenAt)
+    expect(requests[0].individualOpenAt).toBe(DEMO_RACES[0].applicationOpenAt)
+  })
+
+  it('대회 일시는 주말 오전이다', () => {
+    for (const request of requests) {
+      const day = new Date(`${request.raceDate.slice(0, 10)}T00:00:00Z`).getUTCDay()
+      expect([0, 6], request.title).toContain(day)
+      expect(request.raceDate.slice(11, 13), request.title).toBe('08')
+    }
+  })
+
+  it('고정 접수 시작이 실행일 + 2일보다 이르면 막는다', () => {
+    // 2027-03-01 접수 시작 대회(서울마라톤)를 2027-02-28에 돌리면 이틀 뒤(03-02)보다 이르다
+    const tooLate = Date.parse('2027-02-28T10:00:00+09:00')
+    const request = buildRaceRequest(DEMO_RACES[2], { now: tooLate, fileIds: [1, 2] })
+    expect(request.individualOpenAt).toBe('2027-03-01T00:00:00')
+    expect(validateRaceRequest(request, { now: tooLate })).toContain(
+      '개인 예매 오픈: 오늘로부터 이틀 뒤(2027-03-02)부터',
+    )
   })
 
   it('접수 마감은 대회마다 다르다', () => {
@@ -123,22 +142,22 @@ describe('서버 규칙 검사', () => {
   })
 
   it('날짜 순서가 틀리면 잡는다', () => {
-    const closeBeforeOpen = { ...valid(), applicationCloseAt: '2026-10-22T00:00:00' }
+    const closeBeforeOpen = { ...valid(), applicationCloseAt: '2027-03-02T00:00:00' }
     expect(validateRaceRequest(closeBeforeOpen, { now: NOW })).toContain(
       '접수 마감: 개인 예매 오픈보다 늦게',
     )
-    const closeAfterRace = { ...valid(), applicationCloseAt: '2026-11-01T09:00:00' }
+    const closeAfterRace = { ...valid(), applicationCloseAt: '2027-03-27T09:00:00' }
     expect(validateRaceRequest(closeAfterRace, { now: NOW })).toContain(
       '접수 마감: 대회 일시보다 늦을 수 없음',
     )
-    const lateRefund = { ...valid(), refundDeadline: '2026-11-02' }
+    const lateRefund = { ...valid(), refundDeadline: '2027-03-28' }
     expect(validateRaceRequest(lateRefund, { now: NOW })).toContain(
       '환불 기준일: 대회 날짜보다 늦을 수 없음',
     )
   })
 
   it('15분 단위가 아닌 시각을 잡는다', () => {
-    const request = { ...valid(), raceDate: '2026-11-01T08:10:00' }
+    const request = { ...valid(), raceDate: '2027-03-27T08:10:00' }
     expect(validateRaceRequest(request, { now: NOW })).toContain(
       'raceDate: 15분 단위(00·15·30·45분)',
     )
