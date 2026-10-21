@@ -55,6 +55,11 @@ type BookingFlowState = {
   applications: Record<string, BookingApplication>
   /** 참가 신청을 저장하면 고른 종목과 입력값, 참가 신청 ID를 남긴다. */
   submitApplication: (application: BookingApplication, participant: BookingParticipant) => void
+  /**
+   * 장바구니에서 뺀 종목의 참가 신청을 잊는다. 빼면 서버가 그 결제 전 신청서를 취소하므로,
+   * 남겨 두면 같은 종목을 다시 신청할 때 취소된 신청서를 고치려다 실패한다.
+   */
+  forgetApplications: (optionIds: string[]) => void
 }
 
 /** 테스트·시안 미리보기에서 단계 중간부터 시작할 때 넘기는 값 */
@@ -75,6 +80,12 @@ export const { Provider: BookingFlowProvider, useStore: useBookingFlow } = creat
           selection: { raceId: application.raceId, optionId: application.optionId },
           participant,
           applications: { ...s.applications, [application.optionId]: application },
+        })),
+      forgetApplications: (optionIds) =>
+        set((s) => ({
+          applications: Object.fromEntries(
+            Object.entries(s.applications).filter(([optionId]) => !optionIds.includes(optionId)),
+          ),
         })),
     })),
 )

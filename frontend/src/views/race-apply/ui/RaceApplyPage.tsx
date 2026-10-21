@@ -60,7 +60,9 @@ type NextStep = 'cart' | 'checkout'
 type ReplaceCart = {
   /** 빼야 할 장바구니 항목 */
   cartItemIds: number[]
-  /** 담아 둔 대회 · 종목 이름. 이 기기에서 담지 않아 모르면 undefined */
+  /** 빼야 할 항목의 종목 ID. 빼면 서버가 그 결제 전 신청서를 취소하므로 메모리에서도 잊는다 */
+  optionIds: string[]
+  /** 담아 둔 대회 · 종목 이름. 대회를 알 수 없으면 undefined */
   label?: string
 }
 
@@ -145,6 +147,7 @@ function ParticipantForm({
   const sizes = (option.shirtSizes ?? []).map((v) => ({ value: v, label: v }))
   const applications = useBookingFlow((s) => s.applications)
   const submitApplication = useBookingFlow((s) => s.submitApplication)
+  const forgetApplications = useBookingFlow((s) => s.forgetApplications)
   const {
     register,
     control,
@@ -214,8 +217,9 @@ function ParticipantForm({
 
   // 확인 창에서 바꾸기를 누르면 담아 둔 다른 종목을 빼고 이 종목을 담는다.
   const replaceCart = useMutation({
-    mutationFn: async (cartItemIds: number[]) => {
+    mutationFn: async ({ cartItemIds, optionIds }: ReplaceCart) => {
       for (const id of cartItemIds) await orderApi.removeItem(id)
+      forgetApplications(optionIds)
       await addToCart()
     },
     onSuccess: () => router.push('/cart'),
@@ -239,21 +243,25 @@ function ParticipantForm({
     const others = (cart.items ?? []).filter((item) => String(item.raceCourseId) !== option.id)
     if (others.length === 0) return null
     const label = await cartLabel(others[0])
-    return { cartItemIds: others.map((i) => i.id ?? 0), label }
+    return {
+      cartItemIds: others.map((i) => i.id ?? 0),
+      optionIds: others.map((i) => String(i.raceCourseId)),
+      label,
+    }
   }
 
   /**
    * 담아 둔 항목의 대회 · 종목 이름. 같은 대회의 종목이면 이 대회에서 찾고,
-   * 다른 대회는 이 기기에서 저장한 참가 신청이 있어야 알 수 있다.
+   * 다른 대회는 장바구니 항목에 붙은 참가 신청(없으면 이 기기에서 저장한 참가 신청)의 대회 ID로 찾는다.
    */
-  async function cartLabel(item: { raceCourseId?: number }) {
+  async function cartLabel(item: { raceCourseId?: number; raceId?: number | null }) {
     const courseId = String(item.raceCourseId)
     const sameRace = race.options.find((o) => o.id === courseId)
     if (sameRace) return `${race.title} · ${sameRace.name}`
-    const application = applications[courseId]
-    if (!application) return undefined
+    const raceId = item.raceId != null ? String(item.raceId) : applications[courseId]?.raceId
+    if (!raceId) return undefined
     try {
-      const other = await queryClient.fetchQuery(raceDetailQueryOptions(application.raceId))
+      const other = await queryClient.fetchQuery(raceDetailQueryOptions(raceId))
       const course = other?.options.find((o) => o.id === courseId)
       return other && course ? `${other.title} · ${course.name}` : undefined
     } catch {
@@ -450,7 +458,7 @@ function ParticipantForm({
         }
         confirmLabel="바꾸기"
         cancelLabel="그대로 두기"
-        onConfirm={() => replace && replaceCart.mutate(replace.cartItemIds)}
+        onConfirm={() => replace && replaceCart.mutate(replace)}
       />
     </>
   )

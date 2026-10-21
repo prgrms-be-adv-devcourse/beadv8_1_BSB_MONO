@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { AppHeader } from '@/widgets/app-header'
-import { SAMPLE_PARTICIPANT, useBookingFlow } from '@/features/booking'
+import { SAMPLE_PARTICIPANT } from '@/features/booking'
 import { chargeAmountFor, requestCharge } from '@/features/deposit-charge'
 import { useQueueAdmission } from '@/features/queue-admission'
 import { parseKstDateTime, RACE_DETAIL, raceDetailQueryOptions } from '@/entities/race'
@@ -215,7 +215,11 @@ function OrderCheckout({
     enabled: raceId !== undefined,
   })
   const deposit = useDepositBalance()
-  const applications = useBookingFlow((s) => s.applications)
+  // 참가자 이름은 참가 신청 API로 불러온다 (예매 흐름 스토어는 새로고침하면 비어서 쓰지 않는다)
+  const participationId = order.data?.items?.[0]?.participationId
+  const participation = orderApi.useFindById(participationId ?? 0, {
+    query: { enabled: participationId !== undefined, select: unwrapData },
+  })
   // 필수 동의는 결제 화면에 들어올 때마다 사용자가 직접 체크한다.
   const [agreed, setAgreed] = useState(false)
   const [failure, setFailure] = useState<PayFailure | null>(
@@ -309,7 +313,11 @@ function OrderCheckout({
   return (
     <CheckoutForm
       remaining={remaining}
-      summary={orderSummary(order.data, race.data ?? undefined, applications)}
+      summary={orderSummary(
+        order.data,
+        race.data ?? undefined,
+        participation.data?.participant?.name,
+      )}
       amount={amount}
       balance={balance}
       refund={race.data?.refund}
@@ -330,14 +338,12 @@ function OrderCheckout({
 function orderSummary(
   order: orderModel.OrderDto,
   race: { title: string; options: { id: string; name: string }[] } | undefined,
-  applications: Record<string, { participationId: number; participantName: string }>,
+  participantName: string | undefined,
 ) {
   const item = order.items?.[0]
   const option = race?.options.find((o) => o.id === String(item?.raceCourseId))
   const name = race && option ? `${race.title} · ${option.name}` : (item?.itemName ?? '')
-  const participant =
-    Object.values(applications).find((a) => a.participationId === item?.participationId)
-      ?.participantName ?? order.shippingAddress?.recipientName
+  const participant = participantName ?? order.shippingAddress?.recipientName
   return participant ? `${name} · ${participant}` : name
 }
 
