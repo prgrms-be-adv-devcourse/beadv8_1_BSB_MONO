@@ -26,7 +26,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 주문 상품. 참가권 1장(키트 포함) = 1행이고 수량은 늘 1이다 (09 ERD order_item, 굿즈 삭제)
- * 정산(E)은 이 행의 판매자·대회·대회 날짜·금액을 읽는다 (정산 SoldEntryPort → /internal/v1/order/sold-entries)
+ * 정산(E)은 이 행의 판매자·대회·대회 날짜·금액을 읽는다 (정산 SoldEntryPort → /internal/v1/order/sold-entries?raceId=)
  */
 @Entity
 @NoArgsConstructor(access = PROTECTED)

@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,8 +49,8 @@ public class InternalV1OrderController {
 
 	@GetMapping("/sold-entries")
 	@Operation(summary = "정산용 판매 내역 조회",
-		description = "정산 서비스가 정산 대상일 배치에서 부른다. from ~ to(양 끝 포함, 최대 31일)에 열린 대회의 주문 상품 중 "
-			+ "결제 완료이고 취소되지 않은 참가권을 주문 상품 ID 순으로 돌려준다. 정산 배치는 놓친 날을 따라잡으려고 7일치를 묻는다. "
+		description = "정산 서비스가 최종 정산 생성 배치에서 부른다. 이 대회의 주문 상품 중 결제 완료이고 취소되지 않은 참가권을 "
+			+ "주문 상품 ID 순으로 돌려준다. 판매가 없거나 없는 대회면 빈 목록이다. "
 			+ "필드는 정산 서비스의 SoldEntry와 같고, raceCourseId는 참가권의 코스, raceDate는 주문 때 복사한 대회 날짜, "
 			+ "price는 1장 값(키트 포함)이다.")
 	@ApiResponses({
@@ -60,22 +59,17 @@ public class InternalV1OrderController {
 				@ExampleObject(name = "판매 내역 있음", value = OrderInternalApiExamples.SOLD_ENTRIES_SUCCESS),
 				@ExampleObject(name = "판매 내역 없음", value = OrderInternalApiExamples.SOLD_ENTRIES_EMPTY)
 			})),
-		@ApiResponse(responseCode = "400", description = "기간 없음, 형식 오류, 시작일 > 종료일, 31일 초과",
+		@ApiResponse(responseCode = "400", description = "대회 ID 없음 또는 형식 오류",
 			content = @Content(schema = @Schema(implementation = RsData.class), examples = {
-				@ExampleObject(name = "기간 없음", value = OrderInternalApiExamples.MISSING_FROM),
-				@ExampleObject(name = "날짜 형식 오류", value = OrderInternalApiExamples.INVALID_VALUE_TYPE),
-				@ExampleObject(name = "시작일이 종료일보다 늦음", value = OrderInternalApiExamples.FROM_AFTER_TO),
-				@ExampleObject(name = "31일 초과", value = OrderInternalApiExamples.PERIOD_TOO_LONG)
+				@ExampleObject(name = "대회 ID 없음", value = OrderInternalApiExamples.MISSING_RACE_ID),
+				@ExampleObject(name = "대회 ID 형식 오류", value = OrderInternalApiExamples.INVALID_VALUE_TYPE)
 			}))
 	})
 	public ResponseEntity<RsData<List<SoldEntryDto>>> findSoldEntries(
-		@Parameter(description = "조회 시작 대회 날짜 (yyyy-MM-dd, 포함)", example = "2026-11-09")
-		@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-		@Parameter(description = "조회 끝 대회 날짜 (yyyy-MM-dd, 포함)", example = "2026-11-15")
-		@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+		@Parameter(description = "대회 ID", example = "5") @RequestParam int raceId
 	) {
 		return ResponseEntity.ok()
-			.body(RsData.of(HttpStatus.OK, "판매 내역을 조회했습니다.", soldEntryQueryUseCase.findSoldEntries(from, to)));
+			.body(RsData.of(HttpStatus.OK, "판매 내역을 조회했습니다.", soldEntryQueryUseCase.findSoldEntries(raceId)));
 	}
 
 	@GetMapping("/sold-summary")
