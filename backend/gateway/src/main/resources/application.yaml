@@ -17,6 +17,13 @@ spring:
     gateway:
       server:
         webflux:
+          # 서비스로 넘긴 요청의 시간 제한. 꺼진 서비스나 멈춘 서비스를 기다리느라 게이트웨이 연결이 쌓이지 않게 한다
+          # 연결 시간 초과·연결 거부는 503, 응답 시간 초과는 504로 응답한다 (GatewayErrorHandler)
+          httpclient:
+            # 서비스와 연결을 맺기까지 기다리는 시간(ms 단위 숫자)
+            connect-timeout: 2000
+            # 요청을 보낸 뒤 응답을 받기까지 기다리는 시간
+            response-timeout: 10s
           # 주소 앞부분을 자르지 않는다(StripPrefix 없음). 서비스 주소와 쿠키 경로가 게이트웨이 주소와 그대로 맞아야 한다
           # /internal/**는 규칙을 만들지 않는다. 맞는 규칙이 없으면 게이트웨이가 404로 응답한다
           # 서비스 주소(gateway.services.*)는 프로파일별 yaml에 있다 (dev: localhost, prod: 컨테이너 이름)
@@ -31,10 +38,29 @@ spring:
               uri: ${gateway.services.member}
               predicates:
                 - Path=/api/v1/member/**,/api/v1/auth/**
+            # 예치금 충전 확정은 Toss 결제 승인을 기다린다 (cash.clients.pg.timeout 5s를 연결·응답에 각각 써서 최악 약 10초)
+            # 게이트웨이가 먼저 504로 끊으면 서비스는 승인·입금을 끝냈는데 화면은 실패로 보이므로, 이 주소만 30초로 늘린다
+            # 아래 cash-service(/api/v1/cash/**)보다 먼저 맞아야 하므로 그 위에 둔다
+            - id: cash-charge-confirm
+              uri: ${gateway.services.cash}
+              predicates:
+                - Path=/api/v1/cash/charges/confirm
+              metadata:
+                response-timeout: 30000
             - id: cash-service
               uri: ${gateway.services.cash}
               predicates:
                 - Path=/api/v1/cash/**
+            # dev의 정산 배치 수동 실행 API만 응답 시간 제한을 5분(ms 단위 숫자)으로 늘린다. prod에는 그 API가 없다
+            # 정산 대상일 배치는 주문 서비스를 최대 30초 기다리고, 지급 배치는 정산 내역마다 캐시 서비스를 불러 건수만큼 길어진다
+            # Nginx를 거치면 Nginx의 기본 응답 대기(60초)에 먼저 걸리므로, 오래 걸리는 배치는 게이트웨이(8000)로 바로 부른다
+            # 아래 payout-service(/api/v1/payout/**)보다 먼저 맞아야 하므로 그 위에 둔다
+            - id: payout-dev-batch
+              uri: ${gateway.services.payout}
+              predicates:
+                - Path=/api/v1/payout/dev/batches/**
+              metadata:
+                response-timeout: 300000
             - id: payout-service
               uri: ${gateway.services.payout}
               predicates:
