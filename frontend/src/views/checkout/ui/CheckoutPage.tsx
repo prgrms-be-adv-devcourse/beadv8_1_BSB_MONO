@@ -263,10 +263,17 @@ function OrderCheckout({
     mutationFn: async () => unwrapData(await orderApi.pay(orderId)),
     // 이 화면이 받아 둔 결제 전 주문 · 잔액이 캐시에 1분 동안 남는다. 지우지 않으면 결제 직후 참가권 상세가
     // 결제 전 주문을 읽어 '참가권을 찾을 수 없어요'가 나오고, 내 참가권의 예치금도 옛 값으로 보인다.
-    // 결제한 주문 · 잔액을 다시 받은 뒤에 넘어간다 (받기 전에 상세를 열면 옛 주문을 잠깐 읽는다).
+    // 결제한 주문만 다시 받은 뒤에 넘어간다 (받기 전에 상세를 열면 옛 주문을 잠깐 읽는다).
+    // 잔액 · 참가 신청 등은 무효로만 표시한다. 다 기다리면 그중 하나가 실패해 재시도가 끝난 몇 초 뒤에야
+    // 넘어가는데, 그때 사용자가 다른 화면에 가 있어도 완료 화면으로 다시 보낸다.
+    // 다시 받은 주문이 PAID라 아래 effect도 완료 화면으로 보내므로, 같은 replace로 맞춰 기록이 두 번 남지 않게 한다.
     onSuccess: async () => {
-      await invalidateTicketQueries(queryClient)
-      router.push(completeHref)
+      void invalidateTicketQueries(queryClient)
+      await queryClient.refetchQueries(
+        { queryKey: orderApi.getFindById1QueryKey(orderId) },
+        { cancelRefetch: false },
+      )
+      router.replace(completeHref)
     },
     onError: (error, { auto }) => {
       const next = toPayFailure(error)
