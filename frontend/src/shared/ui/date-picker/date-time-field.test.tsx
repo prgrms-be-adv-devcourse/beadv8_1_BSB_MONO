@@ -55,6 +55,25 @@ describe('DateTimeField', () => {
     expect(screen.getByRole('button', { name: /2026-10-20 \(화\)/ })).toBeInTheDocument()
   })
 
+  it('withTime={false}면 시간 칸 없이 날짜만 알린다', async () => {
+    const onValueChange = vi.fn()
+    render(
+      <DateTimeField
+        mode="range"
+        withTime={false}
+        label="접수 기간"
+        onValueChange={onValueChange}
+      />,
+    )
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /접수 기간/ }))
+    await userEvent.click(screen.getByRole('button', { name: /10월 20일/ }))
+    await userEvent.click(screen.getByRole('button', { name: /10월 24일/ }))
+    await userEvent.click(screen.getByRole('button', { name: '선택 완료' }))
+
+    expect(onValueChange).toHaveBeenLastCalledWith({ from: '2026-10-20', to: '2026-10-24' })
+  })
+
   it('선택 완료 없이 닫으면 고른 날짜를 버린다', async () => {
     const onValueChange = vi.fn()
     render(

@@ -1,4 +1,5 @@
 export {
+  invalidateTicketQueries,
   myTicketCountQueryOptions,
   myTicketsQueryOptions,
   orderQueryOptions,

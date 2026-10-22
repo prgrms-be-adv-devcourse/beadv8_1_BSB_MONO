@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.IntFunction;
@@ -64,10 +65,10 @@ class PayoutCreateUseCaseTest {
 	@Autowired
 	private PayoutRecoveryRepository payoutRecoveryRepository;
 
-	// 주문 서비스처럼, 물어본 기간(양 끝 포함)에 열린 대회의 참가권만 돌려주는 가짜 포트
+	// 주문 서비스처럼, 물어본 대회의 참가권만 돌려주는 가짜 포트
 	private SoldEntryPort soldEntriesReturning(List<SoldEntry> entries) {
-		return (from, to) -> entries.stream()
-			.filter(entry -> !entry.raceDate().isBefore(from) && !entry.raceDate().isAfter(to))
+		return raceId -> entries.stream()
+			.filter(entry -> entry.raceId() == raceId)
 			.toList();
 	}
 
@@ -120,7 +121,7 @@ class PayoutCreateUseCaseTest {
 		useCase.run(TARGET_DATE, NOW);
 
 		assertThat(payoutOf(1).getRaceName()).isEqualTo("2026 한강 나이트런");
-		// 대상 대회는 상품 서비스가 정한다 (PRO-214). 모르는 대회의 참가권은 실패로 남기고 정산하지 않는다
+		// 대상 대회는 상품 서비스가 정한다 (PRO-214). 모르는 대회는 주문 서비스에 묻지 않아 정산하지 않는다
 		assertThat(payoutRepository.findAll()).extracting(Payout::getSellerId).containsExactly(1);
 	}
 
@@ -289,6 +290,36 @@ class PayoutCreateUseCaseTest {
 	}
 
 	@Test
+	@DisplayName("최종은 상품 서비스가 정한 대회의 ID로 판매 내역을 묻고, 한 대회의 조회가 실패해도 다른 대회는 만든다")
+	void finalPayoutAsksSoldEntriesPerRace() {
+		List<SoldEntry> entries = List.of(
+			new SoldEntry(100, 1, 10, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 20, 20, RACE_DATE, 30_000L)
+		);
+		List<Integer> askedRaceIds = new ArrayList<>();
+		SoldEntryPort working = soldEntriesReturning(entries);
+		SoldEntryPort race20Down = raceId -> {
+			askedRaceIds.add(raceId);
+			if (raceId == 20) {
+				throw new IllegalStateException("주문 서비스 응답 없음");
+			}
+			return working.findSoldEntries(raceId);
+		};
+		PayoutGroupCreator payoutGroupCreator =
+			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
+				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
+		PayoutCreateUseCase useCase = new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, race20Down,
+			sellerId -> true, new StubRacePort(RACE_NAMES, List.of(), entries), summariesOf(entries));
+
+		useCase.run(TARGET_DATE, NOW);
+
+		assertThat(askedRaceIds).containsExactlyInAnyOrder(10, 20);
+		assertThat(payoutRepository.findAll())
+			.extracting(Payout::getRaceId, Payout::getPayoutStage)
+			.containsExactly(tuple(10, PayoutStage.FINAL));
+	}
+
+	@Test
 	@DisplayName("1차: 환불 마감 9/30이면 10/1 실행이 1차 정산을 만든다. 정산 월 2026-09, 장마다 40%, 수수료 없음, 10/20 지급 예정")
 	void createsFirstPayoutDayAfterRefundDeadline() {
 		LocalDate refundDeadline = LocalDate.of(2026, 9, 30);
@@ -451,5 +482,29 @@ class PayoutCreateUseCaseTest {
 		assertThat(first.getItems())
 			.extracting(PayoutItem::getTargetDate)
 			.containsOnly(LocalDate.of(2026, 9, 29));
+	}
+
+	@Test
+	@DisplayName("1차를 만든 뒤 판매자가 환불 마감일을 다음 달로 늦춰도(9/30 → 10/5) 1차 정산은 하나만 있다")
+	void firstPayoutOnceWhenRefundDeadlineMovesToNextMonth() {
+		LocalDate raceDate = LocalDate.of(2026, 10, 10);
+		List<SoldEntry> entries = List.of(
+			new SoldEntry(100, 1, 10, 10, raceDate, 50_000L),
+			new SoldEntry(101, 1, 10, 10, raceDate, 50_000L)
+		);
+		// 10/1 실행: 환불 마감 9/30 → 1차(정산 월 2026-09)
+		useCaseSelling(entries, sellerId -> true,
+			List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 9, 30))))
+			.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
+
+		// 판매자가 환불 마감일을 10/5로 늦췄다 (상품 Race.update는 늦추는 변경을 허용한다). 10/6 실행
+		useCaseSelling(entries, sellerId -> true,
+			List.of(new RaceSchedule(10, "2026 한강 나이트런", raceDate, LocalDate.of(2026, 10, 5))))
+			.run(LocalDate.of(2026, 10, 6), LocalDateTime.of(2026, 10, 6, 3, 0));
+
+		assertThat(payoutRepository.findAll())
+			.filteredOn(payout -> payout.getPayoutStage() == PayoutStage.FIRST)
+			.extracting(Payout::getPayoutMonth, Payout::getPayoutAmount)
+			.containsExactly(tuple("2026-09", 40_000L));
 	}
 }

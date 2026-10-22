@@ -1,22 +1,20 @@
 package com.bukang.gateway.auth;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 
+import com.bukang.gateway.error.RsDataResponseWriter;
 import com.bukang.jwt.InvalidTokenException;
 import com.bukang.jwt.JwtClaims;
 import com.bukang.jwt.JwtProvider;
@@ -145,14 +143,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 		return token.isEmpty() ? null : token;
 	}
 
-	// 게이트웨이는 common(webmvc)에 의존하지 않으므로 RsData {status, code, message, data} 형식의 JSON을 직접 만든다
-	// code와 message는 이 클래스의 고정 상수·문구만 들어오므로 JSON 이스케이프가 필요 없다
+	// 응답 형식(RsData JSON)은 게이트웨이 오류 응답이 함께 쓰는 RsDataResponseWriter에 둔다
 	private Mono<Void> reject(ServerHttpResponse response, HttpStatus status, String code, String message) {
-		String body = "{\"status\":%d,\"code\":\"%s\",\"message\":\"%s\",\"data\":null}"
-			.formatted(status.value(), code, message);
-		DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
-		response.setStatusCode(status);
-		response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-		return response.writeWith(Mono.just(buffer));
+		return RsDataResponseWriter.write(response, status, code, message);
 	}
 }

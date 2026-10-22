@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 
 import { ConsoleCard, ConsolePage } from '@/widgets/console-page'
-import { parseRaceDateTimeInput } from '@/entities/race'
+import { parseRaceDateInput } from '@/entities/race'
 import { ApiError } from '@/shared/api'
 import { cn, formatNumber, formatWon } from '@/shared/lib'
 import {
@@ -40,19 +40,20 @@ import { useRegisterRace } from '../model/use-register-race'
 
 const FORM_ID = 'seller-race-new'
 
-// 지난 날은 대회 일시·접수 기간·환불 기한으로 고를 수 없다
+// 지난 날은 대회 날짜·접수 기간·환불 기한으로 고를 수 없다
 const today = startOfToday()
 const isPast = (date: Date) => isBefore(date, today)
 // 접수 시작(판매 시작일)은 오늘로부터 이틀 뒤부터
 const saleOpenEarliest = earliestSaleOpenDate(today)
 const raceFormSchema = createRaceFormSchema({ today })
 
-// 대회 일시와 순서를 비교하는 칸들. 한 칸이 바뀌면 다 쓴 나머지 칸도 다시 검사한다
+// 대회 날짜와 순서를 비교하는 칸들. 한 칸이 바뀌면 다 쓴 나머지 칸도 다시 검사한다
 const ORDERED_FIELDS = ['individualOpenAt', 'applicationCloseAt', 'refundDeadline'] as const
 
-/** 'yyyy-MM-dd …' 글자의 날짜 (날짜를 아직 안 골랐으면 undefined) */
+/** 'yyyy-MM-dd' 글자의 날짜 (날짜를 아직 안 골랐으면 undefined) */
 function dayOf(text: string): Date | undefined {
-  return /^\d{4}-\d{2}-\d{2}/.test(text) ? parseISO(text.slice(0, 10)) : undefined
+  const day = parseRaceDateInput(text)
+  return day ? parseISO(day) : undefined
 }
 
 const KITS = [
@@ -110,12 +111,12 @@ export function SellerRaceNewPage() {
   })
   const [raceDateText] = schedule
   const raceDay = dayOf(raceDateText)
-  // 순서 오류는 서로 다른 칸을 비교해서 생긴다. 대회 일시를 나중에 바꿔도 접수 · 환불 칸 오류가 다시 계산되도록,
-  // 일정 칸 중 하나가 바뀌면 날짜와 시간을 다 쓴 칸을 모두 다시 검사한다(등록하기를 누르기 전에도 칸 아래에 보인다)
+  // 순서 오류는 서로 다른 칸을 비교해서 생긴다. 대회 날짜를 나중에 바꿔도 접수 · 환불 칸 오류가 다시 계산되도록,
+  // 일정 칸 중 하나가 바뀌면 날짜를 고른 칸을 모두 다시 검사한다(등록하기를 누르기 전에도 칸 아래에 보인다)
   const scheduleKey = schedule.join('|')
   useEffect(() => {
     const [, ...ordered] = scheduleKey.split('|')
-    const ready = ORDERED_FIELDS.filter((_, i) => parseRaceDateTimeInput(ordered[i]) !== null)
+    const ready = ORDERED_FIELDS.filter((_, i) => parseRaceDateInput(ordered[i]) !== null)
     if (ready.length > 0) void trigger([...ready])
   }, [scheduleKey, trigger])
   const [cover, setCover] = useState<ImageUploadValue[]>([])
@@ -212,7 +213,8 @@ export function SellerRaceNewPage() {
               render={({ field }) => (
                 <DateTimeField
                   mode="single"
-                  label="대회 일시"
+                  withTime={false}
+                  label="대회 날짜"
                   error={errors.raceDate?.message}
                   isDateDisabled={isPast}
                   startMonth={today}
@@ -247,15 +249,16 @@ export function SellerRaceNewPage() {
             />
           </div>
           <div className="flex gap-4">
-            {/* 시작은 개인 예매 오픈, 끝은 접수 마감으로 보낸다 */}
+            {/* 시작은 개인 예매 오픈(그날 00:00), 끝은 접수 마감(그날 23:59:59)으로 보낸다 */}
             <DateTimeField
               mode="range"
+              withTime={false}
               label="접수 기간"
-              helper="이날부터 판매 중으로 보여요 · 오늘로부터 이틀 뒤부터"
+              helper="마감일 23:59까지 받아요 · 오늘로부터 이틀 뒤부터 · 대회 전날까지"
               error={errors.individualOpenAt?.message ?? errors.applicationCloseAt?.message}
               isDateDisabled={(date) =>
                 isBefore(date, saleOpenEarliest) ||
-                (raceDay !== undefined && isAfter(date, raceDay))
+                (raceDay !== undefined && !isBefore(date, raceDay))
               }
               startMonth={today}
               onValueChange={(range) => {
@@ -348,9 +351,10 @@ export function SellerRaceNewPage() {
             control={control}
             name="refundDeadline"
             render={({ field }) => (
-              // 백엔드는 날짜만 받는다. 시간 칸 값은 보내지 않고 그 날 23:59까지로 본다
+              // 백엔드는 날짜만 받고 그 날 23:59:59까지로 본다
               <DateTimeField
                 mode="single"
+                withTime={false}
                 label="환불 기한"
                 helper="이 날짜(23:59)까지 취소하면 전액 환불, 그 뒤 개인 사정 환불은 안 돼요. 결제 전에 구매자에게 보여 줘요."
                 error={errors.refundDeadline?.message}

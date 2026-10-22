@@ -105,7 +105,7 @@ class InternalV1OrderControllerTest {
 	}
 
 	@Test
-	@DisplayName("11/15 대회 참가권 3장 중 1장을 취소하면 11/15 ~ 11/15 조회에 2장만 정산 필드로 나온다")
+	@DisplayName("11/15 대회 참가권 3장 중 1장을 취소하면 그 대회 조회에 2장만 정산 필드로 나온다")
 	void soldEntriesExcludeCanceled() throws Exception {
 		int first = paidOrderItem(1, COURSE_1115);
 		int canceled = paidOrderItem(2, COURSE_1115);
@@ -113,7 +113,7 @@ class InternalV1OrderControllerTest {
 		// 취소 API는 다음 작업이라, 주문 상품을 직접 취소 상태로 만든다
 		markCanceled(canceled);
 
-		findSoldEntries("2026-11-15", "2026-11-15")
+		findSoldEntries(100)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("판매 내역을 조회했습니다."))
 			.andExpect(jsonPath("$.data.length()").value(2))
@@ -127,64 +127,50 @@ class InternalV1OrderControllerTest {
 	}
 
 	@Test
-	@DisplayName("결제 전(CREATED)·만료(EXPIRED) 주문 상품과 다른 날 대회는 나오지 않는다")
-	void soldEntriesOnlyPaidOnThatDay() throws Exception {
+	@DisplayName("결제 전(CREATED)·만료(EXPIRED) 주문 상품과 다른 대회의 참가권은 나오지 않는다")
+	void soldEntriesOnlyPaidOfThatRace() throws Exception {
 		int paid = paidOrderItem(1, COURSE_1115);
 		createdOrder(2, COURSE_1115);
 		createdOrder(3, COURSE_1115);
 		orderExpiryUseCase.expireOverdue(LocalDateTime.now().plusHours(1));
 		createdOrder(4, COURSE_1115);
-		paidOrderItem(1, COURSE_1116);
+		int otherRace = paidOrderItem(1, COURSE_1116);
 
-		findSoldEntries("2026-11-15", "2026-11-15")
+		findSoldEntries(100)
 			.andExpect(jsonPath("$.data.length()").value(1))
 			.andExpect(jsonPath("$.data[0].orderItemId").value(paid));
-		// 11/16 23:59 대회는 그날에 들어간다
-		findSoldEntries("2026-11-16", "2026-11-16")
-			.andExpect(jsonPath("$.data.length()").value(1));
-		findSoldEntries("2026-11-17", "2026-11-17")
+		findSoldEntries(101)
+			.andExpect(jsonPath("$.data.length()").value(1))
+			.andExpect(jsonPath("$.data[0].orderItemId").value(otherRace));
+		// 판매가 없거나 없는 대회는 빈 목록이다
+		findSoldEntries(999)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.length()").value(0));
 	}
 
 	@Test
-	@DisplayName("기간으로 물으면 양 끝 날짜의 대회를 모두 포함해 주문 상품 ID 순으로 돌려주고, 참가권마다 대회일을 준다")
-	void soldEntriesInPeriod() throws Exception {
-		int on1115 = paidOrderItem(1, COURSE_1115);
-		int on1116 = paidOrderItem(2, COURSE_1116);
+	@DisplayName("주문 상품에 복사된 대회일이 달라져도 대회 ID로 찾고, 그 대회일을 그대로 준다")
+	void soldEntriesByRaceIdRegardlessOfRaceDate() throws Exception {
+		int moved = paidOrderItem(1, COURSE_1115);
+		changeRaceDate(moved, LocalDateTime.of(2026, 11, 22, 8, 0));
 
-		findSoldEntries("2026-11-15", "2026-11-16")
-			.andExpect(jsonPath("$.data.length()").value(2))
-			.andExpect(jsonPath("$.data[0].orderItemId").value(on1115))
-			.andExpect(jsonPath("$.data[0].raceDate").value("2026-11-15"))
-			.andExpect(jsonPath("$.data[1].orderItemId").value(on1116))
-			.andExpect(jsonPath("$.data[1].raceDate").value("2026-11-16"));
-		findSoldEntries("2026-11-09", "2026-11-15")
-			.andExpect(jsonPath("$.data.length()").value(1));
+		findSoldEntries(100)
+			.andExpect(jsonPath("$.data.length()").value(1))
+			.andExpect(jsonPath("$.data[0].orderItemId").value(moved))
+			.andExpect(jsonPath("$.data[0].raceDate").value("2026-11-22"));
 	}
 
 	@Test
-	@DisplayName("기간이 없거나 형식이 틀리거나, 시작일이 종료일보다 늦거나, 31일을 넘으면 400이다")
-	void invalidPeriod() throws Exception {
-		mockMvc.perform(get(URL).param("to", "2026-11-15"))
+	@DisplayName("대회 ID가 없거나 형식이 틀리면 400이다")
+	void invalidRaceId() throws Exception {
+		mockMvc.perform(get(URL))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("필수 요청 값(from)이 없습니다."))
+			.andExpect(jsonPath("$.message").value("필수 요청 값(raceId)이 없습니다."))
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-		findSoldEntries("2026/11/15", "2026-11-15")
+		mockMvc.perform(get(URL).param("raceId", "abc"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("요청 값의 형식이 올바르지 않습니다."))
 			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
-		findSoldEntries("2026-11-16", "2026-11-15")
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("조회 시작일이 종료일보다 늦습니다."))
-			.andExpect(jsonPath("$.code").value("ORDER_INVALID_SOLD_ENTRY_PERIOD"));
-		// 10/16 ~ 11/15는 31일, 10/15 ~ 11/15는 32일
-		findSoldEntries("2026-10-16", "2026-11-15")
-			.andExpect(status().isOk());
-		findSoldEntries("2026-10-15", "2026-11-15")
-			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.message").value("판매 내역은 한 번에 31일까지 조회할 수 있습니다."))
-			.andExpect(jsonPath("$.code").value("ORDER_INVALID_SOLD_ENTRY_PERIOD"));
 	}
 
 	@Test
@@ -298,8 +284,8 @@ class InternalV1OrderControllerTest {
 		return mockMvc.perform(get("/internal/v1/order/members/{memberId}/active-tickets/count", memberId));
 	}
 
-	private ResultActions findSoldEntries(String from, String to) throws Exception {
-		return mockMvc.perform(get(URL).param("from", from).param("to", to));
+	private ResultActions findSoldEntries(int raceId) throws Exception {
+		return mockMvc.perform(get(URL).param("raceId", String.valueOf(raceId)));
 	}
 
 	private static RaceCourseInfo courseOn(int raceCourseId, int raceId, LocalDateTime raceDate) {

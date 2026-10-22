@@ -20,7 +20,7 @@ import { maskPhone, toDotDate } from '../model/member-format'
 // 피그마 V2 · M30 마이 · 설정 (+ M30-2 판매자 승인 후)
 // 회원 정보는 내 정보 조회(GET /api/v1/member/members/me)로 불러온다.
 // 예치금은 지갑 잔액 API(useMyBalance)로 불러온다.
-// 참가 대회 수는 내 참가권 화면과 같은 목록(주문 API)을 센다.
+// 참가 대회 수는 내 참가권 화면과 같은 목록(주문 API)에서 취소한 참가권만 빼고 센다.
 // 판매자 메뉴는 내 판매자 신청 조회(GET /api/v1/member/sellers/me) 상태로 갈 곳을 정한다(SellerMenuRow).
 // TODO(api): 알림 설정 API가 아직 없다. 지금은 시안 값을 보여 준다.
 export function MyPage() {

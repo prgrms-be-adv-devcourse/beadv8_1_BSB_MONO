@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.shared.member.web.MemberIdHeader;
+import com.bukang.payout.app.PayoutSellerIdResolver;
 import com.bukang.payout.app.PayoutSellerQueryUseCase;
 import com.bukang.payout.domain.PayoutItemPaging;
 import com.bukang.payout.dto.PageDto;
@@ -37,8 +38,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 판매자의 정산 조회: 요약, 정산 내역, 건별 정산, 지급보류 내역
- * 회원 ID(X-Member-Id)를 판매자 ID로 보고 그 판매자의 기록만 돌려준다.
- * 판매자인지는 여기서 검사하지 않고, 게이트웨이가 토큰을 검사해 헤더를 넣어 줄 때(PRO-20) 판매자 경로로 막는다
+ * 회원 ID(X-Member-Id)를 회원 서비스에 물어 판매자 ID(판매자 신청서 ID)로 바꾸고, 그 판매자의 기록만 돌려준다.
+ * 두 값은 다른 번호라 그대로 쓰면 남의 정산이 보인다. 승인된 판매자가 아니면 403, 탈퇴한 회원은 404다 (PayoutSellerIdResolver)
  */
 @Tag(name = "PayoutSeller", description = "정산 요약, 정산 내역, 건별 정산, 지급보류 내역 조회 API (판매자)")
 @RestController
@@ -49,6 +50,7 @@ public class ApiV1PayoutSellerController {
 	private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
 	private final PayoutSellerQueryUseCase payoutSellerQueryUseCase;
+	private final PayoutSellerIdResolver sellerIdResolver;
 
 	@GetMapping("/summary")
 	@Operation(summary = "정산 요약 조회",
@@ -64,13 +66,23 @@ public class ApiV1PayoutSellerController {
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED)))
+				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "판매자 신청이 없거나 대기 · 반려 상태",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.SELLER_NOT_APPROVED))),
+		@ApiResponse(responseCode = "404", description = "존재하지 않거나 탈퇴한 회원",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.MEMBER_NOT_FOUND))),
+		@ApiResponse(responseCode = "503", description = "회원 서비스에서 판매자 정보를 확인하지 못함",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.SELLER_LOOKUP_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<PayoutSummaryDto>> summary(
-		@Parameter(description = "판매자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@Parameter(description = "판매자의 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
 		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId
 	) {
-		PayoutSummaryDto summary = payoutSellerQueryUseCase.summary(memberId, LocalDate.now(ZONE));
+		int sellerId = sellerIdResolver.sellerIdOf(memberId);
+		PayoutSummaryDto summary = payoutSellerQueryUseCase.summary(sellerId, LocalDate.now(ZONE));
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "정산 요약을 조회했습니다.", summary));
 	}
 
@@ -92,17 +104,27 @@ public class ApiV1PayoutSellerController {
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED)))
+				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "판매자 신청이 없거나 대기 · 반려 상태",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.SELLER_NOT_APPROVED))),
+		@ApiResponse(responseCode = "404", description = "존재하지 않거나 탈퇴한 회원",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.MEMBER_NOT_FOUND))),
+		@ApiResponse(responseCode = "503", description = "회원 서비스에서 판매자 정보를 확인하지 못함",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.SELLER_LOOKUP_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<List<PayoutDto>>> payouts(
-		@Parameter(description = "판매자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@Parameter(description = "판매자의 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
 		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "조회 시작 정산 월 (yyyy-MM)", example = "2025-11")
 		@RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth fromMonth,
 		@Parameter(description = "조회 끝 정산 월 (yyyy-MM, 포함)", example = "2026-10")
 		@RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth toMonth
 	) {
-		List<PayoutDto> payouts = payoutSellerQueryUseCase.payouts(memberId, fromMonth, toMonth);
+		int sellerId = sellerIdResolver.sellerIdOf(memberId);
+		List<PayoutDto> payouts = payoutSellerQueryUseCase.payouts(sellerId, fromMonth, toMonth);
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "정산 내역을 조회했습니다.", payouts));
 	}
 
@@ -127,10 +149,19 @@ public class ApiV1PayoutSellerController {
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED)))
+				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "판매자 신청이 없거나 대기 · 반려 상태",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.SELLER_NOT_APPROVED))),
+		@ApiResponse(responseCode = "404", description = "존재하지 않거나 탈퇴한 회원",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.MEMBER_NOT_FOUND))),
+		@ApiResponse(responseCode = "503", description = "회원 서비스에서 판매자 정보를 확인하지 못함",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.SELLER_LOOKUP_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<PageDto<PayoutItemDto>>> items(
-		@Parameter(description = "판매자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@Parameter(description = "판매자의 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
 		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "조회 시작 정산 대상일 (yyyy-MM-dd)", example = "2026-09-01")
 		@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -141,7 +172,8 @@ public class ApiV1PayoutSellerController {
 		@Parameter(description = "페이지 크기 (1 ~ 100)", example = "50")
 		@RequestParam(defaultValue = "" + PayoutItemPaging.DEFAULT_SIZE) int size
 	) {
-		PageDto<PayoutItemDto> items = payoutSellerQueryUseCase.items(memberId, from, to, page, size);
+		int sellerId = sellerIdResolver.sellerIdOf(memberId);
+		PageDto<PayoutItemDto> items = payoutSellerQueryUseCase.items(sellerId, from, to, page, size);
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "건별 정산을 조회했습니다.", items));
 	}
 
@@ -163,17 +195,27 @@ public class ApiV1PayoutSellerController {
 			})),
 		@ApiResponse(responseCode = "401", description = "회원 ID 헤더 없음",
 			content = @Content(schema = @Schema(implementation = RsData.class),
-				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED)))
+				examples = @ExampleObject(value = PayoutSellerApiExamples.LOGIN_REQUIRED))),
+		@ApiResponse(responseCode = "403", description = "판매자 신청이 없거나 대기 · 반려 상태",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.SELLER_NOT_APPROVED))),
+		@ApiResponse(responseCode = "404", description = "존재하지 않거나 탈퇴한 회원",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.MEMBER_NOT_FOUND))),
+		@ApiResponse(responseCode = "503", description = "회원 서비스에서 판매자 정보를 확인하지 못함",
+			content = @Content(schema = @Schema(implementation = RsData.class),
+				examples = @ExampleObject(value = PayoutSellerApiExamples.SELLER_LOOKUP_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<List<SellerPayoutHoldDto>>> holds(
-		@Parameter(description = "판매자 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
+		@Parameter(description = "판매자의 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
 		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
 		@Parameter(description = "조회 시작 보류일 (yyyy-MM-dd)", example = "2026-09-15")
 		@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
 		@Parameter(description = "조회 끝 보류일 (yyyy-MM-dd, 포함)", example = "2026-10-14")
 		@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
 	) {
-		List<SellerPayoutHoldDto> holds = payoutSellerQueryUseCase.holds(memberId, from, to);
+		int sellerId = sellerIdResolver.sellerIdOf(memberId);
+		List<SellerPayoutHoldDto> holds = payoutSellerQueryUseCase.holds(sellerId, from, to);
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "지급보류 내역을 조회했습니다.", holds));
 	}
 }

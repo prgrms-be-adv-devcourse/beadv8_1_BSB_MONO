@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { cashApi, orderApi } from '@/shared/api'
 import { orderMock, server } from '@/shared/testing'
 
 import { CheckoutPage, type CheckoutState } from './CheckoutPage'
@@ -164,8 +165,104 @@ describe('결제 화면', () => {
     await agree(user)
     await user.click(pay)
 
-    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout/complete?orderId=1'))
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/checkout/complete?orderId=1'))
     expect(paid).toBe(true)
+  })
+
+  it('결제하면 결제 전 주문 · 잔액 · 내 참가권 캐시를 지워 다음 화면이 결제한 값을 받는다', async () => {
+    let paid = false
+    server.use(
+      http.get('*/api/v1/order/orders/:orderId', () =>
+        HttpResponse.json(orderResponse({ status: paid ? 'PAID' : 'CREATED' })),
+      ),
+      http.post('*/api/v1/order/orders/:orderId/payment', () => {
+        paid = true
+        return HttpResponse.json(orderMock.getPayResponseMock())
+      }),
+      http.get('*/api/v1/cash/wallets/balance', () =>
+        HttpResponse.json({
+          status: 200,
+          message: '잔액 조회 성공',
+          data: { holderId: 1, balance: paid ? 55000 : 100000 },
+        }),
+      ),
+    )
+    // 앱처럼 1분 동안은 다시 받지 않는다 (shared/api/query-client.ts)
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 60_000 } },
+    })
+    // 결제 전에 열어 둔 내 참가권 목록 (지금은 화면에 없다)
+    const ticketsKey = [...orderApi.getFindMineQueryKey({ page: 0, size: 100 }), 'tickets']
+    client.setQueryData(ticketsKey, [])
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <QueryClientProvider client={client}>
+        <CheckoutPage orderId={1} />
+      </QueryClientProvider>,
+    )
+
+    const pay = await screen.findByRole('button', { name: '₩45,000 결제' })
+    await agree(user)
+    await user.click(pay)
+
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/checkout/complete?orderId=1'))
+    // 넘어갈 때는 이미 결제한 주문을 받아 두었고, 잔액은 곧 새 값으로 바뀐다
+    expect(client.getQueryData(orderApi.getFindById1QueryKey(1))).toMatchObject({
+      data: { status: 'PAID' },
+    })
+    await vi.waitFor(() =>
+      expect(client.getQueryData(cashApi.getGetBalanceQueryKey())).toMatchObject({
+        data: { balance: 55000 },
+      }),
+    )
+    expect(client.getQueryState(ticketsKey)?.isInvalidated).toBe(true)
+    // 같은 완료 주소로 push까지 하면 기록이 두 번 남는다
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('결제 뒤 잔액을 다시 받다가 실패해도 기다리지 않고 완료 화면으로 넘어간다', async () => {
+    let paid = false
+    server.use(
+      http.get('*/api/v1/order/orders/:orderId', () =>
+        HttpResponse.json(orderResponse({ status: paid ? 'PAID' : 'CREATED' })),
+      ),
+      http.post('*/api/v1/order/orders/:orderId/payment', () => {
+        paid = true
+        return HttpResponse.json(orderMock.getPayResponseMock())
+      }),
+      http.get('*/api/v1/cash/wallets/balance', () =>
+        paid
+          ? HttpResponse.json({ status: 500, message: '오류', data: null }, { status: 500 })
+          : HttpResponse.json({
+              status: 200,
+              message: '잔액 조회 성공',
+              data: { holderId: 1, balance: 100000 },
+            }),
+      ),
+    )
+    // 앱처럼 실패하면 다시 시도한다. 그동안 기다리면 넘어가지 못한다
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: 3, retryDelay: 5_000, staleTime: 60_000 } },
+    })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(
+      <QueryClientProvider client={client}>
+        <CheckoutPage orderId={1} />
+      </QueryClientProvider>,
+    )
+
+    const pay = await screen.findByRole('button', { name: '₩45,000 결제' })
+    await agree(user)
+    await user.click(pay)
+
+    // 결제 onSuccess(주문 다시 받기 → 완료 화면)가 끝났을 때 잔액은 아직 다시 시도하는 중이다.
+    // 잔액까지 기다리면 재시도가 끝난 몇 초 뒤에야 끝나고, 그사이 다른 화면에 가 있어도 완료 화면으로 다시 보낸다
+    await vi.waitFor(() =>
+      expect(client.getMutationCache().getAll()[0]?.state.status).toBe('success'),
+    )
+    expect(replace).toHaveBeenCalledWith('/checkout/complete?orderId=1')
+    expect(client.getQueryState(cashApi.getGetBalanceQueryKey())?.fetchStatus).toBe('fetching')
+    client.clear()
   })
 
   it('잔액이 모자라 보이면 충전하고 결제 버튼을 보여 주고, 누르면 결제 API부터 부른다', async () => {
@@ -191,7 +288,7 @@ describe('결제 화면', () => {
       expect(requestCharge).toHaveBeenCalledWith({ amount: 10_000, returnOrderId: 1 }),
     )
     expect(paid).toBe(1)
-    expect(push).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
   })
 
   it('결제 때 예치금이 모자라다고 하면(409 ORDER_INSUFFICIENT_BALANCE) 서버가 알려 준 부족 금액만큼 충전한다', async () => {
@@ -248,7 +345,7 @@ describe('결제 화면', () => {
     )
     renderCheckout(undefined, { charged: true })
 
-    await vi.waitFor(() => expect(push).toHaveBeenCalledWith('/checkout/complete?orderId=1'))
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith('/checkout/complete?orderId=1'))
     expect(paidOrders).toEqual(['1'])
     expect(requestCharge).not.toHaveBeenCalled()
   })
@@ -292,7 +389,7 @@ describe('결제 화면', () => {
     renderCheckout(undefined, { charged: true })
 
     expect(await screen.findByText('결제 시간이 지났어요')).toBeInTheDocument()
-    expect(push).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
   })
 
   it('충전이 안 돼 돌아오면(chargeFailed) 결제 실패 화면을 보여 주고, 다시 결제하기로 결제 화면에 돌아간다', async () => {

@@ -45,7 +45,7 @@ class CashPayoutTransferAdapterTest {
 	}
 
 	@Test
-	@DisplayName("정산 ID를 경로에, 판매자 회원 ID · 지급액 · 수수료 · 단계를 본문에 담아 보내고 2xx면 성공이다")
+	@DisplayName("정산 ID를 경로에, 판매자 ID · 지급액 · 수수료 · 단계를 본문에 담아 보내고 2xx면 성공이다")
 	void success() {
 		server.expect(requestTo(URL))
 			.andExpect(method(HttpMethod.POST))

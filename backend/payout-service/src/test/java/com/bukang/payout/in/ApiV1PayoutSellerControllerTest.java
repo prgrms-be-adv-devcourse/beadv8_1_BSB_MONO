@@ -2,6 +2,7 @@ package com.bukang.payout.in;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
 import static org.springframework.restdocs.headers.HeaderDocumentation.requestHeaders;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
@@ -17,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,16 +33,21 @@ import org.springframework.restdocs.headers.HeaderDescriptor;
 import org.springframework.restdocs.payload.JsonFieldType;
 import org.springframework.restdocs.snippet.Snippet;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutHold;
 import com.bukang.payout.domain.PayoutHoldReason;
+import com.bukang.payout.domain.exception.PayoutSellerLookupUnavailableException;
 import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
+import com.bukang.payout.out.SellerLookupPort;
+import com.bukang.payout.out.SellerLookupPort.SellerOfMember;
 import com.bukang.payout.support.RestDocsConfig;
 
 import jakarta.persistence.EntityManager;
@@ -54,12 +61,16 @@ import jakarta.persistence.EntityManager;
 class ApiV1PayoutSellerControllerTest {
 	private static final int SELLER_ID = 1;
 	private static final int OTHER_SELLER_ID = 2;
+	// 판매자 1의 회원 ID. 판매자 ID와 다른 번호로 두어, 회원 ID를 그대로 판매자 ID로 쓰면 조회가 비게 한다
+	// 회원 2는 판매자 2와 같은 번호지만 판매자가 아니다 (회원 ID로 찾으면 남의 정산이 보이는 경우)
+	private static final int MEMBER_ID = 7;
+	private static final int NOT_SELLER_MEMBER_ID = 2;
 	private static final BigDecimal FEE_RATE = new BigDecimal("0.0550");
 	private static final BusinessDayCalendar CALENDAR = new BusinessDayCalendar();
 	private static final String URL = "/api/v1/payout/seller";
 
 	private static final HeaderDescriptor MEMBER_ID_HEADER =
-		headerWithName("X-Member-Id").description("판매자 회원 ID (게이트웨이가 넣어 줄 예정)");
+		headerWithName("X-Member-Id").description("판매자의 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다). 판매자 ID와 다른 값이다");
 
 	private static final Snippet ERROR_RESPONSE = responseFields(
 		fieldWithPath("status").description("HTTP 상태 코드"),
@@ -79,6 +90,10 @@ class ApiV1PayoutSellerControllerTest {
 	@Autowired
 	private TransactionTemplate transactionTemplate;
 
+	// 회원 서비스는 띄우지 않는다. 회원 ID → 판매자 ID 변환 결과만 정해 둔다 (어댑터는 MemberSellerLookupAdapterTest)
+	@MockitoBean
+	private SellerLookupPort sellerLookupPort;
+
 	@Autowired
 	private EntityManager entityManager;
 
@@ -86,6 +101,9 @@ class ApiV1PayoutSellerControllerTest {
 	// 판매자 2: 2026-09 정산 예정 (판매자 1의 조회에 나오면 안 된다)
 	@BeforeEach
 	void setUp() {
+		given(sellerLookupPort.findSellerOf(MEMBER_ID))
+			.willReturn(Optional.of(new SellerOfMember(SELLER_ID, SellerStatus.APPROVED)));
+
 		transactionTemplate.executeWithoutResult(status -> {
 			Payout september = savePayout(SELLER_ID, 10, YearMonth.of(2026, 9), LocalDate.of(2026, 9, 26));
 			september.addItem(100, 50_000L, FEE_RATE, LocalDate.of(2026, 9, 26));
@@ -124,7 +142,7 @@ class ApiV1PayoutSellerControllerTest {
 	}
 
 	private ResultActions request(String path, String... params) throws Exception {
-		var builder = get(URL + path).header("X-Member-Id", SELLER_ID);
+		var builder = get(URL + path).header("X-Member-Id", MEMBER_ID);
 		for (int i = 0; i < params.length; i += 2) {
 			builder.param(params[i], params[i + 1]);
 		}
@@ -384,5 +402,63 @@ class ApiV1PayoutSellerControllerTest {
 				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
 				.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."));
 		}
+	}
+
+	@Test
+	@DisplayName("회원 ID와 같은 번호의 판매자가 있어도, 그 회원이 판매자가 아니면 403이고 남의 정산을 보여 주지 않는다")
+	void notSellerIsForbidden() throws Exception {
+		given(sellerLookupPort.findSellerOf(NOT_SELLER_MEMBER_ID))
+			.willReturn(Optional.of(new SellerOfMember(null, null)));
+
+		mockMvc.perform(get(URL + "/payouts").header("X-Member-Id", NOT_SELLER_MEMBER_ID)
+				.param("fromMonth", "2025-11").param("toMonth", "2026-10"))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.message").value("승인된 판매자만 정산을 조회할 수 있습니다."))
+			.andDo(document("payout-seller-forbidden", ERROR_RESPONSE));
+	}
+
+	@Test
+	@DisplayName("네 조회 API 모두 판매자 신청이 대기 · 반려 상태면 403")
+	void notApprovedIsForbidden() throws Exception {
+		for (SellerStatus status : new SellerStatus[] {SellerStatus.PENDING, SellerStatus.REJECTED}) {
+			given(sellerLookupPort.findSellerOf(MEMBER_ID))
+				.willReturn(Optional.of(new SellerOfMember(SELLER_ID, status)));
+			for (String path : allPaths()) {
+				mockMvc.perform(get(URL + path).header("X-Member-Id", MEMBER_ID))
+					.andExpect(status().isForbidden())
+					.andExpect(jsonPath("$.message").value("승인된 판매자만 정산을 조회할 수 있습니다."));
+			}
+		}
+	}
+
+	@Test
+	@DisplayName("존재하지 않거나 탈퇴한 회원이면 404")
+	void withdrawnMemberIsNotFound() throws Exception {
+		given(sellerLookupPort.findSellerOf(MEMBER_ID)).willReturn(Optional.empty());
+
+		request("/summary")
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("존재하지 않는 회원입니다."))
+			.andDo(document("payout-seller-member-not-found", ERROR_RESPONSE));
+	}
+
+	@Test
+	@DisplayName("회원 서비스에서 판매자 정보를 확인하지 못하면 503 (빈 목록으로 답하지 않는다)")
+	void lookupUnavailable() throws Exception {
+		given(sellerLookupPort.findSellerOf(MEMBER_ID)).willThrow(new PayoutSellerLookupUnavailableException());
+
+		request("/holds", "from", "2026-09-15", "to", "2026-10-14")
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.message").value("판매자 정보를 확인하지 못했습니다. 잠시 뒤 다시 시도해주세요."))
+			.andDo(document("payout-seller-lookup-unavailable", ERROR_RESPONSE));
+	}
+
+	private String[] allPaths() {
+		return new String[] {
+			"/summary",
+			"/payouts?fromMonth=2025-11&toMonth=2026-10",
+			"/payout-items?from=2026-09-01&to=2026-09-30",
+			"/holds?from=2026-09-15&to=2026-10-14"
+		};
 	}
 }
