@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getAuthStatus, setAccessToken } from '@/shared/api'
-import { memberMock, server } from '@/shared/testing'
+import { memberMock, orderMock, server } from '@/shared/testing'
 
 import { MyPage } from './MyPage'
 
@@ -129,6 +129,30 @@ describe('MyPage 참가 대회 수', () => {
     renderPage()
 
     // 목의 주문 목록에서 참가권이 되는 것은 결제한 주문 1개다
+    expect(await screen.findByText('1개')).toBeInTheDocument()
+  })
+
+  it('취소한 참가권은 세지 않는다', async () => {
+    // 결제한 주문 1개에 참가권 2장: 하나는 참가 확정, 하나는 취소
+    server.use(
+      http.get('*/api/v1/order/orders/:orderId', () => {
+        const example = orderMock.getFindById1ResponseMock()
+        const item = example.data!.items![0]!
+        return HttpResponse.json({
+          ...example,
+          data: {
+            ...example.data,
+            status: 'PARTIAL_CANCELED',
+            items: [
+              { ...item, id: 1, status: 'PAID' },
+              { ...item, id: 2, participationId: 2, status: 'CANCELED' },
+            ],
+          },
+        })
+      }),
+    )
+    renderPage()
+
     expect(await screen.findByText('1개')).toBeInTheDocument()
   })
 

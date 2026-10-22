@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -10,6 +10,7 @@ import { SAMPLE_PARTICIPANT } from '@/features/booking'
 import { chargeAmountFor, requestCharge } from '@/features/deposit-charge'
 import { useQueueAdmission } from '@/features/queue-admission'
 import { parseKstDateTime, RACE_DETAIL, raceDetailQueryOptions } from '@/entities/race'
+import { invalidateTicketQueries } from '@/entities/ticket'
 import { orderApi, unwrapData, type orderModel } from '@/shared/api'
 import { formatNumber } from '@/shared/lib'
 import {
@@ -207,6 +208,7 @@ function OrderCheckout({
   chargeFailed: boolean
 }) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const completeHref = `/checkout/complete?orderId=${orderId}` as const
   const order = orderApi.useFindById1(orderId, { query: { select: unwrapData } })
   const raceId = order.data?.raceId
@@ -259,7 +261,20 @@ function OrderCheckout({
   // 잔액을 다시 불러 화면의 계산 · "충전하고 결제" 버튼으로 모자란 만큼을 보여 주고, 사용자가 눌러 충전한다.
   const pay = useMutation<orderModel.OrderDto, Error, { auto: boolean }>({
     mutationFn: async () => unwrapData(await orderApi.pay(orderId)),
-    onSuccess: () => router.push(completeHref),
+    // 이 화면이 받아 둔 결제 전 주문 · 잔액이 캐시에 1분 동안 남는다. 지우지 않으면 결제 직후 참가권 상세가
+    // 결제 전 주문을 읽어 '참가권을 찾을 수 없어요'가 나오고, 내 참가권의 예치금도 옛 값으로 보인다.
+    // 결제한 주문만 다시 받은 뒤에 넘어간다 (받기 전에 상세를 열면 옛 주문을 잠깐 읽는다).
+    // 잔액 · 참가 신청 등은 무효로만 표시한다. 다 기다리면 그중 하나가 실패해 재시도가 끝난 몇 초 뒤에야
+    // 넘어가는데, 그때 사용자가 다른 화면에 가 있어도 완료 화면으로 다시 보낸다.
+    // 다시 받은 주문이 PAID라 아래 effect도 완료 화면으로 보내므로, 같은 replace로 맞춰 기록이 두 번 남지 않게 한다.
+    onSuccess: async () => {
+      void invalidateTicketQueries(queryClient)
+      await queryClient.refetchQueries(
+        { queryKey: orderApi.getFindById1QueryKey(orderId) },
+        { cancelRefetch: false },
+      )
+      router.replace(completeHref)
+    },
     onError: (error, { auto }) => {
       const next = toPayFailure(error)
       if (next.kind === 'insufficient') {
