@@ -154,6 +154,7 @@ export const COURSE_FORM_ERRORS = {
   distancePositive: '거리는 0보다 커야 해요.',
   timeLimitPositive: '제한 시간은 1분 이상이어야 해요.',
   quotaPositive: '정원은 1명 이상이어야 해요.',
+  pricePositive: '참가비는 1원 이상이어야 해요.',
   minAge: `최소 나이는 만 ${productZod.registerBodyCoursesItemMinAgeMin}세 이상이어야 해요.`,
   maxAgeOrder: '최대 나이는 최소 나이보다 작을 수 없어요.',
 } as const
@@ -208,7 +209,8 @@ const courseDraftSchema = z
       z.number().positive(COURSE_FORM_ERRORS.distancePositive),
     ),
     timeLimitMinutes: wholeNumber.pipe(z.number().min(1, COURSE_FORM_ERRORS.timeLimitPositive)),
-    price: wholeNumber,
+    // 서버 RaceCourseSaveRequestDto가 @Positive라 0원은 막는다 (orval zod는 min(0)뿐)
+    price: wholeNumber.pipe(z.number().min(1, COURSE_FORM_ERRORS.pricePositive)),
     individualQuota: wholeNumber.pipe(z.number().min(1, COURSE_FORM_ERRORS.quotaPositive)),
     minAge: wholeNumber.pipe(
       z.number().min(productZod.registerBodyCoursesItemMinAgeMin, COURSE_FORM_ERRORS.minAge),

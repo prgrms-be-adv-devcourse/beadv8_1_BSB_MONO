@@ -150,4 +150,20 @@ describe('toCourseInput 종목 추가 창', () => {
     const result = toCourseInput({ ...draft, minAge: '20', maxAge: '19' })
     expect(result).toEqual({ errors: { maxAge: COURSE_FORM_ERRORS.maxAgeOrder } })
   })
+
+  it('참가비 · 정원 · 제한 시간이 0이면 막는다 (서버는 참가비 0원을 받지 않는다)', () => {
+    const result = toCourseInput({
+      ...draft,
+      price: '0',
+      individualQuota: '0',
+      timeLimitMinutes: '0',
+    })
+    expect(result).toEqual({
+      errors: {
+        price: COURSE_FORM_ERRORS.pricePositive,
+        individualQuota: COURSE_FORM_ERRORS.quotaPositive,
+        timeLimitMinutes: COURSE_FORM_ERRORS.timeLimitPositive,
+      },
+    })
+  })
 })
