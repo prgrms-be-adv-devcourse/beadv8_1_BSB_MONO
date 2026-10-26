@@ -32,11 +32,11 @@ import jakarta.persistence.PersistenceContext;
  * - 메시지에는 대기열의 진입 판정에 쓰는 칸(판매 상태, 개인 예매 오픈, 접수 마감)과 대회 행의 수정 일시를 담는다
  *
  * 메시지를 확인하는 방법 (Kafka 브로커 없이)
- * 대회 저장과 같은 트랜잭션에서 아웃박스(PRODUCT_OUTBOX_EVENT)에 남긴 행을 읽는다. 테스트에서는 릴레이가 돌지 않아 보내지 않는다.
+ * 대회 저장과 같은 트랜잭션에서 아웃박스(PRODUCT_OUTBOX_KAFKA_EVENT)에 남긴 행을 읽는다. 테스트에서는 릴레이가 돌지 않아 보내지 않는다.
  * 1. key 확인: raceChangedKeys()가 queuing.race.changed 행의 key(ref_id = 대회 ID)만 꺼낸다
  * 2. 본문 확인: raceChangedMessages()·lastRaceChanged()가 같은 행의 본문(payload)을 꺼낸다
  * 아웃박스는 테스트마다 비워지므로, 각 테스트는 그 테스트 안에서 남긴 메시지만 센다.
- * Kafka로 보내는 일은 ProductOutboxRelayTest가 확인한다.
+ * Kafka로 보내는 일은 ProductOutboxKafkaRelayTest가 확인한다.
  */
 class ProductFacadeRaceChangedTest extends ProductIntegrationTest {
 	// 등록 요청과 수정 요청이 같은 일정을 쓰도록 기준 시각을 테스트마다 하나로 고정한다

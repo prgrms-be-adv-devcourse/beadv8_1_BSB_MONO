@@ -22,42 +22,42 @@ import org.springframework.transaction.IllegalTransactionStateException;
 
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.product.domain.OutboxStatus;
-import com.bukang.product.domain.ProductOutboxEvent;
+import com.bukang.product.domain.ProductOutboxKafkaEvent;
 import com.bukang.product.support.ProductIntegrationTest;
 
 /**
- * 아웃박스 저장(ProductOutboxAppendUseCase)과 릴레이(ProductFacade.relayOutbox)를 확인한다.
+ * 아웃박스 저장(ProductOutboxKafkaAppendUseCase)과 릴레이(ProductFacade.relayKafkaOutbox)를 확인한다.
  * - 저장은 대회 저장 트랜잭션 안에서만 할 수 있고, 그 트랜잭션이 롤백되면 행도 남지 않는다
  * - 릴레이는 미발행 행을 만든 순서대로 보내고, 브로커가 받으면 SENT로 바꾼다
- * - 보내지 못하면 재시도 횟수를 올리고 멈추며(뒤의 행은 보내지 않는다), MAX_RETRY번 실패하면 FAILED로 바꾼다
+ * - 보내지 못하면 재시도 횟수를 올리고 멈추며(뒤의 행은 보내지 않는다), MAX_RETRY번 실패하면 SEND_FAILED로 바꾼다
  * KafkaTemplate은 ProductIntegrationTest의 spy라 브로커 없이 바로 성공을 돌려준다. 실패는 토픽별로 실패한 결과를 돌려주게 바꿔 만든다.
  */
-class ProductOutboxRelayTest extends ProductIntegrationTest {
+class ProductOutboxKafkaRelayTest extends ProductIntegrationTest {
 	private static final int RACE_ID = 101;
 	private static final int OTHER_RACE_ID = 102;
 
 	@Autowired
-	private ProductOutboxAppendUseCase productOutboxAppendUseCase;
+	private ProductOutboxKafkaAppendUseCase productOutboxKafkaAppendUseCase;
 
 	@Test
 	@DisplayName("대회 저장 트랜잭션이 롤백되면 아웃박스 행도 남지 않는다")
 	void rollbackWithBusinessTransaction() {
 		transactionTemplate.executeWithoutResult(status -> {
-			productOutboxAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, RACE_ID, payload(RACE_ID));
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, RACE_ID, payload(RACE_ID));
 			status.setRollbackOnly();
 		});
 
-		assertThat(productOutboxEventRepository.count()).isZero();
+		assertThat(productOutboxKafkaEventRepository.count()).isZero();
 	}
 
 	@Test
 	@DisplayName("트랜잭션 밖에서 아웃박스에 저장하면 예외가 나고 행이 남지 않는다 (MANDATORY)")
 	void rejectAppendOutsideTransaction() {
 		assertThatThrownBy(() ->
-			productOutboxAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, RACE_ID, payload(RACE_ID)))
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, RACE_ID, payload(RACE_ID)))
 			.isInstanceOf(IllegalTransactionStateException.class);
 
-		assertThat(productOutboxEventRepository.count()).isZero();
+		assertThat(productOutboxKafkaEventRepository.count()).isZero();
 	}
 
 	@Test
@@ -66,7 +66,7 @@ class ProductOutboxRelayTest extends ProductIntegrationTest {
 		append(KafkaTopics.RACE_CHANGED, RACE_ID);
 		append(KafkaTopics.ORDER_RACE_CANCEL, OTHER_RACE_ID);
 
-		int sent = productFacade.relayOutbox();
+		int sent = productFacade.relayKafkaOutbox();
 
 		assertThat(sent).isEqualTo(2);
 		InOrder order = inOrder(kafka());
@@ -84,8 +84,8 @@ class ProductOutboxRelayTest extends ProductIntegrationTest {
 	void skipSentEvents() {
 		append(KafkaTopics.RACE_CHANGED, RACE_ID);
 
-		productFacade.relayOutbox();
-		int sentAgain = productFacade.relayOutbox();
+		productFacade.relayKafkaOutbox();
+		int sentAgain = productFacade.relayKafkaOutbox();
 
 		assertThat(sentAgain).isZero();
 		verify(kafka(), times(1)).send(eq(KafkaTopics.RACE_CHANGED), anyString(), anyString());
@@ -98,10 +98,10 @@ class ProductOutboxRelayTest extends ProductIntegrationTest {
 		append(KafkaTopics.RACE_CHANGED, RACE_ID);
 		append(KafkaTopics.ORDER_RACE_CANCEL, OTHER_RACE_ID);
 
-		int sent = productFacade.relayOutbox();
+		int sent = productFacade.relayKafkaOutbox();
 
 		assertThat(sent).isZero();
-		List<ProductOutboxEvent> events = allEvents();
+		List<ProductOutboxKafkaEvent> events = allEvents();
 		assertThat(events.get(0).getStatus()).isEqualTo(OutboxStatus.PENDING);
 		assertThat(events.get(0).getRetryCount()).isEqualTo(1);
 		assertThat(events.get(1).getStatus()).isEqualTo(OutboxStatus.PENDING);
@@ -109,29 +109,29 @@ class ProductOutboxRelayTest extends ProductIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("MAX_RETRY번 보내지 못하면 FAILED로 바꾸고, 다음 릴레이부터는 그 행을 건너뛰고 뒤의 행을 보낸다")
+	@DisplayName("MAX_RETRY번 보내지 못하면 SEND_FAILED로 바꾸고, 다음 릴레이부터는 그 행을 건너뛰고 뒤의 행을 보낸다")
 	void markFailedAfterMaxRetry() {
 		failSendTo(KafkaTopics.RACE_CHANGED);
 		append(KafkaTopics.RACE_CHANGED, RACE_ID);
 		append(KafkaTopics.ORDER_RACE_CANCEL, OTHER_RACE_ID);
 
-		for (int i = 0; i < ProductOutboxRelayUseCase.MAX_RETRY; i++) {
-			productFacade.relayOutbox();
+		for (int i = 0; i < ProductOutboxKafkaRelayUseCase.MAX_RETRY; i++) {
+			productFacade.relayKafkaOutbox();
 		}
-		int sent = productFacade.relayOutbox();
+		int sent = productFacade.relayKafkaOutbox();
 
 		assertThat(sent).isEqualTo(1);
-		List<ProductOutboxEvent> events = allEvents();
-		assertThat(events.get(0).getStatus()).isEqualTo(OutboxStatus.FAILED);
-		assertThat(events.get(0).getRetryCount()).isEqualTo(ProductOutboxRelayUseCase.MAX_RETRY);
+		List<ProductOutboxKafkaEvent> events = allEvents();
+		assertThat(events.get(0).getStatus()).isEqualTo(OutboxStatus.SEND_FAILED);
+		assertThat(events.get(0).getRetryCount()).isEqualTo(ProductOutboxKafkaRelayUseCase.MAX_RETRY);
 		assertThat(events.get(1).getStatus()).isEqualTo(OutboxStatus.SENT);
-		verify(kafka(), times(ProductOutboxRelayUseCase.MAX_RETRY))
+		verify(kafka(), times(ProductOutboxKafkaRelayUseCase.MAX_RETRY))
 			.send(eq(KafkaTopics.RACE_CHANGED), anyString(), anyString());
 	}
 
 	private void append(String topic, int raceId) {
 		transactionTemplate.executeWithoutResult(status ->
-			productOutboxAppendUseCase.appendRaceEvent(topic, raceId, payload(raceId)));
+			productOutboxKafkaAppendUseCase.appendRaceEvent(topic, raceId, payload(raceId)));
 	}
 
 	private static Map<String, Object> payload(int raceId) {
@@ -144,8 +144,8 @@ class ProductOutboxRelayTest extends ProductIntegrationTest {
 			.when(kafka()).send(eq(topic), anyString(), anyString());
 	}
 
-	private List<ProductOutboxEvent> allEvents() {
-		return productOutboxEventRepository.findAll().stream()
+	private List<ProductOutboxKafkaEvent> allEvents() {
+		return productOutboxKafkaEventRepository.findAll().stream()
 			.sorted((left, right) -> Integer.compare(left.getId(), right.getId()))
 			.toList();
 	}

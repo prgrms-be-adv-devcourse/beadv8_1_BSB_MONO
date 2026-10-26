@@ -11,8 +11,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.bukang.product.domain.OutboxStatus;
-import com.bukang.product.domain.ProductOutboxEvent;
-import com.bukang.product.out.ProductOutboxEventRepository;
+import com.bukang.product.domain.ProductOutboxKafkaEvent;
+import com.bukang.product.out.ProductOutboxKafkaEventRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,23 +27,23 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ProductOutboxRelayUseCase {
+public class ProductOutboxKafkaRelayUseCase {
 	// 한 번에 보낼 최대 건수 (DB 부하 제한)
 	static final int BATCH_SIZE = 100;
-	// 이 횟수만큼 보내지 못하면 FAILED로 바꾸고 더는 보내지 않는다
+	// 이 횟수만큼 보내지 못하면 SEND_FAILED로 바꾸고 더는 보내지 않는다
 	static final int MAX_RETRY = 5;
 	// 브로커 응답을 기다리는 최대 시간
 	private static final long SEND_TIMEOUT_SECONDS = 5;
 
-	private final ProductOutboxEventRepository productOutboxEventRepository;
+	private final ProductOutboxKafkaEventRepository productOutboxKafkaEventRepository;
 	private final KafkaTemplate<String, String> kafkaTemplate;
 
 	// 보낸 건수를 돌려준다. 트랜잭션은 ProductFacade가 연다 (상태 변경은 더티 체킹으로 커밋된다)
 	public int relay(LocalDateTime now) {
-		List<ProductOutboxEvent> events = productOutboxEventRepository
+		List<ProductOutboxKafkaEvent> events = productOutboxKafkaEventRepository
 			.findByStatusOrderByCreateDateAscIdAsc(OutboxStatus.PENDING, Limit.of(BATCH_SIZE));
 		int sent = 0;
-		for (ProductOutboxEvent event : events) {
+		for (ProductOutboxKafkaEvent event : events) {
 			if (!send(event)) {
 				event.markSendFailed(MAX_RETRY);
 				logSendFailure(event);
@@ -55,7 +55,7 @@ public class ProductOutboxRelayUseCase {
 		return sent;
 	}
 
-	private boolean send(ProductOutboxEvent event) {
+	private boolean send(ProductOutboxKafkaEvent event) {
 		try {
 			kafkaTemplate.send(event.getEventType(), event.getMessageKey(), event.getPayload())
 				.get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -71,9 +71,9 @@ public class ProductOutboxRelayUseCase {
 		}
 	}
 
-	private void logSendFailure(ProductOutboxEvent event) {
+	private void logSendFailure(ProductOutboxKafkaEvent event) {
 		if (event.isFailed()) {
-			log.error("아웃박스 메시지를 {}번 보내지 못해 FAILED로 바꿨습니다. 원인을 고친 뒤 PENDING으로 되돌려야 합니다. "
+			log.error("아웃박스 메시지를 {}번 보내지 못해 SEND_FAILED로 바꿨습니다. 원인을 고친 뒤 PENDING으로 되돌려야 합니다. "
 				+ "id={}, topic={}, key={}", MAX_RETRY, event.getId(), event.getEventType(), event.getMessageKey());
 		}
 	}

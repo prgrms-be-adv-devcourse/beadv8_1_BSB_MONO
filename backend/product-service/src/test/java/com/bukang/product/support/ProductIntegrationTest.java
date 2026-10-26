@@ -43,13 +43,13 @@ import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.product.TestcontainersConfiguration;
 import com.bukang.product.app.ProductFacade;
 import com.bukang.product.domain.ProductMember;
-import com.bukang.product.domain.ProductOutboxEvent;
+import com.bukang.product.domain.ProductOutboxKafkaEvent;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.out.ParticipationHoldRepository;
 import com.bukang.product.out.ProductMemberRepository;
-import com.bukang.product.out.ProductOutboxEventRepository;
+import com.bukang.product.out.ProductOutboxKafkaEventRepository;
 import com.bukang.product.out.ProductSellerRepository;
 import com.bukang.product.out.RaceCourseDocumentRepository;
 import com.bukang.product.out.RaceCourseRepository;
@@ -101,7 +101,7 @@ public abstract class ProductIntegrationTest {
 	@Autowired
 	protected RaceCourseDocumentRepository raceCourseDocumentRepository;
 	@Autowired
-	protected ProductOutboxEventRepository productOutboxEventRepository;
+	protected ProductOutboxKafkaEventRepository productOutboxKafkaEventRepository;
 	@PersistenceContext
 	private EntityManager entityManager;
 
@@ -131,7 +131,7 @@ public abstract class ProductIntegrationTest {
 		raceRepository.deleteAll();
 		productSellerRepository.deleteAll();
 		productMemberRepository.deleteAll();
-		productOutboxEventRepository.deleteAll();
+		productOutboxKafkaEventRepository.deleteAll();
 		raceCourseDocumentRepository.deleteAll();
 	}
 
@@ -142,18 +142,18 @@ public abstract class ProductIntegrationTest {
 
 	// 이 테스트에서 아웃박스에 남긴(보낼) 토픽의 메시지 본문 (남긴 순서대로)
 	protected List<String> outboxPayloads(String topic) {
-		return outboxEvents(topic).stream().map(ProductOutboxEvent::getPayload).toList();
+		return outboxEvents(topic).stream().map(ProductOutboxKafkaEvent::getPayload).toList();
 	}
 
 	// 이 테스트에서 아웃박스에 남긴(보낼) 토픽의 메시지 key = 대상 ID (남긴 순서대로)
 	protected List<String> outboxKeys(String topic) {
-		return outboxEvents(topic).stream().map(ProductOutboxEvent::getMessageKey).toList();
+		return outboxEvents(topic).stream().map(ProductOutboxKafkaEvent::getMessageKey).toList();
 	}
 
-	protected List<ProductOutboxEvent> outboxEvents(String topic) {
+	protected List<ProductOutboxKafkaEvent> outboxEvents(String topic) {
 		return entityManager
-			.createQuery("select e from ProductOutboxEvent e where e.eventType = :topic order by e.id",
-				ProductOutboxEvent.class)
+			.createQuery("select e from ProductOutboxKafkaEvent e where e.eventType = :topic order by e.id",
+				ProductOutboxKafkaEvent.class)
 			.setParameter("topic", topic)
 			.getResultList();
 	}

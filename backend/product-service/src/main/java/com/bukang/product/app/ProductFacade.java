@@ -50,8 +50,8 @@ public class ProductFacade {
 	private final RaceHoldUseCase raceHoldUseCase;
 	private final RaceCancelUseCase raceCancelUseCase;
 	private final TransactionTemplate transactionTemplate;
-	private final ProductOutboxAppendUseCase productOutboxAppendUseCase;
-	private final ProductOutboxRelayUseCase productOutboxRelayUseCase;
+	private final ProductOutboxKafkaAppendUseCase productOutboxKafkaAppendUseCase;
+	private final ProductOutboxKafkaRelayUseCase productOutboxKafkaRelayUseCase;
 	private final RaceCourseDocumentRepository raceCourseDocumentRepository;
 
 	@Transactional
@@ -116,7 +116,8 @@ public class ProductFacade {
 	public RaceSaveDto cancelRace(int memberId, int raceId) {
 		RaceCancelResult result = transactionTemplate.execute(status -> {
 			RaceCancelResult canceled = raceCancelUseCase.cancel(memberId, raceId, LocalDateTime.now());
-			productOutboxAppendUseCase.appendRaceEvent(KafkaTopics.ORDER_RACE_CANCEL, raceId, canceled.cancelEvent());
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.ORDER_RACE_CANCEL, raceId,
+				canceled.cancelEvent());
 			appendRaceChanged(canceled.saved());
 			return canceled;
 		});
@@ -190,7 +191,7 @@ public class ProductFacade {
 		RaceSaleStatusResult result = transactionTemplate.execute(status -> {
 			RaceSaleStatusResult refreshed = raceSaleStatusUseCase.refresh(LocalDateTime.now());
 			refreshed.raceChanges().forEach(event ->
-				productOutboxAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, event.raceId(), event));
+				productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, event.raceId(), event));
 			return refreshed;
 		});
 		List<RaceCourseDocument> documents = result.documents();
@@ -205,10 +206,10 @@ public class ProductFacade {
 		return documents.size();
 	}
 
-	// 아웃박스의 미발행 메시지를 Kafka로 보낸다 (ProductOutboxRelayScheduler가 1초마다 부른다). 보낸 건수를 돌려준다
+	// 아웃박스의 미발행 메시지를 Kafka로 보낸다 (ProductOutboxKafkaRelayScheduler가 1초마다 부른다). 보낸 건수를 돌려준다
 	@Transactional
-	public int relayOutbox() {
-		return productOutboxRelayUseCase.relay(LocalDateTime.now());
+	public int relayKafkaOutbox() {
+		return productOutboxKafkaRelayUseCase.relay(LocalDateTime.now());
 	}
 
 	// ES 검색 문서(race_courses)를 맞춘다
@@ -233,16 +234,17 @@ public class ProductFacade {
 	}
 
 	// file-service에 보낼 이미지 연결 메시지 (race.filelink.requested)
-	// 연결되지 않은 파일은 하루 뒤 file-service 정리 배치가 지우므로, 메시지가 FAILED로 남으면 그 전에 다시 보내야 한다
+	// 연결되지 않은 파일은 하루 뒤 file-service 정리 배치가 지우므로, 메시지가 SEND_FAILED로 남으면 그 전에 다시 보내야 한다
 	private void appendFileLink(RaceSaveResult result) {
-		productOutboxAppendUseCase.appendRaceEvent(KafkaTopics.RACE_FILE_LINK_REQUESTED, result.raceId(),
+		productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_FILE_LINK_REQUESTED, result.raceId(),
 			result.fileLink());
 	}
 
 	// 대기열 서비스에 보낼 대회 변경 메시지 (queuing.race.changed). 대회 칸이 바뀌지 않은 수정이면 남기지 않는다
 	private void appendRaceChanged(RaceSaveResult result) {
 		if (result.raceChanged() != null) {
-			productOutboxAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, result.raceId(), result.raceChanged());
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, result.raceId(),
+				result.raceChanged());
 		}
 	}
 
@@ -250,6 +252,6 @@ public class ProductFacade {
 	// 같은 대회의 메시지가 순서대로 처리되도록 종목 메시지도 대회 ID를 key로 보낸다 (같은 key는 같은 파티션)
 	private void appendRaceCourseChanged(RaceSaveResult result) {
 		result.courseChanges().forEach(event ->
-			productOutboxAppendUseCase.appendRaceEvent(KafkaTopics.RACE_COURSE_CHANGED, result.raceId(), event));
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_COURSE_CHANGED, result.raceId(), event));
 	}
 }
