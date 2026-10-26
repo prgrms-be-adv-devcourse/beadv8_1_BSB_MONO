@@ -75,7 +75,6 @@ class PayoutLedgerScenarioTest {
 	private PayoutLedgerUseCase ledgerUseCase;
 	private PayoutGroupCreator creator;
 	private PayoutPayUseCase payUseCase;
-	private PayoutRecoveryRequestUseCase recoveryRequestUseCase;
 	private PayoutRecoveryUseCase recoveryUseCase;
 	private PayoutRaceCancelUseCase raceCancelUseCase;
 
@@ -86,8 +85,6 @@ class PayoutLedgerScenarioTest {
 		creator = new PayoutGroupCreator(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
 		payUseCase = new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
 		});
-		recoveryRequestUseCase = new PayoutRecoveryRequestUseCase(payoutRepository, payoutItemRepository,
-			payoutRecoveryRepository, ledgerUseCase);
 		recoveryUseCase = new PayoutRecoveryUseCase(payoutRecoveryRepository, payoutItemRepository, ledgerUseCase);
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, payoutItemRepository,
 			payoutRecoveryRepository, ledgerUseCase);
@@ -119,7 +116,7 @@ class PayoutLedgerScenarioTest {
 	}
 
 	private PayoutRecovery requestRecovery(int orderItemId, LocalDateTime at) {
-		return recoveryRequestUseCase.requestScheduleChange(SELLER_ID, RACE_ID, RACE_ID, orderItemId, PRICE, at)
+		return ledgerUseCase.recoverScheduleChange(SELLER_ID, RACE_ID, RACE_ID, orderItemId, PRICE, at)
 			.orElseThrow();
 	}
 
@@ -359,7 +356,7 @@ class PayoutLedgerScenarioTest {
 	@Test
 	@DisplayName("1차 정산이 없으면 일정 변경 회수는 빈 값이고, 원장 줄 · 회수가 생기지 않는다")
 	void recoveryWithoutFirstIsEmpty() {
-		assertThat(recoveryRequestUseCase.requestScheduleChange(SELLER_ID, RACE_ID, RACE_ID, 108, PRICE,
+		assertThat(ledgerUseCase.recoverScheduleChange(SELLER_ID, RACE_ID, RACE_ID, 108, PRICE,
 			LocalDateTime.of(2026, 10, 20, 10, 0))).isEmpty();
 
 		entityManager.flush();
