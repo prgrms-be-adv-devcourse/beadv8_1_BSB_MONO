@@ -25,7 +25,7 @@ public class RaceSaleStatusScheduler {
 	public void refreshSaleStatuses() {
 		int changed = productFacade.refreshSaleStatuses();
 		if (changed > 0) {
-			log.info("대회 판매 상태를 바꿨습니다. 다시 색인한 종목 문서 수={}", changed);
+			log.info("대회 판매 상태를 바꿨습니다. 대회 수={}", changed);
 		}
 	}
 }

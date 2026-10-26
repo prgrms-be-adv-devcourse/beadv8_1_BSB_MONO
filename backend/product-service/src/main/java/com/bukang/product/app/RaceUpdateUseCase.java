@@ -17,7 +17,6 @@ import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.product.domain.ProductSeller;
 import com.bukang.product.domain.Race;
 import com.bukang.product.domain.RaceCourse;
-import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.domain.exception.InvalidRaceException;
 import com.bukang.product.domain.exception.RaceAccessDeniedException;
 import com.bukang.product.domain.exception.RaceNotFoundException;
@@ -89,7 +88,7 @@ public class RaceUpdateUseCase {
 		});
 		// 새 종목은 목록 끝에 붙었으므로 요청 순서로 다시 맞춘다
 		race.sortCourses(new ArrayList<>(imagesByCourse.keySet()));
-		// 새 종목 INSERT와 뺀 종목 DELETE를 실행해, 새 종목의 ID로 파일 연결 대상과 검색 문서를 만든다
+		// 새 종목 INSERT와 뺀 종목 DELETE를 실행해, 새 종목의 ID로 파일 연결 대상과 메시지를 만든다
 		raceRepository.flush();
 
 		List<FileLinkRequestedEvent.Ref> refs = new ArrayList<>();
@@ -98,18 +97,13 @@ public class RaceUpdateUseCase {
 		// 뺀 종목에 붙어 있던 이미지는 빈 목록으로 보내 모두 뗀다 (file-service가 삭제 상태로 바꾼다)
 		removedCourses.forEach(course -> refs.add(FileLinkRequestedEvent.Ref.of(FileRef.of(course), List.of())));
 
-		List<Integer> removedCourseIds = removedCourses.stream().map(RaceCourse::getId).toList();
-		RaceSaveResult saved = RaceSaveResult.of(race, removedCourseIds, new FileLinkRequestedEvent(memberId, refs),
-			List.of());
+		RaceSaveResult saved = RaceSaveResult.of(race, new FileLinkRequestedEvent(memberId, refs), List.of());
 
 		// 정원을 늘려 남은 자리가 생기면 정원 마감을 접수 중으로 되돌린다 (DB의 최신 카운터로 판단)
 		// 엔티티의 카운터는 이 트랜잭션이 처음 읽은 값이라 그 사이 확보된 자리가 빠져 있을 수 있어 쓰지 않는다
 		saved.dto().getCourseIds().forEach(raceCourseRepository::refreshStatus);
-		// 위 UPDATE가 영속성 컨텍스트를 비웠으므로, 바뀐 종목 상태로 검색 문서를 다시 만든다
+		// 위 UPDATE가 영속성 컨텍스트를 비웠으므로, 다시 읽어 수정 일시를 비교한다
 		Race updated = raceRepository.findById(raceId).orElseThrow(RaceNotFoundException::new);
-		List<RaceCourseDocument> documents = updated.getCourses().stream()
-			.map(RaceCourseDocument::from)
-			.toList();
 		// 종목만 바뀐 수정은 대회 수정 일시가 그대로라 대회 메시지를 보내지 않는다
 		RaceChangedEvent raceChanged = updated.getModifyDate().equals(modifyDateBefore)
 			? null : updated.toChangedEvent();
@@ -122,7 +116,6 @@ public class RaceUpdateUseCase {
 		// 뺀 종목은 삭제 메시지로 알린다. 지운 행에는 수정 일시가 남지 않아 수정을 시작한 시각(now)을 삭제 시각으로 담는다
 		// now는 대회 행을 잠근 뒤 잡은 시각이라, 이 종목으로 앞서 보낸 메시지의 수정 일시보다 늦다
 		removedCourses.forEach(course -> courseChanges.add(course.toDeletedEvent(now)));
-		return new RaceSaveResult(saved.dto(), documents, saved.deletedDocumentIds(), saved.fileLink(), raceChanged,
-			courseChanges);
+		return new RaceSaveResult(saved.dto(), saved.fileLink(), raceChanged, courseChanges);
 	}
 }
