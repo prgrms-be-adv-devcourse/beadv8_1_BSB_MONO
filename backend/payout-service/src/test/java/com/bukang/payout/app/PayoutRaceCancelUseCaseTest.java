@@ -56,7 +56,7 @@ class PayoutRaceCancelUseCaseTest {
 	private EntityManager entityManager;
 
 	private PayoutRaceCancelUseCase useCase() {
-		return new PayoutRaceCancelUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository,
+		return new PayoutRaceCancelUseCase(payoutRepository,
 			new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
 	}
 

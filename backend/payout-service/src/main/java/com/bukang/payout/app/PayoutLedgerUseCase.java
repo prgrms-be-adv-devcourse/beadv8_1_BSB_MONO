@@ -13,6 +13,7 @@ import com.bukang.payout.domain.PayoutAccount;
 import com.bukang.payout.domain.PayoutItem;
 import com.bukang.payout.domain.PayoutRecordType;
 import com.bukang.payout.domain.PayoutRecovery;
+import com.bukang.payout.domain.PayoutRecoveryReason;
 import com.bukang.payout.domain.PayoutRecoveryStatus;
 import com.bukang.payout.domain.PayoutStage;
 import com.bukang.payout.domain.PayoutStatus;
@@ -23,14 +24,16 @@ import com.bukang.payout.out.PayoutRecoveryRepository;
 import com.bukang.payout.out.PayoutRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 원장 잔고와 회수 상계 (PRO-214)
  * 잔고는 판매자 × 대회 × 계정의 원장 줄을 더해 계산한다. 따로 저장하지 않는다
  * 상계는 갚을 돈(RECEIVABLE)을 같은 판매자 × 대회의 지급 전 정산 내역에서 바로 뺀다. 정산 내역 금액까지만 뺀다
  * 회수 요청 · 최종 생성 · 대회 취소가 같은 규칙을 쓰도록 한곳에 둔다
- * 일정 변경 환불의 회수 요청도 여기서 받는다 (payout.md 4-2, PRO-33)
+ * 일정 변경 환불 · 대회 취소의 회수 요청도 여기서 받는다 (payout.md 4-2 · 4-3, PRO-33 · PRO-34)
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PayoutLedgerUseCase {
@@ -72,6 +75,38 @@ public class PayoutLedgerUseCase {
 			PayoutRecovery.scheduleChanged(sellerId, raceId, orderItemId, amount, now), orderItemId, raceCourseId);
 		settle(sellerId, raceId, now);
 		return Optional.of(recovery);
+	}
+
+	/**
+	 * 대회 취소의 회수 요청 (payout.md 4-3, PRO-34 · PRO-214). 대회당 1건만 만든다
+	 * 판매자가 손에 든 돈 = 남은 1차 정산금 + 번 돈. 지급 전 정산 내역은 먼저 되돌렸으므로 지급한 정산 내역의 몫만 남는다
+	 * 이미 요청 중인 갚을 돈(RECEIVABLE)은 따로 받으므로 더하지 않는다
+	 *
+	 * @return 만든 회수. 이미 있거나 돌려받을 돈이 없으면 빈 값
+	 */
+	@Transactional
+	public Optional<PayoutRecovery> recoverRaceCancel(int sellerId, int raceId, LocalDateTime now) {
+		if (payoutRecoveryRepository.existsByRaceIdAndReasonType(raceId, PayoutRecoveryReason.RACE_CANCELED)) {
+			return Optional.empty();
+		}
+		long advance = balance(sellerId, raceId, PayoutAccount.ADVANCE);
+		long earning = balance(sellerId, raceId, PayoutAccount.EARNING);
+		if (earning != 0) {
+			// 최종 지급 뒤의 대회 취소는 번 돈까지 되돌려야 하는데 아직 정하지 않았다 (PRO-214 미룸). 금액만 맞춰 1차 정산금 줄로 남긴다
+			log.warn("최종 지급 뒤 대회 취소: 번 돈까지 회수합니다. sellerId={}, raceId={}, earning={}",
+				sellerId, raceId, earning);
+		}
+		long amount = advance + earning;
+		if (amount < 0) {
+			// 회수 요청액이 준 1차 정산금보다 많은 상태(지급 전 정산 내역에 상계했던 회수가 남음). 처리 규칙을 정하지 않았다
+			log.warn("대회 취소 회수액이 음수라 만들지 않습니다. sellerId={}, raceId={}, amount={}", sellerId, raceId, amount);
+		}
+		// 지급액이 0원인 정산 내역(0원 지급 완료)만 있으면 돌려받을 돈이 없다
+		if (amount <= 0) {
+			return Optional.empty();
+		}
+		return Optional.of(openRecovery(
+			new PayoutRecovery(sellerId, raceId, PayoutRecoveryReason.RACE_CANCELED, amount, now), null, null));
 	}
 
 	// JPQL 합계 쿼리 전에 Hibernate가 쌓인 원장 줄을 먼저 내보내므로(자동 flush) 같은 트랜잭션에서 쓴 줄도 더해진다

@@ -87,8 +87,7 @@ class PayoutLedgerScenarioTest {
 		payUseCase = new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
 		});
 		recoveryUseCase = new PayoutRecoveryUseCase(payoutRecoveryRepository, payoutItemRepository, ledgerUseCase);
-		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, payoutItemRepository,
-			payoutRecoveryRepository, ledgerUseCase);
+		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, ledgerUseCase);
 	}
 
 	private PayoutGroup group(int... orderItemIds) {
