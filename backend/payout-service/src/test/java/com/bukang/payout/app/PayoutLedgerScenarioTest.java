@@ -27,6 +27,7 @@ import com.bukang.payout.domain.PayoutItem;
 import com.bukang.payout.domain.PayoutRecordType;
 import com.bukang.payout.domain.PayoutRecovery;
 import com.bukang.payout.domain.PayoutRecoveryCompletion;
+import com.bukang.payout.domain.PayoutRecoveryReason;
 import com.bukang.payout.domain.PayoutRecoveryStatus;
 import com.bukang.payout.domain.PayoutStage;
 import com.bukang.payout.domain.PayoutStatus;
@@ -308,6 +309,31 @@ class PayoutLedgerScenarioTest {
 		assertThat(payoutRepository.findFirstBySellerIdAndRaceIdAndPayoutStageOrderByIdAsc(SELLER_ID, RACE_ID,
 			PayoutStage.FINAL)).isEmpty();
 		assertEveryPayoutLineSumMatches();
+	}
+
+	@Test
+	@DisplayName("최종 지급 뒤 대회 취소: 회수 472,500(남은 1차 정산금 0 + 번 돈 472,500), 회수 두 줄이 생긴다")
+	void raceCanceledAfterFinalPay() {
+		createFirst();
+		pay(FIRST_PAY_DATE);
+		createFinal(range(101, 110));
+		pay(FINAL_PAY_DATE);
+		raceCancelUseCase.cancelRace(RACE_ID, LocalDateTime.of(2027, 1, 25, 10, 0));
+
+		// ADVANCE: 1차 +200,000, 최종 차감 −200,000 → 0
+		// EARNING: 판매 10장 × 50,000 − 수수료 10장 × 2,750 = 472,500 (판매자가 받은 돈 200,000 + 272,500과 같다)
+		PayoutRecovery recovery = payoutRecoveryRepository.findAll().getFirst();
+		assertThat(payoutRecoveryRepository.findAll()).hasSize(1);
+		assertThat(recovery.getReasonType()).isEqualTo(PayoutRecoveryReason.RACE_CANCELED);
+		assertThat(recovery.getAmount()).isEqualTo(472_500L);
+		assertThat(payoutItemRepository.findAll())
+			.filteredOn(item -> item.getRecordType() == PayoutRecordType.RECOVERY_REQUESTED
+				|| item.getRecordType() == PayoutRecordType.RECEIVABLE_ADDED)
+			.extracting(PayoutItem::getRecordType, PayoutItem::getAmount)
+			.containsExactlyInAnyOrder(
+				tuple(PayoutRecordType.RECOVERY_REQUESTED, -472_500L),
+				tuple(PayoutRecordType.RECEIVABLE_ADDED, 472_500L));
+		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(472_500L);
 	}
 
 	@Test
