@@ -344,4 +344,26 @@ class PayoutLedgerScenarioTest {
 			.extracting(PayoutItem::getRecordType)
 			.containsExactlyInAnyOrder(PayoutRecordType.RECOVERY_REQUESTED, PayoutRecordType.RECEIVABLE_ADDED);
 	}
+
+	@Test
+	@DisplayName("최종 정산을 만든 뒤 일정 변경 회수를 요청하면 충돌(409)이다")
+	void recoveryAfterFinalConflicts() {
+		createFirst();
+		pay(FIRST_PAY_DATE);
+		createFinal(range(101, 110));
+
+		assertThatThrownBy(() -> requestRecovery(108, LocalDateTime.of(2026, 12, 15, 10, 0)))
+			.isInstanceOf(PayoutRecoveryConflictException.class);
+	}
+
+	@Test
+	@DisplayName("1차 정산이 없으면 일정 변경 회수는 빈 값이고, 원장 줄 · 회수가 생기지 않는다")
+	void recoveryWithoutFirstIsEmpty() {
+		assertThat(recoveryRequestUseCase.requestScheduleChange(SELLER_ID, RACE_ID, RACE_ID, 108, PRICE,
+			LocalDateTime.of(2026, 10, 20, 10, 0))).isEmpty();
+
+		entityManager.flush();
+		assertThat(payoutItemRepository.findAll()).isEmpty();
+		assertThat(payoutRecoveryRepository.findAll()).isEmpty();
+	}
 }
