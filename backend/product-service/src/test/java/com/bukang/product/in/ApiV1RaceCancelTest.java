@@ -207,6 +207,7 @@ class ApiV1RaceCancelTest extends ProductIntegrationTest {
 			.andExpect(jsonPath("$.data.courses[*].raceId").value(hasItem(canceled.raceId())));
 
 		cancelRace(canceled.raceId(), SELLER_MEMBER_ID).andExpect(status().isOk());
+		syncRaceDocuments();
 
 		searchRaces()
 			.andExpect(status().isOk())

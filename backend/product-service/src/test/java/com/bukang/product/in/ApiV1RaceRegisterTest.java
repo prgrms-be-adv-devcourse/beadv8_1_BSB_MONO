@@ -276,7 +276,6 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 		assertThat(tenK.getRegionSido()).isEqualTo("서울특별시");
 		assertThat(tenK.getRegionSigungu()).isEqualTo("성동구");
 		assertThat(tenK.getSaleStatus()).isEqualTo(RaceSaleStatus.SCHEDULED);
-		assertThat(tenK.getCourseStatus()).isEqualTo(CourseStatus.OPEN);
 		assertThat(tenK.getCourseType()).isEqualTo(CourseType.KM_10);
 		assertThat(tenK.getSurface()).isEqualTo(CourseSurface.ROAD);
 		assertThat(tenK.getRaceDate()).isEqualTo(request.getRaceDate());

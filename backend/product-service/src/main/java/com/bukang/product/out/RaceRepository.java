@@ -44,10 +44,14 @@ public interface RaceRepository extends JpaRepository<Race, Integer> {
 	Optional<Race> findByIdForShare(@Param("id") int id);
 
 	// 상태 배치가 바꾼 대회를 다시 읽는다. 잠그고 읽어야 트랜잭션 처음의 스냅숏이 아닌 최신 상태를 본다
-	// (그 사이 다른 요청이 취소한 대회를 옛 상태로 다시 색인하지 않게)
+	// (그 사이 다른 요청이 취소한 대회를 옛 상태로 대기열에 보내지 않게)
 	@Lock(LockModeType.PESSIMISTIC_READ)
 	@Query("select r from Race r where r.id in :ids")
 	List<Race> findAllByIdForShare(@Param("ids") Collection<Integer> ids);
+
+	// 대회와 종목을 쿼리 한 번으로 읽는다 (검색 문서 동기화용, RaceDocumentSyncProcessUseCase)
+	@Query("select r from Race r left join fetch r.courses where r.id = :id")
+	Optional<Race> findWithCoursesById(@Param("id") int id);
 
 	// 정산 대상 대회 조회는 거르는 날짜 칸(환불 마감일 LocalDate / 대회 일시 LocalDateTime)과 경계 · 정렬이 달라 두 쿼리로 둔다
 	// QueryDSL로 날짜 조건만 바꿔 끼우면 쿼리 2개치고 코드(커스텀 리포지토리)가 늘고,

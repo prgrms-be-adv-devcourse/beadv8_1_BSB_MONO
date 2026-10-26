@@ -30,7 +30,7 @@ import com.jayway.jsonpath.JsonPath;
  * - 취소는 종목 메시지를 남기지 않는다 (대회 메시지만 남긴다)
  *
  * 메시지는 ProductFacadeRaceChangedTest와 같은 방법으로 확인한다.
- * 아웃박스(PRODUCT_OUTBOX_EVENT)에 남은 이 토픽의 행에서 key(ref_id)와 본문(payload)을 꺼낸다.
+ * 아웃박스(PRODUCT_OUTBOX_KAFKA_EVENT)에 남은 이 토픽의 행에서 key(ref_id)와 본문(payload)을 꺼낸다.
  * 등록할 때도 종목 메시지가 남으므로, 수정 테스트는 등록 때 남긴 건수를 세어 두고 그 뒤에 남긴 메시지만 본다.
  */
 class ProductFacadeRaceCourseChangedTest extends ProductIntegrationTest {

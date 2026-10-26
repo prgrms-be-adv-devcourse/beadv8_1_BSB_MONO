@@ -42,17 +42,18 @@ import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.product.TestcontainersConfiguration;
 import com.bukang.product.app.ProductFacade;
+import com.bukang.product.app.RaceDocumentSyncAppendUseCase;
 import com.bukang.product.domain.ProductMember;
-import com.bukang.product.domain.ProductOutboxEvent;
+import com.bukang.product.domain.ProductOutboxKafkaEvent;
 import com.bukang.product.domain.ProductSeller;
-import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.RaceSaveRequestDto;
 import com.bukang.product.out.ParticipationHoldRepository;
 import com.bukang.product.out.ProductMemberRepository;
-import com.bukang.product.out.ProductOutboxEventRepository;
+import com.bukang.product.out.ProductOutboxKafkaEventRepository;
 import com.bukang.product.out.ProductSellerRepository;
 import com.bukang.product.out.RaceCourseDocumentRepository;
 import com.bukang.product.out.RaceCourseRepository;
+import com.bukang.product.out.RaceDocumentSyncEventRepository;
 import com.bukang.product.out.RaceRepository;
 import com.jayway.jsonpath.JsonPath;
 
@@ -101,7 +102,11 @@ public abstract class ProductIntegrationTest {
 	@Autowired
 	protected RaceCourseDocumentRepository raceCourseDocumentRepository;
 	@Autowired
-	protected ProductOutboxEventRepository productOutboxEventRepository;
+	protected ProductOutboxKafkaEventRepository productOutboxKafkaEventRepository;
+	@Autowired
+	protected RaceDocumentSyncEventRepository raceDocumentSyncEventRepository;
+	@Autowired
+	private RaceDocumentSyncAppendUseCase raceDocumentSyncAppendUseCase;
 	@PersistenceContext
 	private EntityManager entityManager;
 
@@ -124,14 +129,15 @@ public abstract class ProductIntegrationTest {
 		seedSeller(OTHER_SELLER_MEMBER_ID, OTHER_SELLER_ID);
 	}
 
-	// FK 순서대로 지운다: 자리 → 대회(종목은 함께 지워진다) → 판매자 → 회원, 그리고 아웃박스와 검색 문서
+	// FK 순서대로 지운다: 자리 → 대회(종목은 함께 지워진다) → 판매자 → 회원, 그리고 아웃박스·동기화 이벤트와 검색 문서
 	@AfterEach
 	void cleanUpProductTest() {
 		participationHoldRepository.deleteAll();
 		raceRepository.deleteAll();
 		productSellerRepository.deleteAll();
 		productMemberRepository.deleteAll();
-		productOutboxEventRepository.deleteAll();
+		productOutboxKafkaEventRepository.deleteAll();
+		raceDocumentSyncEventRepository.deleteAll();
 		raceCourseDocumentRepository.deleteAll();
 	}
 
@@ -142,18 +148,18 @@ public abstract class ProductIntegrationTest {
 
 	// 이 테스트에서 아웃박스에 남긴(보낼) 토픽의 메시지 본문 (남긴 순서대로)
 	protected List<String> outboxPayloads(String topic) {
-		return outboxEvents(topic).stream().map(ProductOutboxEvent::getPayload).toList();
+		return outboxEvents(topic).stream().map(ProductOutboxKafkaEvent::getPayload).toList();
 	}
 
 	// 이 테스트에서 아웃박스에 남긴(보낼) 토픽의 메시지 key = 대상 ID (남긴 순서대로)
 	protected List<String> outboxKeys(String topic) {
-		return outboxEvents(topic).stream().map(ProductOutboxEvent::getMessageKey).toList();
+		return outboxEvents(topic).stream().map(ProductOutboxKafkaEvent::getMessageKey).toList();
 	}
 
-	protected List<ProductOutboxEvent> outboxEvents(String topic) {
+	protected List<ProductOutboxKafkaEvent> outboxEvents(String topic) {
 		return entityManager
-			.createQuery("select e from ProductOutboxEvent e where e.eventType = :topic order by e.id",
-				ProductOutboxEvent.class)
+			.createQuery("select e from ProductOutboxKafkaEvent e where e.eventType = :topic order by e.id",
+				ProductOutboxKafkaEvent.class)
 			.setParameter("topic", topic)
 			.getResultList();
 	}
@@ -179,7 +185,21 @@ public abstract class ProductIntegrationTest {
 		String body = result.getResponse().getContentAsString();
 		int raceId = JsonPath.read(body, "$.data.raceId");
 		List<Integer> courseIds = JsonPath.read(body, "$.data.courseIds");
+		// 등록 API는 동기화 이벤트만 남긴다. 스케줄러가 검색 문서를 맞춘 뒤의 상태로 만든다
+		syncRaceDocuments();
 		return new RegisteredRace(raceId, courseIds);
+	}
+
+	// 미처리 동기화 이벤트를 처리해 검색 문서를 DB에 맞춘다 (test 프로파일에서는 RaceDocumentSyncScheduler가 돌지 않아 직접 부른다)
+	// 대회를 바꾸는 API(수정·취소)나 상태 배치를 부른 뒤 검색 문서를 확인하려면 먼저 부른다
+	protected int syncRaceDocuments() {
+		return productFacade.syncRaceDocuments();
+	}
+
+	// API를 거치지 않고 대회 행을 직접 바꾼 뒤, 그 대회의 검색 문서를 DB에 맞춘다 (대회 저장처럼 이벤트를 남기고 처리한다)
+	protected void resyncRaceDocument(int raceId) {
+		transactionTemplate.executeWithoutResult(status -> raceDocumentSyncAppendUseCase.append(raceId));
+		syncRaceDocuments();
 	}
 
 	// 판매 시작일이 오늘이거나 지난 대회를 판매 중으로 만든다 (기본 요청이면 개인 예매가 한 시간 전에 열린 대회)
@@ -214,11 +234,7 @@ public abstract class ProductIntegrationTest {
 			.setParameter("saleStatus", saleStatus)
 			.setParameter("id", race.raceId())
 			.executeUpdate());
-		List<RaceCourseDocument> documents = transactionTemplate.execute(status ->
-			raceRepository.findById(race.raceId()).orElseThrow().getCourses().stream()
-				.map(RaceCourseDocument::from)
-				.toList());
-		raceCourseDocumentRepository.saveAll(documents);
+		resyncRaceDocument(race.raceId());
 		return race;
 	}
 

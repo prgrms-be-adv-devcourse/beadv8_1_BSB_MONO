@@ -586,7 +586,6 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 		RaceCourse added = findCourse(newCourseId);
 		assertThat(added.getName()).isEqualTo("5K");
 		assertThat(added.getStatus()).isEqualTo(CourseStatus.OPEN);
-		assertThat(findDocument(newCourseId).getSaleStatus()).isEqualTo(RaceSaleStatus.ON_SALE);
 		// 새 종목의 이미지도 요청 순서대로 연결을 요청한다
 		assertThat(lastFileLink().refs())
 			.extracting(FileLinkRequestedEvent.Ref::refId)
@@ -604,9 +603,13 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.courseIds.length()").value(1))
 			.andExpect(jsonPath("$.data.courseIds[0]").value(registered.courseId()));
+		// 수정 API는 동기화 이벤트만 남기므로, 이벤트를 처리하기 전에는 뺀 종목의 문서가 남아 있다
+		assertThat(raceCourseDocumentRepository.existsById(String.valueOf(halfCourseId))).isTrue();
+		syncRaceDocuments();
 
 		assertThat(raceCourseRepository.existsById(halfCourseId)).isFalse();
 		assertThat(raceCourseDocumentRepository.existsById(String.valueOf(halfCourseId))).isFalse();
+		assertThat(raceCourseDocumentRepository.existsById(String.valueOf(registered.courseId()))).isTrue();
 		FileLinkRequestedEvent fileLink = lastFileLink();
 		assertThat(refOf(fileLink, halfCourseId).files()).isEmpty();
 		assertThat(refOf(fileLink, registered.courseId()).files()).hasSize(1);
@@ -749,6 +752,7 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 			.extracting(FileLinkRequestedEvent.Item::fileId)
 			.containsExactly(newThumbnail.getFileId(), detail.getFileId());
 
+		syncRaceDocuments();
 		RaceCourseDocument document = findDocument(registered.courseId());
 		assertThat(document.getRaceTitle()).isEqualTo("2026 부산 바다 런");
 		assertThat(document.getCourseLabel()).isEqualTo("2026 부산 바다 런 10K");
@@ -764,14 +768,13 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 			.andExpect(jsonPath("$.data.held").value(true));
 		assertThat(findCourse(registered.courseId()).getStatus()).isEqualTo(CourseStatus.SOLD_OUT);
 
-		// 정원을 그대로 두고 대회명만 바꾸면 정원 마감 그대로이고, 검색 문서도 DB의 정원 마감으로 다시 만든다
+		// 정원을 그대로 두고 대회명만 바꾸면 정원 마감 그대로다
 		update(registered.raceId(), sameRace()
 			.title("2026 서울 가을 하프 마라톤")
 			.course(sameCourse(registered.courseId()).quota(0, 1))
 			.build())
 			.andExpect(status().isOk());
 		assertThat(findCourse(registered.courseId()).getStatus()).isEqualTo(CourseStatus.SOLD_OUT);
-		assertThat(findDocument(registered.courseId()).getCourseStatus()).isEqualTo(CourseStatus.SOLD_OUT);
 
 		update(registered.raceId(), sameRace()
 			.course(sameCourse(registered.courseId()).quota(0, 2))
@@ -783,7 +786,6 @@ class ApiV1RaceUpdateTest extends ProductIntegrationTest {
 		assertThat(course.getIndividualQuota()).isEqualTo(2);
 		// 수정은 확보 수를 덮어쓰지 않는다
 		assertThat(course.getIndividualReserved()).isEqualTo(1);
-		assertThat(findDocument(registered.courseId()).getCourseStatus()).isEqualTo(CourseStatus.OPEN);
 	}
 
 	// ---------- 도우미 ----------
