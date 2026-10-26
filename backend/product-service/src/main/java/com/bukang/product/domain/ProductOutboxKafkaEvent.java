@@ -54,6 +54,10 @@ public class ProductOutboxKafkaEvent extends BaseIdAndTime {
 	@Column(name = "retry_count", nullable = false)
 	private int retryCount;
 
+	// 보내지 못했을 때 다시 보내도 되는 가장 이른 시각 (재시도 간격을 점점 늘린다). 한 번도 실패하지 않았으면 null
+	@Column(name = "next_retry_date")
+	private LocalDateTime nextRetryDate;
+
 	// 브로커가 받았다고 응답한 시각
 	@Column(name = "sent_date")
 	private LocalDateTime sentDate;
@@ -81,11 +85,19 @@ public class ProductOutboxKafkaEvent extends BaseIdAndTime {
 	}
 
 	// 보내지 못한 횟수를 올리고, maxRetry번째 실패면 실패로 바꿔 더는 보내지 않는다
-	public void markSendFailed(int maxRetry) {
+	// 아직 재시도할 수 있으면 nextRetryDate 전에는 다시 보내지 않는다
+	public void markSendFailed(int maxRetry, LocalDateTime nextRetryDate) {
 		this.retryCount++;
 		if (retryCount >= maxRetry) {
 			this.status = OutboxStatus.SEND_FAILED;
+			return;
 		}
+		this.nextRetryDate = nextRetryDate;
+	}
+
+	// 지금 보내도 되는지 (실패한 적이 없거나, 재시도 시각이 지났다)
+	public boolean isSendableAt(LocalDateTime now) {
+		return nextRetryDate == null || !nextRetryDate.isAfter(now);
 	}
 
 	public boolean isFailed() {
