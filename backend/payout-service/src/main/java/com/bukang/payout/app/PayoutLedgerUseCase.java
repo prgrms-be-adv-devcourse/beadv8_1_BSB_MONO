@@ -137,6 +137,19 @@ public class PayoutLedgerUseCase {
 		return recovery;
 	}
 
+	/**
+	 * 최종 정산 내역에서 남은 1차 정산금을 빼고, 아직 못 받은 갚을 돈(RECEIVABLE)이 있으면 바로 상계한다 (PRO-214)
+	 * 정산 내역을 저장한 뒤에 부른다. 상계가 이 정산 내역을 잠가서 읽기 때문이다
+	 */
+	@Transactional(propagation = Propagation.MANDATORY)
+	public void deductAdvanceAndSettle(Payout payout, LocalDateTime now) {
+		// 남은 1차 정산금 = 1차 정산금 − 회수 요청액. 회수 요청 때 이미 1차 정산금에서 뺐으므로 진행 중인 회수액을 또 빼지 않는다
+		// 차감 줄을 쓰기 전에 읽는다. 쓴 뒤에 읽으면 자동 flush로 그 줄이 더해져 0이 된다
+		long advance = balance(payout.getSellerId(), payout.getRaceId(), PayoutAccount.ADVANCE);
+		payout.deductAdvance(advance);
+		settle(payout.getSellerId(), payout.getRaceId(), now);
+	}
+
 	// JPQL 합계 쿼리 전에 Hibernate가 쌓인 원장 줄을 먼저 내보내므로(자동 flush) 같은 트랜잭션에서 쓴 줄도 더해진다
 	public long balance(int sellerId, int raceId, PayoutAccount account) {
 		return payoutItemRepository.sumBalance(sellerId, raceId, account);

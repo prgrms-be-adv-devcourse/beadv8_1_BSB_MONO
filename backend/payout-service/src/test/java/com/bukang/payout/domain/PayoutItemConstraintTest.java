@@ -33,7 +33,7 @@ class PayoutItemConstraintTest {
 	private EntityManager entityManager;
 
 	private Payout finalPayout(YearMonth month) {
-		return Payout.finalStage(1, 7, "대회 A", month, 0L, SETTLED_AT, CALENDAR);
+		return Payout.finalStage(1, 7, "대회 A", month, SETTLED_AT, CALENDAR);
 	}
 
 	@Test
