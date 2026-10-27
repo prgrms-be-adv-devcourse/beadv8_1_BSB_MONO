@@ -140,6 +140,8 @@ public class PayoutLedgerUseCase {
 	/**
 	 * 최종 정산 내역에서 남은 1차 정산금을 빼고, 아직 못 받은 갚을 돈(RECEIVABLE)이 있으면 바로 상계한다 (PRO-214)
 	 * 정산 내역을 저장한 뒤에 부른다. 상계가 이 정산 내역을 잠가서 읽기 때문이다
+	 * 저장한 정산 내역 엔티티를 받으므로 부른 쪽 트랜잭션 안에서만 돈다(MANDATORY).
+	 * 새 트랜잭션을 열면 받은 엔티티가 영속성 컨텍스트 밖이라 차감 줄이 소리 없이 빠질 수 있다
 	 */
 	@Transactional(propagation = Propagation.MANDATORY)
 	public void deductAdvanceAndSettle(Payout payout, LocalDateTime now) {
@@ -151,19 +153,16 @@ public class PayoutLedgerUseCase {
 	}
 
 	// JPQL 합계 쿼리 전에 Hibernate가 쌓인 원장 줄을 먼저 내보내므로(자동 flush) 같은 트랜잭션에서 쓴 줄도 더해진다
-	public long balance(int sellerId, int raceId, PayoutAccount account) {
+	// 같은 패키지의 시나리오 테스트가 잔고를 확인하려고 부르므로 package-private으로 둔다
+	long balance(int sellerId, int raceId, PayoutAccount account) {
 		return payoutItemRepository.sumBalance(sellerId, raceId, account);
 	}
 
-	/**
-	 * 갚을 돈을 지급 전 정산 내역에서 빼고, 다 갚았으면 그 대회의 요청 중인 회수를 상계로 완료한다
-	 * 지급 전 정산 내역을 잠가서 읽으므로 지급 배치 · 다른 회수 요청과 정산 내역 금액을 동시에 바꾸지 않는다
-	 * 다시 불러도 잔고로 다시 계산하므로 이미 뺀 금액을 또 빼지 않는다
-	 *
-	 * @return 다 갚아서 이번에 완료한 회수 (못 다 갚았으면 빈 목록. 남은 갚을 돈은 입금으로 받는다)
-	 */
-	@Transactional(propagation = Propagation.MANDATORY)
-	public List<PayoutRecovery> settle(int sellerId, int raceId, LocalDateTime now) {
+	// 상계: 갚을 돈을 지급 전 정산 내역에서 빼고, 다 갚았으면 그 대회의 요청 중인 회수를 상계로 완료한다
+	// 지급 전 정산 내역을 잠가서 읽으므로 지급 배치 · 다른 회수 요청과 정산 내역 금액을 동시에 바꾸지 않는다
+	// 다시 불러도 잔고로 다시 계산하므로 이미 뺀 금액을 또 빼지 않는다
+	// 부르는 쪽(회수 요청 · 최종 정산 차감)의 트랜잭션 안에서 돈다. 이번에 완료한 회수를 돌려준다
+	private List<PayoutRecovery> settle(int sellerId, int raceId, LocalDateTime now) {
 		long receivable = balance(sellerId, raceId, PayoutAccount.RECEIVABLE);
 		if (receivable <= 0) {
 			return List.of();
