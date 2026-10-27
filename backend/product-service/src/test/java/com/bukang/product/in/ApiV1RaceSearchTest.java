@@ -238,6 +238,7 @@ class ApiV1RaceSearchTest extends ProductIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("대회를 수정했습니다."))
 			.andExpect(jsonPath("$.data.courseIds", hasSize(2)));
+		syncRaceDocuments();
 
 		// 더한 하프 종목도 색인되었다 (하프만 고르면 먼저 등록한 대회만 나온다)
 		expectRacesInOrder(search("courseType", "HALF", "sort", "LATEST"), earlier);

@@ -65,7 +65,7 @@ public class RaceRegisterUseCase {
 			.map(RaceCourse::toChangedEvent)
 			.toList();
 		// 파일 소유자는 대회를 등록한 회원이다 (파일을 올린 회원과 같아야 연결된다)
-		return RaceSaveResult.of(race, List.of(), new FileLinkRequestedEvent(memberId, refs), courseChanges);
+		return RaceSaveResult.of(race, new FileLinkRequestedEvent(memberId, refs), courseChanges);
 	}
 
 	// 같은 판매자가 같은 Idempotency-Key로 이미 등록한 대회

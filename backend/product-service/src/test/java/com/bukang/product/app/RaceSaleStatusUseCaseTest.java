@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import com.bukang.common.shared.race.domain.RaceSaleStatus;
+import com.bukang.common.shared.race.event.RaceChangedEvent;
 import com.bukang.product.domain.CourseType;
-import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.support.ProductIntegrationTest;
 import com.bukang.product.support.RaceRequests.CourseBuilder;
 import com.jayway.jsonpath.JsonPath;
@@ -35,8 +35,8 @@ import jakarta.persistence.PersistenceContext;
  * 판매 상태 배치(RaceSaleStatusUseCase.refresh)가 배치 시각에 맞춰 대회 판매 상태를 바꾸는지 확인한다.
  * - 판매 시작일이 된 판매 예정 → 판매 중 (판매 시작일 0시부터. 개인 예매 오픈 시각 전이어도 바뀐다)
  * - 대회 날짜가 지난 판매 예정·판매 중 → 판매 종료 (대회 당일은 그대로, 다음 날 0시부터). 둘 다 지났으면 바로 판매 종료
- * - 판매 중지·대회 취소는 건드리지 않고, 상태가 바뀐 대회의 종목 검색 문서만 바뀐 상태로 돌려준다
- * - ProductFacade.refreshSaleStatuses가 바뀐 문서를 다시 색인해 공개 목록에 반영한다
+ * - 판매 중지·대회 취소는 건드리지 않고, 상태가 바뀐 대회의 변경 메시지만 바뀐 상태로 돌려준다
+ * - ProductFacade.refreshSaleStatuses가 바뀐 대회의 검색 문서 동기화 이벤트를 남기고, 이벤트를 처리하면 공개 목록에 반영된다
  * 스케줄러(RaceSaleStatusScheduler)는 test 프로파일에서 돌지 않으므로, refresh에 원하는 시각을 넣어 직접 부른다.
  */
 class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
@@ -60,15 +60,15 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 		assertThat(saleStatusOf(waiting.raceId())).isEqualTo(SCHEDULED);
 		LocalDateTime now = base.plusDays(4);
 
-		List<RaceCourseDocument> documents = refresh(now);
+		List<RaceChangedEvent> changes = refresh(now);
 
 		assertThat(saleStatusOf(opening.raceId())).isEqualTo(ON_SALE);
 		assertThat(saleStatusOf(waiting.raceId())).isEqualTo(SCHEDULED);
 		// 엔티티를 거치지 않는 UPDATE라 수정 일시를 배치 시각으로 직접 채운다
 		assertThat(raceRepository.findById(opening.raceId()).orElseThrow().getModifyDate()).isEqualTo(now);
-		assertThat(documents)
-			.extracting(RaceCourseDocument::getId, RaceCourseDocument::getSaleStatus)
-			.containsExactly(tuple(String.valueOf(opening.courseId()), ON_SALE));
+		assertThat(changes)
+			.extracting(RaceChangedEvent::raceId, RaceChangedEvent::saleStatus)
+			.containsExactly(tuple(opening.raceId(), ON_SALE));
 	}
 
 	@Test
@@ -97,13 +97,13 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 		assertThat(saleStatusOf(registered.raceId())).isEqualTo(ON_SALE);
 
 		LocalDateTime nextDay = raceDay.plusDays(1).atStartOfDay();
-		List<RaceCourseDocument> documents = refresh(nextDay);
+		List<RaceChangedEvent> changes = refresh(nextDay);
 
 		assertThat(saleStatusOf(registered.raceId())).isEqualTo(CLOSED);
 		assertThat(raceRepository.findById(registered.raceId()).orElseThrow().getModifyDate()).isEqualTo(nextDay);
-		assertThat(documents)
-			.extracting(RaceCourseDocument::getId, RaceCourseDocument::getSaleStatus)
-			.containsExactly(tuple(String.valueOf(registered.courseId()), CLOSED));
+		assertThat(changes)
+			.extracting(RaceChangedEvent::raceId, RaceChangedEvent::saleStatus)
+			.containsExactly(tuple(registered.raceId(), CLOSED));
 	}
 
 	@Test
@@ -118,15 +118,13 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 			.build());
 		assertThat(saleStatusOf(registered.raceId())).isEqualTo(SCHEDULED);
 
-		List<RaceCourseDocument> documents = refresh(raceDay.plusDays(1).atStartOfDay());
+		List<RaceChangedEvent> changes = refresh(raceDay.plusDays(1).atStartOfDay());
 
 		assertThat(saleStatusOf(registered.raceId())).isEqualTo(CLOSED);
-		// 종목마다 문서 1개씩, 모두 판매 종료다 (판매 중으로 만든 문서가 섞이지 않는다)
-		assertThat(documents)
-			.extracting(RaceCourseDocument::getId, RaceCourseDocument::getSaleStatus)
-			.containsExactlyInAnyOrder(
-				tuple(String.valueOf(registered.courseIds().get(0)), CLOSED),
-				tuple(String.valueOf(registered.courseIds().get(1)), CLOSED));
+		// 대회 메시지는 판매 종료 1건뿐이다 (판매 중으로 만든 메시지가 섞이지 않는다)
+		assertThat(changes)
+			.extracting(RaceChangedEvent::raceId, RaceChangedEvent::saleStatus)
+			.containsExactly(tuple(registered.raceId(), CLOSED));
 	}
 
 	@Test
@@ -140,16 +138,16 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("대회를 취소했습니다."));
 
-		List<RaceCourseDocument> documents = refresh(LocalDate.now().plusDays(30).atStartOfDay());
+		List<RaceChangedEvent> changes = refresh(LocalDate.now().plusDays(30).atStartOfDay());
 
-		assertThat(documents).isEmpty();
+		assertThat(changes).isEmpty();
 		assertThat(saleStatusOf(stopped.raceId())).isEqualTo(STOPPED);
 		assertThat(saleStatusOf(canceled.raceId())).isEqualTo(CANCELED);
 	}
 
 	@Test
-	@DisplayName("한 번 돌면 판매 중이 된 대회(종목 2개)와 판매 종료된 대회(종목 1개)의 문서 3개만 바뀐 상태로 돌려준다")
-	void returnDocumentsOfChangedRacesOnly() throws Exception {
+	@DisplayName("한 번 돌면 판매 중이 된 대회와 판매 종료된 대회의 메시지 2건만 바뀐 상태로 돌려준다")
+	void returnChangesOfChangedRacesOnly() throws Exception {
 		LocalDateTime base = LocalDateTime.now().withNano(0);
 		LocalDate today = base.toLocalDate();
 		RegisteredRace opening = register(race().title("사흘 뒤 판매 시작 대회")
@@ -165,21 +163,21 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 		assertThat(saleStatusOf(untouched.raceId())).isEqualTo(ON_SALE);
 
 		// 판매 시작(3일 뒤)과 모레 대회일은 지났고, 보름 뒤 대회일은 남은 시각
-		List<RaceCourseDocument> documents = refresh(today.plusDays(4).atStartOfDay());
+		List<RaceChangedEvent> changes = refresh(today.plusDays(4).atStartOfDay());
 
-		assertThat(documents)
-			.extracting(RaceCourseDocument::getId, RaceCourseDocument::getRaceId, RaceCourseDocument::getSaleStatus)
+		assertThat(changes)
+			.extracting(RaceChangedEvent::raceId, RaceChangedEvent::saleStatus)
 			.containsExactlyInAnyOrder(
-				tuple(String.valueOf(opening.courseIds().get(0)), String.valueOf(opening.raceId()), ON_SALE),
-				tuple(String.valueOf(opening.courseIds().get(1)), String.valueOf(opening.raceId()), ON_SALE),
-				tuple(String.valueOf(closing.courseId()), String.valueOf(closing.raceId()), CLOSED));
+				tuple(opening.raceId(), ON_SALE),
+				tuple(closing.raceId(), CLOSED));
 		assertThat(saleStatusOf(opening.raceId())).isEqualTo(ON_SALE);
 		assertThat(saleStatusOf(closing.raceId())).isEqualTo(CLOSED);
 		assertThat(saleStatusOf(untouched.raceId())).isEqualTo(ON_SALE);
 	}
 
 	@Test
-	@DisplayName("대회일이 이틀 지난 판매 중 대회는 상태 배치를 돌리면 검색 문서가 판매 종료로 다시 색인되어 공개 목록에서 빠진다")
+	@DisplayName("대회일이 이틀 지난 판매 중 대회는 상태 배치를 돌리고 동기화 이벤트를 처리하면 검색 문서가 판매 종료로 다시 색인되어 "
+		+ "공개 목록에서 빠진다")
 	void refreshSaleStatusesRemovesClosedRaceFromPublicList() throws Exception {
 		RegisteredRace registered = registerOnSale(race().build());
 		assertThat(publicRaceIds()).containsExactly(registered.raceId());
@@ -189,16 +187,20 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 		updateRace(registered.raceId(), "raceDate", LocalDateTime.now().withNano(0).minusDays(2));
 		assertThat(publicRaceIds()).containsExactly(registered.raceId());
 
-		int reindexed = productFacade.refreshSaleStatuses();
+		int changed = productFacade.refreshSaleStatuses();
+		// 상태 배치는 동기화 이벤트만 남긴다. 이벤트를 처리하기 전에는 검색 문서가 그대로다
+		assertThat(documentStatusOf(registered.courseId())).isEqualTo(ON_SALE);
+		productFacade.syncRaceDocuments();
 
-		assertThat(reindexed).isEqualTo(1);
+		assertThat(changed).isEqualTo(1);
 		assertThat(saleStatusOf(registered.raceId())).isEqualTo(CLOSED);
 		assertThat(documentStatusOf(registered.courseId())).isEqualTo(CLOSED);
 		assertThat(publicRaceIds()).doesNotContain(registered.raceId());
 	}
 
 	@Test
-	@DisplayName("판매 시작일이 된 판매 예정 대회는 상태 배치를 돌리면 검색 문서가 판매 중으로 다시 색인되고 공개 목록에 그대로 나온다")
+	@DisplayName("판매 시작일이 된 판매 예정 대회는 상태 배치를 돌리고 동기화 이벤트를 처리하면 검색 문서가 판매 중으로 다시 색인되고 "
+		+ "공개 목록에 그대로 나온다")
 	void refreshSaleStatusesReindexesOpenedRace() throws Exception {
 		RegisteredRace registered = register(race()
 			.individualOpenAt(LocalDateTime.now().plusDays(3))
@@ -208,17 +210,18 @@ class RaceSaleStatusUseCaseTest extends ProductIntegrationTest {
 		// 기다리지 않고 판매 시작일이 된 상태를 만들려고 판매 시작일만 오늘로 옮긴다
 		updateRace(registered.raceId(), "saleOpenDate", LocalDate.now());
 
-		int reindexed = productFacade.refreshSaleStatuses();
+		int changed = productFacade.refreshSaleStatuses();
+		productFacade.syncRaceDocuments();
 
-		assertThat(reindexed).isEqualTo(1);
+		assertThat(changed).isEqualTo(1);
 		assertThat(saleStatusOf(registered.raceId())).isEqualTo(ON_SALE);
 		assertThat(documentStatusOf(registered.courseId())).isEqualTo(ON_SALE);
 		assertThat(publicRaceIds()).containsExactly(registered.raceId());
 	}
 
-	// 원하는 배치 시각으로 판매 상태를 바꾼다. ProductFacade처럼 트랜잭션 안에서 부르고 커밋한다 (검색 색인은 하지 않는다)
-	private List<RaceCourseDocument> refresh(LocalDateTime now) {
-		return transactionTemplate.execute(tx -> raceSaleStatusUseCase.refresh(now)).documents();
+	// 원하는 배치 시각으로 판매 상태를 바꾼다. ProductFacade처럼 트랜잭션 안에서 부르고 커밋한다 (Kafka 아웃박스·동기화 이벤트는 남기지 않는다)
+	private List<RaceChangedEvent> refresh(LocalDateTime now) {
+		return transactionTemplate.execute(tx -> raceSaleStatusUseCase.refresh(now)).raceChanges();
 	}
 
 	// 기본 종목(10K) 옆에 붙이는 두 번째 종목

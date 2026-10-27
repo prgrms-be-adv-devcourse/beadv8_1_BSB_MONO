@@ -16,7 +16,6 @@ import org.springframework.data.elasticsearch.annotations.MultiField;
 import org.springframework.data.elasticsearch.annotations.Setting;
 
 import com.bukang.common.shared.race.domain.RaceSaleStatus;
-import com.bukang.product.domain.CourseStatus;
 import com.bukang.product.domain.CourseSurface;
 import com.bukang.product.domain.CourseType;
 import com.bukang.product.domain.Race;
@@ -28,7 +27,7 @@ import lombok.NoArgsConstructor;
 /**
  * 대회 검색 문서. 종목 1개 = 문서 1개이고, 대회 정보는 종목 문서마다 복사해 넣는다.
  * 대회 목록은 raceId로 묶어(collapse) 보여 주고, 연관검색어는 raceTitle(대회)과 courseLabel(종목)을 나눠 찾는다.
- * 남은 정원처럼 자주 바뀌는 값은 넣지 않고 DB에서 읽는다.
+ * 남은 정원·종목 상태(접수 중·정원 마감)처럼 자주 바뀌는 값은 넣지 않고 DB에서 읽는다.
  * 분석기·동의어는 race-settings.json에 있다. 동의어는 검색할 때만 적용한다 (searchAnalyzer).
  */
 @Getter
@@ -124,9 +123,6 @@ public class RaceCourseDocument extends BaseDocument {
 	@Field(type = FieldType.Keyword)
 	private RaceSaleStatus saleStatus;
 
-	@Field(type = FieldType.Keyword)
-	private CourseStatus courseStatus;
-
 	@Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second_millis)
 	private LocalDateTime raceDate;
 
@@ -175,7 +171,6 @@ public class RaceCourseDocument extends BaseDocument {
 		this.courseType = course.getCourseType();
 		this.surface = course.getSurface();
 		this.saleStatus = race.getSaleStatus();
-		this.courseStatus = course.getStatus();
 		this.raceDate = race.getRaceDate();
 		this.applicationCloseAt = race.getApplicationCloseAt();
 		this.saleOpenDate = race.getSaleOpenDate();

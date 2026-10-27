@@ -6,19 +6,16 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.shared.kafka.KafkaTopics;
 import com.bukang.common.shared.seller.event.SellerChangedEvent;
 import com.bukang.product.domain.HoldReleaseReason;
 import com.bukang.product.domain.ProductMember;
 import com.bukang.product.domain.ProductSeller;
-import com.bukang.product.domain.document.RaceCourseDocument;
 import com.bukang.product.dto.HoldRequestDto;
 import com.bukang.product.dto.HoldResultDto;
 import com.bukang.product.dto.HoldSellResult;
@@ -31,12 +28,9 @@ import com.bukang.product.dto.RaceScheduleDto;
 import com.bukang.product.dto.RaceSearchCondition;
 import com.bukang.product.dto.RaceSuggestionDto;
 import com.bukang.product.dto.SellerRaceDto;
-import com.bukang.product.out.RaceCourseDocumentRepository;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -52,9 +46,10 @@ public class ProductFacade {
 	private final RaceHoldUseCase raceHoldUseCase;
 	private final RaceCancelUseCase raceCancelUseCase;
 	private final TransactionTemplate transactionTemplate;
-	private final RaceCourseDocumentRepository raceCourseDocumentRepository;
-	private final KafkaTemplate<String, String> kafkaTemplate;
-	private final JsonConverter jsonConverter;
+	private final ProductOutboxKafkaAppendUseCase productOutboxKafkaAppendUseCase;
+	private final ProductOutboxKafkaRelayUseCase productOutboxKafkaRelayUseCase;
+	private final RaceDocumentSyncAppendUseCase raceDocumentSyncAppendUseCase;
+	private final RaceDocumentSyncProcessUseCase raceDocumentSyncProcessUseCase;
 
 	@Transactional
 	public ProductMember syncMember(int id, LocalDateTime createDate, LocalDateTime modifyDate, String nickname) {
@@ -66,8 +61,9 @@ public class ProductFacade {
 		return productSyncSellerUseCase.syncSeller(event);
 	}
 
-	// 대회 저장(등록·수정)은 DB에 커밋한 뒤에 검색 색인과 파일 연결·대회 변경·종목 변경 메시지 발행을 한다
-	// 롤백된 저장을 색인하거나, 롤백된 대회에 파일을 연결하지 않기 위해서다
+	// 대회 저장(등록·수정)은 파일 연결·대회 변경·종목 변경 메시지(Kafka 아웃박스)와 검색 문서 동기화 이벤트를 같은 트랜잭션에서 남긴다
+	// 저장이 롤백되면 두 행도 남지 않으므로 롤백된 대회에 파일을 연결하거나 문서를 바꾸지 않고, 커밋되면 반드시 남는다
+	// (보내는 일은 ProductOutboxKafkaRelayScheduler, 문서를 맞추는 일은 RaceDocumentSyncScheduler가 한다)
 	// NOT_SUPPORTED: 이 메서드는 트랜잭션 없이 실행한다 (클래스에 붙은 readOnly 트랜잭션을 쓰지 않는다)
 	// transactionTemplate.execute(): 넘긴 람다만 새 트랜잭션으로 실행하고, execute()가 값을 돌려주기 전에 커밋한다
 	// 그래서 다음 줄로 넘어온 시점에는 저장이 이미 커밋되어 있고, 저장이 실패하면 예외가 나서 다음 줄로 오지 않는다
@@ -80,8 +76,12 @@ public class ProductFacade {
 		}
 		RaceSaveResult result;
 		try {
-			result = transactionTemplate.execute(status ->
-				raceRegisterUseCase.register(memberId, idempotencyKey, request, LocalDateTime.now()));
+			result = transactionTemplate.execute(status -> {
+				RaceSaveResult saved = raceRegisterUseCase.register(memberId, idempotencyKey, request,
+					LocalDateTime.now());
+				appendRaceSaved(saved);
+				return saved;
+			});
 		} catch (DataIntegrityViolationException exception) {
 			// 같은 키로 거의 동시에 보내 늦은 쪽이 유니크 제약(uk_race_idempotency)에 걸렸다
 			// 늦은 쪽 트랜잭션은 롤백되었으므로, 먼저 등록된 대회를 새 트랜잭션에서 읽어 돌려준다 (자리 확보 holdSeat와 같은 방식)
@@ -89,10 +89,6 @@ public class ProductFacade {
 			RaceSaveDto first = findRegisteredRace(memberId, idempotencyKey).orElseThrow(() -> exception);
 			return RaceRegisterResult.existing(first);
 		}
-		indexRaceCourses(result);
-		publishFileLink(result);
-		publishRaceChanged(result);
-		publishRaceCourseChanged(result);
 		return RaceRegisterResult.created(result.dto());
 	}
 
@@ -102,23 +98,26 @@ public class ProductFacade {
 
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public RaceSaveDto updateRace(int memberId, int raceId, RaceSaveRequestDto request) {
-		RaceSaveResult result = transactionTemplate.execute(status ->
-			raceUpdateUseCase.update(memberId, raceId, request));
-		indexRaceCourses(result);
-		publishFileLink(result);
-		publishRaceChanged(result);
-		publishRaceCourseChanged(result);
+		RaceSaveResult result = transactionTemplate.execute(status -> {
+			RaceSaveResult saved = raceUpdateUseCase.update(memberId, raceId, request);
+			appendRaceSaved(saved);
+			return saved;
+		});
 		return result.dto();
 	}
 
-	// 판매자가 대회를 취소한다. 커밋한 뒤 검색 문서를 다시 색인하고(공개 목록에서 빠짐), 주문·대기열 서비스에 취소를 알린다
+	// 판매자가 대회를 취소한다. 주문·대기열 서비스에 보낼 취소 메시지와 검색 문서 동기화 이벤트(공개 목록에서 빠짐)를
+	// 같은 트랜잭션에서 남긴다
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	public RaceSaveDto cancelRace(int memberId, int raceId) {
-		RaceCancelResult result = transactionTemplate.execute(status ->
-			raceCancelUseCase.cancel(memberId, raceId, LocalDateTime.now()));
-		indexRaceCourses(result.saved());
-		publish(KafkaTopics.ORDER_RACE_CANCEL, String.valueOf(raceId), result.cancelEvent(), "대회 취소");
-		publishRaceChanged(result.saved());
+		RaceCancelResult result = transactionTemplate.execute(status -> {
+			RaceCancelResult canceled = raceCancelUseCase.cancel(memberId, raceId, LocalDateTime.now());
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.ORDER_RACE_CANCEL, raceId,
+				canceled.cancelEvent());
+			appendRaceChanged(canceled.saved());
+			raceDocumentSyncAppendUseCase.append(raceId);
+			return canceled;
+		});
 		return result.saved().dto();
 	}
 
@@ -181,75 +180,58 @@ public class ProductFacade {
 		return raceScheduleQueryUseCase.findByRaceDate(from, to);
 	}
 
-	// 시각이 지난 대회의 판매 상태를 바꾸고(커밋), 바뀐 대회의 검색 문서를 다시 색인하고 대기열에 대회 변경 메시지를 보낸다
-	// 바꾼 종목 문서 수를 돌려준다
-	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	// 시각이 지난 대회의 판매 상태를 바꾸고, 바뀐 대회마다 대기열에 보낼 대회 변경 메시지와 검색 문서 동기화 이벤트를 남긴다
+	// 상태가 바뀐 대회 수를 돌려준다
+	@Transactional
 	public int refreshSaleStatuses() {
-		RaceSaleStatusResult result = transactionTemplate.execute(status ->
-			raceSaleStatusUseCase.refresh(LocalDateTime.now()));
-		List<RaceCourseDocument> documents = result.documents();
-		if (!documents.isEmpty()) {
-			try {
-				raceCourseDocumentRepository.saveAll(documents);
-			} catch (RuntimeException exception) {
-				log.error("판매 상태가 바뀐 대회의 검색 문서를 색인하지 못했습니다. 다시 색인해야 합니다. 문서 수={}",
-					documents.size(), exception);
-			}
-		}
-		result.raceChanges().forEach(event ->
-			publish(KafkaTopics.RACE_CHANGED, String.valueOf(event.raceId()), event, "대회 변경"));
-		return documents.size();
+		RaceSaleStatusResult result = raceSaleStatusUseCase.refresh(LocalDateTime.now());
+		result.raceChanges().forEach(event -> {
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, event.raceId(), event);
+			raceDocumentSyncAppendUseCase.append(event.raceId());
+		});
+		return result.raceChanges().size();
 	}
 
-	// ES 검색 문서(race_courses)를 맞춘다
-	// 이미 커밋된 뒤라 실패해도 대회를 되돌릴 수 없으므로, 예외를 잡아 에러 로그만 남긴다 (나중에 다시 색인한다)
-	// 잡지 않으면 저장은 됐는데 응답이 실패(500)로 나간다
-	private void indexRaceCourses(RaceSaveResult result) {
-		try {
-			raceCourseDocumentRepository.saveAll(result.documents());
-			if (!result.deletedDocumentIds().isEmpty()) {
-				raceCourseDocumentRepository.deleteAllById(result.deletedDocumentIds());
-			}
-		} catch (RuntimeException exception) {
-			log.error("대회 검색 문서를 색인하지 못했습니다. 다시 색인해야 합니다. raceId={}", result.raceId(), exception);
-		}
+	// 아웃박스의 미발행 메시지를 Kafka로 보낸다 (ProductOutboxKafkaRelayScheduler가 1초마다 부른다). 보낸 건수를 돌려준다
+	@Transactional
+	public int relayKafkaOutbox() {
+		return productOutboxKafkaRelayUseCase.relay(LocalDateTime.now());
 	}
 
-	// file-service에 이미지 연결 메시지를 보낸다 (race.filelink.requested)
-	// 연결되지 않은 파일은 하루 뒤 file-service 정리 배치가 지우므로, 보내지 못했으면 그 전에 로그의 메시지를 다시 보내야 한다
-	private void publishFileLink(RaceSaveResult result) {
-		publish(KafkaTopics.RACE_FILE_LINK_REQUESTED, String.valueOf(result.raceId()), result.fileLink(), "파일 연결");
+	// 미처리 동기화 이벤트를 처리해 대회 검색 문서를 DB에 맞춘다 (RaceDocumentSyncScheduler가 1초마다 부른다)
+	// 문서를 맞춘 대회 수를 돌려준다
+	@Transactional
+	public int syncRaceDocuments() {
+		return raceDocumentSyncProcessUseCase.process(LocalDateTime.now());
 	}
 
-	// 대기열 서비스에 대회 변경 메시지를 보낸다 (queuing.race.changed). 대회 칸이 바뀌지 않은 수정이면 보내지 않는다
-	// 보내지 못하면 대기열 복제본이 옛 일정·상태로 남으므로 로그의 메시지를 다시 보내야 한다
-	private void publishRaceChanged(RaceSaveResult result) {
+	// 대회 저장 메시지와 검색 문서 동기화 이벤트를 남긴다 (대회 저장 트랜잭션 안에서 부른다)
+	private void appendRaceSaved(RaceSaveResult result) {
+		appendFileLink(result);
+		appendRaceChanged(result);
+		appendRaceCourseChanged(result);
+		raceDocumentSyncAppendUseCase.append(result.raceId());
+	}
+
+	// file-service에 보낼 이미지 연결 메시지 (race.filelink.requested)
+	// 연결되지 않은 파일은 하루 뒤 file-service 정리 배치가 지우므로, 메시지가 SEND_FAILED로 남으면 그 전에 다시 보내야 한다
+	private void appendFileLink(RaceSaveResult result) {
+		productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_FILE_LINK_REQUESTED, result.raceId(),
+			result.fileLink());
+	}
+
+	// 대기열 서비스에 보낼 대회 변경 메시지 (queuing.race.changed). 대회 칸이 바뀌지 않은 수정이면 남기지 않는다
+	private void appendRaceChanged(RaceSaveResult result) {
 		if (result.raceChanged() != null) {
-			publish(KafkaTopics.RACE_CHANGED, String.valueOf(result.raceId()), result.raceChanged(), "대회 변경");
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_CHANGED, result.raceId(),
+				result.raceChanged());
 		}
 	}
 
-	// 대기열 서비스에 종목 변경 메시지를 종목마다 1건씩 보낸다 (queuing.racecourse.changed). 보낼 종목이 없으면 보내지 않는다
-	// 보내지 못하면 대기열 복제본에 새 종목이 없거나 뺀 종목이 남으므로 로그의 메시지를 다시 보내야 한다
-	private void publishRaceCourseChanged(RaceSaveResult result) {
+	// 대기열 서비스에 보낼 종목 변경 메시지. 종목마다 1건씩 남긴다 (queuing.racecourse.changed)
+	// 같은 대회의 메시지가 순서대로 처리되도록 종목 메시지도 대회 ID를 key로 보낸다 (같은 key는 같은 파티션)
+	private void appendRaceCourseChanged(RaceSaveResult result) {
 		result.courseChanges().forEach(event ->
-			publish(KafkaTopics.RACE_COURSE_CHANGED, String.valueOf(result.raceId()), event, "종목 변경"));
-	}
-
-	// 커밋한 뒤 Kafka 메시지를 보낸다. 같은 대회의 메시지가 순서대로 처리되도록 대회 ID를 key로 보낸다 (같은 key는 같은 파티션)
-	// 보내지 못하면 이미 커밋된 저장을 되돌릴 수 없어 에러 로그에 메시지를 남긴다 (아웃박스 없이 로그로 남기기로 결정, 10/13)
-	private void publish(String topic, String key, Object event, String name) {
-		String payload = jsonConverter.toJson(event);
-		try {
-			kafkaTemplate.send(topic, key, payload)
-				.whenComplete((sendResult, exception) -> {
-					if (exception != null) {
-						log.error("{} 메시지를 보내지 못했습니다. key={}, payload={}", name, key, payload, exception);
-					}
-				});
-		} catch (RuntimeException exception) {
-			// 브로커에 연결하지 못하면 send()가 기다리다(max.block.ms, 기본 60초) 예외를 던진다
-			log.error("{} 메시지를 보내지 못했습니다. key={}, payload={}", name, key, payload, exception);
-		}
+			productOutboxKafkaAppendUseCase.appendRaceEvent(KafkaTopics.RACE_COURSE_CHANGED, result.raceId(), event));
 	}
 }
