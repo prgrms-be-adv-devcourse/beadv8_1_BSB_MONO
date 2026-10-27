@@ -20,3 +20,6 @@
 .claude/skills/karpathy-guidelines
 .claude/output-styles/
 .claude/settings.local.json
+
+# 팀원에게 보내는 전달문 (개인 작성물)
+/handoff/
