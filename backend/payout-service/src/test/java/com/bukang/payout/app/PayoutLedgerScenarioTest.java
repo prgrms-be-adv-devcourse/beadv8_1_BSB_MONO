@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import com.bukang.payout.app.PayoutGroupCreator.PayoutGroup;
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutAccount;
+import com.bukang.payout.domain.PayoutHold;
 import com.bukang.payout.domain.PayoutItem;
 import com.bukang.payout.domain.PayoutRecordType;
 import com.bukang.payout.domain.PayoutRecovery;
@@ -149,6 +151,14 @@ class PayoutLedgerScenarioTest {
 		return paid + deposited;
 	}
 
+	// 회수마다 (참가권, 완료 방식, 완료한 회원)
+	private void assertCompletions(Tuple... expected) {
+		entityManager.flush();
+		assertThat(payoutRecoveryRepository.findAll())
+			.extracting(PayoutRecovery::getOrderItemId, PayoutRecovery::getCompletion, PayoutRecovery::getCompletedBy)
+			.containsExactlyInAnyOrder(expected);
+	}
+
 	private void assertEveryPayoutLineSumMatches() {
 		entityManager.flush();
 		entityManager.clear();
@@ -231,6 +241,11 @@ class PayoutLedgerScenarioTest {
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isZero();
 		assertThat(payoutRecoveryRepository.findById(r110.getId()).orElseThrow().getCompletion())
 			.isEqualTo(PayoutRecoveryCompletion.OFFSET);
+		// 108 · 109는 관리자가 입금을 확인했고, 110은 최종 정산 내역에서 빼서 갚을 돈이 0이 되어 시스템이 상계로 완료
+		assertCompletions(
+			tuple(108, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(109, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(110, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
 		pay(FINAL_PAY_DATE);
 		assertThat(sellerReceived()).isEqualTo(330_750L);
 		assertEveryPayoutLineSumMatches();
@@ -244,6 +259,7 @@ class PayoutLedgerScenarioTest {
 
 		assertThat(r108.getStatus()).isEqualTo(PayoutRecoveryStatus.COMPLETED);
 		assertThat(r108.getCompletion()).isEqualTo(PayoutRecoveryCompletion.OFFSET);
+		assertThat(r108.getCompletedBy()).isEqualTo(PayoutHold.SYSTEM_MEMBER_ID);
 		assertThat(lineSum(payout(PayoutStage.FIRST))).isEqualTo(180_000L);
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isZero();
 
@@ -286,6 +302,23 @@ class PayoutLedgerScenarioTest {
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isZero();
 		assertThat(payoutRecoveryRepository.findAll())
 			.allSatisfy(recovery -> assertThat(recovery.getStatus()).isEqualTo(PayoutRecoveryStatus.COMPLETED));
+		// 103~107은 20,000씩 입금, 108은 남은 5,500을 입금해 갚을 돈이 0이 된다
+		// 그때 남은 109 · 110은 최종 정산 내역에서 상계로 갚은 몫이라 입금 없이 상계로 함께 완료
+		assertCompletions(
+			tuple(103, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(104, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(105, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(106, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(107, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(108, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(109, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID),
+			tuple(110, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
+		assertThat(payoutItemRepository.findAll())
+			.filteredOn(item -> item.getRecordType() == PayoutRecordType.RECOVERY_RECEIVED)
+			.extracting(item -> item.getRecovery().getOrderItemId(), PayoutItem::getAmount)
+			.containsExactlyInAnyOrder(
+				tuple(103, -20_000L), tuple(104, -20_000L), tuple(105, -20_000L), tuple(106, -20_000L),
+				tuple(107, -20_000L), tuple(108, -5_500L));
 		assertThat(sellerReceived()).isEqualTo(94_500L);
 		assertEveryPayoutLineSumMatches();
 	}
@@ -304,6 +337,7 @@ class PayoutLedgerScenarioTest {
 
 		recoveryUseCase.complete(recovery.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 5, 10, 0));
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isZero();
+		assertCompletions(tuple(null, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID));
 		assertThat(sellerReceived()).isZero();
 		assertThat(payoutRepository.findFirstBySellerIdAndRaceIdAndPayoutStageOrderByIdAsc(SELLER_ID, RACE_ID,
 			PayoutStage.FINAL)).isEmpty();
