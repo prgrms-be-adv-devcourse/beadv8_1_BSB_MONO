@@ -324,6 +324,32 @@ class PayoutLedgerScenarioTest {
 	}
 
 	@Test
+	@DisplayName("갚을 돈이 0 아래일 때 입금을 확인하면 입금 줄 없이 그 회수를 끝내고, 남은 요청 중인 회수도 상계로 완료한다")
+	void depositWhenReceivableBelowZero() {
+		createFirst();
+		pay(FIRST_PAY_DATE);
+		PayoutRecovery r108 = requestRecovery(108, LocalDateTime.of(2026, 11, 26, 10, 0));
+		requestRecovery(109, LocalDateTime.of(2026, 11, 27, 10, 0));
+		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(40_000L);
+		// 상계와 입금이 같은 잔고를 동시에 읽어 두 번 뺀 상태를 원장 줄로 직접 만든다 (동시 실행은 이 테스트로 재현하지 않는다)
+		payoutItemRepository.save(
+			PayoutItem.ofRecovery(r108, PayoutRecordType.RECOVERY_RECEIVED, null, null, -60_000L));
+		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(-20_000L);
+
+		recoveryUseCase.complete(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
+
+		// 받을 돈이 없으므로 입금액은 0 이하라 줄을 쓰지 않고, 잔고는 그대로 −20,000
+		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(-20_000L);
+		assertThat(payoutItemRepository.findAll())
+			.filteredOn(item -> item.getRecordType() == PayoutRecordType.RECOVERY_RECEIVED)
+			.extracting(PayoutItem::getAmount)
+			.containsExactly(-60_000L);
+		assertCompletions(
+			tuple(108, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(109, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
+	}
+
+	@Test
 	@DisplayName("대회 취소 (1차 지급 뒤): 회수 200,000, 요청 뒤 ADVANCE 0 · RECEIVABLE 200,000, 입금 뒤 0, 최종 없음")
 	void raceCanceledAfterFirstPay() {
 		createFirst();
