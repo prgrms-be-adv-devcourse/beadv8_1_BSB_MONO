@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.shared.member.web.MemberIdHeader;
-import com.bukang.payout.app.PayoutSellerIdResolver;
+import com.bukang.payout.app.PayoutSellerVerifyUseCase;
 import com.bukang.payout.app.PayoutSellerQueryUseCase;
 import com.bukang.payout.domain.PayoutItemPaging;
 import com.bukang.payout.dto.PageDto;
@@ -39,7 +39,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 판매자의 정산 조회: 요약, 정산 내역, 건별 정산, 지급보류 내역
  * 회원 ID(X-Member-Id)를 회원 서비스에 물어 판매자 ID(판매자 신청서 ID)로 바꾸고, 그 판매자의 기록만 돌려준다.
- * 두 값은 다른 번호라 그대로 쓰면 남의 정산이 보인다. 승인된 판매자가 아니면 403, 탈퇴한 회원은 404다 (PayoutSellerIdResolver)
+ * 두 값은 다른 번호라 그대로 쓰면 남의 정산이 보인다. 승인된 판매자가 아니면 403, 탈퇴한 회원은 404다 (PayoutSellerVerifyUseCase)
  */
 @Tag(name = "PayoutSeller", description = "정산 요약, 정산 내역, 건별 정산, 지급보류 내역 조회 API (판매자)")
 @RestController
@@ -50,7 +50,7 @@ public class ApiV1PayoutSellerController {
 	private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
 	private final PayoutSellerQueryUseCase payoutSellerQueryUseCase;
-	private final PayoutSellerIdResolver sellerIdResolver;
+	private final PayoutSellerVerifyUseCase sellerVerifyUseCase;
 
 	@GetMapping("/summary")
 	@Operation(summary = "정산 요약 조회",
@@ -81,7 +81,7 @@ public class ApiV1PayoutSellerController {
 		@Parameter(description = "판매자의 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
 		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId
 	) {
-		int sellerId = sellerIdResolver.sellerIdOf(memberId);
+		int sellerId = sellerVerifyUseCase.verify(memberId);
 		PayoutSummaryDto summary = payoutSellerQueryUseCase.summary(sellerId, LocalDate.now(ZONE));
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "정산 요약을 조회했습니다.", summary));
 	}
@@ -123,7 +123,7 @@ public class ApiV1PayoutSellerController {
 		@Parameter(description = "조회 끝 정산 월 (yyyy-MM, 포함)", example = "2026-10")
 		@RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth toMonth
 	) {
-		int sellerId = sellerIdResolver.sellerIdOf(memberId);
+		int sellerId = sellerVerifyUseCase.verify(memberId);
 		List<PayoutDto> payouts = payoutSellerQueryUseCase.payouts(sellerId, fromMonth, toMonth);
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "정산 내역을 조회했습니다.", payouts));
 	}
@@ -172,7 +172,7 @@ public class ApiV1PayoutSellerController {
 		@Parameter(description = "페이지 크기 (1 ~ 100)", example = "50")
 		@RequestParam(defaultValue = "" + PayoutItemPaging.DEFAULT_SIZE) int size
 	) {
-		int sellerId = sellerIdResolver.sellerIdOf(memberId);
+		int sellerId = sellerVerifyUseCase.verify(memberId);
 		PageDto<PayoutItemDto> items = payoutSellerQueryUseCase.items(sellerId, from, to, page, size);
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "건별 정산을 조회했습니다.", items));
 	}
@@ -214,7 +214,7 @@ public class ApiV1PayoutSellerController {
 		@Parameter(description = "조회 끝 보류일 (yyyy-MM-dd, 포함)", example = "2026-10-14")
 		@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
 	) {
-		int sellerId = sellerIdResolver.sellerIdOf(memberId);
+		int sellerId = sellerVerifyUseCase.verify(memberId);
 		List<SellerPayoutHoldDto> holds = payoutSellerQueryUseCase.holds(sellerId, from, to);
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "지급보류 내역을 조회했습니다.", holds));
 	}
