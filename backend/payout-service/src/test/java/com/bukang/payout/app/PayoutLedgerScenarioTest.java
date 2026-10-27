@@ -88,7 +88,7 @@ class PayoutLedgerScenarioTest {
 		creator = new PayoutGroupCreator(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
 		payUseCase = new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
 		});
-		recoveryUseCase = new PayoutRecoveryUseCase(payoutRecoveryRepository, payoutItemRepository, ledgerUseCase);
+		recoveryUseCase = new PayoutRecoveryUseCase(ledgerUseCase);
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, ledgerUseCase);
 	}
 

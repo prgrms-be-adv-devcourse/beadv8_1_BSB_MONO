@@ -19,6 +19,7 @@ import com.bukang.payout.domain.PayoutStage;
 import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.domain.TwoStagePayoutCalculator;
 import com.bukang.payout.domain.exception.PayoutRecoveryConflictException;
+import com.bukang.payout.domain.exception.PayoutRecoveryNotFoundException;
 import com.bukang.payout.out.PayoutItemRepository;
 import com.bukang.payout.out.PayoutRecoveryRepository;
 import com.bukang.payout.out.PayoutRepository;
@@ -31,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
  * 잔고는 판매자 × 대회 × 계정의 원장 줄을 더해 계산한다. 따로 저장하지 않는다
  * 상계는 갚을 돈(RECEIVABLE)을 같은 판매자 × 대회의 지급 전 정산 내역에서 바로 뺀다. 정산 내역 금액까지만 뺀다
  * 회수 요청 · 최종 생성 · 대회 취소가 같은 규칙을 쓰도록 한곳에 둔다
- * 일정 변경 환불 · 대회 취소의 회수 요청도 여기서 받는다 (payout.md 4-2 · 4-3, PRO-33 · PRO-34)
+ * 일정 변경 환불 · 대회 취소의 회수 요청과 관리자의 입금 확인도 여기서 받는다 (payout.md 4-2 · 4-3, PRO-33 · PRO-34)
  */
 @Slf4j
 @Service
@@ -109,6 +110,33 @@ public class PayoutLedgerUseCase {
 			new PayoutRecovery(sellerId, raceId, PayoutRecoveryReason.RACE_CANCELED, amount, now), null, null));
 	}
 
+	/**
+	 * 관리자의 회수 완료: 판매자의 입금을 확인하고 회수를 끝낸다 (payout.md 4-2, PRO-33)
+	 * 판매자 입금 요청 · 시스템 입금 확인 이슈가 생기기 전까지 쓰는 임시 경로다 (PRO-214)
+	 *
+	 * 입금액은 이 회수의 금액과 그 대회의 남은 갚을 돈 중 작은 쪽이다 (상계로 일부를 이미 갚았을 수 있다)
+	 * 입금으로 그 대회의 갚을 돈이 0이 되면, 남은 요청 중인 회수는 앞서 상계로 갚은 몫이므로 상계로 함께 완료한다
+	 * (상계로 못 다 갚은 회수들을 묶어 두었다가 다 갚으면 한 번에 끝내는 규칙. 여러 회수를 한 번에 입금받는 요청은 별도 이슈에서 만든다)
+	 */
+	@Transactional
+	public PayoutRecovery confirmDeposit(int recoveryId, int completedBy, LocalDateTime now) {
+		PayoutRecovery recovery = payoutRecoveryRepository.findByIdForUpdate(recoveryId)
+			.orElseThrow(PayoutRecoveryNotFoundException::new);
+		if (recovery.getStatus() == PayoutRecoveryStatus.COMPLETED) {
+			throw new PayoutRecoveryConflictException("이미 완료된 회수입니다.");
+		}
+		long receivable = balance(recovery.getSellerId(), recovery.getRaceId(), PayoutAccount.RECEIVABLE);
+		long deposit = Math.min(recovery.getAmount(), receivable);
+		if (deposit > 0) {
+			payoutItemRepository.save(
+				PayoutItem.ofRecovery(recovery, PayoutRecordType.RECOVERY_RECEIVED, null, null, -deposit));
+		}
+		// 이 회수를 먼저 입금으로 완료해야 아래에서 상계 완료 대상(요청 중)에 들지 않는다
+		recovery.complete(completedBy, now);
+		completeRequestedIfCleared(recovery.getSellerId(), recovery.getRaceId(), now);
+		return recovery;
+	}
+
 	// JPQL 합계 쿼리 전에 Hibernate가 쌓인 원장 줄을 먼저 내보내므로(자동 flush) 같은 트랜잭션에서 쓴 줄도 더해진다
 	public long balance(int sellerId, int raceId, PayoutAccount account) {
 		return payoutItemRepository.sumBalance(sellerId, raceId, account);
@@ -133,7 +161,13 @@ public class PayoutLedgerUseCase {
 				break;
 			}
 		}
-		if (receivable > 0) {
+		return completeRequestedIfCleared(sellerId, raceId, now);
+	}
+
+	// 그 대회의 갚을 돈이 0이면 요청 중인 회수는 상계로 갚은 몫이므로 상계로 완료한다 (상계 · 입금이 함께 쓰는 규칙)
+	// 남은 금액을 넘겨받지 않고 잔고를 다시 읽는다. 방금 쓴 상계 · 입금 줄도 자동 flush로 더해진다
+	private List<PayoutRecovery> completeRequestedIfCleared(int sellerId, int raceId, LocalDateTime now) {
+		if (balance(sellerId, raceId, PayoutAccount.RECEIVABLE) != 0) {
 			return List.of();
 		}
 		List<PayoutRecovery> requested = payoutRecoveryRepository.findBySellerIdAndRaceIdAndStatus(
