@@ -166,8 +166,9 @@ public class PayoutLedgerUseCase {
 
 	// 그 대회의 갚을 돈이 0이면 요청 중인 회수는 상계로 갚은 몫이므로 상계로 완료한다 (상계 · 입금이 함께 쓰는 규칙)
 	// 남은 금액을 넘겨받지 않고 잔고를 다시 읽는다. 방금 쓴 상계 · 입금 줄도 자동 flush로 더해진다
+	// 상계와 입금이 같은 잔고를 동시에 읽어 갚을 돈이 0 아래가 됐어도, 더 받을 돈이 없으므로 완료한다
 	private List<PayoutRecovery> completeRequestedIfCleared(int sellerId, int raceId, LocalDateTime now) {
-		if (balance(sellerId, raceId, PayoutAccount.RECEIVABLE) != 0) {
+		if (balance(sellerId, raceId, PayoutAccount.RECEIVABLE) > 0) {
 			return List.of();
 		}
 		List<PayoutRecovery> requested = payoutRecoveryRepository.findBySellerIdAndRaceIdAndStatus(
