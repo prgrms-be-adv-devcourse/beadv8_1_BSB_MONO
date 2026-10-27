@@ -159,6 +159,15 @@ class PayoutLedgerScenarioTest {
 			.containsExactlyInAnyOrder(expected);
 	}
 
+	// 최종 정산 내역에는 1차 정산금 차감 줄이 하나만 있고, 금액은 만들 때 남은 1차 정산금(ADVANCE 잔고)을 뺀 값이다
+	// 줄 순서는 보지 않는다
+	private void assertAdvanceOffset(Payout last, long expected) {
+		assertThat(last.getItems())
+			.filteredOn(item -> item.getRecordType() == PayoutRecordType.ADVANCE_OFFSET)
+			.extracting(PayoutItem::getAmount)
+			.containsExactly(expected);
+	}
+
 	private void assertEveryPayoutLineSumMatches() {
 		entityManager.flush();
 		entityManager.clear();
@@ -178,9 +187,22 @@ class PayoutLedgerScenarioTest {
 		Payout last = payout(PayoutStage.FINAL);
 		assertThat(lineSum(last)).isEqualTo(272_500L);
 		assertThat(last.getAdvanceDeductionAmount()).isEqualTo(200_000L);
+		assertAdvanceOffset(last, -200_000L);
 		assertThat(sellerReceived()).isEqualTo(472_500L);
 		assertThat(balance(PayoutAccount.ADVANCE)).isZero();
 		assertThat(balance(PayoutAccount.EARNING)).isEqualTo(472_500L);
+		assertEveryPayoutLineSumMatches();
+	}
+
+	@Test
+	@DisplayName("1차 없이 최종을 만들면 남은 1차 정산금이 0이라 1차 정산금 차감 줄도 0원으로 하나 남는다")
+	void finalWithoutFirst() {
+		createFinal(range(101, 110));
+
+		Payout last = payout(PayoutStage.FINAL);
+		assertThat(last.getAdvanceDeductionAmount()).isZero();
+		assertAdvanceOffset(last, 0L);
+		assertThat(lineSum(last)).isEqualTo(472_500L);
 		assertEveryPayoutLineSumMatches();
 	}
 
@@ -238,6 +260,9 @@ class PayoutLedgerScenarioTest {
 
 		Payout last = payout(PayoutStage.FINAL);
 		assertThat(lineSum(last)).isEqualTo(170_750L);
+		// 남은 1차 정산금 = 200,000 − 회수 요청 3건 × 20,000 = 140,000
+		assertThat(last.getAdvanceDeductionAmount()).isEqualTo(140_000L);
+		assertAdvanceOffset(last, -140_000L);
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isZero();
 		assertThat(payoutRecoveryRepository.findById(r110.getId()).orElseThrow().getCompletion())
 			.isEqualTo(PayoutRecoveryCompletion.OFFSET);
