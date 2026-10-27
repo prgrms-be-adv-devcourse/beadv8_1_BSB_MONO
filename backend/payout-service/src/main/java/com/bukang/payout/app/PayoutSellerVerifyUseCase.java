@@ -19,7 +19,8 @@ import lombok.RequiredArgsConstructor;
  * - 존재하지 않거나 탈퇴한 회원: 404
  * - 회원 서비스에 묻지 못함: 503 (SellerLookupPort가 던진다)
  *
- * 다른 서비스를 부르므로 DB 트랜잭션 밖에서 부른다. 승인된 판매자가 둘 이상인 경우는 아직 다루지 않는다 (회원 서비스의 가장 최근 신청)
+ * 다른 서비스를 부르므로 PayoutSellerFacade가 DB 트랜잭션 밖에서 조회 UseCase보다 먼저 부른다.
+ * 승인된 판매자가 둘 이상인 경우는 아직 다루지 않는다 (회원 서비스의 가장 최근 신청)
  */
 @Service
 @RequiredArgsConstructor

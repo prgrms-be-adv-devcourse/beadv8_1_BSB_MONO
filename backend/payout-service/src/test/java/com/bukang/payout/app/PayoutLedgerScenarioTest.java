@@ -78,7 +78,6 @@ class PayoutLedgerScenarioTest {
 	private PayoutLedgerUseCase ledgerUseCase;
 	private PayoutGroupCreator creator;
 	private PayoutPayUseCase payUseCase;
-	private PayoutRecoveryUseCase recoveryUseCase;
 	private PayoutRaceCancelUseCase raceCancelUseCase;
 
 	@BeforeEach
@@ -88,7 +87,6 @@ class PayoutLedgerScenarioTest {
 		creator = new PayoutGroupCreator(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
 		payUseCase = new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
 		});
-		recoveryUseCase = new PayoutRecoveryUseCase(ledgerUseCase);
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, ledgerUseCase);
 	}
 
@@ -254,8 +252,8 @@ class PayoutLedgerScenarioTest {
 		PayoutRecovery r110 = requestRecovery(110, LocalDateTime.of(2026, 11, 28, 10, 0));
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(60_000L);
 
-		recoveryUseCase.complete(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 11, 30, 10, 0));
-		recoveryUseCase.complete(r109.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
+		ledgerUseCase.confirmDeposit(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 11, 30, 10, 0));
+		ledgerUseCase.confirmDeposit(r109.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
 		createFinal(range(101, 107));
 
 		Payout last = payout(PayoutStage.FINAL);
@@ -320,7 +318,7 @@ class PayoutLedgerScenarioTest {
 			entityManager.clear();
 			if (payoutRecoveryRepository.findById(recovery.getId()).orElseThrow().getStatus()
 				== PayoutRecoveryStatus.REQUESTED) {
-				recoveryUseCase.complete(recovery.getId(), ADMIN_ID, LocalDateTime.of(2027, 1, 25, 10, 0));
+				ledgerUseCase.confirmDeposit(recovery.getId(), ADMIN_ID, LocalDateTime.of(2027, 1, 25, 10, 0));
 			}
 		}
 
@@ -361,7 +359,7 @@ class PayoutLedgerScenarioTest {
 			PayoutItem.ofRecovery(r108, PayoutRecordType.RECOVERY_RECEIVED, null, null, -60_000L));
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(-20_000L);
 
-		recoveryUseCase.complete(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
+		ledgerUseCase.confirmDeposit(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
 
 		// 받을 돈이 없으므로 입금액은 0 이하라 줄을 쓰지 않고, 잔고는 그대로 −20,000
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(-20_000L);
@@ -386,7 +384,7 @@ class PayoutLedgerScenarioTest {
 		PayoutRecovery recovery = payoutRecoveryRepository.findAll().getFirst();
 		assertThat(recovery.getAmount()).isEqualTo(200_000L);
 
-		recoveryUseCase.complete(recovery.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 5, 10, 0));
+		ledgerUseCase.confirmDeposit(recovery.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 5, 10, 0));
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isZero();
 		assertCompletions(tuple(null, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID));
 		assertThat(sellerReceived()).isZero();
