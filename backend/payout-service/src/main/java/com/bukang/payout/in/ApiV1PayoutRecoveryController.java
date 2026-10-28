@@ -12,8 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.shared.member.web.LoginMemberId;
-import com.bukang.payout.app.PayoutAdminVerifyUseCase;
-import com.bukang.payout.app.PayoutRecoveryUseCase;
+import com.bukang.payout.app.PayoutAdminFacade;
 import com.bukang.payout.dto.PayoutRecoveryDto;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 관리자의 회수 완료 (판매자 입금 확인)
  * 회원 ID는 게이트웨이가 토큰에서 꺼내 넣은 X-Member-Id 헤더를 믿는다.
- * 지급보류 API와 같이 UseCase보다 먼저 회원 서비스에 물어 관리자가 아니면 403으로 막는다 (PRO-265)
+ * 지급보류 API와 같이 PayoutAdminFacade가 먼저 회원 서비스에 물어 관리자가 아니면 403으로 막는다 (PRO-265)
  */
 @Tag(name = "PayoutRecovery", description = "회수 완료 API (관리자)")
 @RestController
@@ -39,8 +38,7 @@ public class ApiV1PayoutRecoveryController {
 	// 서버 시간대와 상관없이 한국 시간으로 남긴다 (지급보류 API와 같은 기준)
 	private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
-	private final PayoutAdminVerifyUseCase payoutAdminVerifyUseCase;
-	private final PayoutRecoveryUseCase payoutRecoveryUseCase;
+	private final PayoutAdminFacade payoutAdminFacade;
 
 	// 에러 응답은 GlobalExceptionHandler, PayoutExceptionHandler가 RsData(data: null) 형식으로 반환한다
 	@PostMapping("/recoveries/{recoveryId}/complete")
@@ -77,8 +75,7 @@ public class ApiV1PayoutRecoveryController {
 		@Parameter(description = "회수 ID", example = "1")
 		@PathVariable int recoveryId
 	) {
-		payoutAdminVerifyUseCase.verify(memberId);
-		PayoutRecoveryDto recovery = payoutRecoveryUseCase.complete(recoveryId, memberId, LocalDateTime.now(ZONE));
+		PayoutRecoveryDto recovery = payoutAdminFacade.completeRecovery(memberId, recoveryId, LocalDateTime.now(ZONE));
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "회수를 완료했습니다.", recovery));
 	}
 }

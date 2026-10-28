@@ -61,7 +61,7 @@ class PayoutPayUseCaseTest {
 	}
 
 	private PayoutPayUseCase useCase() {
-		return new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
+		return new PayoutPayUseCase(new PayoutPayStepUseCase(payoutRepository), transfer -> {
 			transfers.add(transfer);
 			cashService.accept(transfer);
 		});
@@ -70,7 +70,7 @@ class PayoutPayUseCaseTest {
 	// 9월분(2026-09)은 10/20, 10월분(2026-10)은 11/20이 지급 예정일이다
 	private Payout savePayout(int sellerId, YearMonth payoutMonth) {
 		LocalDateTime settledAt = payoutMonth.atDay(29).atTime(3, 0);
-		return payoutRepository.save(Payout.finalStage(sellerId, 10, "테스트 대회", payoutMonth, 0L, settledAt,
+		return payoutRepository.save(Payout.finalStage(sellerId, 10, "테스트 대회", payoutMonth, settledAt,
 			new BusinessDayCalendar()));
 	}
 
@@ -188,8 +188,9 @@ class PayoutPayUseCaseTest {
 	@DisplayName("대금이 상계로 0원이어도 수수료가 남으면 캐시 서비스에 보내 수수료를 옮기고 지급 완료한다")
 	void sendsFeeOnlyPayout() {
 		// 판매액 50,000 − 수수료 2,750 − 1차 정산금 차감 47,250 = 지급액 0원
-		Payout feeOnly = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 47_250L,
+		Payout feeOnly = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
 			LocalDateTime.of(2026, 10, 1, 3, 0), new BusinessDayCalendar());
+		feeOnly.deductAdvance(47_250L);
 		feeOnly.addItem(100, 50_000L, new BigDecimal("0.0550"), LocalDate.of(2026, 10, 1));
 		payoutRepository.save(feeOnly);
 
@@ -314,7 +315,7 @@ class PayoutPayUseCaseTest {
 	@DisplayName("다른 배치가 먼저 지급을 시작해 낙관적 락으로 부딪히면 그 건은 캐시 서비스를 부르지 않고 건너뛴다")
 	void skipsWhenAnotherRunStartedFirst() {
 		Payout payout = savePayoutWithSale(1);
-		PayoutPayStep conflicting = new PayoutPayStep(payoutRepository) {
+		PayoutPayStepUseCase conflicting = new PayoutPayStepUseCase(payoutRepository) {
 			@Override
 			public Start start(int payoutId, LocalDate today, LocalDateTime now) {
 				throw new ObjectOptimisticLockingFailureException(Payout.class, payoutId);

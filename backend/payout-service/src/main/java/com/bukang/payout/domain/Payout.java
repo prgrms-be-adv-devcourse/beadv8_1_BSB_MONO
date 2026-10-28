@@ -113,34 +113,28 @@ public class Payout extends BaseIdAndTime {
 	private List<PayoutStatusHistory> statusHistories = new ArrayList<>();
 
 	private Payout(int sellerId, int raceId, String raceName, PayoutStage payoutStage, YearMonth payoutMonth,
-		long advanceDeductionAmount, LocalDateTime settledAt, BusinessDayCalendar calendar) {
+		LocalDateTime settledAt, BusinessDayCalendar calendar) {
 		this.sellerId = sellerId;
 		this.raceId = raceId;
 		this.raceName = raceName;
 		this.payoutStage = payoutStage;
 		this.payoutMonth = payoutMonth.toString();
-		this.advanceDeductionAmount = advanceDeductionAmount;
 		this.settledAt = settledAt;
 		this.scheduledPayDate = payDayOf(payoutMonth.plusMonths(1), calendar);
 		// 정산 내역은 배치가 만든다
 		changeStatus(PayoutStatus.CALCULATED, PayoutHold.SYSTEM_MEMBER_ID, settledAt, null);
-		// 최종은 그때 남은 1차 정산금(ADVANCE 잔고)을 한 줄로 뺀다. 0원이어도 남겨 "뺄 1차 정산금이 없었다"를 기록한다 (PRO-214)
-		if (payoutStage == PayoutStage.FINAL) {
-			addLine(PayoutRecordType.ADVANCE_OFFSET, null, null, -advanceDeductionAmount, null, null);
-		}
 	}
 
 	// 1차 정산 내역: 정산 월은 환불 마감일의 달이다
 	public static Payout first(int sellerId, int raceId, String raceName, YearMonth payoutMonth,
 		LocalDateTime settledAt, BusinessDayCalendar calendar) {
-		return new Payout(sellerId, raceId, raceName, PayoutStage.FIRST, payoutMonth, 0L, settledAt, calendar);
+		return new Payout(sellerId, raceId, raceName, PayoutStage.FIRST, payoutMonth, settledAt, calendar);
 	}
 
-	// 최종 정산 내역: 정산 월은 대회일의 달이고, 1차 정산금 차감은 만들 때의 ADVANCE 잔고(1차 정산금 − 회수 요청액)다
+	// 최종 정산 내역: 정산 월은 대회일의 달이다. 1차 정산금 차감은 만든 뒤 deductAdvance로 쓴다
 	public static Payout finalStage(int sellerId, int raceId, String raceName, YearMonth payoutMonth,
-		long advanceDeductionAmount, LocalDateTime settledAt, BusinessDayCalendar calendar) {
-		return new Payout(sellerId, raceId, raceName, PayoutStage.FINAL, payoutMonth, advanceDeductionAmount,
-			settledAt, calendar);
+		LocalDateTime settledAt, BusinessDayCalendar calendar) {
+		return new Payout(sellerId, raceId, raceName, PayoutStage.FINAL, payoutMonth, settledAt, calendar);
 	}
 
 	// 바깥에서 remove, clear로 원장 줄을 바꾸지 못하도록 읽기 전용으로 내보낸다 (추가는 Payout의 메서드로만)
@@ -199,6 +193,25 @@ public class Payout extends BaseIdAndTime {
 	// 코스를 모를 때(테스트 · 샘플 데이터)
 	public PayoutItem addItem(int orderItemId, long price, BigDecimal feeRate, LocalDate targetDate) {
 		return addItem(orderItemId, null, price, feeRate, targetDate);
+	}
+
+	/**
+	 * 최종은 그때 남은 1차 정산금(ADVANCE 잔고)을 한 줄로 뺀다. 0원이어도 남겨 "뺄 1차 정산금이 없었다"를 기록한다 (PRO-214)
+	 * 1차 정산금 차감은 만들 때의 ADVANCE 잔고(1차 정산금 − 회수 요청액)다. 최종 정산 내역마다 한 번만 쓴다
+	 *
+	 * @param amount 남은 1차 정산금 (ADVANCE 잔고)
+	 */
+	public void deductAdvance(long amount) {
+		if (payoutStage != PayoutStage.FINAL) {
+			throw new IllegalStateException("1차 정산금 차감은 최종 정산에만 씁니다. payoutStage=%s".formatted(payoutStage));
+		}
+		boolean alreadyDeducted = items.stream()
+			.anyMatch(item -> item.getRecordType() == PayoutRecordType.ADVANCE_OFFSET);
+		if (alreadyDeducted) {
+			throw new IllegalStateException("1차 정산금 차감 줄은 하나만 씁니다. raceId=%d".formatted(raceId));
+		}
+		this.advanceDeductionAmount = amount;
+		addLine(PayoutRecordType.ADVANCE_OFFSET, null, null, -amount, null, null);
 	}
 
 	/**
