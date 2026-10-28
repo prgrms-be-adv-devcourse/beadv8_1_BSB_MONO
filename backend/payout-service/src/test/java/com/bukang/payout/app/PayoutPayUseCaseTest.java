@@ -61,7 +61,7 @@ class PayoutPayUseCaseTest {
 	}
 
 	private PayoutPayUseCase useCase() {
-		return new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
+		return new PayoutPayUseCase(new PayoutPayStepUseCase(payoutRepository), transfer -> {
 			transfers.add(transfer);
 			cashService.accept(transfer);
 		});
@@ -315,7 +315,7 @@ class PayoutPayUseCaseTest {
 	@DisplayName("다른 배치가 먼저 지급을 시작해 낙관적 락으로 부딪히면 그 건은 캐시 서비스를 부르지 않고 건너뛴다")
 	void skipsWhenAnotherRunStartedFirst() {
 		Payout payout = savePayoutWithSale(1);
-		PayoutPayStep conflicting = new PayoutPayStep(payoutRepository) {
+		PayoutPayStepUseCase conflicting = new PayoutPayStepUseCase(payoutRepository) {
 			@Override
 			public Start start(int payoutId, LocalDate today, LocalDateTime now) {
 				throw new ObjectOptimisticLockingFailureException(Payout.class, payoutId);

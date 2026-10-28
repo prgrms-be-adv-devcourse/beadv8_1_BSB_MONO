@@ -18,9 +18,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.bukang.payout.app.PayoutGroupCreator.CourseSale;
-import com.bukang.payout.app.PayoutGroupCreator.FirstGroup;
-import com.bukang.payout.app.PayoutGroupCreator.PayoutGroup;
+import com.bukang.payout.app.PayoutCreateStepUseCase.CourseSale;
+import com.bukang.payout.app.PayoutCreateStepUseCase.FinalPayoutSource;
+import com.bukang.payout.app.PayoutCreateStepUseCase.FirstPayoutSource;
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutAccount;
@@ -76,27 +76,25 @@ class PayoutLedgerScenarioTest {
 	private EntityManager entityManager;
 
 	private PayoutLedgerUseCase ledgerUseCase;
-	private PayoutGroupCreator creator;
+	private PayoutCreateStepUseCase creator;
 	private PayoutPayUseCase payUseCase;
-	private PayoutRecoveryUseCase recoveryUseCase;
 	private PayoutRaceCancelUseCase raceCancelUseCase;
 
 	@BeforeEach
 	void setUp() {
 		BusinessDayCalendar calendar = new BusinessDayCalendar();
 		ledgerUseCase = new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository);
-		creator = new PayoutGroupCreator(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
-		payUseCase = new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
+		creator = new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
+		payUseCase = new PayoutPayUseCase(new PayoutPayStepUseCase(payoutRepository), transfer -> {
 		});
-		recoveryUseCase = new PayoutRecoveryUseCase(ledgerUseCase);
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, ledgerUseCase);
 	}
 
-	private PayoutGroup group(int... orderItemIds) {
+	private FinalPayoutSource finalSource(int... orderItemIds) {
 		List<SoldEntry> entries = Arrays.stream(orderItemIds)
 			.mapToObj(id -> new SoldEntry(id, SELLER_ID, RACE_ID, RACE_ID, RACE_DATE, PRICE))
 			.toList();
-		return new PayoutGroup(SELLER_ID, RACE_ID, "대회 A", true, entries);
+		return new FinalPayoutSource(SELLER_ID, RACE_ID, "대회 A", true, entries);
 	}
 
 	private static int[] range(int from, int to) {
@@ -104,13 +102,13 @@ class PayoutLedgerScenarioTest {
 	}
 
 	private void createFirst() {
-		creator.createFirst(new FirstGroup(SELLER_ID, RACE_ID, "대회 A", true,
+		creator.createFirst(new FirstPayoutSource(SELLER_ID, RACE_ID, "대회 A", true,
 			List.of(new CourseSale(RACE_ID, PRICE * 10, 10))), REFUND_DEADLINE,
 			REFUND_DEADLINE.plusDays(1).atTime(3, 0));
 	}
 
 	private void createFinal(int... orderItemIds) {
-		creator.createFinal(group(orderItemIds), RACE_DATE, RACE_DATE.plusDays(1).atTime(3, 0));
+		creator.createFinal(finalSource(orderItemIds), RACE_DATE, RACE_DATE.plusDays(1).atTime(3, 0));
 	}
 
 	private void pay(LocalDate payDate) {
@@ -211,7 +209,7 @@ class PayoutLedgerScenarioTest {
 	void twoCourses() {
 		int course10k = 71;
 		int course5k = 72;
-		creator.createFirst(new FirstGroup(SELLER_ID, RACE_ID, "대회 A", true, List.of(
+		creator.createFirst(new FirstPayoutSource(SELLER_ID, RACE_ID, "대회 A", true, List.of(
 			new CourseSale(course10k, 50_000L * 6, 6),
 			new CourseSale(course5k, 30_000L * 4, 4))), REFUND_DEADLINE, REFUND_DEADLINE.plusDays(1).atTime(3, 0));
 		pay(FIRST_PAY_DATE);
@@ -222,7 +220,7 @@ class PayoutLedgerScenarioTest {
 		for (int id = 107; id <= 110; id++) {
 			entries.add(new SoldEntry(id, SELLER_ID, RACE_ID, course5k, RACE_DATE, 30_000L));
 		}
-		creator.createFinal(new PayoutGroup(SELLER_ID, RACE_ID, "대회 A", true, entries), RACE_DATE,
+		creator.createFinal(new FinalPayoutSource(SELLER_ID, RACE_ID, "대회 A", true, entries), RACE_DATE,
 			RACE_DATE.plusDays(1).atTime(3, 0));
 
 		// 10K 6장 × 20,000 + 5K 4장 × 12,000
@@ -254,8 +252,8 @@ class PayoutLedgerScenarioTest {
 		PayoutRecovery r110 = requestRecovery(110, LocalDateTime.of(2026, 11, 28, 10, 0));
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(60_000L);
 
-		recoveryUseCase.complete(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 11, 30, 10, 0));
-		recoveryUseCase.complete(r109.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
+		ledgerUseCase.confirmDeposit(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 11, 30, 10, 0));
+		ledgerUseCase.confirmDeposit(r109.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
 		createFinal(range(101, 107));
 
 		Payout last = payout(PayoutStage.FINAL);
@@ -320,7 +318,7 @@ class PayoutLedgerScenarioTest {
 			entityManager.clear();
 			if (payoutRecoveryRepository.findById(recovery.getId()).orElseThrow().getStatus()
 				== PayoutRecoveryStatus.REQUESTED) {
-				recoveryUseCase.complete(recovery.getId(), ADMIN_ID, LocalDateTime.of(2027, 1, 25, 10, 0));
+				ledgerUseCase.confirmDeposit(recovery.getId(), ADMIN_ID, LocalDateTime.of(2027, 1, 25, 10, 0));
 			}
 		}
 
@@ -361,7 +359,7 @@ class PayoutLedgerScenarioTest {
 			PayoutItem.ofRecovery(r108, PayoutRecordType.RECOVERY_RECEIVED, null, null, -60_000L));
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(-20_000L);
 
-		recoveryUseCase.complete(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
+		ledgerUseCase.confirmDeposit(r108.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 1, 10, 0));
 
 		// 받을 돈이 없으므로 입금액은 0 이하라 줄을 쓰지 않고, 잔고는 그대로 −20,000
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isEqualTo(-20_000L);
@@ -386,7 +384,7 @@ class PayoutLedgerScenarioTest {
 		PayoutRecovery recovery = payoutRecoveryRepository.findAll().getFirst();
 		assertThat(recovery.getAmount()).isEqualTo(200_000L);
 
-		recoveryUseCase.complete(recovery.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 5, 10, 0));
+		ledgerUseCase.confirmDeposit(recovery.getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 5, 10, 0));
 		assertThat(balance(PayoutAccount.RECEIVABLE)).isZero();
 		assertCompletions(tuple(null, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID));
 		assertThat(sellerReceived()).isZero();

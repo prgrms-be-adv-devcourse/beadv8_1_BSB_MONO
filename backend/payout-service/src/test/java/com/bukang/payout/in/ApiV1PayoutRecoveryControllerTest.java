@@ -34,6 +34,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.bukang.payout.domain.PayoutRecovery;
 import com.bukang.payout.domain.PayoutRecoveryReason;
 import com.bukang.payout.domain.PayoutRecoveryStatus;
+import com.bukang.payout.domain.exception.PayoutMemberNotFoundException;
+import com.bukang.payout.domain.exception.PayoutMemberUnavailableException;
 import com.bukang.payout.out.MemberAdminPort;
 import com.bukang.payout.out.PayoutRecoveryRepository;
 import com.bukang.payout.support.RestDocsConfig;
@@ -172,5 +174,43 @@ class ApiV1PayoutRecoveryControllerTest {
 			.andExpect(jsonPath("$.message").value("회원 ID가 올바르지 않습니다."));
 		assertThat(payoutRecoveryRepository.findById(recovery.getId()).orElseThrow().getStatus())
 			.isEqualTo(PayoutRecoveryStatus.REQUESTED);
+	}
+
+	@Test
+	@DisplayName("일반 회원이 없는 회수를 완료해도 404가 아니라 403이다 (관리자 확인이 먼저다)")
+	void nonAdminGetsForbiddenBeforeNotFound() throws Exception {
+		mockMvc.perform(post("/api/v1/payout/recoveries/{recoveryId}/complete", 9999)
+				.header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("PAYOUT_NOT_ADMIN"));
+	}
+
+	@Test
+	@DisplayName("헤더의 회원이 없거나 탈퇴했으면 404 PAYOUT_MEMBER_NOT_FOUND이고, 회수는 그대로다")
+	void unknownMemberIsNotFound() throws Exception {
+		PayoutRecovery recovery = saveRecovery();
+		given(memberAdminPort.isAdmin(MEMBER_ID)).willThrow(new PayoutMemberNotFoundException());
+
+		mockMvc.perform(post("/api/v1/payout/recoveries/{recoveryId}/complete", recovery.getId())
+				.header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("PAYOUT_MEMBER_NOT_FOUND"));
+		assertThat(payoutRecoveryRepository.findById(recovery.getId()).orElseThrow().getStatus())
+			.isEqualTo(PayoutRecoveryStatus.REQUESTED);
+	}
+
+	@Test
+	@DisplayName("회원 서비스가 응답하지 않으면 503 PAYOUT_MEMBER_UNAVAILABLE이고, 관리자여도 회수는 그대로다")
+	void memberServiceUnavailable() throws Exception {
+		PayoutRecovery recovery = saveRecovery();
+		given(memberAdminPort.isAdmin(ADMIN_ID))
+			.willThrow(new PayoutMemberUnavailableException(new IllegalStateException("타임아웃")));
+
+		complete(recovery.getId())
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.code").value("PAYOUT_MEMBER_UNAVAILABLE"));
+		PayoutRecovery reloaded = payoutRecoveryRepository.findById(recovery.getId()).orElseThrow();
+		assertThat(reloaded.getStatus()).isEqualTo(PayoutRecoveryStatus.REQUESTED);
+		assertThat(reloaded.getCompletedBy()).isNull();
 	}
 }

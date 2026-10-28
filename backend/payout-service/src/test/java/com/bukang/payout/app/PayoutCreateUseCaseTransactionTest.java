@@ -34,11 +34,11 @@ import com.bukang.payout.support.StubRacePort;
 
 /**
  * 정산 대상일 배치가 판매자 × 대회 정산 내역마다 트랜잭션을 나누는지 확인한다 (PRO-60)
- * 테스트 전체를 감싸는 트랜잭션이 있으면 정산 내역별 커밋 · 롤백이 보이지 않으므로 끄고, 진짜 프록시(PayoutGroupCreator 빈)를 쓴다
+ * 테스트 전체를 감싸는 트랜잭션이 있으면 정산 내역별 커밋 · 롤백이 보이지 않으므로 끄고, 진짜 프록시(PayoutCreateStepUseCase 빈)를 쓴다
  */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({PayoutGroupCreator.class, BusinessDayCalendar.class, PayoutLedgerUseCase.class})
+@Import({PayoutCreateStepUseCase.class, BusinessDayCalendar.class, PayoutLedgerUseCase.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PayoutCreateUseCaseTransactionTest {
 	private static final LocalDate RACE_DATE = LocalDate.of(2026, 9, 25);
@@ -60,7 +60,7 @@ class PayoutCreateUseCaseTransactionTest {
 	private PayoutHoldRepository payoutHoldRepository;
 
 	@Autowired
-	private PayoutGroupCreator payoutGroupCreator;
+	private PayoutCreateStepUseCase payoutCreateStepUseCase;
 
 	@Autowired
 	private PayoutStatusHistoryRepository payoutStatusHistoryRepository;
@@ -76,7 +76,7 @@ class PayoutCreateUseCaseTransactionTest {
 
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort) {
 		SoldEntryPort soldEntryPort = raceId -> entries.stream().filter(entry -> entry.raceId() == raceId).toList();
-		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntryPort, sellerAccountPort,
+		return new PayoutCreateUseCase(payoutRepository, payoutCreateStepUseCase, soldEntryPort, sellerAccountPort,
 			new StubRacePort(RACE_NAMES, List.of(), entries), raceId -> List.of());
 	}
 
