@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Consumer;
 
 import org.springframework.stereotype.Service;
 
@@ -155,35 +154,23 @@ public class PayoutCreateUseCase {
 		return counts;
 	}
 
-	// 최종 정산 내역 하나를 만든다. 참가권의 대회일이 상품의 대회일과 다르면 만들지 않고 실패로 남긴다
+	// 최종 정산 내역 하나를 만든다. 이 정산 내역만 실패로 남기고 다음 정산 내역을 계속 만든다
+	// 참가권의 대회일이 상품의 대회일과 다르면 만들지 않는다. 실패한 정산 내역과 그 항목 · 보류는 함께 롤백된다
 	private void createFinalGroup(SellerRace key, List<SoldEntry> entries, RaceSchedule race, YearMonth payoutMonth,
 		Counts counts, LocalDateTime now) {
 		try {
 			checkRaceDate(key, entries, race);
-		} catch (RuntimeException exception) {
-			counts.fail(key, entries, exception);
-			return;
-		}
-		createGroup(key, entries, race.raceName(), PayoutStage.FINAL, payoutMonth, counts,
-			group -> payoutGroupCreator.createFinal(group, race.raceDate(), now));
-	}
-
-	// 정산 내역 하나를 만든다. 이 정산 내역만 실패로 남기고 다음 정산 내역을 계속 만든다
-	// 실패한 정산 내역과 그 항목 · 보류는 함께 롤백된다
-	private void createGroup(SellerRace key, List<SoldEntry> entries, String raceName, PayoutStage stage,
-		YearMonth payoutMonth, Counts counts, Consumer<PayoutGroup> creator) {
-		try {
-			// 정산 월은 실행일이 아니라 환불 마감일 · 대회일로 정한다. 실행일로 정하면 월말 대회를 다음 달 실행이
+			// 정산 월은 실행일이 아니라 대회일로 정한다. 실행일로 정하면 월말 대회를 다음 달 실행이
 			// 다시 볼 때 정산 월이 달라져 아래 중복 확인을 통과하고, 같은 참가권이 두 번 지급된다
 			// 이미 만든 정산 내역은 건너뛴다 (되돌아보기로 매일 같은 대회를 다시 보므로 대부분 여기서 걸린다)
 			// 확인과 저장 사이에 다른 인스턴스가 먼저 저장하면 DB 유일 제약이 막고, 실패로 남는다
 			if (payoutRepository.existsBySellerIdAndRaceIdAndPayoutMonthAndPayoutStage(
-				key.sellerId(), key.raceId(), payoutMonth.toString(), stage)) {
+				key.sellerId(), key.raceId(), payoutMonth.toString(), PayoutStage.FINAL)) {
 				counts.skipped++;
 				return;
 			}
-			creator.accept(new PayoutGroup(key.sellerId(), key.raceId(), raceName,
-				sellerAccountPort.hasPayoutAccount(key.sellerId()), entries));
+			payoutGroupCreator.createFinal(new PayoutGroup(key.sellerId(), key.raceId(), race.raceName(),
+				sellerAccountPort.hasPayoutAccount(key.sellerId()), entries), race.raceDate(), now);
 			counts.created++;
 		} catch (RuntimeException exception) {
 			counts.fail(key, entries, exception);
