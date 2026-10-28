@@ -45,6 +45,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.Nullable;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -397,7 +398,7 @@ public class ApiV1RaceController {
 		@Parameter(in = ParameterIn.HEADER, name = MemberIdHeader.NAME,
 			description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 취소된 대회는 등록한 판매자만 본다)",
 			example = "9001")
-		@LoginMemberId(required = false) Integer memberId,
+		@LoginMemberId(required = false) @Nullable Integer memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId
 	) {
