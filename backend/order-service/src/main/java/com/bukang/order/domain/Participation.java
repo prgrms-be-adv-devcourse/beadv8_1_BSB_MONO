@@ -31,7 +31,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = PROTECTED)
 @Getter
 @Table(
-	name = "BOOKING_PARTICIPATION",
+	name = "ORDER_PARTICIPATION",
 	uniqueConstraints = {
 		// 한 사람은 한 대회에 살아 있는 신청 1건 (정책 1장 3-1). 끝난 신청은 active_flag가 NULL이라 걸리지 않는다
 		@UniqueConstraint(name = "uk_participation_active", columnNames = {"race_id", "member_id", "active_flag"})
