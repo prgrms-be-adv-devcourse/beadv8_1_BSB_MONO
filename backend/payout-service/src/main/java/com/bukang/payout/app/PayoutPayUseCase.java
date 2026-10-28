@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
-import com.bukang.payout.app.PayoutPayStep.Start;
+import com.bukang.payout.app.PayoutPayStepUseCase.Start;
 import com.bukang.payout.dto.PayoutPayResultDto;
 import com.bukang.payout.out.PayoutTransferPort;
 import com.bukang.payout.out.PayoutTransferRejectedException;
@@ -36,14 +36,14 @@ import lombok.extern.slf4j.Slf4j;
 public class PayoutPayUseCase {
 	private static final String REJECTED_REASON = "캐시 서비스 거절";
 
-	private final PayoutPayStep payoutPayStep;
+	private final PayoutPayStepUseCase payoutPayStepUseCase;
 	private final PayoutTransferPort payoutTransferPort;
 
 	public PayoutPayResultDto run(LocalDate today, LocalDateTime now) {
 		int paid = 0;
 		int failed = 0;
 		int unknown = 0;
-		for (int payoutId : payoutPayStep.findTargetIds(today)) {
+		for (int payoutId : payoutPayStepUseCase.findTargetIds(today)) {
 			switch (payOne(payoutId, today, now)) {
 				case PAID -> paid++;
 				case FAILED -> failed++;
@@ -63,7 +63,7 @@ public class PayoutPayUseCase {
 	private Result payOne(int payoutId, LocalDate today, LocalDateTime now) {
 		Start start;
 		try {
-			start = payoutPayStep.start(payoutId, today, now);
+			start = payoutPayStepUseCase.start(payoutId, today, now);
 		} catch (OptimisticLockingFailureException exception) {
 			// 같은 정산 내역을 다른 배치 · 보류 API가 먼저 바꿨다. 그쪽 결과를 따른다
 			log.info("지급 시작 중 다른 변경과 부딪혀 건너뜁니다. payoutId={}", payoutId);
@@ -100,7 +100,7 @@ public class PayoutPayUseCase {
 		}
 
 		try {
-			payoutPayStep.complete(payoutId, now);
+			payoutPayStepUseCase.complete(payoutId, now);
 			return Result.PAID;
 		} catch (RuntimeException exception) {
 			// 돈은 옮겨졌는데 지급 완료를 커밋하지 못했다. 지급 중으로 남아 다음 실행이 다시 요청하면 캐시 서비스 멱등으로 완료된다
@@ -111,7 +111,7 @@ public class PayoutPayUseCase {
 
 	private Result revert(int payoutId, LocalDateTime now) {
 		try {
-			payoutPayStep.revert(payoutId, now, REJECTED_REASON);
+			payoutPayStepUseCase.revert(payoutId, now, REJECTED_REASON);
 			return Result.FAILED;
 		} catch (RuntimeException exception) {
 			// 되돌리지 못하면 지급 중으로 남는다. 다음 실행이 다시 요청하고, 또 거절되면 그때 되돌린다

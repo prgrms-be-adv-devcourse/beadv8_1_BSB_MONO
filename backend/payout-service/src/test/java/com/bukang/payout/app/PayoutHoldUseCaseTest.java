@@ -48,7 +48,7 @@ class PayoutHoldUseCaseTest {
 	}
 
 	private PayoutPayUseCase payUseCase() {
-		return new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
+		return new PayoutPayUseCase(new PayoutPayStepUseCase(payoutRepository), transfer -> {
 		});
 	}
 

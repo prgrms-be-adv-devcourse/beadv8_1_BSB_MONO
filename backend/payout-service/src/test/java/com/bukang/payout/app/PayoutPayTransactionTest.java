@@ -36,11 +36,12 @@ import com.bukang.payout.out.PayoutStatusHistoryRepository;
 
 /**
  * 지급 배치가 정산 내역 한 건마다 트랜잭션을 나누는지 확인한다 (PRO-252)
- * 테스트 전체를 감싸는 트랜잭션이 있으면 지급 중(PAYING)의 커밋이 보이지 않으므로 끄고, 진짜 프록시(PayoutPayStep 빈)를 쓴다
+ * 테스트 전체를 감싸는 트랜잭션이 있으면 지급 중(PAYING)의 커밋이 보이지 않으므로 끄고,
+ * 진짜 프록시(PayoutPayStepUseCase 빈)를 쓴다
  */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({PayoutPayStep.class, PayoutHoldUseCase.class, BusinessDayCalendar.class})
+@Import({PayoutPayStepUseCase.class, PayoutHoldUseCase.class, BusinessDayCalendar.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PayoutPayTransactionTest {
 	private static final LocalDate PAY_DATE = LocalDate.of(2026, 10, 20);
@@ -59,7 +60,7 @@ class PayoutPayTransactionTest {
 	private PayoutStatusHistoryRepository payoutStatusHistoryRepository;
 
 	@Autowired
-	private PayoutPayStep payoutPayStep;
+	private PayoutPayStepUseCase payoutPayStepUseCase;
 
 	@Autowired
 	private PayoutHoldUseCase payoutHoldUseCase;
@@ -94,7 +95,7 @@ class PayoutPayTransactionTest {
 		Payout payout = savePayoutWithSale();
 		List<PayoutStatus> statusDuringTransfer = new ArrayList<>();
 		List<RuntimeException> holdErrors = new ArrayList<>();
-		PayoutPayUseCase useCase = new PayoutPayUseCase(payoutPayStep, transfer -> {
+		PayoutPayUseCase useCase = new PayoutPayUseCase(payoutPayStepUseCase, transfer -> {
 			// 배치 트랜잭션 밖이라, 여기서 읽는 값은 다른 요청(관리자 보류 API)이 보는 커밋된 값이다
 			statusDuringTransfer.add(statusOf(payout));
 			try {
@@ -124,7 +125,7 @@ class PayoutPayTransactionTest {
 			// 느린 배치가 정산 예정을 읽어 둔 사이에
 			Payout stale = payoutRepository.findById(payout.getId()).orElseThrow();
 			// 빠른 배치가 먼저 지급 중으로 커밋한다
-			fastRun.executeWithoutResult(inner -> payoutPayStep.start(payout.getId(), PAY_DATE, NOW));
+			fastRun.executeWithoutResult(inner -> payoutPayStepUseCase.start(payout.getId(), PAY_DATE, NOW));
 			stale.startPaying(NOW);
 		})).isInstanceOf(ObjectOptimisticLockingFailureException.class);
 
@@ -135,10 +136,10 @@ class PayoutPayTransactionTest {
 	@DisplayName("다른 배치가 같은 지급 중 건을 먼저 지급 완료했으면 지급 완료를 다시 바꾸지 않는다")
 	void completeIsNoOpWhenAlreadyPaid() {
 		Payout payout = savePayoutWithSale();
-		payoutPayStep.start(payout.getId(), PAY_DATE, NOW);
-		payoutPayStep.complete(payout.getId(), NOW);
+		payoutPayStepUseCase.start(payout.getId(), PAY_DATE, NOW);
+		payoutPayStepUseCase.complete(payout.getId(), NOW);
 
-		boolean changed = payoutPayStep.complete(payout.getId(), NOW.plusHours(1));
+		boolean changed = payoutPayStepUseCase.complete(payout.getId(), NOW.plusHours(1));
 
 		assertThat(changed).isFalse();
 		assertThat(payoutRepository.findById(payout.getId()).orElseThrow().getPaidAt()).isEqualTo(NOW);
