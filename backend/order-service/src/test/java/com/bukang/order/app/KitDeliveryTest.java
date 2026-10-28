@@ -386,6 +386,20 @@ class KitDeliveryTest {
 	}
 
 	@Test
+	@DisplayName("같은 결제 요청이 두 번 와도 배송은 1건이다")
+	void payTwiceCreatesOneShipment() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().plusDays(10)));
+		int orderId = paidOrder();
+
+		OrderPayResult again = transactionTemplate.execute(status ->
+			orderPayUseCase.pay(MEMBER_ID, orderId, LocalDateTime.now()));
+
+		assertThat(again.alreadyPaid()).isTrue();
+		assertThat(shipmentsOf(orderId)).hasSize(1);
+		assertThat(jdbcTemplate.queryForObject("select count(*) from order_shipment_item", Long.class)).isEqualTo(1);
+	}
+
+	@Test
 	@DisplayName("키트가 없는 종목은 결제해도 배송이 생기지 않는다")
 	void payWithoutKitCreatesNoShipment() throws Exception {
 		raceCoursePort.put(StubRaceCoursePort.courseWithoutKit(COURSE_ID, RACE_ID));

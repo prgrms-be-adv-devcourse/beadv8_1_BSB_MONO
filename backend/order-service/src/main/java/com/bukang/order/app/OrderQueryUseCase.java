@@ -42,6 +42,9 @@ public class OrderQueryUseCase {
 		if (!order.isOwnedBy(memberId)) {
 			throw new OrderAccessDeniedException("본인의 주문만 볼 수 있습니다.");
 		}
+		if (!order.getShipments().isEmpty()) {
+			return order.toDto();
+		}
 		// 결제 전이라 배송이 아직 없으면 참가 신청의 배송지를 보여 준다 (BUK-6)
 		ShippingAddress applicationShippingAddress = participationRepository.findById(order.participationId())
 			.map(participation -> participation.getParticipant().getShippingAddress())
