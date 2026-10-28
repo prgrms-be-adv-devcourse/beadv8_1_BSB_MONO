@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -162,7 +161,7 @@ class PayoutCreateUseCaseTransactionTest {
 	@Test
 	@DisplayName("자동 보류는 정산 생성 트랜잭션 안에서만 건다. 트랜잭션 밖에서 부르면 예외가 나고 보류가 남지 않는다")
 	void autoHoldRequiresTransaction() {
-		Payout first = payoutRepository.save(Payout.first(1, 10, "대회 10", YearMonth.of(2026, 9), NOW,
+		Payout first = payoutRepository.save(Payout.first(1, 10, "대회 10", LocalDate.of(2026, 9, 30), NOW,
 			new BusinessDayCalendar()));
 		Payout last = payoutRepository.save(Payout.finalStage(1, 10, "대회 10", RACE_DATE, NOW,
 			new BusinessDayCalendar()));

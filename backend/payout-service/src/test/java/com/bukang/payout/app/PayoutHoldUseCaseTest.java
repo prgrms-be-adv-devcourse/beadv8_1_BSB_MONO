@@ -51,7 +51,7 @@ class PayoutHoldUseCaseTest {
 		});
 	}
 
-	// 대회일 10/17 토: 지급 예정일 10/20 화
+	// 대회일 10/17 토: 지급 예정일 10/19 월
 	private Payout saveFinalPayout() {
 		return payoutRepository.save(Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
 			LocalDateTime.of(2026, 10, 18, 3, 0), new BusinessDayCalendar()));
@@ -84,24 +84,24 @@ class PayoutHoldUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("보류 중인 최종 정산 내역은 10/20 배치에서 지급되지 않고, 10/21에 풀면 다음 영업일 10/22 배치에서 지급된다")
+	@DisplayName("보류 중인 최종 정산 내역은 10/19 배치에서 지급되지 않고, 10/20에 풀면 다음 날 10/21 배치에서 지급된다")
 	void releasedPayoutIsPaidOnNextPayDate() {
 		Payout payout = saveFinalPayout();
 		PayoutHoldDto hold = holdOf(payout);
 
-		payUseCase().run(LocalDate.of(2026, 10, 20), LocalDateTime.of(2026, 10, 20, 4, 0));
+		payUseCase().run(LocalDate.of(2026, 10, 19), LocalDateTime.of(2026, 10, 19, 4, 0));
 		assertThat(reload(payout).getStatus()).isEqualTo(PayoutStatus.HELD);
 
-		// 최종 정산은 해제일 다음 영업일에 지급한다 (10/21 수 → 10/22 목)
-		PayoutHoldDto released = useCase().release(hold.getId(), 77, LocalDateTime.of(2026, 10, 21, 9, 0));
+		// 보류를 풀면 해제일 다음 날에 지급한다 (10/20 화 → 10/21 수)
+		PayoutHoldDto released = useCase().release(hold.getId(), 77, LocalDateTime.of(2026, 10, 20, 9, 0));
 		assertThat(released.getStatus()).isEqualTo(PayoutHoldStatus.RELEASED);
 		assertThat(released.getReleasedBy()).isEqualTo(77);
-		assertThat(reload(payout).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 22));
+		assertThat(reload(payout).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 21));
 
-		payUseCase().run(LocalDate.of(2026, 10, 21), LocalDateTime.of(2026, 10, 21, 4, 0));
+		payUseCase().run(LocalDate.of(2026, 10, 20), LocalDateTime.of(2026, 10, 20, 4, 0));
 		assertThat(reload(payout).getStatus()).isEqualTo(PayoutStatus.CALCULATED);
 
-		payUseCase().run(LocalDate.of(2026, 10, 22), LocalDateTime.of(2026, 10, 22, 4, 0));
+		payUseCase().run(LocalDate.of(2026, 10, 21), LocalDateTime.of(2026, 10, 21, 4, 0));
 		assertThat(reload(payout).getStatus()).isEqualTo(PayoutStatus.PAID);
 	}
 
@@ -168,7 +168,7 @@ class PayoutHoldUseCaseTest {
 		entityManager.flush();
 		entityManager.clear();
 
-		readByBatch.pay(LocalDateTime.of(2026, 10, 20, 4, 0));
+		readByBatch.pay(LocalDateTime.of(2026, 10, 19, 4, 0));
 		assertThatThrownBy(() -> payoutRepository.saveAndFlush(readByBatch))
 			.isInstanceOf(ObjectOptimisticLockingFailureException.class);
 	}

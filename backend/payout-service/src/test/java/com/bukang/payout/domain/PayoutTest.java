@@ -27,34 +27,43 @@ class PayoutTest {
 		return Payout.finalStage(1, 10, "테스트 대회", raceDate, raceDate.plusDays(1).atTime(3, 0), CALENDAR);
 	}
 
-	private Payout firstPayout(YearMonth payoutMonth) {
-		return Payout.first(1, 10, "테스트 대회", payoutMonth, payoutMonth.atEndOfMonth().atTime(3, 0), CALENDAR);
+	private Payout firstPayout(LocalDate refundDeadline) {
+		return Payout.first(1, 10, "테스트 대회", refundDeadline, refundDeadline.plusDays(1).atTime(3, 0), CALENDAR);
 	}
 
-	@Test
-	@DisplayName("1차 정산의 지급 예정일은 정산 월의 다음 달 20일이다 (2026-09 → 10/20 화)")
-	void firstPayDateIsNextMonth20th() {
-		assertThat(firstPayout(YearMonth.of(2026, 9)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+	// 2026-10-11 일 ~ 10-17 토. 마감일을 1일째로 세어 3일째(마감일 + 2일)에 지급한다. 주말이어도 그날 지급한다 (10/28 결정)
+	@ParameterizedTest(name = "환불 마감일 {0} → {1} 지급")
+	@CsvSource({
+		"2026-10-11, 2026-10-13", // 일 → 화
+		"2026-10-12, 2026-10-14", // 월 → 수
+		"2026-10-13, 2026-10-15", // 화 → 목
+		"2026-10-14, 2026-10-16", // 수 → 금
+		"2026-10-15, 2026-10-17", // 목 → 토 (주말에도 지급)
+		"2026-10-16, 2026-10-18", // 금 → 일 (주말에도 지급)
+		"2026-10-17, 2026-10-19", // 토 → 월
+		"2026-10-30, 2026-11-01", // 달이 바뀌어도 마감일 + 2일이다. 정산 월은 마감일의 달(2026-10)
+		"2026-12-31, 2027-01-02" // 해가 바뀌어도 같다
+	})
+	@DisplayName("1차 정산의 지급 예정일은 환불 마감일 + 2일이고, 정산 월은 환불 마감일의 달이다")
+	void firstPayDateIsRefundDeadlinePlus2Days(LocalDate refundDeadline, LocalDate expectedPayDate) {
+		Payout payout = firstPayout(refundDeadline);
+
+		assertThat(payout.getScheduledPayDate()).isEqualTo(expectedPayDate);
+		assertThat(payout.getPayoutMonth()).isEqualTo(YearMonth.from(refundDeadline).toString());
 	}
 
-	@Test
-	@DisplayName("1차 정산의 다음 달 20일이 주말이면 다음 월요일에 지급한다 (2026-05 → 6/20 토 → 6/22, 2026-08 → 9/20 일 → 9/21)")
-	void firstPayDateSkipsWeekend() {
-		assertThat(firstPayout(YearMonth.of(2026, 5)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 6, 22));
-		assertThat(firstPayout(YearMonth.of(2026, 8)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 9, 21));
-	}
-
-	// 2026-10-15 목, 10-16 금, 10-17 토, 10-18 일
+	// 대회일을 1일째로 세어 3일째(대회일 + 2일)에 지급한다. 주말이어도 그날 지급한다 (10/28 결정)
 	@ParameterizedTest(name = "대회일 {0} → {1} 지급")
 	@CsvSource({
-		"2026-10-16, 2026-10-19", // 금 + 3일 = 월
-		"2026-10-17, 2026-10-20", // 토 + 3일 = 화
-		"2026-10-15, 2026-10-19", // 목 + 3일 = 일 → 다음 영업일 월
-		"2026-10-14, 2026-10-19", // 수 + 3일 = 토 → 다음 영업일 월
-		"2026-10-31, 2026-11-03" // 달이 바뀌어도 대회일 + 3일이다
+		"2026-10-18, 2026-10-20", // 일 → 화
+		"2026-10-17, 2026-10-19", // 토 → 월
+		"2026-10-16, 2026-10-18", // 금 → 일 (주말에도 지급)
+		"2026-10-15, 2026-10-17", // 목 → 토 (주말에도 지급)
+		"2026-10-12, 2026-10-14", // 월 → 수
+		"2026-10-31, 2026-11-02" // 달이 바뀌어도 대회일 + 2일이다. 정산 월은 대회일의 달(2026-10)
 	})
-	@DisplayName("최종 정산의 지급 예정일은 대회일 + 3일이고, 주말이면 다음 영업일이다")
-	void finalPayDateIsRaceDatePlus3Days(LocalDate raceDate, LocalDate expectedPayDate) {
+	@DisplayName("최종 정산의 지급 예정일은 대회일 + 2일이고, 정산 월은 대회일의 달이다")
+	void finalPayDateIsRaceDatePlus2Days(LocalDate raceDate, LocalDate expectedPayDate) {
 		Payout payout = finalPayout(raceDate);
 
 		assertThat(payout.getScheduledPayDate()).isEqualTo(expectedPayDate);
@@ -91,8 +100,8 @@ class PayoutTest {
 	@Test
 	@DisplayName("1차는 판매 집계로 1장 몫(가격 × 40% 버림) × 장수를 1차 정산금 한 줄로 쓴다 (33,333원 × 10장 → 133,330, 합계에 곱한 133,332가 아니다)")
 	void firstPayoutIsFortyPercentPerTicket() {
-		Payout first = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 10, 1, 3, 0),
-			CALENDAR);
+		Payout first = Payout.first(1, 10, "테스트 대회", LocalDate.of(2026, 9, 30),
+			LocalDateTime.of(2026, 10, 1, 3, 0), CALENDAR);
 
 		first.recordAdvance(10, 333_330L, 10, LocalDate.of(2026, 10, 1));
 
@@ -107,8 +116,8 @@ class PayoutTest {
 	@Test
 	@DisplayName("가격 합이 장수로 나누어떨어지지 않으면(가격이 섞임) 1차 정산금을 만들지 않는다")
 	void firstPayoutRejectsMixedPrices() {
-		Payout first = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), LocalDateTime.of(2026, 10, 1, 3, 0),
-			CALENDAR);
+		Payout first = Payout.first(1, 10, "테스트 대회", LocalDate.of(2026, 9, 30),
+			LocalDateTime.of(2026, 10, 1, 3, 0), CALENDAR);
 
 		assertThatThrownBy(() -> first.recordAdvance(10, 83_333L, 2, LocalDate.of(2026, 10, 1)))
 			.isInstanceOf(IllegalStateException.class);

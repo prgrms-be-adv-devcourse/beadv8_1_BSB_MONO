@@ -155,7 +155,7 @@ class ApiV1PayoutSellerControllerTest {
 		request("/summary")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("정산 요약을 조회했습니다."))
-			.andExpect(jsonPath("$.data.nextPayDate").value("2026-09-28"))
+			.andExpect(jsonPath("$.data.nextPayDate").value("2026-09-27"))
 			.andExpect(jsonPath("$.data.scheduledPayoutAmount").value(94_500))
 			.andExpect(jsonPath("$.data.heldCount").value(1))
 			.andDo(document("payout-seller-summary",
@@ -181,7 +181,7 @@ class ApiV1PayoutSellerControllerTest {
 			.andExpect(jsonPath("$.data[0].salesAmount").value(100_000))
 			.andExpect(jsonPath("$.data[0].feeAmount").value(5_500))
 			.andExpect(jsonPath("$.data[0].payoutAmount").value(94_500))
-			.andExpect(jsonPath("$.data[0].scheduledPayDate").value("2026-09-28"))
+			.andExpect(jsonPath("$.data[0].scheduledPayDate").value("2026-09-27"))
 			.andExpect(jsonPath("$.data[0].raceName").value("대회 10"))
 			.andExpect(jsonPath("$.data[1].status").value("HELD"))
 			.andDo(document("payout-seller-payouts",
@@ -209,7 +209,7 @@ class ApiV1PayoutSellerControllerTest {
 						+ "CANCELED: 대회 취소로 닫힘)"),
 					fieldWithPath("data[].settledAt").description("정산 내역을 만든 일시"),
 					fieldWithPath("data[].scheduledPayDate").description(
-						"지급 예정일 (보류를 풀면 다시 정한다. 1차는 해제일 뒤 돌아오는 20일, 최종은 해제일 다음 영업일)"),
+						"지급 예정일. 1차는 환불 마감일 + 2일, 최종은 대회일 + 2일 (보류를 풀면 원래 지급 예정일과 해제일 + 1일 중 늦은 날로 다시 정한다)"),
 					fieldWithPath("data[].paidAt").description("지급 완료 일시 (지급 전에는 null)")
 						.optional().type(JsonFieldType.STRING)
 				)));

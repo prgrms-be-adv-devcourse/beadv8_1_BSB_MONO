@@ -3,7 +3,6 @@ package com.bukang.payout.in;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.List;
 
 import org.springframework.boot.ApplicationRunner;
@@ -117,7 +116,7 @@ public class PayoutDataInit {
 	private StagePair createPayouts(int raceId, String raceName, LocalDate raceDate, int count, long price) {
 		LocalDate refundDeadline = raceDate.minusDays(REFUND_DEADLINE_DAYS_BEFORE_RACE);
 		LocalDate firstTargetDate = PayoutTargetDate.firstOf(refundDeadline);
-		Payout first = Payout.first(SELLER_ID, raceId, raceName, YearMonth.from(refundDeadline),
+		Payout first = Payout.first(SELLER_ID, raceId, raceName, refundDeadline,
 			firstTargetDate.atTime(3, 0), calendar);
 		// 샘플은 대회마다 코스가 하나라고 보고 코스 ID를 대회 ID와 같게 둔다
 		first.recordAdvance(raceId, price * count, count, firstTargetDate);

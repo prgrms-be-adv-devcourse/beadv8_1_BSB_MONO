@@ -2,7 +2,6 @@ package com.bukang.payout.app;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,7 +43,7 @@ public class PayoutCreateStepUseCase {
 	public void createFirst(FirstPayoutSource source, LocalDate refundDeadline, LocalDateTime now) {
 		LocalDate targetDate = PayoutTargetDate.firstOf(refundDeadline);
 		Payout payout = Payout.first(source.sellerId(), source.raceId(), source.raceName(),
-			YearMonth.from(refundDeadline), now, businessDayCalendar);
+			refundDeadline, now, businessDayCalendar);
 		source.courses().forEach(course ->
 			payout.recordAdvance(course.raceCourseId(), course.priceSum(), course.ticketCount(), targetDate));
 
