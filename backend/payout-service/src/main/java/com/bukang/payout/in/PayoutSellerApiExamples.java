@@ -16,6 +16,19 @@ final class PayoutSellerApiExamples {
 		}
 		""";
 
+	// 지급 예정 정산 내역이 없으면 다음 정산일은 null, 정산 예정액은 0이다
+	static final String SUMMARY_EMPTY = """
+		{
+			"status": 200,
+			"message": "정산 요약을 조회했습니다.",
+			"data": {
+				"nextPayDate": null,
+				"scheduledPayoutAmount": 0,
+				"heldCount": 0
+			}
+		}
+		""";
+
 	static final String PAYOUTS_SUCCESS = """
 		{
 			"status": 200,

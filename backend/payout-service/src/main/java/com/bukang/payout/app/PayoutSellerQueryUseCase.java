@@ -8,7 +8,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutItemPaging;
 import com.bukang.payout.domain.PayoutQueryPeriod;
@@ -35,7 +34,6 @@ public class PayoutSellerQueryUseCase {
 	private final PayoutRepository payoutRepository;
 	private final PayoutItemRepository payoutItemRepository;
 	private final PayoutHoldRepository payoutHoldRepository;
-	private final BusinessDayCalendar businessDayCalendar;
 
 	public List<PayoutDto> payouts(int sellerId, YearMonth fromMonth, YearMonth toMonth) {
 		PayoutQueryPeriod.checkPayoutMonths(fromMonth, toMonth);
@@ -66,12 +64,15 @@ public class PayoutSellerQueryUseCase {
 
 	public PayoutSummaryDto summary(int sellerId, LocalDate today) {
 		// 지급 예정일이 지났는데 아직 CALCULATED라면(배치 실행을 놓침) 그 날짜를 그대로 보여 준다. 다음 배치에서 지급된다
+		// 지급 예정 정산 내역이 없으면 null이다. 지급일이 대회마다 달라(기준일 + 2일) 대신 채울 정기 지급일이 없다 (10/28 결정)
 		LocalDate nextPayDate = payoutRepository
 			.findFirstBySellerIdAndStatusOrderByScheduledPayDateAsc(sellerId, PayoutStatus.CALCULATED)
 			.map(Payout::getScheduledPayDate)
-			.orElseGet(() -> Payout.nextPayDateAfter(today, businessDayCalendar));
+			.orElse(null);
 
-		long scheduledPayoutAmount = payoutRepository.sumPayoutAmount(sellerId, PayoutStatus.CALCULATED, nextPayDate);
+		long scheduledPayoutAmount = nextPayDate == null
+			? 0
+			: payoutRepository.sumPayoutAmount(sellerId, PayoutStatus.CALCULATED, nextPayDate);
 		long heldCount = payoutRepository.countBySellerIdAndStatus(sellerId, PayoutStatus.HELD);
 		return new PayoutSummaryDto(nextPayDate, scheduledPayoutAmount, heldCount);
 	}

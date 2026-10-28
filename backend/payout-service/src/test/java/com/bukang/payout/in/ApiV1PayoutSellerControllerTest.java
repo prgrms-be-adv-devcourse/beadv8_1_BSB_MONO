@@ -2,6 +2,7 @@ package com.bukang.payout.in;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
 import static org.springframework.restdocs.headers.HeaderDocumentation.requestHeaders;
@@ -60,6 +61,8 @@ import jakarta.persistence.EntityManager;
 class ApiV1PayoutSellerControllerTest {
 	private static final int SELLER_ID = 1;
 	private static final int OTHER_SELLER_ID = 2;
+	// 정산 내역이 하나도 없는 판매자
+	private static final int NEW_SELLER_ID = 3;
 	// 판매자 1의 회원 ID. 판매자 ID와 다른 번호로 두어, 회원 ID를 그대로 판매자 ID로 쓰면 조회가 비게 한다
 	// 회원 2는 판매자 2와 같은 번호지만 판매자가 아니다 (회원 ID로 찾으면 남의 정산이 보이는 경우)
 	private static final int MEMBER_ID = 7;
@@ -163,9 +166,33 @@ class ApiV1PayoutSellerControllerTest {
 				responseFields(
 					fieldWithPath("status").description("HTTP 상태 코드"),
 					fieldWithPath("message").description("결과 메시지"),
-					fieldWithPath("data.nextPayDate").description(
-						"다음 정산일. 지급 예정 정산 내역 중 가장 이른 지급 예정일, 없으면 오늘 뒤 돌아오는 정기 지급일(20일, 휴일이면 다음 영업일)"),
-					fieldWithPath("data.scheduledPayoutAmount").description("정산 예정액. 다음 정산일에 나갈 지급액 합계 (보류 제외)"),
+					fieldWithPath("data.nextPayDate").type(JsonFieldType.STRING).optional().description(
+						"다음 정산일. 지급 예정 정산 내역 중 가장 이른 지급 예정일. 지급 예정 정산 내역이 없으면 null"),
+					fieldWithPath("data.scheduledPayoutAmount").description(
+						"정산 예정액. 다음 정산일에 나갈 지급액 합계 (보류 제외). 다음 정산일이 null이면 0"),
+					fieldWithPath("data.heldCount").description("지급보류 중인 정산 내역 수")
+				)));
+	}
+
+	@Test
+	@DisplayName("요약: 지급 예정 정산 내역이 없으면 다음 정산일은 null, 정산 예정액은 0이다 (정기 지급일이 없어 대신 채울 날이 없다)")
+	void summaryWithoutScheduledPayout() throws Exception {
+		given(sellerLookupPort.findSellerOf(MEMBER_ID))
+			.willReturn(Optional.of(new SellerOfMember(NEW_SELLER_ID, SellerStatus.APPROVED)));
+
+		request("/summary")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.nextPayDate").value(nullValue()))
+			.andExpect(jsonPath("$.data.scheduledPayoutAmount").value(0))
+			.andExpect(jsonPath("$.data.heldCount").value(0))
+			.andDo(document("payout-seller-summary-empty",
+				requestHeaders(MEMBER_ID_HEADER),
+				responseFields(
+					fieldWithPath("status").description("HTTP 상태 코드"),
+					fieldWithPath("message").description("결과 메시지"),
+					fieldWithPath("data.nextPayDate").type(JsonFieldType.STRING).optional()
+						.description("다음 정산일. 지급 예정 정산 내역이 없어 null"),
+					fieldWithPath("data.scheduledPayoutAmount").description("정산 예정액. 다음 정산일이 없어 0"),
 					fieldWithPath("data.heldCount").description("지급보류 중인 정산 내역 수")
 				)));
 	}
