@@ -30,6 +30,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.Nullable;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -121,7 +122,7 @@ public class ApiV1FileController {
 	public ResponseEntity<RsData<FileDto>> findById(
 		@Parameter(in = ParameterIn.HEADER, name = MemberIdHeader.NAME,
 			description = "요청한 회원 ID (연결 전 파일을 볼 때 필요)", example = "1")
-		@LoginMemberId(required = false) Integer memberId,
+		@LoginMemberId(required = false) @Nullable Integer memberId,
 		@Parameter(description = "파일 ID", example = "1")
 		@PathVariable int fileId
 	) {
