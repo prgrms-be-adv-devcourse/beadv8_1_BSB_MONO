@@ -465,7 +465,7 @@ class KitDeliveryTest {
 	}
 
 	@Test
-	@DisplayName("옛 키트 칸·주문 배송지를 배송 표로 옮기는 SQL은 상태·송장·주소를 옮기고, 다시 돌려도 두 번 만들지 않는다")
+	@DisplayName("옛 키트 칸을 배송 표로 옮기는 SQL은 상태·송장과 참가 신청의 최신 주소를 옮기고, 다시 돌려도 두 번 만들지 않는다")
 	void migrationSql() throws Exception {
 		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().plusDays(10)));
 		int readyOrderId = paidOrder(MEMBER_ID);
@@ -493,6 +493,8 @@ class KitDeliveryTest {
 			""");
 		jdbcTemplate.update("update order_order set recipient_name = '김러너', recipient_phone = '010-1234-5678',"
 			+ " zipcode = '04700', address = '서울 성동구 왕십리로 00', address_detail = '101동 1001호'");
+		// 배포 뒤 SQL 전에 구매자가 주소를 고쳤다. 새 코드는 참가 신청만 고치므로 주문의 옛 칸은 옛 주소 그대로다
+		changeAddress(MEMBER_ID, participationIdOf(readyOrderId)).andExpect(status().isOk());
 		jdbcTemplate.update("update order_order_item set kit_delivery_status = 'PREPARING'");
 		LocalDateTime shippedAt = LocalDateTime.now().minusDays(2).truncatedTo(ChronoUnit.MICROS);
 		jdbcTemplate.update("update order_order_item set kit_delivery_status = 'SHIPPING', kit_carrier = ?,"
@@ -509,7 +511,9 @@ class KitDeliveryTest {
 		assertThat(shipmentsOf(readyOrderId)).singleElement()
 			.satisfies(shipment -> {
 				assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.READY);
-				assertThat(shipment.getShippingAddress().getAddressDetail()).isEqualTo("101동 1001호");
+				assertThat(shipment.getShippingAddress().getRecipientName()).isEqualTo("김가족");
+				assertThat(shipment.getShippingAddress().getAddress()).isEqualTo("부산 해운대구 해운대로 00");
+				assertThat(shipment.getShippingAddress().getAddressDetail()).isNull();
 				assertThat(shipment.getItems()).singleElement()
 					.satisfies(item -> assertThat(item.getOrderItemId()).isEqualTo(itemIdOf(readyOrderId)));
 			});
@@ -519,6 +523,7 @@ class KitDeliveryTest {
 				assertThat(shipment.getCarrier()).isEqualTo(CARRIER);
 				assertThat(shipment.getTrackingNumber()).isEqualTo(TRACKING_NUMBER);
 				assertThat(shipment.getShippedAt()).isEqualTo(shippedAt);
+				assertThat(shipment.getShippingAddress().getAddressDetail()).isEqualTo("101동 1001호");
 			});
 		assertThat(shipmentOf(deliveredOrderId).getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
 		assertThat(shipmentOf(deliveredOrderId).getDeliveredAt()).isEqualTo(shippedAt.plusDays(1));

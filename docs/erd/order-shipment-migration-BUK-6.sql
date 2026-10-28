@@ -1,6 +1,10 @@
 -- 키트 배송을 배송 표로 옮기는 SQL (BUK-6, 2026-10-28)
 -- 언제: BUK-6을 배포해 주문 서비스가 새 표(order_shipment, order_shipment_item)를 만든 직후 1번 (ddl-auto: update)
--- 무엇: 주문 상품의 옛 키트 칸(kit_*)과 주문의 옛 배송지 칸(recipient_name ~ address_detail)을 배송 표로 옮긴다
+-- 무엇: 주문 상품의 옛 키트 칸(kit_*)을 배송 표로 옮기고, 받는 분·주소는 참가 신청의 배송지(shipping_*)에서 복사한다
+--       옛 코드는 주문 배송지와 참가 신청 배송지를 늘 같이 바꿨다. 새 코드는 주문 칸을 더는 고치지 않으므로,
+--       배포 뒤 SQL 전에 구매자가 주소를 고쳤어도 참가 신청 쪽에 최신 값이 있다
+-- 참가 신청 표 이름: 지금은 booking_participation. #237(ORDER_PARTICIPATION으로 이름 바꾸기)이 먼저 배포됐으면
+--       아래 booking_participation을 order_participation으로 바꿔 돌린다
 -- 다시 돌려도 된다: 이미 배송이 있는 주문, 이미 상자 속 상품이 있는 배송은 건너뛴다
 -- 옛 칸은 이번 배포에서 남겨 두고(새 코드는 읽지도 쓰지도 않음), 다음 배포에서 지운다
 -- MySQL 8 기준. 테스트(H2 MySQL 모드)에서도 같은 파일을 돌려 확인한다 (KitDeliveryTest.migrationSql)
@@ -18,11 +22,12 @@ SELECT CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6), i.order_id,
 		ELSE 'CANCELED'
 	END,
 	i.kit_carrier, i.kit_tracking_number,
-	o.recipient_name, o.recipient_phone, o.zipcode, o.address, o.address_detail, NULL,
+	p.shipping_recipient_name, p.shipping_recipient_phone, p.shipping_zipcode, p.shipping_address,
+	p.shipping_address_detail, NULL,
 	i.kit_shipped_at, i.kit_delivered_at,
 	CASE WHEN i.kit_delivery_status = 'PREPARING' AND i.status <> 'PAID' THEN i.canceled_at END
 FROM order_order_item i
-	JOIN order_order o ON o.id = i.order_id
+	JOIN booking_participation p ON p.id = i.participation_id
 WHERE i.kit_delivery_status IS NOT NULL
 	AND i.status <> 'ORDERED'
 	AND NOT EXISTS (SELECT 1 FROM order_shipment s WHERE s.order_id = i.order_id);
