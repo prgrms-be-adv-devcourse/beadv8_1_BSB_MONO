@@ -34,4 +34,11 @@ public class KafkaTopicConfig {
 			.partitions(PARTITIONS)
 			.build();
 	}
+
+	@Bean
+	public NewTopic productHoldRestoreTopic() {
+		return TopicBuilder.name(KafkaTopics.PRODUCT_HOLD_RESTORE)
+			.partitions(PARTITIONS)
+			.build();
+	}
 }
