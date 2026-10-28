@@ -19,8 +19,8 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.bukang.payout.app.PayoutGroupCreator.CourseSale;
-import com.bukang.payout.app.PayoutGroupCreator.FirstGroup;
-import com.bukang.payout.app.PayoutGroupCreator.PayoutGroup;
+import com.bukang.payout.app.PayoutGroupCreator.FinalPayoutSource;
+import com.bukang.payout.app.PayoutGroupCreator.FirstPayoutSource;
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutAccount;
@@ -90,11 +90,11 @@ class PayoutLedgerScenarioTest {
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, ledgerUseCase);
 	}
 
-	private PayoutGroup group(int... orderItemIds) {
+	private FinalPayoutSource finalSource(int... orderItemIds) {
 		List<SoldEntry> entries = Arrays.stream(orderItemIds)
 			.mapToObj(id -> new SoldEntry(id, SELLER_ID, RACE_ID, RACE_ID, RACE_DATE, PRICE))
 			.toList();
-		return new PayoutGroup(SELLER_ID, RACE_ID, "대회 A", true, entries);
+		return new FinalPayoutSource(SELLER_ID, RACE_ID, "대회 A", true, entries);
 	}
 
 	private static int[] range(int from, int to) {
@@ -102,13 +102,13 @@ class PayoutLedgerScenarioTest {
 	}
 
 	private void createFirst() {
-		creator.createFirst(new FirstGroup(SELLER_ID, RACE_ID, "대회 A", true,
+		creator.createFirst(new FirstPayoutSource(SELLER_ID, RACE_ID, "대회 A", true,
 			List.of(new CourseSale(RACE_ID, PRICE * 10, 10))), REFUND_DEADLINE,
 			REFUND_DEADLINE.plusDays(1).atTime(3, 0));
 	}
 
 	private void createFinal(int... orderItemIds) {
-		creator.createFinal(group(orderItemIds), RACE_DATE, RACE_DATE.plusDays(1).atTime(3, 0));
+		creator.createFinal(finalSource(orderItemIds), RACE_DATE, RACE_DATE.plusDays(1).atTime(3, 0));
 	}
 
 	private void pay(LocalDate payDate) {
@@ -209,7 +209,7 @@ class PayoutLedgerScenarioTest {
 	void twoCourses() {
 		int course10k = 71;
 		int course5k = 72;
-		creator.createFirst(new FirstGroup(SELLER_ID, RACE_ID, "대회 A", true, List.of(
+		creator.createFirst(new FirstPayoutSource(SELLER_ID, RACE_ID, "대회 A", true, List.of(
 			new CourseSale(course10k, 50_000L * 6, 6),
 			new CourseSale(course5k, 30_000L * 4, 4))), REFUND_DEADLINE, REFUND_DEADLINE.plusDays(1).atTime(3, 0));
 		pay(FIRST_PAY_DATE);
@@ -220,7 +220,7 @@ class PayoutLedgerScenarioTest {
 		for (int id = 107; id <= 110; id++) {
 			entries.add(new SoldEntry(id, SELLER_ID, RACE_ID, course5k, RACE_DATE, 30_000L));
 		}
-		creator.createFinal(new PayoutGroup(SELLER_ID, RACE_ID, "대회 A", true, entries), RACE_DATE,
+		creator.createFinal(new FinalPayoutSource(SELLER_ID, RACE_ID, "대회 A", true, entries), RACE_DATE,
 			RACE_DATE.plusDays(1).atTime(3, 0));
 
 		// 10K 6장 × 20,000 + 5K 4장 × 12,000
