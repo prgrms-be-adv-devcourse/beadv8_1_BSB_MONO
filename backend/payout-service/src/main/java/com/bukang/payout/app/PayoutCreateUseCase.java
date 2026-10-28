@@ -11,9 +11,9 @@ import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
-import com.bukang.payout.app.PayoutGroupCreator.CourseSale;
-import com.bukang.payout.app.PayoutGroupCreator.FinalPayoutSource;
-import com.bukang.payout.app.PayoutGroupCreator.FirstPayoutSource;
+import com.bukang.payout.app.PayoutCreateStepUseCase.CourseSale;
+import com.bukang.payout.app.PayoutCreateStepUseCase.FinalPayoutSource;
+import com.bukang.payout.app.PayoutCreateStepUseCase.FirstPayoutSource;
 import com.bukang.payout.domain.PayoutStage;
 import com.bukang.payout.domain.PayoutTargetDate;
 import com.bukang.payout.dto.PayoutCreateResultDto;
@@ -49,7 +49,7 @@ public class PayoutCreateUseCase {
 	private static final int LOOKBACK_DAYS = 7;
 
 	private final PayoutRepository payoutRepository;
-	private final PayoutGroupCreator payoutGroupCreator;
+	private final PayoutCreateStepUseCase payoutCreateStepUseCase;
 	private final SoldEntryPort soldEntryPort;
 	private final SellerAccountPort sellerAccountPort;
 	private final RacePort racePort;
@@ -122,7 +122,7 @@ public class PayoutCreateUseCase {
 			List<CourseSale> courseSales = courses.stream()
 				.map(course -> new CourseSale(course.raceCourseId(), course.priceSum(), course.ticketCount()))
 				.toList();
-			payoutGroupCreator.createFirst(new FirstPayoutSource(key.sellerId(), key.raceId(), raceName,
+			payoutCreateStepUseCase.createFirst(new FirstPayoutSource(key.sellerId(), key.raceId(), raceName,
 				sellerAccountPort.hasPayoutAccount(key.sellerId()), courseSales), refundDeadline, now);
 			counts.created++;
 		} catch (RuntimeException exception) {
@@ -169,7 +169,7 @@ public class PayoutCreateUseCase {
 				counts.skipped++;
 				return;
 			}
-			payoutGroupCreator.createFinal(new FinalPayoutSource(key.sellerId(), key.raceId(), race.raceName(),
+			payoutCreateStepUseCase.createFinal(new FinalPayoutSource(key.sellerId(), key.raceId(), race.raceName(),
 				sellerAccountPort.hasPayoutAccount(key.sellerId()), entries), race.raceDate(), now);
 			counts.created++;
 		} catch (RuntimeException exception) {

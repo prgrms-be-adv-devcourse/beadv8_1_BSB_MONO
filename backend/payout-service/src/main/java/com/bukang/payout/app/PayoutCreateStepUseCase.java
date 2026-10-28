@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PayoutGroupCreator {
+public class PayoutCreateStepUseCase {
 	// 자동 보류의 사유 상세. 관리자가 건 보류와 구분되도록 고정 문구를 남긴다
 	private static final String AUTO_HOLD_REASON = "정산 계좌 미등록으로 자동 보류";
 	private static final String FIRST_HELD_REASON = "1차 정산 보류 중이라 최종 정산도 자동 보류";

@@ -18,9 +18,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.bukang.payout.app.PayoutGroupCreator.CourseSale;
-import com.bukang.payout.app.PayoutGroupCreator.FinalPayoutSource;
-import com.bukang.payout.app.PayoutGroupCreator.FirstPayoutSource;
+import com.bukang.payout.app.PayoutCreateStepUseCase.CourseSale;
+import com.bukang.payout.app.PayoutCreateStepUseCase.FinalPayoutSource;
+import com.bukang.payout.app.PayoutCreateStepUseCase.FirstPayoutSource;
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutAccount;
@@ -76,7 +76,7 @@ class PayoutLedgerScenarioTest {
 	private EntityManager entityManager;
 
 	private PayoutLedgerUseCase ledgerUseCase;
-	private PayoutGroupCreator creator;
+	private PayoutCreateStepUseCase creator;
 	private PayoutPayUseCase payUseCase;
 	private PayoutRaceCancelUseCase raceCancelUseCase;
 
@@ -84,7 +84,7 @@ class PayoutLedgerScenarioTest {
 	void setUp() {
 		BusinessDayCalendar calendar = new BusinessDayCalendar();
 		ledgerUseCase = new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository);
-		creator = new PayoutGroupCreator(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
+		creator = new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
 		payUseCase = new PayoutPayUseCase(new PayoutPayStepUseCase(payoutRepository), transfer -> {
 		});
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, ledgerUseCase);
