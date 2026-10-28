@@ -9,6 +9,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -22,7 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
@@ -35,6 +38,7 @@ import com.bukang.order.domain.KitDeliveryStatus;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItem;
 import com.bukang.order.domain.OrderItemStatus;
+import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.Shipment;
 import com.bukang.order.domain.ShipmentStatus;
 import com.bukang.order.domain.exception.KitNotShippableException;
@@ -57,6 +61,8 @@ import com.bukang.order.support.StubSeatHoldPortConfig;
 import com.bukang.order.support.StubWalletPort;
 import com.bukang.order.support.StubWalletPortConfig;
 import com.jayway.jsonpath.JsonPath;
+
+import jakarta.persistence.Table;
 
 /**
  * 판매자가 키트를 발송 처리하고, 구매자 주문 조회에 배송 상태가 보이는지 본다 (PRO-136)
@@ -504,7 +510,12 @@ class KitDeliveryTest {
 			+ " kit_tracking_number = ?, kit_shipped_at = ?, kit_delivered_at = ? where order_id = ?",
 			CARRIER, TRACKING_NUMBER, shippedAt, shippedAt.plusDays(1), deliveredOrderId);
 
-		FileSystemResource sql = new FileSystemResource("../../docs/erd/order-shipment-migration-BUK-6.sql");
+		// SQL은 운영의 참가 신청 표 이름(order_participation, #237)을 쓴다. 테스트는 엔티티의 지금 표 이름으로 바꿔 돌린다
+		String participationTable = Participation.class.getAnnotation(Table.class).name().toLowerCase();
+		ByteArrayResource sql = new ByteArrayResource(Files.readString(
+				Path.of("../../docs/erd/order-shipment-migration-BUK-6.sql"))
+			.replace("order_participation", participationTable)
+			.getBytes(StandardCharsets.UTF_8));
 		new ResourceDatabasePopulator(sql).execute(jdbcTemplate.getDataSource());
 		new ResourceDatabasePopulator(sql).execute(jdbcTemplate.getDataSource());
 
