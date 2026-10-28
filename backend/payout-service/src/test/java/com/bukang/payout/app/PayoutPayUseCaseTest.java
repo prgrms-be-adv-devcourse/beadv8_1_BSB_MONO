@@ -334,4 +334,98 @@ class PayoutPayUseCaseTest {
 		payout.addItem(100 + sellerId, 50_000L, new BigDecimal("0.0550"), LocalDate.of(2026, 9, 26));
 		return payout;
 	}
+
+	// PRO-188: 최종은 같은 판매자 · 대회의 1차가 지급 완료된 뒤에만 지급한다
+	// 마감일 = 대회일 = 10/17이면 1차 · 최종 모두 10/19 지급 예정이다 (같은 날 지급)
+	private Payout saveFirstWithAdvance(int sellerId, long priceSum) {
+		Payout first = Payout.first(sellerId, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
+			LocalDateTime.of(2026, 10, 18, 3, 0), new BusinessDayCalendar());
+		if (priceSum > 0) {
+			first.recordAdvance(10, priceSum, 1, LocalDate.of(2026, 10, 18));
+		}
+		return payoutRepository.save(first);
+	}
+
+	@Test
+	@DisplayName("같은 날 1차 · 최종이 함께 대상이면 같은 실행에서 1차 → 최종 순서로 지급한다 (ID 순서로 처리하고 1차를 먼저 저장한다)")
+	void sameDayPaysFirstThenFinalInOneRun() {
+		Payout first = saveFirstWithAdvance(1, 50_000L);
+		Payout last = savePayoutWithSale(1);
+
+		useCase().run(PAY_DATE, NOW);
+
+		assertThat(statusOf(first)).isEqualTo(PayoutStatus.PAID);
+		assertThat(statusOf(last)).isEqualTo(PayoutStatus.PAID);
+		assertThat(transfers).extracting(PayoutTransfer::payoutId).containsExactly(first.getId(), last.getId());
+	}
+
+	@Test
+	@DisplayName("1차 이체 결과를 몰라 지급 중으로 남으면, 같은 대회의 최종은 이번 실행에서 건너뛰고 정산 예정으로 둔다")
+	void finalWaitsWhileFirstIsPaying() {
+		Payout first = saveFirstWithAdvance(1, 50_000L);
+		Payout last = savePayoutWithSale(1);
+		cashService = transfer -> {
+			if (transfer.payoutId() == first.getId()) {
+				throw new PayoutTransferUnknownException("read timed out", null);
+			}
+		};
+
+		useCase().run(PAY_DATE, NOW);
+
+		assertThat(statusOf(first)).isEqualTo(PayoutStatus.PAYING);
+		assertThat(statusOf(last)).isEqualTo(PayoutStatus.CALCULATED);
+		assertThat(transfers).extracting(PayoutTransfer::payoutId).containsExactly(first.getId());
+	}
+
+	@Test
+	@DisplayName("최종을 만든 뒤 1차에만 보류가 걸리면 최종은 기다리고, 1차를 풀어 지급한 뒤에 최종을 지급한다")
+	void finalWaitsWhileFirstIsHeld() {
+		Payout first = saveFirstWithAdvance(1, 50_000L);
+		Payout last = savePayoutWithSale(1);
+		var hold = payoutHoldRepository.save(
+			first.hold(PayoutHoldReason.ACCOUNT_NOT_REGISTERED, null, 99, NOW.minusHours(1)));
+		entityManager.flush();
+		entityManager.clear();
+
+		useCase().run(PAY_DATE, NOW);
+		assertThat(statusOf(first)).isEqualTo(PayoutStatus.HELD);
+		assertThat(statusOf(last)).isEqualTo(PayoutStatus.CALCULATED);
+
+		// 10/19 해제 → 1차는 10/20 지급 예정
+		Payout heldFirst = payoutRepository.findById(first.getId()).orElseThrow();
+		heldFirst.release(payoutHoldRepository.findById(hold.getId()).orElseThrow(), 99, NOW.plusHours(5),
+			new BusinessDayCalendar());
+		entityManager.flush();
+		entityManager.clear();
+
+		useCase().run(PAY_DATE.plusDays(1), NOW.plusDays(1));
+		useCase().run(PAY_DATE.plusDays(2), NOW.plusDays(2));
+
+		assertThat(statusOf(first)).isEqualTo(PayoutStatus.PAID);
+		assertThat(statusOf(last)).isEqualTo(PayoutStatus.PAID);
+		assertThat(transfers).extracting(PayoutTransfer::payoutId).containsExactly(first.getId(), last.getId());
+	}
+
+	@Test
+	@DisplayName("같은 대회의 1차가 없는 최종(1차를 만들지 못함, PRO-190)은 기다리지 않고 지급한다")
+	void finalWithoutFirstIsPaid() {
+		Payout last = savePayoutWithSale(1);
+
+		useCase().run(PAY_DATE, NOW);
+
+		assertThat(statusOf(last)).isEqualTo(PayoutStatus.PAID);
+	}
+
+	@Test
+	@DisplayName("다른 판매자 · 다른 대회의 1차가 지급 전이어도 최종은 막히지 않는다")
+	void otherFirstDoesNotBlockFinal() {
+		Payout otherSellerFirst = saveFirstWithAdvance(2, 50_000L);
+		payoutHoldRepository.save(
+			otherSellerFirst.hold(PayoutHoldReason.ACCOUNT_NOT_REGISTERED, null, 99, NOW.minusHours(1)));
+		Payout last = savePayoutWithSale(1);
+
+		useCase().run(PAY_DATE, NOW);
+
+		assertThat(statusOf(last)).isEqualTo(PayoutStatus.PAID);
+	}
 }
