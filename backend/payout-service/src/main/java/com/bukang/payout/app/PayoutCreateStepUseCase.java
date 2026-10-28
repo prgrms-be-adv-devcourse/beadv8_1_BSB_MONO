@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
-import com.bukang.payout.domain.PayoutAccount;
 import com.bukang.payout.domain.PayoutHold;
 import com.bukang.payout.domain.PayoutHoldReason;
 import com.bukang.payout.domain.PayoutHoldStatus;
@@ -34,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class PayoutGroupCreator {
+public class PayoutCreateStepUseCase {
 	// 자동 보류의 사유 상세. 관리자가 건 보류와 구분되도록 고정 문구를 남긴다
 	private static final String AUTO_HOLD_REASON = "정산 계좌 미등록으로 자동 보류";
 	private static final String FIRST_HELD_REASON = "1차 정산 보류 중이라 최종 정산도 자동 보류";
@@ -51,15 +50,15 @@ public class PayoutGroupCreator {
 	 * (다른 서비스 응답을 기다리는 동안 DB 트랜잭션을 열어 두지 않기 위해서다)
 	 */
 	@Transactional
-	public void createFirst(FirstGroup group, LocalDate refundDeadline, LocalDateTime now) {
+	public void createFirst(FirstPayoutSource source, LocalDate refundDeadline, LocalDateTime now) {
 		LocalDate targetDate = PayoutTargetDate.firstOf(refundDeadline);
-		Payout payout = Payout.first(group.sellerId(), group.raceId(), group.raceName(),
+		Payout payout = Payout.first(source.sellerId(), source.raceId(), source.raceName(),
 			YearMonth.from(refundDeadline), now, businessDayCalendar);
-		group.courses().forEach(course ->
+		source.courses().forEach(course ->
 			payout.recordAdvance(course.raceCourseId(), course.priceSum(), course.ticketCount(), targetDate));
 
 		save(payout);
-		if (!group.hasPayoutAccount()) {
+		if (!source.hasPayoutAccount()) {
 			holdForMissingAccount(payout, now);
 		}
 	}
@@ -70,33 +69,31 @@ public class PayoutGroupCreator {
 	 * 1차가 보류 중이면 최종도 같은 사유로 보류한다 (사유는 PRO-189에서 다시 정한다)
 	 */
 	@Transactional
-	public void createFinal(PayoutGroup group, LocalDate raceDate, LocalDateTime now) {
+	public void createFinal(FinalPayoutSource source, LocalDate raceDate, LocalDateTime now) {
 		LocalDate targetDate = PayoutTargetDate.of(raceDate);
 		Optional<Payout> first = payoutRepository.findFirstBySellerIdAndRaceIdAndPayoutStageOrderByIdAsc(
-			group.sellerId(), group.raceId(), PayoutStage.FIRST);
+			source.sellerId(), source.raceId(), PayoutStage.FIRST);
 		if (first.isEmpty()) {
 			// 1차 없이 최종 대상이 된 경우의 처리는 PRO-190에서 정한다. 그때까지는 1차 정산금 차감 없이 만들고 드러낸다
 			log.warn("1차 정산 내역 없이 최종 정산을 만듭니다. 선지급 차감은 0입니다. sellerId={}, raceId={}",
-				group.sellerId(), group.raceId());
+				source.sellerId(), source.raceId());
 		}
-		// 남은 1차 정산금 = 1차 정산금 − 회수 요청액. 회수 요청 때 이미 1차 정산금에서 뺐으므로 진행 중인 회수액을 또 빼지 않는다
-		long advanceDeduction = payoutLedgerUseCase.balance(group.sellerId(), group.raceId(), PayoutAccount.ADVANCE);
 
-		Payout payout = Payout.finalStage(group.sellerId(), group.raceId(), group.raceName(), YearMonth.from(raceDate),
-			advanceDeduction, now, businessDayCalendar);
+		Payout payout = Payout.finalStage(source.sellerId(), source.raceId(), source.raceName(),
+			YearMonth.from(raceDate), now, businessDayCalendar);
 
-		group.entries().forEach(entry ->
+		source.entries().forEach(entry ->
 			payout.addItem(entry.orderItemId(), entry.raceCourseId(), entry.price(), TwoStagePayoutCalculator.FEE_RATE,
 				targetDate));
 
 		save(payout);
-		payoutLedgerUseCase.settle(group.sellerId(), group.raceId(), now);
+		payoutLedgerUseCase.deductAdvanceAndSettle(payout, now);
 		Optional<PayoutHold> firstHold = first.filter(firstPayout -> firstPayout.getStatus() == PayoutStatus.HELD)
 			.flatMap(held -> payoutHoldRepository.findFirstByPayoutIdAndStatusOrderByIdDesc(
 				held.getId(), PayoutHoldStatus.HELD));
 		if (firstHold.isPresent()) {
 			hold(payout, firstHold.get().getReasonType(), FIRST_HELD_REASON, now);
-		} else if (!group.hasPayoutAccount()) {
+		} else if (!source.hasPayoutAccount()) {
 			holdForMissingAccount(payout, now);
 		}
 	}
@@ -120,10 +117,10 @@ public class PayoutGroupCreator {
 	}
 
 	/**
-	 * 1차 정산 내역 하나로 묶이는 판매자 × 대회의 코스별 판매 집계와, 저장에 필요한 다른 서비스의 값
+	 * 1차 정산 내역 하나(판매자 × 대회)를 만들 재료: 코스별 판매 집계와, 저장에 필요한 다른 서비스의 값
 	 * 정산 내역은 대회 단위이고, 1차 정산금 줄은 코스마다 하나씩 쓴다
 	 */
-	public record FirstGroup(int sellerId, int raceId, String raceName, boolean hasPayoutAccount,
+	public record FirstPayoutSource(int sellerId, int raceId, String raceName, boolean hasPayoutAccount,
 		List<CourseSale> courses) {
 	}
 
@@ -132,9 +129,9 @@ public class PayoutGroupCreator {
 	}
 
 	/**
-	 * 최종 정산 내역 하나로 묶이는 판매자 × 대회의 참가권과, 저장에 필요한 다른 서비스의 값
+	 * 최종 정산 내역 하나(판매자 × 대회)를 만들 재료: 참가권과, 저장에 필요한 다른 서비스의 값
 	 */
-	public record PayoutGroup(int sellerId, int raceId, String raceName, boolean hasPayoutAccount,
+	public record FinalPayoutSource(int sellerId, int raceId, String raceName, boolean hasPayoutAccount,
 		List<SoldEntry> entries) {
 	}
 }

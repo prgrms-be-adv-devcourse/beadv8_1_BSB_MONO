@@ -48,13 +48,13 @@ class PayoutHoldUseCaseTest {
 	}
 
 	private PayoutPayUseCase payUseCase() {
-		return new PayoutPayUseCase(new PayoutPayStep(payoutRepository), transfer -> {
+		return new PayoutPayUseCase(new PayoutPayStepUseCase(payoutRepository), transfer -> {
 		});
 	}
 
 	// 2026-09분: 지급 예정일 10/20
 	private Payout saveSeptemberPayout() {
-		return payoutRepository.save(Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 0L,
+		return payoutRepository.save(Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
 			LocalDateTime.of(2026, 9, 29, 3, 0), new BusinessDayCalendar()));
 	}
 
@@ -125,7 +125,7 @@ class PayoutHoldUseCaseTest {
 	@DisplayName("다른 정산 내역의 보류로는 풀 수 없다 (ID로 비교)")
 	void cannotReleaseWithOtherPayoutsHold() {
 		Payout payout = saveSeptemberPayout();
-		Payout other = payoutRepository.save(Payout.finalStage(2, 10, "테스트 대회", YearMonth.of(2026, 9), 0L,
+		Payout other = payoutRepository.save(Payout.finalStage(2, 10, "테스트 대회", YearMonth.of(2026, 9),
 			LocalDateTime.of(2026, 9, 29, 3, 0), new BusinessDayCalendar()));
 		holdOf(payout);
 		PayoutHoldDto otherHold = holdOf(other);

@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.payout.domain.Payout;
@@ -21,11 +21,9 @@ import lombok.RequiredArgsConstructor;
  * 지급 중(PAYING)을 호출 전에 커밋해 두므로, 트랜잭션 밖에 있어도 그동안 보류 · 상계 · 취소가 끼어들지 못한다
  * PayoutPayUseCase가 부른다. 같은 클래스 안에서 부르면 @Transactional 프록시를 거치지 않으므로 빈을 나눈다
  */
-// TODO: app 패키지에는 UseCase · Facade만 둔다는 규칙과 어긋난다. 이름을 UseCase로 바꿀지,
-//  PayoutPayUseCase에 TransactionTemplate으로 합칠지 고민해 보기 (PayoutGroupCreator도 같은 문제)
-@Component
+@Service
 @RequiredArgsConstructor
-public class PayoutPayStep {
+public class PayoutPayStepUseCase {
 	private final PayoutRepository payoutRepository;
 
 	@Transactional(readOnly = true)
