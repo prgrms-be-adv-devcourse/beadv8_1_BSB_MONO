@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -38,10 +39,12 @@ import com.bukang.order.domain.event.OrderRaceCanceledEvent;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.in.RaceCanceledNotificationListener;
+import com.bukang.order.out.OrderOutboxKafkaEventRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.out.QueueAdmissionRepository;
 import com.bukang.order.support.QueueEntry;
+import com.bukang.order.support.SeatOutboxMessages;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -96,6 +99,9 @@ class RaceCancelRefundTest {
 	private StubSeatHoldPort seatHoldPort;
 
 	@Autowired
+	private OrderOutboxKafkaEventRepository orderOutboxKafkaEventRepository;
+
+	@Autowired
 	private StubWalletPort walletPort;
 
 	@Autowired
@@ -106,6 +112,7 @@ class RaceCancelRefundTest {
 
 	@BeforeEach
 	void setUp() {
+		orderOutboxKafkaEventRepository.deleteAll();
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null));
 		raceCoursePort.put(StubRaceCoursePort.openCourse(OTHER_COURSE_ID, OTHER_RACE_ID, 14, null));
 		walletPort.setBalance(BALANCE);
@@ -118,6 +125,7 @@ class RaceCancelRefundTest {
 		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
+		orderOutboxKafkaEventRepository.deleteAll();
 		walletPort.clear();
 	}
 
@@ -143,7 +151,7 @@ class RaceCancelRefundTest {
 		assertThat(walletPort.cancelCalls()).containsExactly(new StubWalletPort.Call(waiting, 3));
 		assertThat(statusOf(otherRace)).isEqualTo(OrderStatus.PAID);
 		// 자리는 되돌리지 않는다 (취소된 대회는 다시 팔지 않는다)
-		assertThat(seatHoldPort.restoredParticipations()).isEmpty();
+		assertThat(restoredSeats()).isEmpty();
 		// 환불한 구매자에게만 알린다
 		verify(notificationListener)
 			.notifyBuyer(new OrderRaceCanceledEvent(first, 1, RACE_ID, StubRaceCoursePort.PRICE));
@@ -336,5 +344,13 @@ class RaceCancelRefundTest {
 	private ParticipationStatus participationStatusOf(int orderId) {
 		int participationId = orderOf(orderId).participationId();
 		return participationRepository.findById(participationId).orElseThrow().getStatus();
+	}
+
+	private List<Integer> restoredSeats() {
+		return SeatOutboxMessages.restored(orderOutboxKafkaEventRepository);
+	}
+
+	private List<Integer> releasedSeats() {
+		return SeatOutboxMessages.released(orderOutboxKafkaEventRepository);
 	}
 }

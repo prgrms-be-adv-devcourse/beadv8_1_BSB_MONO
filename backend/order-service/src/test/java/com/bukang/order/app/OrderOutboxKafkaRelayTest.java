@@ -108,6 +108,8 @@ class OrderOutboxKafkaRelayTest {
 		int sent = relayAt(now);
 
 		assertThat(sent).isEqualTo(2);
+		// 상품 서비스가 받는 본문 형식 ({participationId}) 그대로인지 글자로 확인한다
+		assertThat(restorePayload(PARTICIPATION_ID)).isEqualTo("{\"participationId\":1001}");
 		InOrder order = inOrder(kafka());
 		order.verify(kafka()).send(KafkaTopics.PRODUCT_HOLD_RESTORE, "1001", restorePayload(PARTICIPATION_ID));
 		order.verify(kafka()).send(KafkaTopics.PRODUCT_HOLD_CANCEL, "1002", releasePayload(OTHER_PARTICIPATION_ID));

@@ -6,10 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.client.RestClient;
 
-import com.bukang.common.global.json.JsonConverter;
 import com.bukang.order.out.InternalHttpClients;
 import com.bukang.order.out.seat.HttpSeatHoldAdapter;
 
@@ -36,10 +34,8 @@ public class ProductClientConfig {
 		return new HttpRaceCourseAdapter(restClient);
 	}
 
-	// 결제하지 않은 자리 해제는 Kafka(product.hold.cancel)로 알린다
 	@Bean
-	public HttpSeatHoldAdapter httpSeatHoldAdapter(KafkaTemplate<String, String> kafkaTemplate,
-		JsonConverter jsonConverter) {
-		return new HttpSeatHoldAdapter(restClient, kafkaTemplate, jsonConverter);
+	public HttpSeatHoldAdapter httpSeatHoldAdapter() {
+		return new HttpSeatHoldAdapter(restClient);
 	}
 }

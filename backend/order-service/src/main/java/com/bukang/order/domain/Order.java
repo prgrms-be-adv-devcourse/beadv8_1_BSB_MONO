@@ -154,7 +154,7 @@ public class Order extends BaseIdAndTime {
 	}
 
 	// 결제하지 않고 기한이 지났다. 예치금 결제 취소를 부른 뒤에 바꾼다 (OrderExpiryUseCase)
-	// 상품 서비스에 자리를 풀어 달라고 알리도록 이벤트를 발행한다. 보내지 못하면 예외로 만료가 롤백된다 (OrderExpiredEventListener)
+	// 상품 서비스에 자리를 풀어 달라고 알리도록 이벤트를 발행한다. 같은 트랜잭션에서 아웃박스에 남는다 (OrderExpiredEventListener)
 	public void expire(LocalDateTime now) {
 		if (!isOverdue(now)) {
 			throw new IllegalStateException(

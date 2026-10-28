@@ -21,7 +21,6 @@ import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.out.payout.RefundEligibilityPort;
 import com.bukang.order.out.race.RaceCourseInfo;
 import com.bukang.order.out.race.RaceCoursePort;
-import com.bukang.order.out.seat.SeatHoldPort;
 import com.bukang.order.out.wallet.WalletPort;
 
 import lombok.RequiredArgsConstructor;
@@ -30,8 +29,11 @@ import lombok.RequiredArgsConstructor;
  * 결제한 참가권을 주문 상품 단위로 취소·환불한다 (정책 5장). 키트는 같은 주문 상품이라 함께 취소된다
  * 환불 기한 안이거나, 대회 일정이 바뀐 뒤 7일 안이면 자동 승인 (ERD v4 환불 판정):
  * 주문 상품 CANCELED, 주문 PARTIAL_CANCELED/CANCELED, 참가 신청 CANCELED
- * → 자리 되돌리기(B) → 예치금 환불(D). 정산 대상일이 지난 참가권은 정산 서비스(E)가 거절한다
- * 외부 호출은 모두 멱등이라(자리는 참가 신청, 환불은 주문 단위), 중간에 실패해 롤백되면 같은 취소를 다시 요청하면 된다
+ * → 예치금 환불(D) → 자리 복구 메시지를 아웃박스에 저장(B에는 커밋 뒤 Kafka product.hold.restore로 간다, PRO-270)
+ * 정산 대상일이 지난 참가권은 정산 서비스(E)가 거절한다
+ * 자리 복구를 환불보다 먼저 HTTP로 부르면, 환불이 실패해 주문이 결제 완료로 롤백돼도 자리는 이미 판매 가능으로 풀려
+ * 정원보다 더 팔릴 수 있었다. 이제 환불이 실패하면 복구 메시지도 함께 롤백되고, 커밋된 취소만 자리를 되돌린다
+ * 환불은 주문 단위로 멱등이라, 환불 뒤 커밋이 실패해 롤백되면 같은 취소를 다시 요청하면 된다
  * 트랜잭션은 이 클래스가 단계마다 연다. 바깥 트랜잭션 없이 부른다 (OrderFacade.cancelItem)
  */
 @Service
@@ -41,7 +43,7 @@ public class OrderCancelUseCase {
 	private final ParticipationRepository participationRepository;
 	private final RaceCoursePort raceCoursePort;
 	private final RefundEligibilityPort refundEligibilityPort;
-	private final SeatHoldPort seatHoldPort;
+	private final OrderOutboxKafkaAppendUseCase orderOutboxKafkaAppendUseCase;
 	private final WalletPort walletPort;
 	private final TransactionTemplate transactionTemplate;
 
@@ -86,9 +88,10 @@ public class OrderCancelUseCase {
 		order.cancelItem(item, now);
 		participation.markCanceled(now);
 
-		seatHoldPort.restore(item.getParticipationId());
 		// 주문 하나 = 참가권 하나라, 주문 단위 전액 환불이 이 상품의 환불이다. 금액은 D가 결제 기록으로 정한다
 		walletPort.refund(order.getId(), memberId);
+		// 환불이 성공한 뒤에만 남긴다. 이 트랜잭션이 커밋돼야 보내진다 (롤백되면 메시지도 없다)
+		orderOutboxKafkaAppendUseCase.appendSeatRestore(item.getParticipationId());
 		return new CancelResult(order.toDto(), item.getAmount());
 	}
 

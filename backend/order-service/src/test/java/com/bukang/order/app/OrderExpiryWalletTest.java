@@ -7,6 +7,7 @@ import static org.mockito.Mockito.reset;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -32,10 +33,12 @@ import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
+import com.bukang.order.out.OrderOutboxKafkaEventRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
 import com.bukang.order.out.QueueAdmissionRepository;
 import com.bukang.order.support.QueueEntry;
+import com.bukang.order.support.SeatOutboxMessages;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -91,6 +94,9 @@ class OrderExpiryWalletTest {
 	private StubSeatHoldPort seatHoldPort;
 
 	@Autowired
+	private OrderOutboxKafkaEventRepository orderOutboxKafkaEventRepository;
+
+	@Autowired
 	private StubWalletPort walletPort;
 
 	@Autowired
@@ -98,6 +104,7 @@ class OrderExpiryWalletTest {
 
 	@BeforeEach
 	void setUp() {
+		orderOutboxKafkaEventRepository.deleteAll();
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null));
 		walletPort.setBalance(BALANCE);
 	}
@@ -109,6 +116,7 @@ class OrderExpiryWalletTest {
 		queueAdmissionRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
+		orderOutboxKafkaEventRepository.deleteAll();
 		walletPort.clear();
 	}
 
@@ -151,10 +159,10 @@ class OrderExpiryWalletTest {
 		assertThat(walletPort.chargedOrders()).isEmpty();
 		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.EXPIRED);
 		assertThat(participationStatusOf(orderId)).isEqualTo(ParticipationStatus.RELEASED);
-		// 판매된 채 남았을 수 있는 자리는 복구하고, 결제하지 않은 자리는 만료 트랜잭션 안에서 풀어 달라고 알린다 (PRO-166)
+		// 판매된 채 남았을 수 있는 자리는 복구하고, 결제하지 않은 자리는 풀어 달라고 만료 트랜잭션 안에서 아웃박스에 남긴다 (PRO-270)
 		int participationId = participationIdOf(orderId);
-		assertThat(seatHoldPort.restoredParticipations()).containsExactly(participationId);
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(participationId);
+		assertThat(restoredSeats()).containsExactly(participationId);
+		assertThat(releasedSeats()).containsExactly(participationId);
 	}
 
 	@Test
@@ -169,8 +177,8 @@ class OrderExpiryWalletTest {
 		assertThat(first).isEqualTo(new OrderExpiryUseCase.ExpiryResult(0, 0, 1));
 		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.CREATED);
 		assertThat(participationStatusOf(orderId)).isEqualTo(ParticipationStatus.APPLIED);
-		// 결제 취소가 실패해 만료하지 않았으니 자리 해제 알림도 보내지 않는다 (해제는 만료 트랜잭션 안에서 보낸다)
-		assertThat(seatHoldPort.releasedParticipations()).isEmpty();
+		// 결제 취소가 실패해 만료가 롤백됐으니 자리 메시지도 남지 않는다 (만료 트랜잭션 안에서 아웃박스에 남긴다)
+		assertThat(releasedSeats()).isEmpty();
 
 		walletPort.setCancelFails(false);
 		OrderExpiryUseCase.ExpiryResult second = orderExpiryUseCase.expireOverdue(due.plusMinutes(1));
@@ -180,12 +188,13 @@ class OrderExpiryWalletTest {
 			new StubWalletPort.Call(orderId, MEMBER_ID), new StubWalletPort.Call(orderId, MEMBER_ID));
 		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.EXPIRED);
 		assertThat(participationStatusOf(orderId)).isEqualTo(ParticipationStatus.RELEASED);
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(participationIdOf(orderId));
+		assertThat(releasedSeats()).containsExactly(participationIdOf(orderId));
 	}
 
 	@Test
-	@DisplayName("해제 알림을 보낸 뒤 같은 트랜잭션에서 실패하면(참가 신청 잠금 실패) 만료는 롤백되고 다음 실행에서 다시 보낸다 (상품 해제는 멱등)")
-	void releaseAgainWhenExpiryRollsBackAfterRelease() throws Exception {
+	@DisplayName("자리 메시지를 남긴 뒤 같은 트랜잭션에서 실패하면(참가 신청 잠금 실패) 만료와 함께 메시지도 롤백되고, "
+		+ "다음 실행에서 만료하면 복구·해제 메시지가 한 번씩만 남는다")
+	void seatMessagesRollBackWithExpiry() throws Exception {
 		int orderId = createOrder();
 		int participationId = participationIdOf(orderId);
 		doThrow(new IllegalStateException("잠금 대기 시간 초과 (테스트)"))
@@ -195,51 +204,15 @@ class OrderExpiryWalletTest {
 
 		assertThat(result).isEqualTo(new OrderExpiryUseCase.ExpiryResult(0, 0, 1));
 		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.CREATED);
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(participationId);
+		assertThat(restoredSeats()).isEmpty();
+		assertThat(releasedSeats()).isEmpty();
 
 		reset(participationRepository);
 		orderExpiryUseCase.expireOverdue(dueOf(orderId).plusMinutes(1));
 
 		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.EXPIRED);
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(participationId, participationId);
-	}
-
-	@Test
-	@DisplayName("해제 알림을 보내지 못하면(Kafka 장애) 만료하지 않고 결제 대기로 남겨, 다음 실행에서 다시 보낸 뒤 만료한다")
-	void expiryRetriesWhenReleaseFails() throws Exception {
-		int orderId = createOrder();
-		seatHoldPort.failRelease(true);
-
-		OrderExpiryUseCase.ExpiryResult first = orderExpiryUseCase.expireOverdue(dueOf(orderId));
-
-		assertThat(first).isEqualTo(new OrderExpiryUseCase.ExpiryResult(0, 0, 1));
-		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.CREATED);
-		assertThat(participationStatusOf(orderId)).isEqualTo(ParticipationStatus.APPLIED);
-
-		seatHoldPort.failRelease(false);
-		orderExpiryUseCase.expireOverdue(dueOf(orderId).plusMinutes(1));
-
-		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.EXPIRED);
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(participationIdOf(orderId));
-	}
-
-	@Test
-	@DisplayName("자리 복구가 실패하면 만료하지 않고 해제 알림도 보내지 않는다 (다음 실행에서 다시)")
-	void expiryRetriesWhenRestoreFails() throws Exception {
-		int orderId = createOrder();
-		seatHoldPort.failRestore(true);
-
-		OrderExpiryUseCase.ExpiryResult first = orderExpiryUseCase.expireOverdue(dueOf(orderId));
-
-		assertThat(first).isEqualTo(new OrderExpiryUseCase.ExpiryResult(0, 0, 1));
-		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.CREATED);
-		assertThat(seatHoldPort.releasedParticipations()).isEmpty();
-
-		seatHoldPort.failRestore(false);
-		orderExpiryUseCase.expireOverdue(dueOf(orderId).plusMinutes(1));
-
-		assertThat(statusOf(orderId)).isEqualTo(OrderStatus.EXPIRED);
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(participationIdOf(orderId));
+		assertThat(restoredSeats()).containsExactly(participationId);
+		assertThat(releasedSeats()).containsExactly(participationId);
 	}
 
 	@Test
@@ -348,5 +321,13 @@ class OrderExpiryWalletTest {
 		// 주문 상품은 지연 로딩이라 트랜잭션 안에서 읽는다
 		int participationId = transactionTemplate.execute(status -> orderOf(orderId).participationId());
 		return participationRepository.findById(participationId).orElseThrow().getStatus();
+	}
+
+	private List<Integer> restoredSeats() {
+		return SeatOutboxMessages.restored(orderOutboxKafkaEventRepository);
+	}
+
+	private List<Integer> releasedSeats() {
+		return SeatOutboxMessages.released(orderOutboxKafkaEventRepository);
 	}
 }

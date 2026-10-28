@@ -33,7 +33,7 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
       properties:
-        # 브로커가 없을 때 send()가 기다리는 시간 (기본 60초). 만료 처리 한 건이 오래 붙잡히지 않게 줄인다 (PRO-166)
+        # 브로커가 없을 때 send()가 기다리는 시간 (기본 60초). 아웃박스 릴레이 한 번이 오래 붙잡히지 않게 줄인다 (PRO-270)
         max.block.ms: 3000
 
     consumer:

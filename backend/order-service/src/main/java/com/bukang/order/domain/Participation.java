@@ -173,7 +173,7 @@ public class Participation extends BaseIdAndTime {
 			case PENDING -> {
 				changeStatus(ParticipationStatus.CANCELED);
 				this.canceledAt = canceledAt;
-				// [결제하기]에서 자리만 잡히고 주문은 롤백됐을 수 있어, 커밋 뒤 상품에 자리를 풀어 달라고 알린다
+				// [결제하기]에서 자리만 잡히고 주문은 롤백됐을 수 있어, 상품에 자리를 풀어 달라고 알린다 (아웃박스 → 커밋 뒤 Kafka)
 				publishEvent(new ParticipationCanceledBeforePaymentEvent(getId()));
 			}
 			case APPLIED -> throw new ParticipationNotCancelableException(
