@@ -28,7 +28,7 @@ public class HttpCashBalanceAdapter implements CashBalancePort {
 	private final RestClient restClient;
 
 	@Override
-	public int findBalance(int memberId) {
+	public int findBalance(long memberId) {
 		RsData<Balance> response;
 		try {
 			response = restClient.get()

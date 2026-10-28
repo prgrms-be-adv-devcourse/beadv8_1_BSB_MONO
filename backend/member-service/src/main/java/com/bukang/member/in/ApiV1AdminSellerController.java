@@ -55,7 +55,7 @@ public class ApiV1AdminSellerController {
 				examples = @ExampleObject(value = SellerApiExamples.MEMBER_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<List<SellerDto>>> findAll(
-		@LoginMemberId int memberId,
+		@LoginMemberId long memberId,
 		@Parameter(description = "신청 상태 (비우면 전체)", example = "PENDING")
 		@RequestParam(required = false) SellerStatus status
 	) {
@@ -86,9 +86,9 @@ public class ApiV1AdminSellerController {
 				examples = @ExampleObject(value = SellerApiExamples.ALREADY_REVIEWED)))
 	})
 	public ResponseEntity<RsData<SellerDto>> approve(
-		@LoginMemberId int memberId,
+		@LoginMemberId long memberId,
 		@Parameter(description = "판매자 신청 ID", example = "1")
-		@PathVariable int id
+		@PathVariable long id
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "판매자 신청을 승인했습니다.", sellerFacade.approve(memberId, id)));
@@ -121,9 +121,9 @@ public class ApiV1AdminSellerController {
 				examples = @ExampleObject(value = SellerApiExamples.ALREADY_REVIEWED)))
 	})
 	public ResponseEntity<RsData<SellerDto>> reject(
-		@LoginMemberId int memberId,
+		@LoginMemberId long memberId,
 		@Parameter(description = "판매자 신청 ID", example = "1")
-		@PathVariable int id,
+		@PathVariable long id,
 		@Valid @RequestBody SellerRejectRequestDto sellerRejectRequestDto
 	) {
 		return ResponseEntity.ok()

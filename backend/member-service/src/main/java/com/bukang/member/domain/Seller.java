@@ -44,7 +44,7 @@ public class Seller extends BaseEntity {
 	@Id
 	@GeneratedValue(strategy = IDENTITY)
 	@Column(name = "seller_id")
-	private int id;
+	private long id;
 
 	// 신청한 회원. 반려 뒤 재신청하면 한 회원에 행이 여러 개다
 	@ManyToOne(fetch = LAZY)
@@ -83,7 +83,7 @@ public class Seller extends BaseEntity {
 
 	// 심사한 관리자의 회원 ID. 기록용이라 외래 키를 걸지 않는다
 	@Column(name = "reviewed_by")
-	private Integer reviewedBy;
+	private Long reviewedBy;
 
 	// 신청자가 승인·반려 결과를 처음 본 시각. 아직 안 봤으면 null. 화면 표시용이라 이벤트에는 넣지 않는다
 	@Column(name = "result_checked_at")
@@ -115,13 +115,13 @@ public class Seller extends BaseEntity {
 	}
 
 	// 대기(PENDING)인 신청만 승인할 수 있다 (BE-020 결정 5). 이미 저장된 신청이라 ID가 있어 바로 발행한다
-	public void approve(int adminId, LocalDateTime now) {
+	public void approve(long adminId, LocalDateTime now) {
 		review(adminId, now);
 		this.status = SellerStatus.APPROVED;
 		publishChangedEvent();
 	}
 
-	public void reject(int adminId, String reason, LocalDateTime now) {
+	public void reject(long adminId, String reason, LocalDateTime now) {
 		review(adminId, now);
 		this.status = SellerStatus.REJECTED;
 		this.rejectReason = reason;
@@ -150,7 +150,7 @@ public class Seller extends BaseEntity {
 		}
 	}
 
-	private void review(int adminId, LocalDateTime now) {
+	private void review(long adminId, LocalDateTime now) {
 		if (status != SellerStatus.PENDING) {
 			throw new SellerAlreadyReviewedException("이미 심사한 판매자 신청입니다.");
 		}
@@ -160,9 +160,10 @@ public class Seller extends BaseEntity {
 
 	// 판매자 변경 이벤트를 발행한다. 신청은 ID가 저장할 때(IDENTITY) 정해지므로 save() 뒤에 부른다
 	public void publishChangedEvent() {
+		// 판매자·회원 ID는 long이지만 다른 서비스가 받는 이벤트는 아직 int다. 받는 서비스가 long으로 바꿀 때 이 변환을 지운다
 		publishEvent(new SellerChangedEvent(
-			id,
-			member.getId(),
+			Math.toIntExact(id),
+			Math.toIntExact(member.getId()),
 			sellerType,
 			businessName,
 			businessNumber,

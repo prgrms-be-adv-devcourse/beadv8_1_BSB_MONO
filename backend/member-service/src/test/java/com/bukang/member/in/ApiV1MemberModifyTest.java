@@ -75,7 +75,7 @@ class ApiV1MemberModifyTest {
 	@Autowired
 	private ApplicationEvents applicationEvents;
 
-	private int memberId;
+	private long memberId;
 
 	@BeforeEach
 	void setUp() {
@@ -274,7 +274,7 @@ class ApiV1MemberModifyTest {
 		@Test
 		@DisplayName("내 닉네임의 대소문자만 바꾸면 200과 바뀐 닉네임을 받는다")
 		void modifyNicknameLetterCaseOnly() throws Exception {
-			int caseMemberId = joinDirectly("runner2@crewrun.com", "Runner1", OTHER_PHONE);
+			long caseMemberId = joinDirectly("runner2@crewrun.com", "Runner1", OTHER_PHONE);
 
 			modify(caseMemberId, NAME, "runner1", OTHER_PHONE, BIRTH_DATE)
 				.andExpect(status().isOk())
@@ -292,14 +292,14 @@ class ApiV1MemberModifyTest {
 		willReturn(false).given(memberRepository).existsByPhoneHashAndIdNot(anyString(), anyInt());
 	}
 
-	private int joinDirectly(String email, String nickname, String phone) {
+	private long joinDirectly(String email, String nickname, String phone) {
 		return memberFacade.join(new MemberJoinRequestDto(
 			email, "password1234", NAME, nickname, phone, LocalDate.of(1995, 4, 12), null,
 			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		)).getId();
 	}
 
-	private ResultActions modify(int id, String name, String nickname, String phone, String birthDate)
+	private ResultActions modify(long id, String name, String nickname, String phone, String birthDate)
 		throws Exception {
 		return mockMvc.perform(put(ME)
 			.header(MemberIdHeader.NAME, id)

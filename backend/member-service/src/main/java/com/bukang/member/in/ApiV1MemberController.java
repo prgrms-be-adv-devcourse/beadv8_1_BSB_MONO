@@ -71,7 +71,7 @@ public class ApiV1MemberController {
 				examples = @ExampleObject(value = MemberApiExamples.MEMBER_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<MemberDto>> findMe(
-		@LoginMemberId int memberId
+		@LoginMemberId long memberId
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "내 정보를 조회했습니다.", memberFacade.findMe(memberId)));
@@ -105,7 +105,7 @@ public class ApiV1MemberController {
 			}))
 	})
 	public ResponseEntity<RsData<MemberDto>> modifyMe(
-		@LoginMemberId int memberId,
+		@LoginMemberId long memberId,
 		@Valid @RequestBody MemberModifyRequestDto memberModifyRequestDto
 	) {
 		return ResponseEntity.ok()
@@ -139,7 +139,7 @@ public class ApiV1MemberController {
 				examples = @ExampleObject(value = MemberApiExamples.WITHDRAW_CHECK_FAILED)))
 	})
 	public ResponseEntity<RsData<Void>> withdrawMe(
-		@LoginMemberId int memberId
+		@LoginMemberId long memberId
 	) {
 		memberFacade.withdrawMe(memberId);
 		return ResponseEntity.ok().body(RsData.of(HttpStatus.OK, "탈퇴했습니다.", null));

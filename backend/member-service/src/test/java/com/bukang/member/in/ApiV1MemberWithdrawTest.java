@@ -109,7 +109,7 @@ class ApiV1MemberWithdrawTest {
 	@MockitoBean
 	private RefreshTokenRepository refreshTokenRepository;
 
-	private int memberId;
+	private long memberId;
 
 	@BeforeEach
 	void setUp() {
@@ -261,7 +261,7 @@ class ApiV1MemberWithdrawTest {
 	void rejoinAfterWithdraw() throws Exception {
 		withdraw(memberId).andExpect(status().isOk());
 
-		int rejoinedId = join(EMAIL, NICKNAME, PHONE);
+		long rejoinedId = join(EMAIL, NICKNAME, PHONE);
 		assertThat(rejoinedId).isNotEqualTo(memberId);
 		assertThat(memberRepository.findActiveByEmail(EMAIL)).hasValueSatisfying(member ->
 			assertThat(member.getId()).isEqualTo(rejoinedId));
@@ -296,7 +296,7 @@ class ApiV1MemberWithdrawTest {
 	@Test
 	@DisplayName("탈퇴하면 대기 중 판매자 신청을 \"회원 탈퇴\" 사유로 반려하고 반려 이벤트를 보낸다")
 	void withdrawRejectsPendingSellerApplication() throws Exception {
-		int sellerId = sellerFacade.apply(memberId,
+		long sellerId = sellerFacade.apply(memberId,
 			new SellerApplyRequestDto(SellerType.BUSINESS, "크루런 스포츠", "123-45-67890", "김러너")).getId();
 
 		withdraw(memberId).andExpect(status().isOk());
@@ -315,14 +315,14 @@ class ApiV1MemberWithdrawTest {
 		return applicationEvents.stream(MemberModifiedEvent.class).toList();
 	}
 
-	private int join(String email, String nickname, String phone) {
+	private long join(String email, String nickname, String phone) {
 		return memberFacade.join(new MemberJoinRequestDto(
 			email, PASSWORD, "김러너", nickname, phone, LocalDate.of(1995, 4, 12), Gender.FEMALE,
 			List.of(TermsType.SERVICE, TermsType.PRIVACY)
 		)).getId();
 	}
 
-	private ResultActions withdraw(int id) throws Exception {
+	private ResultActions withdraw(long id) throws Exception {
 		return mockMvc.perform(delete(ME).header(MemberIdHeader.NAME, id));
 	}
 }

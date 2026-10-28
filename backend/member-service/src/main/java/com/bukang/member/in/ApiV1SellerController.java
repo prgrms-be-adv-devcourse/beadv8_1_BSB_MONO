@@ -54,7 +54,7 @@ public class ApiV1SellerController {
 				examples = @ExampleObject(value = SellerApiExamples.ALREADY_APPLIED)))
 	})
 	public ResponseEntity<RsData<SellerDto>> apply(
-		@LoginMemberId int memberId,
+		@LoginMemberId long memberId,
 		@Valid @RequestBody SellerApplyRequestDto sellerApplyRequestDto
 	) {
 		return ResponseEntity.status(HttpStatus.CREATED)
@@ -76,7 +76,7 @@ public class ApiV1SellerController {
 				examples = @ExampleObject(value = SellerApiExamples.MY_SELLER_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<SellerDto>> findMine(
-		@LoginMemberId int memberId
+		@LoginMemberId long memberId
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "판매자 신청 내역을 조회했습니다.", sellerFacade.findMine(memberId)));
@@ -100,7 +100,7 @@ public class ApiV1SellerController {
 				examples = @ExampleObject(value = SellerApiExamples.NOT_REVIEWED)))
 	})
 	public ResponseEntity<RsData<SellerDto>> checkMyResult(
-		@LoginMemberId int memberId
+		@LoginMemberId long memberId
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "판매자 신청 결과를 확인했습니다.", sellerFacade.checkMyResult(memberId)));
