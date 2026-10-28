@@ -56,7 +56,7 @@ class PayoutRaceCancelUseCaseTest {
 	private EntityManager entityManager;
 
 	private PayoutRaceCancelUseCase useCase() {
-		return new PayoutRaceCancelUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository,
+		return new PayoutRaceCancelUseCase(payoutRepository,
 			new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
 	}
 
@@ -70,7 +70,7 @@ class PayoutRaceCancelUseCaseTest {
 	private int nextOrderItemId = 1;
 
 	private Payout savePayout(int raceId, YearMonth month, long price) {
-		Payout payout = Payout.finalStage(SELLER_ID, raceId, "테스트 대회", month, 0L,
+		Payout payout = Payout.finalStage(SELLER_ID, raceId, "테스트 대회", month,
 			month.atEndOfMonth().atTime(3, 0), new BusinessDayCalendar());
 		if (price > 0) {
 			payout.addItem(nextOrderItemId++, price, FEE_RATE, month.atEndOfMonth());

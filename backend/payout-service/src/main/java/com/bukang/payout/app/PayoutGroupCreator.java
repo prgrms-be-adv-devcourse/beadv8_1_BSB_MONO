@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
-import com.bukang.payout.domain.PayoutAccount;
 import com.bukang.payout.domain.PayoutHold;
 import com.bukang.payout.domain.PayoutHoldReason;
 import com.bukang.payout.domain.PayoutHoldStatus;
@@ -79,18 +78,16 @@ public class PayoutGroupCreator {
 			log.warn("1차 정산 내역 없이 최종 정산을 만듭니다. 선지급 차감은 0입니다. sellerId={}, raceId={}",
 				group.sellerId(), group.raceId());
 		}
-		// 남은 1차 정산금 = 1차 정산금 − 회수 요청액. 회수 요청 때 이미 1차 정산금에서 뺐으므로 진행 중인 회수액을 또 빼지 않는다
-		long advanceDeduction = payoutLedgerUseCase.balance(group.sellerId(), group.raceId(), PayoutAccount.ADVANCE);
 
 		Payout payout = Payout.finalStage(group.sellerId(), group.raceId(), group.raceName(), YearMonth.from(raceDate),
-			advanceDeduction, now, businessDayCalendar);
+			now, businessDayCalendar);
 
 		group.entries().forEach(entry ->
 			payout.addItem(entry.orderItemId(), entry.raceCourseId(), entry.price(), TwoStagePayoutCalculator.FEE_RATE,
 				targetDate));
 
 		save(payout);
-		payoutLedgerUseCase.settle(group.sellerId(), group.raceId(), now);
+		payoutLedgerUseCase.deductAdvanceAndSettle(payout, now);
 		Optional<PayoutHold> firstHold = first.filter(firstPayout -> firstPayout.getStatus() == PayoutStatus.HELD)
 			.flatMap(held -> payoutHoldRepository.findFirstByPayoutIdAndStatusOrderByIdDesc(
 				held.getId(), PayoutHoldStatus.HELD));

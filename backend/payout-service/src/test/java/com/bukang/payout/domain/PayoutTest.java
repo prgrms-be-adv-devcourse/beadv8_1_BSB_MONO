@@ -17,12 +17,12 @@ class PayoutTest {
 	private static final BusinessDayCalendar CALENDAR = new BusinessDayCalendar();
 
 	private Payout newPayout() {
-		return Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 0L,
+		return Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
 			LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
 	}
 
 	private Payout newPayout(YearMonth payoutMonth) {
-		return Payout.finalStage(1, 10, "테스트 대회", payoutMonth, 0L, payoutMonth.atEndOfMonth().atTime(3, 0), CALENDAR);
+		return Payout.finalStage(1, 10, "테스트 대회", payoutMonth, payoutMonth.atEndOfMonth().atTime(3, 0), CALENDAR);
 	}
 
 	@Test
@@ -94,8 +94,9 @@ class PayoutTest {
 	@Test
 	@DisplayName("최종은 판매자 정산액에서 1차 정산금 차감을 뺀다 (33,333원 × 10장, 1차 133,330 → 181,670)")
 	void finalPayoutDeductsAdvance() {
-		Payout last = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 133_330L,
+		Payout last = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
 			LocalDateTime.of(2026, 10, 1, 3, 0), CALENDAR);
+		last.deductAdvance(133_330L);
 
 		for (int orderItemId = 1; orderItemId <= 10; orderItemId++) {
 			last.addItem(orderItemId, 33_333L, FEE_RATE, TARGET_DATE);

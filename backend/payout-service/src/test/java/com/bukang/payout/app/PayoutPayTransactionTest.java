@@ -78,7 +78,7 @@ class PayoutPayTransactionTest {
 
 	// 9월분(10/20 지급), 판매 50,000 → 지급액 47,250 · 수수료 2,750
 	private Payout savePayoutWithSale() {
-		Payout payout = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 0L,
+		Payout payout = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
 			LocalDateTime.of(2026, 9, 26, 3, 0), new BusinessDayCalendar());
 		payout.addItem(100, 50_000L, new BigDecimal("0.0550"), LocalDate.of(2026, 9, 26));
 		return payoutRepository.save(payout);
