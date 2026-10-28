@@ -107,6 +107,7 @@ include::{snippets}/payout-recovery-complete-conflict/http-response.adoc[]
 
 화면 위쪽 요약 카드(다음 정산일, 정산 예정액, 지급보류 건수)를 채운다. 조회 기간과 상관없이 지금 상태로 계산한다.
 지급 예정 정산 내역이 없으면 다음 정산일(`nextPayDate`)은 `null`, 정산 예정액은 0이다. 지급일이 대회마다 달라 대신 채울 정기 지급일이 없다.
+최종 정산은 같은 대회의 1차가 지급 완료된 뒤에만 지급하므로, 1차를 기다리는 최종은 다음 정산일 · 정산 예정액에서 뺀다.
 
 operation::payout-seller-summary[snippets='http-request,request-headers,http-response,response-fields']
 

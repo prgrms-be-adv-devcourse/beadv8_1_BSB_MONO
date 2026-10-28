@@ -167,11 +167,43 @@ class ApiV1PayoutSellerControllerTest {
 					fieldWithPath("status").description("HTTP 상태 코드"),
 					fieldWithPath("message").description("결과 메시지"),
 					fieldWithPath("data.nextPayDate").type(JsonFieldType.STRING).optional().description(
-						"다음 정산일. 지급 예정 정산 내역 중 가장 이른 지급 예정일. 지급 예정 정산 내역이 없으면 null"),
+						"다음 정산일. 지급 예정 정산 내역 중 가장 이른 지급 예정일 (1차를 기다리는 최종은 뺀다). "
+							+ "지급 예정 정산 내역이 없으면 null"),
 					fieldWithPath("data.scheduledPayoutAmount").description(
-						"정산 예정액. 다음 정산일에 나갈 지급액 합계 (보류 제외). 다음 정산일이 null이면 0"),
+						"정산 예정액. 다음 정산일에 나갈 지급액 합계 (보류 · 1차를 기다리는 최종 제외). 다음 정산일이 null이면 0"),
 					fieldWithPath("data.heldCount").description("지급보류 중인 정산 내역 수")
 				)));
+	}
+
+	@Test
+	@DisplayName("요약: 1차가 아직 지급되지 않아 기다리는 최종은 다음 정산일 · 정산 예정액에서 뺀다 (지급 배치가 건너뛰므로, PRO-188)")
+	void summarySkipsFinalWaitingForFirst() throws Exception {
+		given(sellerLookupPort.findSellerOf(MEMBER_ID))
+			.willReturn(Optional.of(new SellerOfMember(NEW_SELLER_ID, SellerStatus.APPROVED)));
+		transactionTemplate.executeWithoutResult(status -> {
+			// 대회 20: 1차(마감 9/10 → 9/12)는 보류, 최종(대회 9/15 → 9/17)은 정산 예정이지만 1차를 기다린다
+			Payout first = Payout.first(NEW_SELLER_ID, 20, "대회 20", LocalDate.of(2026, 9, 10),
+				LocalDateTime.of(2026, 9, 11, 3, 0), CALENDAR);
+			entityManager.persist(first);
+			entityManager.flush();
+			PayoutHold hold = first.hold(PayoutHoldReason.ACCOUNT_NOT_REGISTERED, "정산 계좌 등록 요청 중",
+				PayoutHold.SYSTEM_MEMBER_ID, LocalDateTime.of(2026, 9, 11, 3, 0));
+			entityManager.persist(hold);
+			entityManager.flush();
+			hold.assignHoldCode();
+			Payout waiting = savePayout(NEW_SELLER_ID, 20, LocalDate.of(2026, 9, 16));
+			waiting.addItem(400, 50_000L, FEE_RATE, LocalDate.of(2026, 9, 16));
+
+			// 대회 21: 1차 없이 만든 최종(대회 9/20 → 9/22)은 기다리지 않는다
+			Payout ready = savePayout(NEW_SELLER_ID, 21, LocalDate.of(2026, 9, 21));
+			ready.addItem(500, 30_000L, FEE_RATE, LocalDate.of(2026, 9, 21));
+		});
+
+		request("/summary")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.nextPayDate").value("2026-09-22"))
+			.andExpect(jsonPath("$.data.scheduledPayoutAmount").value(28_350))
+			.andExpect(jsonPath("$.data.heldCount").value(1));
 	}
 
 	@Test

@@ -60,15 +60,20 @@ public interface PayoutRepository extends JpaRepository<Payout, Integer> {
 	List<Payout> findBySellerIdAndPayoutMonthBetweenOrderByPayoutMonthDescIdDesc(
 		int sellerId, String fromMonth, String toMonth);
 
-	// 판매자 요약: 지급 예정인 정산 내역 중 가장 이른 지급 예정일 (다음 정산일)
-	Optional<Payout> findFirstBySellerIdAndStatusOrderByScheduledPayDateAsc(int sellerId, PayoutStatus status);
-
-	// 판매자 요약: 그 지급일에 나갈 지급액 합계 (정산 예정액). 보류(HELD)된 정산 내역은 상태가 달라 빠진다
+	// 판매자 요약: 지급 배치가 지급할 정산 예정 내역 (지급 예정일 순). 보류(HELD)는 상태가 달라 빠진다
+	// 같은 판매자 × 대회의 살아 있는 1차가 아직 지급 완료가 아니면 그 최종은 지급 배치가 건너뛰므로 뺀다
+	// (PRO-188, PayoutPayStepUseCase.isWaitingForFirst와 같은 기준. 1차가 없거나 취소됐으면 기다리지 않는다)
 	@Query("""
-		select coalesce(sum(p.payoutAmount), 0) from Payout p
-		where p.sellerId = :sellerId and p.status = :status and p.scheduledPayDate = :payDate
+		select p from Payout p
+		where p.sellerId = :sellerId and p.status = :calculated
+		and not (p.payoutStage = :finalStage and exists (
+			select f.id from Payout f
+			where f.sellerId = p.sellerId and f.raceId = p.raceId and f.payoutStage = :firstStage
+			and f.status <> :paid and f.status <> :canceled))
+		order by p.scheduledPayDate, p.id
 		""")
-	long sumPayoutAmount(int sellerId, PayoutStatus status, LocalDate payDate);
+	List<Payout> findPayableForSummary(int sellerId, PayoutStatus calculated, PayoutStage finalStage,
+		PayoutStage firstStage, PayoutStatus paid, PayoutStatus canceled);
 
 	// 판매자 요약: 지급보류 중인 정산 내역 수. 한 정산 내역에는 활성 보류가 하나뿐이라 보류 건수와 같다
 	long countBySellerIdAndStatus(int sellerId, PayoutStatus status);

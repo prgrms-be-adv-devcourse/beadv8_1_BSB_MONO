@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutItemPaging;
 import com.bukang.payout.domain.PayoutQueryPeriod;
+import com.bukang.payout.domain.PayoutStage;
 import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.dto.PageDto;
 import com.bukang.payout.dto.PayoutDto;
@@ -63,16 +64,18 @@ public class PayoutSellerQueryUseCase {
 	}
 
 	public PayoutSummaryDto summary(int sellerId, LocalDate today) {
+		// 지급 배치가 실제로 지급할 정산 예정 내역만 본다. 1차를 기다리는 최종은 지급되지 않으므로 뺀다 (PRO-188)
 		// 지급 예정일이 지났는데 아직 CALCULATED라면(배치 실행을 놓침) 그 날짜를 그대로 보여 준다. 다음 배치에서 지급된다
 		// 지급 예정 정산 내역이 없으면 null이다. 지급일이 대회마다 달라(기준일 + 2일) 대신 채울 정기 지급일이 없다 (10/28 결정)
-		LocalDate nextPayDate = payoutRepository
-			.findFirstBySellerIdAndStatusOrderByScheduledPayDateAsc(sellerId, PayoutStatus.CALCULATED)
-			.map(Payout::getScheduledPayDate)
-			.orElse(null);
+		List<Payout> payable = payoutRepository.findPayableForSummary(sellerId, PayoutStatus.CALCULATED,
+			PayoutStage.FINAL, PayoutStage.FIRST, PayoutStatus.PAID, PayoutStatus.CANCELED);
+		LocalDate nextPayDate = payable.isEmpty() ? null : payable.getFirst().getScheduledPayDate();
 
-		long scheduledPayoutAmount = nextPayDate == null
-			? 0
-			: payoutRepository.sumPayoutAmount(sellerId, PayoutStatus.CALCULATED, nextPayDate);
+		// 정산 예정액: 다음 정산일에 나갈 지급액 합계
+		long scheduledPayoutAmount = payable.stream()
+			.filter(payout -> payout.getScheduledPayDate().equals(nextPayDate))
+			.mapToLong(Payout::getPayoutAmount)
+			.sum();
 		long heldCount = payoutRepository.countBySellerIdAndStatus(sellerId, PayoutStatus.HELD);
 		return new PayoutSummaryDto(nextPayDate, scheduledPayoutAmount, heldCount);
 	}

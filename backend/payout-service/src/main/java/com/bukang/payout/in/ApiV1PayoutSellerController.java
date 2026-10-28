@@ -53,6 +53,7 @@ public class ApiV1PayoutSellerController {
 	@GetMapping("/summary")
 	@Operation(summary = "정산 요약 조회",
 		description = "다음 정산일, 정산 예정액(다음 정산일에 나갈 지급액 합계, 보류 제외), 지급보류 중인 정산 내역 수를 돌려준다. "
+			+ "1차가 아직 지급되지 않아 기다리는 최종 정산은 다음 정산일 · 정산 예정액에서 뺀다. "
 			+ "조회 기간과 상관없이 판매자의 지금 상태로 계산한다. "
 			+ "지급 예정 정산 내역이 없으면 다음 정산일은 null, 정산 예정액은 0이다.")
 	@ApiResponses({
