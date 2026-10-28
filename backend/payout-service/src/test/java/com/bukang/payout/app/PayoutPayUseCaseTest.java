@@ -67,49 +67,49 @@ class PayoutPayUseCaseTest {
 		});
 	}
 
-	// 9월분(2026-09)은 10/20, 10월분(2026-10)은 11/20이 지급 예정일이다
-	private Payout savePayout(int sellerId, YearMonth payoutMonth) {
-		LocalDateTime settledAt = payoutMonth.atDay(29).atTime(3, 0);
-		return payoutRepository.save(Payout.finalStage(sellerId, 10, "테스트 대회", payoutMonth, settledAt,
+	// 지급 예정일은 대회일 + 3일이다. 10/17 토 대회는 10/20 화, 11/17 화 대회는 11/20 금
+	private Payout savePayout(int sellerId, LocalDate raceDate) {
+		LocalDateTime settledAt = raceDate.plusDays(1).atTime(3, 0);
+		return payoutRepository.save(Payout.finalStage(sellerId, 10, "테스트 대회", raceDate, settledAt,
 			new BusinessDayCalendar()));
 	}
 
 	@Test
-	@DisplayName("10/20에 9월 정산 대상분이 지급 완료(PAID)로 바뀌고 지급 시각이 남는다")
+	@DisplayName("10/20에 지급 예정일이 된 정산 내역(10/17 대회분)이 지급 완료(PAID)로 바뀌고 지급 시각이 남는다")
 	void paysPreviousMonthOnPayDate() {
-		Payout september = savePayout(1, YearMonth.of(2026, 9));
+		Payout dueOct20 = savePayout(1, LocalDate.of(2026, 10, 17));
 
 		useCase().run(PAY_DATE, NOW);
 
-		Payout paid = payoutRepository.findById(september.getId()).orElseThrow();
+		Payout paid = payoutRepository.findById(dueOct20.getId()).orElseThrow();
 		assertThat(paid.getStatus()).isEqualTo(PayoutStatus.PAID);
 		assertThat(paid.getPaidAt()).isEqualTo(NOW);
 	}
 
 	@Test
-	@DisplayName("10월 정산 대상분은 10/20에 지급하지 않는다 (11/20 지급분)")
+	@DisplayName("지급 예정일이 안 된 정산 내역(11/17 대회분, 11/20 지급)은 10/20에 지급하지 않는다")
 	void doesNotPayCurrentMonth() {
-		Payout october = savePayout(1, YearMonth.of(2026, 10));
+		Payout dueNov20 = savePayout(1, LocalDate.of(2026, 11, 17));
 
 		useCase().run(PAY_DATE, NOW);
 
-		assertThat(statusOf(october)).isEqualTo(PayoutStatus.CALCULATED);
+		assertThat(statusOf(dueNov20)).isEqualTo(PayoutStatus.CALCULATED);
 	}
 
 	@Test
-	@DisplayName("지급 예정일 전날(10/19)에는 9월분도 지급하지 않는다")
+	@DisplayName("지급 예정일 전날(10/19)에는 10/17 대회분도 지급하지 않는다")
 	void doesNotPayBeforePayDate() {
-		Payout september = savePayout(1, YearMonth.of(2026, 9));
+		Payout dueOct20 = savePayout(1, LocalDate.of(2026, 10, 17));
 
 		useCase().run(PAY_DATE.minusDays(1), NOW.minusDays(1));
 
-		assertThat(statusOf(september)).isEqualTo(PayoutStatus.CALCULATED);
+		assertThat(statusOf(dueOct20)).isEqualTo(PayoutStatus.CALCULATED);
 	}
 
 	@Test
 	@DisplayName("지급보류(HELD)인 정산 내역은 지급 예정일이 지나도 PAID로 바뀌지 않는다")
 	void doesNotPayHeld() {
-		Payout held = savePayout(1, YearMonth.of(2026, 9));
+		Payout held = savePayout(1, LocalDate.of(2026, 10, 17));
 		payoutHoldRepository.save(held.hold(PayoutHoldReason.ACCOUNT_NOT_REGISTERED, null, 99, NOW.minusDays(5)));
 		entityManager.flush();
 		entityManager.clear();
@@ -122,22 +122,22 @@ class PayoutPayUseCaseTest {
 	@Test
 	@DisplayName("같은 날 다시 돌려도 이미 지급한 정산 내역의 지급 시각은 바뀌지 않는다")
 	void runTwiceKeepsFirstPaidAt() {
-		Payout september = savePayout(1, YearMonth.of(2026, 9));
+		Payout dueOct20 = savePayout(1, LocalDate.of(2026, 10, 17));
 
 		useCase().run(PAY_DATE, NOW);
 		useCase().run(PAY_DATE, NOW.plusHours(1));
 
-		assertThat(payoutRepository.findById(september.getId()).orElseThrow().getPaidAt()).isEqualTo(NOW);
+		assertThat(payoutRepository.findById(dueOct20.getId()).orElseThrow().getPaidAt()).isEqualTo(NOW);
 	}
 
 	@Test
-	@DisplayName("10/20 실행을 놓쳐도 10/21 실행에서 9월분을 지급한다")
+	@DisplayName("10/20 실행을 놓쳐도 10/21 실행에서 10/17 대회분을 지급한다")
 	void catchesUpMissedPayDate() {
-		Payout september = savePayout(1, YearMonth.of(2026, 9));
+		Payout dueOct20 = savePayout(1, LocalDate.of(2026, 10, 17));
 
 		useCase().run(PAY_DATE.plusDays(1), NOW.plusDays(1));
 
-		assertThat(statusOf(september)).isEqualTo(PayoutStatus.PAID);
+		assertThat(statusOf(dueOct20)).isEqualTo(PayoutStatus.PAID);
 	}
 
 	private PayoutStatus statusOf(Payout payout) {
@@ -188,8 +188,8 @@ class PayoutPayUseCaseTest {
 	@DisplayName("대금이 상계로 0원이어도 수수료가 남으면 캐시 서비스에 보내 수수료를 옮기고 지급 완료한다")
 	void sendsFeeOnlyPayout() {
 		// 판매액 50,000 − 수수료 2,750 − 1차 정산금 차감 47,250 = 지급액 0원
-		Payout feeOnly = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
-			LocalDateTime.of(2026, 10, 1, 3, 0), new BusinessDayCalendar());
+		Payout feeOnly = Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
+			LocalDateTime.of(2026, 10, 18, 3, 0), new BusinessDayCalendar());
 		feeOnly.deductAdvance(47_250L);
 		feeOnly.addItem(100, 50_000L, new BigDecimal("0.0550"), LocalDate.of(2026, 10, 1));
 		payoutRepository.save(feeOnly);
@@ -204,7 +204,7 @@ class PayoutPayUseCaseTest {
 	@Test
 	@DisplayName("대금 · 수수료가 둘 다 0원이면 캐시 서비스를 부르지 않고 0원으로 지급 완료(PAID)한다")
 	void paysZeroAmountPayoutWithoutTransfer() {
-		Payout zero = savePayout(1, YearMonth.of(2026, 9));
+		Payout zero = savePayout(1, LocalDate.of(2026, 10, 17));
 		assertThat(zero.getPayoutAmount()).isZero();
 		assertThat(zero.getFeeAmount()).isZero();
 
@@ -329,9 +329,9 @@ class PayoutPayUseCaseTest {
 		assertThat(result).isEqualTo(new PayoutPayResultDto(PAY_DATE, 0, 0, 0));
 	}
 
-	// 9월분(10/20 지급), 판매 50,000 → 지급액 47,250 · 수수료 2,750
+	// 10/17 대회분(10/20 지급), 판매 50,000 → 지급액 47,250 · 수수료 2,750
 	private Payout savePayoutWithSale(int sellerId) {
-		Payout payout = savePayout(sellerId, YearMonth.of(2026, 9));
+		Payout payout = savePayout(sellerId, LocalDate.of(2026, 10, 17));
 		payout.addItem(100 + sellerId, 50_000L, new BigDecimal("0.0550"), LocalDate.of(2026, 9, 26));
 		return payout;
 	}

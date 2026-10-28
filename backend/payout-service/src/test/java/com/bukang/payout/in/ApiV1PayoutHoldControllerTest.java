@@ -17,8 +17,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -115,8 +115,8 @@ class ApiV1PayoutHoldControllerTest {
 	}
 
 	private Payout savePayout() {
-		return payoutRepository.save(Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
-			LocalDateTime.of(2026, 9, 29, 3, 0), new BusinessDayCalendar()));
+		return payoutRepository.save(Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
+			LocalDateTime.of(2026, 10, 18, 3, 0), new BusinessDayCalendar()));
 	}
 
 	private ResultActions hold(int payoutId, String body) throws Exception {

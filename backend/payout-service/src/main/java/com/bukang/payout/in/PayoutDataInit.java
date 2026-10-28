@@ -124,7 +124,7 @@ public class PayoutDataInit {
 		save(first);
 
 		LocalDate finalTargetDate = PayoutTargetDate.of(raceDate);
-		Payout last = Payout.finalStage(SELLER_ID, raceId, raceName, YearMonth.from(raceDate),
+		Payout last = Payout.finalStage(SELLER_ID, raceId, raceName, raceDate,
 			finalTargetDate.atTime(3, 0), calendar);
 		last.deductAdvance(first.getPayoutAmount());
 		addItems(last, raceId, count, price, finalTargetDate);

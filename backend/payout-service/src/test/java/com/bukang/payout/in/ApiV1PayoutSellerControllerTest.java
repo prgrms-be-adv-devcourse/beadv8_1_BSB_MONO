@@ -17,7 +17,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
@@ -97,7 +96,7 @@ class ApiV1PayoutSellerControllerTest {
 	@Autowired
 	private EntityManager entityManager;
 
-	// 판매자 1: 2026-09 정산 예정(10/20 지급, 참가권 2장), 2026-08 지급보류(9/20 보류), 2025-08 지급 완료
+	// 판매자 1: 2026-09 정산 예정(9/25 대회 → 9/28 지급, 참가권 2장), 2026-08 지급보류(9/20 보류), 2025-08 지급 완료
 	// 판매자 2: 2026-09 정산 예정 (판매자 1의 조회에 나오면 안 된다)
 	@BeforeEach
 	void setUp() {
@@ -105,11 +104,11 @@ class ApiV1PayoutSellerControllerTest {
 			.willReturn(Optional.of(new SellerOfMember(SELLER_ID, SellerStatus.APPROVED)));
 
 		transactionTemplate.executeWithoutResult(status -> {
-			Payout september = savePayout(SELLER_ID, 10, YearMonth.of(2026, 9), LocalDate.of(2026, 9, 26));
+			Payout september = savePayout(SELLER_ID, 10, LocalDate.of(2026, 9, 26));
 			september.addItem(100, 50_000L, FEE_RATE, LocalDate.of(2026, 9, 26));
 			september.addItem(101, 50_000L, FEE_RATE, LocalDate.of(2026, 9, 26));
 
-			Payout august = savePayout(SELLER_ID, 11, YearMonth.of(2026, 8), LocalDate.of(2026, 8, 16));
+			Payout august = savePayout(SELLER_ID, 11, LocalDate.of(2026, 8, 16));
 			august.addItem(200, 30_000L, FEE_RATE, LocalDate.of(2026, 8, 16));
 			PayoutHold hold = august.hold(PayoutHoldReason.ACCOUNT_NOT_REGISTERED, "정산 계좌 등록 요청 중",
 				PayoutHold.SYSTEM_MEMBER_ID, LocalDateTime.of(2026, 9, 20, 10, 0));
@@ -117,10 +116,10 @@ class ApiV1PayoutSellerControllerTest {
 			entityManager.flush();
 			hold.assignHoldCode();
 
-			Payout lastYear = savePayout(SELLER_ID, 12, YearMonth.of(2025, 8), LocalDate.of(2025, 8, 10));
+			Payout lastYear = savePayout(SELLER_ID, 12, LocalDate.of(2025, 8, 10));
 			lastYear.pay(LocalDateTime.of(2025, 9, 22, 4, 0));
 
-			Payout other = savePayout(OTHER_SELLER_ID, 10, YearMonth.of(2026, 9), LocalDate.of(2026, 9, 26));
+			Payout other = savePayout(OTHER_SELLER_ID, 10, LocalDate.of(2026, 9, 26));
 			other.addItem(300, 50_000L, FEE_RATE, LocalDate.of(2026, 9, 26));
 		});
 	}
@@ -131,8 +130,9 @@ class ApiV1PayoutSellerControllerTest {
 		payoutRepository.deleteAll();
 	}
 
-	private Payout savePayout(int sellerId, int raceId, YearMonth month, LocalDate targetDate) {
-		Payout payout = Payout.finalStage(sellerId, raceId, "대회 %d".formatted(raceId), month,
+	// 최종 정산 대상일(targetDate)은 대회 다음 날이다
+	private Payout savePayout(int sellerId, int raceId, LocalDate targetDate) {
+		Payout payout = Payout.finalStage(sellerId, raceId, "대회 %d".formatted(raceId), targetDate.minusDays(1),
 			targetDate.atTime(3, 0),
 			CALENDAR);
 		entityManager.persist(payout);
@@ -155,7 +155,7 @@ class ApiV1PayoutSellerControllerTest {
 		request("/summary")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("정산 요약을 조회했습니다."))
-			.andExpect(jsonPath("$.data.nextPayDate").value("2026-10-20"))
+			.andExpect(jsonPath("$.data.nextPayDate").value("2026-09-28"))
 			.andExpect(jsonPath("$.data.scheduledPayoutAmount").value(94_500))
 			.andExpect(jsonPath("$.data.heldCount").value(1))
 			.andDo(document("payout-seller-summary",
@@ -181,7 +181,7 @@ class ApiV1PayoutSellerControllerTest {
 			.andExpect(jsonPath("$.data[0].salesAmount").value(100_000))
 			.andExpect(jsonPath("$.data[0].feeAmount").value(5_500))
 			.andExpect(jsonPath("$.data[0].payoutAmount").value(94_500))
-			.andExpect(jsonPath("$.data[0].scheduledPayDate").value("2026-10-20"))
+			.andExpect(jsonPath("$.data[0].scheduledPayDate").value("2026-09-28"))
 			.andExpect(jsonPath("$.data[0].raceName").value("대회 10"))
 			.andExpect(jsonPath("$.data[1].status").value("HELD"))
 			.andDo(document("payout-seller-payouts",
@@ -208,7 +208,8 @@ class ApiV1PayoutSellerControllerTest {
 					fieldWithPath("data[].status").description("상태 (CALCULATED: 정산 예정, HELD: 지급보류, PAID: 지급 완료, "
 						+ "CANCELED: 대회 취소로 닫힘)"),
 					fieldWithPath("data[].settledAt").description("정산 내역을 만든 일시"),
-					fieldWithPath("data[].scheduledPayDate").description("지급 예정일 (보류를 풀면 해제일 뒤 돌아오는 지급일로 바뀐다)"),
+					fieldWithPath("data[].scheduledPayDate").description(
+						"지급 예정일 (보류를 풀면 다시 정한다. 1차는 해제일 뒤 돌아오는 20일, 최종은 해제일 다음 영업일)"),
 					fieldWithPath("data[].paidAt").description("지급 완료 일시 (지급 전에는 null)")
 						.optional().type(JsonFieldType.STRING)
 				)));

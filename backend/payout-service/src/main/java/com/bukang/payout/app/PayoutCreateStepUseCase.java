@@ -80,7 +80,7 @@ public class PayoutCreateStepUseCase {
 		}
 
 		Payout payout = Payout.finalStage(source.sellerId(), source.raceId(), source.raceName(),
-			YearMonth.from(raceDate), now, businessDayCalendar);
+			raceDate, now, businessDayCalendar);
 
 		source.entries().forEach(entry ->
 			payout.addItem(entry.orderItemId(), entry.raceCourseId(), entry.price(), TwoStagePayoutCalculator.FEE_RATE,

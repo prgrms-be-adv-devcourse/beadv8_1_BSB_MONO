@@ -10,6 +10,8 @@ import java.time.YearMonth;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class PayoutTest {
 	private static final BigDecimal FEE_RATE = new BigDecimal("0.0550");
@@ -17,25 +19,46 @@ class PayoutTest {
 	private static final BusinessDayCalendar CALENDAR = new BusinessDayCalendar();
 
 	private Payout newPayout() {
-		return Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
+		return Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 9, 25),
 			LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
 	}
 
-	private Payout newPayout(YearMonth payoutMonth) {
-		return Payout.finalStage(1, 10, "테스트 대회", payoutMonth, payoutMonth.atEndOfMonth().atTime(3, 0), CALENDAR);
+	private Payout finalPayout(LocalDate raceDate) {
+		return Payout.finalStage(1, 10, "테스트 대회", raceDate, raceDate.plusDays(1).atTime(3, 0), CALENDAR);
+	}
+
+	private Payout firstPayout(YearMonth payoutMonth) {
+		return Payout.first(1, 10, "테스트 대회", payoutMonth, payoutMonth.atEndOfMonth().atTime(3, 0), CALENDAR);
 	}
 
 	@Test
-	@DisplayName("지급 예정일은 정산 월의 다음 달 20일이다 (2026-09 → 10/20 화)")
-	void scheduledPayDateIsNextMonth20th() {
-		assertThat(newPayout(YearMonth.of(2026, 9)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+	@DisplayName("1차 정산의 지급 예정일은 정산 월의 다음 달 20일이다 (2026-09 → 10/20 화)")
+	void firstPayDateIsNextMonth20th() {
+		assertThat(firstPayout(YearMonth.of(2026, 9)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
 	}
 
 	@Test
-	@DisplayName("다음 달 20일이 주말이면 다음 월요일에 지급한다 (2026-05 → 6/20 토 → 6/22, 2026-08 → 9/20 일 → 9/21)")
-	void scheduledPayDateSkipsWeekend() {
-		assertThat(newPayout(YearMonth.of(2026, 5)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 6, 22));
-		assertThat(newPayout(YearMonth.of(2026, 8)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 9, 21));
+	@DisplayName("1차 정산의 다음 달 20일이 주말이면 다음 월요일에 지급한다 (2026-05 → 6/20 토 → 6/22, 2026-08 → 9/20 일 → 9/21)")
+	void firstPayDateSkipsWeekend() {
+		assertThat(firstPayout(YearMonth.of(2026, 5)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 6, 22));
+		assertThat(firstPayout(YearMonth.of(2026, 8)).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 9, 21));
+	}
+
+	// 2026-10-15 목, 10-16 금, 10-17 토, 10-18 일
+	@ParameterizedTest(name = "대회일 {0} → {1} 지급")
+	@CsvSource({
+		"2026-10-16, 2026-10-19", // 금 + 3일 = 월
+		"2026-10-17, 2026-10-20", // 토 + 3일 = 화
+		"2026-10-15, 2026-10-19", // 목 + 3일 = 일 → 다음 영업일 월
+		"2026-10-14, 2026-10-19", // 수 + 3일 = 토 → 다음 영업일 월
+		"2026-10-31, 2026-11-03" // 달이 바뀌어도 대회일 + 3일이다
+	})
+	@DisplayName("최종 정산의 지급 예정일은 대회일 + 3일이고, 주말이면 다음 영업일이다")
+	void finalPayDateIsRaceDatePlus3Days(LocalDate raceDate, LocalDate expectedPayDate) {
+		Payout payout = finalPayout(raceDate);
+
+		assertThat(payout.getScheduledPayDate()).isEqualTo(expectedPayDate);
+		assertThat(payout.getPayoutMonth()).isEqualTo(YearMonth.from(raceDate).toString());
 	}
 
 	@Test
@@ -94,8 +117,8 @@ class PayoutTest {
 	@Test
 	@DisplayName("최종은 판매자 정산액에서 1차 정산금 차감을 뺀다 (33,333원 × 10장, 1차 133,330 → 181,670)")
 	void finalPayoutDeductsAdvance() {
-		Payout last = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
-			LocalDateTime.of(2026, 10, 1, 3, 0), CALENDAR);
+		Payout last = Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
+			LocalDateTime.of(2026, 10, 18, 3, 0), CALENDAR);
 		last.deductAdvance(133_330L);
 
 		for (int orderItemId = 1; orderItemId <= 10; orderItemId++) {

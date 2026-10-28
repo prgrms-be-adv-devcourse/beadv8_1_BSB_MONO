@@ -150,7 +150,7 @@ class PayoutCreateUseCaseTest {
 		assertThat(seller1.getRaceId()).isEqualTo(10);
 		assertThat(seller1.getPayoutMonth()).isEqualTo("2026-09");
 		assertThat(seller1.getStatus()).isEqualTo(PayoutStatus.CALCULATED);
-		assertThat(seller1.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+		assertThat(seller1.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 9, 28)); // 대회 9/25 금 + 3일 = 9/28 월
 		assertThat(seller1.getPayoutAmount()).isEqualTo(94_500L);
 		// 최종은 참가권마다 판매 · 수수료 두 줄과 참가권 없는 1차 정산금 차감 한 줄 (PRO-214)
 		assertThat(seller1.getItems())
@@ -228,7 +228,7 @@ class PayoutCreateUseCaseTest {
 
 		Payout payout = payoutOf(1);
 		assertThat(payout.getPayoutMonth()).isEqualTo("2026-09");
-		assertThat(payout.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+		assertThat(payout.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 1)); // 대회 9/28 월 + 3일 = 10/1 목
 		assertThat(payout.getItems())
 			.filteredOn(item -> item.getOrderItemId() != null)
 			.extracting(PayoutItem::getTargetDate)
@@ -247,12 +247,13 @@ class PayoutCreateUseCaseTest {
 		useCase.run(LocalDate.of(2026, 10, 1), LocalDateTime.of(2026, 10, 1, 3, 0));
 
 		assertThat(payoutRepository.findAll()).hasSize(2);
-		// 대회 9/29 → 정산 대상일 9/30 → 10/20 지급
+		// 대회 9/29 → 정산 대상일 9/30
 		assertThat(payoutOf(1).getPayoutMonth()).isEqualTo("2026-09");
-		assertThat(payoutOf(1).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
-		// 대회 9/30 → 정산 대상일은 10/1이지만 정산 월은 대회일의 달 9월 → 10/20 지급 (PRO-32에서 대상일의 달에서 바꿈)
+		assertThat(payoutOf(1).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 2)); // 대회 9/29 화 + 3일 = 10/2 금
+		// 대회 9/30 → 정산 대상일은 10/1이지만 정산 월은 대회일의 달 9월이다 (PRO-32에서 대상일의 달에서 바꿈)
 		assertThat(payoutOf(2).getPayoutMonth()).isEqualTo("2026-09");
-		assertThat(payoutOf(2).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+		// 대회 9/30 수 + 3일 = 10/3 토 → 10/5 월
+		assertThat(payoutOf(2).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 5));
 	}
 
 	@Test
@@ -397,7 +398,7 @@ class PayoutCreateUseCaseTest {
 		Payout last = payoutOf(1, PayoutStage.FINAL);
 		assertThat(first.getPayoutMonth()).isEqualTo("2026-09");
 		assertThat(last.getPayoutMonth()).isEqualTo("2026-09");
-		assertThat(last.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+		assertThat(last.getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 5)); // 대회 9/30 수 + 3일 = 10/3 토 → 10/5 월
 		assertThat(last.getSalesAmount()).isEqualTo(100_000L);
 		assertThat(last.getFeeAmount()).isEqualTo(5_500L);
 		assertThat(last.getAdvanceDeductionAmount()).isEqualTo(40_000L);

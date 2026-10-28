@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,10 +51,10 @@ class PayoutHoldUseCaseTest {
 		});
 	}
 
-	// 2026-09분: 지급 예정일 10/20
-	private Payout saveSeptemberPayout() {
-		return payoutRepository.save(Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9),
-			LocalDateTime.of(2026, 9, 29, 3, 0), new BusinessDayCalendar()));
+	// 대회일 10/17 토: 지급 예정일 10/20 화
+	private Payout saveFinalPayout() {
+		return payoutRepository.save(Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
+			LocalDateTime.of(2026, 10, 18, 3, 0), new BusinessDayCalendar()));
 	}
 
 	private PayoutHoldDto holdOf(Payout payout) {
@@ -71,7 +70,7 @@ class PayoutHoldUseCaseTest {
 	@Test
 	@DisplayName("보류를 걸면 정산 내역이 HELD가 되고, 지급보류 ID가 HD-보류한 날-16진수 4자리로 붙는다")
 	void hold() {
-		Payout payout = saveSeptemberPayout();
+		Payout payout = saveFinalPayout();
 
 		PayoutHoldDto hold = holdOf(payout);
 
@@ -85,31 +84,31 @@ class PayoutHoldUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("보류 중인 정산 내역은 10/20 배치에서 지급되지 않고, 10/21에 풀면 11/20 배치에서 지급된다")
+	@DisplayName("보류 중인 최종 정산 내역은 10/20 배치에서 지급되지 않고, 10/21에 풀면 다음 영업일 10/22 배치에서 지급된다")
 	void releasedPayoutIsPaidOnNextPayDate() {
-		Payout payout = saveSeptemberPayout();
+		Payout payout = saveFinalPayout();
 		PayoutHoldDto hold = holdOf(payout);
 
 		payUseCase().run(LocalDate.of(2026, 10, 20), LocalDateTime.of(2026, 10, 20, 4, 0));
 		assertThat(reload(payout).getStatus()).isEqualTo(PayoutStatus.HELD);
 
-		// 10월 지급일(10/20)이 지났으므로 다음 지급일은 11/20이다
+		// 최종 정산은 해제일 다음 영업일에 지급한다 (10/21 수 → 10/22 목)
 		PayoutHoldDto released = useCase().release(hold.getId(), 77, LocalDateTime.of(2026, 10, 21, 9, 0));
 		assertThat(released.getStatus()).isEqualTo(PayoutHoldStatus.RELEASED);
 		assertThat(released.getReleasedBy()).isEqualTo(77);
-		assertThat(reload(payout).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 11, 20));
+		assertThat(reload(payout).getScheduledPayDate()).isEqualTo(LocalDate.of(2026, 10, 22));
 
-		payUseCase().run(LocalDate.of(2026, 11, 19), LocalDateTime.of(2026, 11, 19, 4, 0));
+		payUseCase().run(LocalDate.of(2026, 10, 21), LocalDateTime.of(2026, 10, 21, 4, 0));
 		assertThat(reload(payout).getStatus()).isEqualTo(PayoutStatus.CALCULATED);
 
-		payUseCase().run(LocalDate.of(2026, 11, 20), LocalDateTime.of(2026, 11, 20, 4, 0));
+		payUseCase().run(LocalDate.of(2026, 10, 22), LocalDateTime.of(2026, 10, 22, 4, 0));
 		assertThat(reload(payout).getStatus()).isEqualTo(PayoutStatus.PAID);
 	}
 
 	@Test
 	@DisplayName("정산 내역을 미리 읽지 않고 보류만 읽어 풀어도(hold.getPayout()이 프록시) 풀린다")
 	void releaseWithLazyPayoutProxy() {
-		Payout payout = saveSeptemberPayout();
+		Payout payout = saveFinalPayout();
 		PayoutHoldDto hold = holdOf(payout);
 		// 실제 요청처럼 영속성 컨텍스트를 비워, 보류를 읽을 때 정산 내역이 프록시로 들어오게 한다
 		entityManager.flush();
@@ -124,9 +123,9 @@ class PayoutHoldUseCaseTest {
 	@Test
 	@DisplayName("다른 정산 내역의 보류로는 풀 수 없다 (ID로 비교)")
 	void cannotReleaseWithOtherPayoutsHold() {
-		Payout payout = saveSeptemberPayout();
-		Payout other = payoutRepository.save(Payout.finalStage(2, 10, "테스트 대회", YearMonth.of(2026, 9),
-			LocalDateTime.of(2026, 9, 29, 3, 0), new BusinessDayCalendar()));
+		Payout payout = saveFinalPayout();
+		Payout other = payoutRepository.save(Payout.finalStage(2, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
+			LocalDateTime.of(2026, 10, 18, 3, 0), new BusinessDayCalendar()));
 		holdOf(payout);
 		PayoutHoldDto otherHold = holdOf(other);
 		entityManager.flush();
@@ -154,7 +153,7 @@ class PayoutHoldUseCaseTest {
 	@Test
 	@DisplayName("지급 배치가 읽은 뒤 보류가 걸리면, 배치가 그 정산 내역을 PAID로 덮어쓰지 못한다 (@Version)")
 	void staleBatchCannotOverwriteHold() {
-		Payout payout = saveSeptemberPayout();
+		Payout payout = saveFinalPayout();
 		entityManager.flush();
 		entityManager.clear();
 
