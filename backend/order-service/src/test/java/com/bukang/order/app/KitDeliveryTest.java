@@ -22,7 +22,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -98,6 +101,8 @@ class KitDeliveryTest {
 	@Autowired
 	private RaceCancelRefundUseCase raceCancelRefundUseCase;
 
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@Autowired
 	private StubRaceCoursePort raceCoursePort;
@@ -443,6 +448,76 @@ class KitDeliveryTest {
 		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, KitDeliveryStatus.SHIPPING, 0, 20).getKits())
 			.singleElement()
 			.satisfies(row -> assertThat(row.getShippingAddress().getAddress()).isEqualTo("서울 성동구 왕십리로 00"));
+	}
+
+	@Test
+	@DisplayName("옛 키트 칸·주문 배송지를 배송 표로 옮기는 SQL은 상태·송장·주소를 옮기고, 다시 돌려도 두 번 만들지 않는다")
+	void migrationSql() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().plusDays(10)));
+		int readyOrderId = paidOrder(MEMBER_ID);
+		int shippingOrderId = paidOrder(MEMBER_ID + 1);
+		int deliveredOrderId = paidOrder(MEMBER_ID + 2);
+		int canceledOrderId = paidOrder(MEMBER_ID + 3);
+		mockMvc.perform(post("/api/v1/order/orders/" + canceledOrderId + "/items/" + itemIdOf(canceledOrderId)
+				+ "/cancel").header("X-Member-Id", MEMBER_ID + 3))
+			.andExpect(status().isOk());
+		int unpaidOrderId = createOrder(MEMBER_ID + 4);
+		// 배송 표 전처럼 만든다: 새 배송을 지우고, 옛 칸(엔티티에서 뺀 컬럼)을 다시 붙여 값을 넣는다
+		jdbcTemplate.update("delete from order_shipment_item");
+		jdbcTemplate.update("delete from order_shipment");
+		jdbcTemplate.execute("""
+			alter table order_order_item add column if not exists kit_delivery_status varchar(20);
+			alter table order_order_item add column if not exists kit_carrier varchar(30);
+			alter table order_order_item add column if not exists kit_tracking_number varchar(50);
+			alter table order_order_item add column if not exists kit_shipped_at timestamp(6);
+			alter table order_order_item add column if not exists kit_delivered_at timestamp(6);
+			alter table order_order add column if not exists recipient_name varchar(50);
+			alter table order_order add column if not exists recipient_phone varchar(20);
+			alter table order_order add column if not exists zipcode varchar(10);
+			alter table order_order add column if not exists address varchar(255);
+			alter table order_order add column if not exists address_detail varchar(255)
+			""");
+		jdbcTemplate.update("update order_order set recipient_name = '김러너', recipient_phone = '010-1234-5678',"
+			+ " zipcode = '04700', address = '서울 성동구 왕십리로 00', address_detail = '101동 1001호'");
+		jdbcTemplate.update("update order_order_item set kit_delivery_status = 'PREPARING'");
+		LocalDateTime shippedAt = LocalDateTime.now().minusDays(2).truncatedTo(ChronoUnit.MICROS);
+		jdbcTemplate.update("update order_order_item set kit_delivery_status = 'SHIPPING', kit_carrier = ?,"
+			+ " kit_tracking_number = ?, kit_shipped_at = ? where order_id = ?",
+			CARRIER, TRACKING_NUMBER, shippedAt, shippingOrderId);
+		jdbcTemplate.update("update order_order_item set kit_delivery_status = 'DELIVERED', kit_carrier = ?,"
+			+ " kit_tracking_number = ?, kit_shipped_at = ?, kit_delivered_at = ? where order_id = ?",
+			CARRIER, TRACKING_NUMBER, shippedAt, shippedAt.plusDays(1), deliveredOrderId);
+
+		FileSystemResource sql = new FileSystemResource("../../docs/erd/order-shipment-migration-BUK-6.sql");
+		new ResourceDatabasePopulator(sql).execute(jdbcTemplate.getDataSource());
+		new ResourceDatabasePopulator(sql).execute(jdbcTemplate.getDataSource());
+
+		assertThat(shipmentsOf(readyOrderId)).singleElement()
+			.satisfies(shipment -> {
+				assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.READY);
+				assertThat(shipment.getShippingAddress().getAddressDetail()).isEqualTo("101동 1001호");
+				assertThat(shipment.getItems()).singleElement()
+					.satisfies(item -> assertThat(item.getOrderItemId()).isEqualTo(itemIdOf(readyOrderId)));
+			});
+		assertThat(shipmentsOf(shippingOrderId)).singleElement()
+			.satisfies(shipment -> {
+				assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.SHIPPING);
+				assertThat(shipment.getCarrier()).isEqualTo(CARRIER);
+				assertThat(shipment.getTrackingNumber()).isEqualTo(TRACKING_NUMBER);
+				assertThat(shipment.getShippedAt()).isEqualTo(shippedAt);
+			});
+		assertThat(shipmentOf(deliveredOrderId).getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
+		assertThat(shipmentOf(deliveredOrderId).getDeliveredAt()).isEqualTo(shippedAt.plusDays(1));
+		assertThat(shipmentOf(canceledOrderId).getStatus()).isEqualTo(ShipmentStatus.CANCELED);
+		assertThat(shipmentOf(canceledOrderId).getCanceledAt()).isNotNull();
+		assertThat(shipmentsOf(unpaidOrderId)).isEmpty();
+		assertThat(jdbcTemplate.queryForObject("select count(*) from order_shipment_item", Long.class)).isEqualTo(4);
+		// 옮긴 배송으로 판매자 화면이 배송 표 전과 같이 보인다
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, null, 0, 20).getKits())
+			.extracting(SellerKitDto::getOrderItemId, SellerKitDto::getKitDeliveryStatus)
+			.containsExactly(tuple(itemIdOf(deliveredOrderId), KitDeliveryStatus.DELIVERED),
+				tuple(itemIdOf(shippingOrderId), KitDeliveryStatus.SHIPPING),
+				tuple(itemIdOf(readyOrderId), KitDeliveryStatus.PREPARING));
 	}
 
 	private ResultActions changeAddress(int memberId, int participationId) throws Exception {
