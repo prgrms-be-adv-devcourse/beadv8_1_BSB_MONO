@@ -27,6 +27,23 @@ describe('SellerDashboardPage', () => {
     expect(screen.getByText('판매 중 대회')).toBeInTheDocument()
   })
 
+  it('지급 예정 정산이 없어 다음 정산일이 null이면 - 를 보여 준다', async () => {
+    server.use(
+      http.get('*/api/v1/payout/seller/summary', () =>
+        HttpResponse.json({
+          status: 200,
+          message: 'ok',
+          data: { nextPayDate: null, scheduledPayoutAmount: 0, heldCount: 0 },
+        }),
+      ),
+    )
+    renderPage()
+
+    expect(await screen.findByText('₩0')).toBeInTheDocument()
+    const tile = screen.getByText('다음 정산일').parentElement as HTMLElement
+    expect(within(tile).getByText('-')).toBeInTheDocument()
+  })
+
   it('정산 요약과 대회 목록이 실패하면 각각 서버 문구를 보여 준다', async () => {
     server.use(
       http.get('*/api/v1/payout/seller/summary', () =>

@@ -99,7 +99,7 @@ export const SummaryResponse = zod.object({
   "status": zod.int().optional(),
   "message": zod.string().optional(),
   "data": zod.object({
-  "nextPayDate": zod.iso.date(),
+  "nextPayDate": zod.iso.date().nullable().describe('다음 정산일. 지급 예정 정산 내역이 없으면 null'),
   "scheduledPayoutAmount": zod.int(),
   "heldCount": zod.int()
 }).optional()

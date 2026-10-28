@@ -75,10 +75,11 @@ export function SellerSettlementsPage({ initialTab = 'monthly' }: { initialTab?:
       <div className="flex gap-6">
         {summary.data ? (
           <>
+            {/* 지급 예정 정산이 없으면 다음 정산일이 null이라 「-」로 보여 준다 */}
             <StatTile
               label="다음 정산일"
-              value={formatMonthDay(summary.data.nextPayDate)}
-              unit={`(${formatWeekday(summary.data.nextPayDate)})`}
+              value={summary.data.nextPayDate ? formatMonthDay(summary.data.nextPayDate) : '-'}
+              unit={summary.data.nextPayDate && `(${formatWeekday(summary.data.nextPayDate)})`}
             />
             <StatTile
               tone="accent"

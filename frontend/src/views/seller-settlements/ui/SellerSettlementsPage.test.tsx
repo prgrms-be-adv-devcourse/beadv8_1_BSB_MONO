@@ -36,6 +36,22 @@ describe('SellerSettlementsPage', () => {
     expect(months).toMatch(/^\d{4}-\d{2}~\d{4}-\d{2}$/)
   })
 
+  it('지급 예정 정산이 없어 다음 정산일이 null이면 - 를 보여 준다', async () => {
+    server.use(
+      http.get('*/api/v1/payout/seller/summary', () =>
+        HttpResponse.json({
+          status: 200,
+          message: 'ok',
+          data: { nextPayDate: null, scheduledPayoutAmount: 0, heldCount: 0 },
+        }),
+      ),
+    )
+    renderPage()
+
+    const tile = (await screen.findByText('다음 정산일')).parentElement as HTMLElement
+    expect(within(tile).getByText('-')).toBeInTheDocument()
+  })
+
   it('월별 정산: 1차 · 최종을 나눠 보여 주고, 수수료 · 1차 정산금 차감은 최종 줄에만 보인다', async () => {
     renderPage()
 
