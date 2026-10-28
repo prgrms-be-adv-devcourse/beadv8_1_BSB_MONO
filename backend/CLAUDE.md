@@ -150,7 +150,13 @@ backend/
   `code`는 오류 응답에 붙는 오류 코드입니다 (예: `MEMBER_DUPLICATE_EMAIL`, 입력값 오류는 `INVALID_REQUEST`, 예상 못 한 오류는 500 `INTERNAL_ERROR`).
   코드가 없으면 JSON에서 `code` 칸이 빠집니다.
   도메인 예외에 코드를 붙이려면 `BusinessException(status, code, message)` 생성자를 쓰고, 코드 이름은 `도메인_상황` 대문자 스네이크로 짓습니다.
-- 엔티티 테이블 이름은 `<도메인>_<엔티티>` 형식입니다 (예: `MEMBER_MEMBER`, `CASH_MEMBER`). 지금은 모든 서비스가 같은 DB(`bukang-db`)를 쓰고 접두사로 구분합니다.
+- 엔티티 테이블 이름은 `<서비스>_<엔티티>` 형식입니다 (예: `MEMBER_MEMBER`, `CASH_MEMBER`, `ORDER_CART`).
+  접두사는 서비스 모듈 이름(`member`, `cash`, `payout`, `file`, `order`, `product`, `queue`)을 대문자로 씁니다.
+  지금은 모든 서비스가 같은 DB(`bukang-db`)를 쓰고 접두사로 구분합니다.
+  테이블 이름 규칙(naming strategy)을 따로 두지 않아 실제 DB에는 소문자(`member_member`)로 만들어지므로, SQL을 직접 쓸 때는 소문자로 씁니다.
+  규칙과 다른 기존 테이블(상품의 `race`, `race_course`, `participation_hold`)은 서비스별로 DB를 나눌 때(최종, Flyway) 맞춥니다.
+  테이블 이름을 바꿀 때는 Flyway가 없는 서비스라면 배포 전에 서버 DB에서 `RENAME TABLE`을 먼저 실행합니다.
+  compose가 `ddl-auto: update`로 띄워서, 이름만 바꿔 배포하면 빈 새 테이블이 생기고 기존 데이터는 옛 테이블에 남습니다.
 
 ## 의존성 구성 (`member-service/build.gradle.kts`)
 
