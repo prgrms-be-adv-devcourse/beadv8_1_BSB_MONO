@@ -58,7 +58,7 @@ class OrderCancelTest {
 	private static Order paidOrderWithTwoItems() {
 		Order order = Order.forParticipation(participation(1), COURSE, "key", NOW.plusMinutes(10));
 		order.getItems().add(OrderItem.ticket(order, participation(2), COURSE));
-		order.markPaid(NOW);
+		order.markPaid(NOW, null);
 		return order;
 	}
 

@@ -105,7 +105,7 @@ public class ParticipationApplyUseCase {
 	// 참가자 정보는 접수 마감 전까지 고칠 수 있다 (정책 3장 1-5). 생년월일이 바뀔 수 있으니 나이 제한도 다시 본다
 	public Participation changeParticipant(int participationId, int memberId, ParticipantInfo participant,
 		LocalDateTime now) {
-		// [결제하기]로 주문이 있으면 주문의 배송지도 바꿔야 하므로 주문부터 잠근다 (잠금 순서: 주문 → 참가 신청)
+		// [결제하기]로 주문이 있으면 발송 대기 배송의 주소도 바꿔야 하므로 주문부터 잠근다 (잠금 순서: 주문 → 참가 신청)
 		Optional<Integer> orderId = orderItemRepository.findOrderIdByParticipationId(participationId);
 		Optional<Order> order = orderId.flatMap(orderRepository::findByIdForUpdate);
 		// 잠가서 읽는다. 엔티티는 저장할 때 모든 컬럼을 다시 쓰므로, 잠그지 않으면 결제·취소가 바꾼 상태를
@@ -113,7 +113,7 @@ public class ParticipationApplyUseCase {
 		Participation participation = participationRepository.findByIdForUpdate(participationId)
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
 		checkOwner(participation, memberId);
-		// 주문을 찾은 뒤 신청서를 잠그기 전에 [결제하기]가 주문을 만들었으면, 그 주문에는 옛 배송지가 복사돼 있다
+		// 주문을 찾은 뒤 신청서를 잠그기 전에 [결제하기]가 주문을 만들고 결제했으면, 그 배송에는 옛 배송지가 복사돼 있다
 		// 신청서를 잡은 채 주문을 잠그면 결제(주문 → 참가 신청)와 서로 기다릴 수 있으므로, 거절하고 다시 시도하게 한다
 		if (orderId.isEmpty() && orderItemRepository.findOrderIdByParticipationId(participationId).isPresent()) {
 			throw new ParticipationChangeRetryException("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요.");
@@ -126,7 +126,7 @@ public class ParticipationApplyUseCase {
 		checkAge(course, participant);
 		ParticipantInfo checked = checkTshirtSize(course, checkShippingAddress(course, participant));
 		participation.changeParticipant(checked);
-		order.ifPresent(found -> found.changeShippingAddress(checked.getShippingAddress()));
+		order.ifPresent(found -> found.changeKitShippingAddress(checked.getShippingAddress()));
 		return participation;
 	}
 
