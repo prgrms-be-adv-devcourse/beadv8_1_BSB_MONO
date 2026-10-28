@@ -9,12 +9,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
-import com.bukang.common.shared.member.web.MemberIdHeader;
+import com.bukang.common.shared.member.web.LoginMemberId;
 import com.bukang.payout.app.PayoutAdminVerifyUseCase;
 import com.bukang.payout.app.PayoutHoldUseCase;
 import com.bukang.payout.dto.PayoutHoldDto;
@@ -29,7 +28,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -89,8 +87,7 @@ public class ApiV1PayoutHoldController {
 				examples = @ExampleObject(value = PayoutApiExamples.MEMBER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<PayoutHoldDto>> hold(
-		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "정산 내역 ID", example = "1")
 		@PathVariable int payoutId,
 		@Valid @RequestBody PayoutHoldRequestDto request
@@ -137,8 +134,7 @@ public class ApiV1PayoutHoldController {
 				examples = @ExampleObject(value = PayoutApiExamples.MEMBER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<PayoutHoldDto>> release(
-		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "지급보류 ID (보류 걸기 응답의 id)", example = "1")
 		@PathVariable int holdId
 	) {

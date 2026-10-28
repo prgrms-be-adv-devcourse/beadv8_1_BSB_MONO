@@ -237,6 +237,7 @@ class ApiV1PayoutHoldControllerTest {
 	void missingMemberId() throws Exception {
 		mockMvc.perform(post("/api/v1/payout/holds/{holdId}/release", 1))
 			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("LOGIN_REQUIRED"))
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
 			.andDo(document("payout-hold-unauthorized", ERROR_RESPONSE));
 	}

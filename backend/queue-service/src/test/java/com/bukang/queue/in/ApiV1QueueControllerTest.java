@@ -225,6 +225,7 @@ class ApiV1QueueControllerTest extends QueueIntegrationTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(requestBody()))
 			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("LOGIN_REQUIRED"))
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
 	}
 
@@ -357,6 +358,7 @@ class ApiV1QueueControllerTest extends QueueIntegrationTest {
 	void rejectStatusWithoutMemberIdHeader() throws Exception {
 		mockMvc.perform(get(STATUS_URL, RACE_ID, RACE_COURSE_ID))
 			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("LOGIN_REQUIRED"))
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
 	}
 

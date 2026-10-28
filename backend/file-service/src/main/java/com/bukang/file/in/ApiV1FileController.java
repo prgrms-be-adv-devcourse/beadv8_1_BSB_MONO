@@ -9,12 +9,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
+import com.bukang.common.shared.member.web.LoginMemberId;
 import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.file.app.FileFacade;
 import com.bukang.file.dto.FileDto;
@@ -23,6 +23,7 @@ import com.bukang.file.dto.FileUploadRequestDto;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,7 +31,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 @Tag(name = "File", description = "이미지 업로드 URL 발급, 업로드 완료 확인, 파일 조회 API")
@@ -67,8 +67,7 @@ public class ApiV1FileController {
 				examples = @ExampleObject(value = FileApiExamples.LOGIN_REQUIRED)))
 	})
 	public ResponseEntity<RsData<FileUploadDto>> createUploadUrl(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Valid @RequestBody FileUploadRequestDto request
 	) {
 		FileUploadDto upload = fileFacade.createUploadUrl(request, memberId);
@@ -120,9 +119,9 @@ public class ApiV1FileController {
 				examples = @ExampleObject(value = FileApiExamples.FILE_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<FileDto>> findById(
-		@Parameter(description = "요청한 회원 ID (연결 전 파일을 볼 때 필요)", example = "1")
-		@RequestHeader(name = MemberIdHeader.NAME, required = false)
-		@Positive(message = MemberIdHeader.INVALID_MESSAGE) Integer memberId,
+		@Parameter(in = ParameterIn.HEADER, name = MemberIdHeader.NAME,
+			description = "요청한 회원 ID (연결 전 파일을 볼 때 필요)", example = "1")
+		@LoginMemberId(required = false) Integer memberId,
 		@Parameter(description = "파일 ID", example = "1")
 		@PathVariable int fileId
 	) {
@@ -156,9 +155,7 @@ public class ApiV1FileController {
 				examples = @ExampleObject(value = FileApiExamples.FILE_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<FileDto>> completeUpload(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE)
-		int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "업로드 URL 발급 때 받은 파일 ID", example = "1")
 		@PathVariable
 		int fileId

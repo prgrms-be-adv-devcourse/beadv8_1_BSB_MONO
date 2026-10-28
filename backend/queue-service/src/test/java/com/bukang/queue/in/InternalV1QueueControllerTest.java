@@ -90,6 +90,7 @@ class InternalV1QueueControllerTest extends QueueIntegrationTest {
 	void rejectWithoutMemberIdHeader() throws Exception {
 		mockMvc.perform(get(ADMISSION_URL, RACE_ID, RACE_COURSE_ID))
 			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("LOGIN_REQUIRED"))
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
 	}
 

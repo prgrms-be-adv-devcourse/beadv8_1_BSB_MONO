@@ -19,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.ResultActions;
 
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
 import com.bukang.product.domain.CourseType;
@@ -241,7 +242,7 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 		mockMvc.perform(get(RACES + registered.raceId()).header("X-Member-Id", "abc"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.message").value(INVALID_VALUE_TYPE));
+			.andExpect(jsonPath("$.message").value(MemberIdHeader.INVALID_MESSAGE));
 	}
 
 	// ---------- 내 대회 ----------
@@ -340,12 +341,13 @@ class ApiV1RaceQueryTest extends ProductIntegrationTest {
 		getAs(MINE, null)
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.status").value(401))
+			.andExpect(jsonPath("$.code").value("LOGIN_REQUIRED"))
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
 			.andExpect(jsonPath("$.data", nullValue()));
 		mockMvc.perform(get(MINE).header("X-Member-Id", "abc"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.message").value(INVALID_VALUE_TYPE));
+			.andExpect(jsonPath("$.message").value(MemberIdHeader.INVALID_MESSAGE));
 	}
 
 	// ---------- 주문용 종목 정보 ----------
