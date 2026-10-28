@@ -39,8 +39,6 @@ import lombok.NoArgsConstructor;
 })
 public class Payout extends BaseIdAndTime {
 	private static final DateTimeFormatter CODE_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
-	// 판매자 요약의 다음 정산일 대체값: 매월 20일 (휴일이면 다음 영업일)
-	private static final int PAY_DAY_OF_MONTH = 20;
 	// 지급일: 기준일(1차는 환불 마감일, 최종은 대회일)을 1일째로 세어 3일째, 즉 기준일 + 2일 (10/28 결정)
 	// 주말이어도 그날 지급한다. 지급 배치가 그날 04:00에 지급한다
 	private static final int PAY_DAYS_AFTER_BASE_DATE = 2;
@@ -365,20 +363,5 @@ public class Payout extends BaseIdAndTime {
 	private void changeStatus(PayoutStatus to, int changedBy, LocalDateTime changedAt, String reason) {
 		statusHistories.add(new PayoutStatusHistory(this, status, to, changedBy, changedAt, reason));
 		this.status = to;
-	}
-
-	// date "뒤"의 매월 20일 지급일. 판매자 요약(지급 예정 정산 내역이 없을 때의 다음 정산일)만 쓴다
-	// 20일이 주말이면 지급일이 밀리므로, 20일이 아니라 밀린 날과 비교한다 (12/20 일 → 12/21 월)
-	public static LocalDate nextPayDateAfter(LocalDate date, BusinessDayCalendar calendar) {
-		YearMonth month = YearMonth.from(date);
-		LocalDate thisMonthPayDay = payDayOf(month, calendar);
-		if (thisMonthPayDay.isAfter(date)) {
-			return thisMonthPayDay;
-		}
-		return payDayOf(month.plusMonths(1), calendar);
-	}
-
-	private static LocalDate payDayOf(YearMonth month, BusinessDayCalendar calendar) {
-		return calendar.nextOrSame(month.atDay(PAY_DAY_OF_MONTH));
 	}
 }
