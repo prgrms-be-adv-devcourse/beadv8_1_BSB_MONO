@@ -36,7 +36,26 @@ class LoginMemberIdArgumentResolverTest {
 	void validHeader() throws Exception {
 		mockMvc.perform(get("/test/member").header(MemberIdHeader.NAME, "5"))
 			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data").value(5L));
+	}
+
+	@Test
+	@DisplayName("int 범위를 넘는 값도 long 인자에는 그대로 넘긴다")
+	void beyondIntRange() throws Exception {
+		mockMvc.perform(get("/test/member").header(MemberIdHeader.NAME, "3000000000"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data").value(3_000_000_000L));
+	}
+
+	@Test
+	@DisplayName("아직 int로 받는 인자는 int 범위를 넘는 값을 400으로 거절한다")
+	void intParameterOverflow() throws Exception {
+		mockMvc.perform(get("/test/int").header(MemberIdHeader.NAME, "5"))
+			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data").value(5));
+		mockMvc.perform(get("/test/int").header(MemberIdHeader.NAME, "3000000000"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 	}
 
 	@Test
@@ -87,12 +106,17 @@ class LoginMemberIdArgumentResolverTest {
 	@RestController
 	static class MemberEchoController {
 		@GetMapping("/test/member")
-		RsData<Integer> member(@LoginMemberId int memberId) {
+		RsData<Long> member(@LoginMemberId long memberId) {
 			return RsData.of(HttpStatus.OK, "회원 ID를 받았습니다.", memberId);
 		}
 
 		@GetMapping("/test/optional")
-		RsData<Integer> optional(@LoginMemberId(required = false) Integer memberId) {
+		RsData<Long> optional(@LoginMemberId(required = false) Long memberId) {
+			return RsData.of(HttpStatus.OK, "회원 ID를 받았습니다.", memberId);
+		}
+
+		@GetMapping("/test/int")
+		RsData<Integer> intMember(@LoginMemberId int memberId) {
 			return RsData.of(HttpStatus.OK, "회원 ID를 받았습니다.", memberId);
 		}
 	}

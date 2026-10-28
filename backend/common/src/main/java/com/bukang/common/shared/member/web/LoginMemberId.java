@@ -9,7 +9,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 
 /**
- * 게이트웨이가 넣어 준 회원 ID 헤더(X-Member-Id)를 컨트롤러 인자로 받는다 (int 또는 Integer)
+ * 게이트웨이가 넣어 준 회원 ID 헤더(X-Member-Id)를 컨트롤러 인자로 받는다 (long 또는 Long)
+ * long으로 옮기는 동안에는 int·Integer 인자도 받는다. int 범위를 넘는 값은 400으로 거절한다
  * 헤더를 꺼내고 검사하는 규칙은 LoginMemberIdArgumentResolver 한 곳에 있다.
  * 헤더가 없으면 401(LOGIN_REQUIRED), 숫자가 아니거나 0 이하면 400(INVALID_REQUEST)으로 응답한다
  * 컨트롤러 인자에 스프링 애노테이션이 없으면 Swagger가 쿼리 칸으로 그리므로, @Parameter를 메타로 붙여 헤더 칸으로 나오게 한다.
@@ -25,7 +26,7 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 	example = "1"
 )
 public @interface LoginMemberId {
-	// false면 헤더가 없을 때 401 대신 null을 넘긴다 (로그인하지 않아도 되는 조회). 인자 타입은 Integer로 둔다
+	// false면 헤더가 없을 때 401 대신 null을 넘긴다 (로그인하지 않아도 되는 조회). 인자 타입은 Long으로 둔다
 	// Swagger 칸도 선택으로 보이려면 인자에 @Parameter(in = HEADER, name = MemberIdHeader.NAME)를 따로 붙인다
 	boolean required() default true;
 }
