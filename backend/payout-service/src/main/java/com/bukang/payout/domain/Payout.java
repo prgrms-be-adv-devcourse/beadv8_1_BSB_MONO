@@ -228,7 +228,7 @@ public class Payout extends BaseIdAndTime {
 	 * @return 이번에 뺀 금액. 뺄 게 없으면 0이고 줄을 쓰지 않는다
 	 */
 	public long offsetReceivable(long receivable) {
-		if (status != PayoutStatus.CALCULATED && status != PayoutStatus.HELD) {
+		if (!status.isBeforePayment()) {
 			throw new IllegalStateException("송금 전 정산 내역에서만 상계할 수 있습니다. payoutId=%d, status=%s"
 				.formatted(getId(), status));
 		}
@@ -344,16 +344,11 @@ public class Payout extends BaseIdAndTime {
 	// 지급액(줄의 합)은 0이 되고, 판매액 · 수수료 칸은 만들 때 그대로 둔다(얼마가 나갈 뻔했는지 남긴다)
 	// 보류 중이었으면 보류 기록은 HELD로 두고 상태만 최신으로 바꾼다. 무엇이었는지는 상태 이력에 남는다
 	// 이미 지급한 정산 내역은 닫지 않는다. 지급 뒤 대회 취소는 회수(PRO-33)가 맡는다
+	// 지급 중에도 돈이 이미 나갔을 수 있어 닫지 않는다. 대회 취소가 지급 중을 만났을 때의 처리는 PRO-253에서 정한다
 	public void cancel(int canceledBy, LocalDateTime canceledAt, String reason) {
-		if (status == PayoutStatus.PAID) {
-			throw new IllegalStateException("이미 지급 완료된 정산 내역은 취소할 수 없습니다. payoutId=%d".formatted(getId()));
-		}
-		if (status == PayoutStatus.CANCELED) {
-			throw new IllegalStateException("이미 취소된 정산 내역입니다. payoutId=%d".formatted(getId()));
-		}
-		// 지급 중에는 돈이 이미 나갔을 수 있어 닫지 않는다. 대회 취소가 지급 중을 만났을 때의 처리는 PRO-253에서 정한다
-		if (status == PayoutStatus.PAYING) {
-			throw new IllegalStateException("지급 중인 정산 내역은 취소할 수 없습니다. payoutId=%d".formatted(getId()));
+		if (!status.isBeforePayment()) {
+			throw new IllegalStateException("지급 전 정산 내역만 취소할 수 있습니다. payoutId=%d, status=%s"
+				.formatted(getId(), status));
 		}
 		List<PayoutItem> original = List.copyOf(items);
 		original.forEach(item -> addLine(item.getRecordType().canceled(), item.getOrderItemId(),

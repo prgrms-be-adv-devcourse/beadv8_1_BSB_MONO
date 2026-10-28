@@ -38,9 +38,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class PayoutLedgerUseCase {
-	// 아직 지급하지 않은 정산 내역. 보류(HELD)도 지급 전이라 상계 대상이다
-	private static final List<PayoutStatus> UNSENT = List.of(PayoutStatus.CALCULATED, PayoutStatus.HELD);
-
 	private final PayoutRepository payoutRepository;
 	private final PayoutItemRepository payoutItemRepository;
 	private final PayoutRecoveryRepository payoutRecoveryRepository;
@@ -167,7 +164,7 @@ public class PayoutLedgerUseCase {
 		if (receivable <= 0) {
 			return List.of();
 		}
-		for (Payout payout : payoutRepository.findForUpdate(sellerId, raceId, UNSENT)) {
+		for (Payout payout : payoutRepository.findForUpdate(sellerId, raceId, PayoutStatus.BEFORE_PAYMENT)) {
 			receivable -= payout.offsetReceivable(receivable);
 			if (receivable == 0) {
 				break;
