@@ -84,7 +84,8 @@ class PayoutLedgerScenarioTest {
 	void setUp() {
 		BusinessDayCalendar calendar = new BusinessDayCalendar();
 		ledgerUseCase = new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository);
-		creator = new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
+		creator = new PayoutCreateStepUseCase(payoutRepository, calendar, ledgerUseCase,
+			new PayoutHoldUseCase(payoutRepository, payoutHoldRepository, calendar));
 		payUseCase = new PayoutPayUseCase(new PayoutPayStepUseCase(payoutRepository), transfer -> {
 		});
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, ledgerUseCase);
