@@ -13,7 +13,7 @@ import jakarta.persistence.EntityManager;
 // common 모듈의 빈(GlobalExceptionHandler, JsonConverter)도 등록되도록 com.bukang.common을 함께 스캔한다
 @SpringBootApplication(scanBasePackages = {"com.bukang.order", "com.bukang.common"})
 @EnableJpaAuditing
-@EnableScheduling // 결제 기한 만료 정리(OrderExpiryScheduler, test 프로파일 제외)
+@EnableScheduling // 결제 기한 만료 정리, 아웃박스 릴레이 (test 프로파일 제외)
 public class OrderApplication {
 
 	public static void main(String[] args) {
