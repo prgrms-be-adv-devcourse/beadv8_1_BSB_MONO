@@ -3,6 +3,7 @@ package com.bukang.payout.app;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import com.bukang.payout.out.PayoutRepository;
 import com.bukang.payout.out.PayoutTransfer;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 지급 배치의 정산 내역 한 건 단계마다 짧은 트랜잭션을 연다 (PRO-252)
@@ -22,6 +24,7 @@ import lombok.RequiredArgsConstructor;
  * 지급 중(PAYING)을 호출 전에 커밋해 두므로, 트랜잭션 밖에 있어도 그동안 보류 · 상계 · 취소가 끼어들지 못한다
  * PayoutPayUseCase가 부른다. 같은 클래스 안에서 부르면 @Transactional 프록시를 거치지 않으므로 빈을 나눈다
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PayoutPayStepUseCase {
@@ -50,7 +53,11 @@ public class PayoutPayStepUseCase {
 		if (payout.getStatus() != PayoutStatus.CALCULATED || payout.getScheduledPayDate().isAfter(today)) {
 			return Start.skipped();
 		}
-		if (isWaitingForFirst(payout)) {
+		Optional<Payout> waitingFirst = findWaitingFirst(payout);
+		if (waitingFirst.isPresent()) {
+			// 보류가 안 풀린 1차 때문에 최종이 계속 밀리면 원인을 찾을 수 있게 실행마다 한 줄 남긴다
+			log.info("1차 정산이 지급 완료되지 않아 최종 정산 지급을 미룹니다. payoutId={}, firstPayoutId={}, firstStatus={}",
+				payout.getId(), waitingFirst.get().getId(), waitingFirst.get().getStatus());
 			return Start.skipped();
 		}
 		if (!payout.hasTransferAmount()) {
@@ -67,15 +74,15 @@ public class PayoutPayStepUseCase {
 	// 지급 중(PAYING)인 최종의 재시도에는 걸지 않는다. 이미 돈이 나갔을 수 있어 결과를 확인해야 한다
 	// 같은 날 1차 · 최종이 함께 대상이면 같은 실행에서 1차 → 최종 순서로 지급한다(같은 날 두 번 이체해도 된다, 10/28 결정).
 	// 지급 배치가 ID 순서로 처리하고 1차가 최종보다 먼저 저장되기 때문이다 (PayoutRepository.findPayTargetIds)
-	private boolean isWaitingForFirst(Payout payout) {
+	// 최종이 기다려야 하는 1차를 돌려준다. 기다리지 않아도 되면 빈 값
+	private Optional<Payout> findWaitingFirst(Payout payout) {
 		if (payout.getPayoutStage() != PayoutStage.FINAL) {
-			return false;
+			return Optional.empty();
 		}
 		return payoutRepository.findFirstBySellerIdAndRaceIdAndPayoutStageOrderByIdAsc(
 				payout.getSellerId(), payout.getRaceId(), PayoutStage.FIRST)
 			.filter(first -> first.getStatus() != PayoutStatus.CANCELED)
-			.map(first -> first.getStatus() != PayoutStatus.PAID)
-			.orElse(false);
+			.filter(first -> first.getStatus() != PayoutStatus.PAID);
 	}
 
 	// 캐시 서비스가 돈을 옮긴 뒤 지급 완료로 바꾼다
