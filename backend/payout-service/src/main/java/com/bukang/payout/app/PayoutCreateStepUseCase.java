@@ -11,14 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.payout.domain.BusinessDayCalendar;
 import com.bukang.payout.domain.Payout;
-import com.bukang.payout.domain.PayoutHold;
-import com.bukang.payout.domain.PayoutHoldReason;
-import com.bukang.payout.domain.PayoutHoldStatus;
 import com.bukang.payout.domain.PayoutStage;
-import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.domain.PayoutTargetDate;
 import com.bukang.payout.domain.TwoStagePayoutCalculator;
-import com.bukang.payout.out.PayoutHoldRepository;
 import com.bukang.payout.out.PayoutRepository;
 import com.bukang.payout.out.SoldEntry;
 
@@ -34,14 +29,10 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class PayoutCreateStepUseCase {
-	// 자동 보류의 사유 상세. 관리자가 건 보류와 구분되도록 고정 문구를 남긴다
-	private static final String AUTO_HOLD_REASON = "정산 계좌 미등록으로 자동 보류";
-	private static final String FIRST_HELD_REASON = "1차 정산 보류 중이라 최종 정산도 자동 보류";
-
 	private final PayoutRepository payoutRepository;
-	private final PayoutHoldRepository payoutHoldRepository;
 	private final BusinessDayCalendar businessDayCalendar;
 	private final PayoutLedgerUseCase payoutLedgerUseCase;
+	private final PayoutHoldUseCase payoutHoldUseCase;
 
 	/**
 	 * 1차 정산 내역을 만든다. 정산 월은 환불 기한의 달이고, 1차 정산금 줄은 판매 집계(가격 합 · 장수)로 계산한다
@@ -58,15 +49,13 @@ public class PayoutCreateStepUseCase {
 			payout.recordAdvance(course.raceCourseId(), course.priceSum(), course.ticketCount(), targetDate));
 
 		save(payout);
-		if (!source.hasPayoutAccount()) {
-			holdForMissingAccount(payout, now);
-		}
+		payoutHoldUseCase.holdNewFirst(payout, source.hasPayoutAccount(), now);
 	}
 
 	/**
 	 * 최종 정산 내역을 만든다. 정산 월은 대회일의 달이고, 같은 판매자 × 대회의 남은 1차 정산금(ADVANCE 잔고)을 1차 정산금 차감으로 뺀다
 	 * 만든 뒤 아직 못 받은 갚을 돈(RECEIVABLE)이 있으면 이 정산 내역에서 바로 상계한다 (PRO-214)
-	 * 1차가 보류 중이면 최종도 같은 사유로 보류한다 (사유는 PRO-189에서 다시 정한다)
+	 * 자동 보류(1차가 보류 중이면 같은 사유로, 아니면 계좌 미등록일 때)는 PayoutHoldUseCase가 정한다
 	 */
 	@Transactional
 	public void createFinal(FinalPayoutSource source, LocalDate raceDate, LocalDateTime now) {
@@ -88,32 +77,13 @@ public class PayoutCreateStepUseCase {
 
 		save(payout);
 		payoutLedgerUseCase.deductAdvanceAndSettle(payout, now);
-		Optional<PayoutHold> firstHold = first.filter(firstPayout -> firstPayout.getStatus() == PayoutStatus.HELD)
-			.flatMap(held -> payoutHoldRepository.findFirstByPayoutIdAndStatusOrderByIdDesc(
-				held.getId(), PayoutHoldStatus.HELD));
-		if (firstHold.isPresent()) {
-			hold(payout, firstHold.get().getReasonType(), FIRST_HELD_REASON, now);
-		} else if (!source.hasPayoutAccount()) {
-			holdForMissingAccount(payout, now);
-		}
+		payoutHoldUseCase.holdNewFinal(payout, first, source.hasPayoutAccount(), now);
 	}
 
 	// 정산 ID의 끝 4자리는 PK에서 만들므로 저장해서 ID를 받은 뒤에 붙인다
 	private void save(Payout payout) {
 		payoutRepository.save(payout);
 		payout.assignPayoutCode();
-	}
-
-	// 계좌가 없으면 지급 배치가 고르지 않도록 HELD로 둔다. 판매자가 계좌를 등록하면 관리자가 보류를 푼다
-	private void holdForMissingAccount(Payout payout, LocalDateTime now) {
-		hold(payout, PayoutHoldReason.ACCOUNT_NOT_REGISTERED, AUTO_HOLD_REASON, now);
-	}
-
-	// 보류는 정산 내역의 PK를 참조하므로 정산 내역을 저장한 뒤에 건다
-	private void hold(Payout payout, PayoutHoldReason reasonType, String reason, LocalDateTime now) {
-		PayoutHold hold = payout.hold(reasonType, reason, PayoutHold.SYSTEM_MEMBER_ID, now);
-		payoutHoldRepository.save(hold);
-		hold.assignHoldCode();
 	}
 
 	/**

@@ -86,8 +86,9 @@ class PayoutCreateUseCaseTest {
 		List<RaceSchedule> schedules) {
 		// 테스트 전체가 트랜잭션 하나라 정산 내역별 트랜잭션은 보이지 않는다 (정산 내역별 트랜잭션은 PayoutCreateUseCaseTransactionTest)
 		PayoutCreateStepUseCase payoutCreateStepUseCase =
-			new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
-				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
+			new PayoutCreateStepUseCase(payoutRepository, new BusinessDayCalendar(),
+				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository),
+				new PayoutHoldUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar()));
 		return new PayoutCreateUseCase(payoutRepository, payoutCreateStepUseCase, soldEntriesReturning(entries),
 			sellerAccountPort, new StubRacePort(RACE_NAMES, schedules, entries), summariesOf(entries));
 	}
@@ -307,8 +308,9 @@ class PayoutCreateUseCaseTest {
 			return working.findSoldEntries(raceId);
 		};
 		PayoutCreateStepUseCase payoutCreateStepUseCase =
-			new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
-				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
+			new PayoutCreateStepUseCase(payoutRepository, new BusinessDayCalendar(),
+				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository),
+				new PayoutHoldUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar()));
 		PayoutCreateUseCase useCase = new PayoutCreateUseCase(payoutRepository, payoutCreateStepUseCase, race20Down,
 			sellerId -> true, new StubRacePort(RACE_NAMES, List.of(), entries), summariesOf(entries));
 
@@ -448,8 +450,9 @@ class PayoutCreateUseCaseTest {
 			return working.summarizeSold(raceId);
 		};
 		PayoutCreateStepUseCase payoutCreateStepUseCase =
-			new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
-				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
+			new PayoutCreateStepUseCase(payoutRepository, new BusinessDayCalendar(),
+				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository),
+				new PayoutHoldUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar()));
 		PayoutCreateUseCase useCase = new PayoutCreateUseCase(payoutRepository, payoutCreateStepUseCase,
 			soldEntriesReturning(entries), sellerId -> true, new StubRacePort(RACE_NAMES, schedules, entries), flaky);
 

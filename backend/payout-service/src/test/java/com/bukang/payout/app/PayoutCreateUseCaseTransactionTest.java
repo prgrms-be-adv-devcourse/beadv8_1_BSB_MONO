@@ -1,9 +1,11 @@
 package com.bukang.payout.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -16,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +41,7 @@ import com.bukang.payout.support.StubRacePort;
  */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({PayoutCreateStepUseCase.class, BusinessDayCalendar.class, PayoutLedgerUseCase.class})
+@Import({PayoutCreateStepUseCase.class, BusinessDayCalendar.class, PayoutLedgerUseCase.class, PayoutHoldUseCase.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PayoutCreateUseCaseTransactionTest {
 	private static final LocalDate RACE_DATE = LocalDate.of(2026, 9, 25);
@@ -64,6 +67,9 @@ class PayoutCreateUseCaseTransactionTest {
 
 	@Autowired
 	private PayoutStatusHistoryRepository payoutStatusHistoryRepository;
+
+	@Autowired
+	private PayoutHoldUseCase payoutHoldUseCase;
 
 	// deleteAllInBatch는 SQL을 바로 보내 cascade가 돌지 않으므로, 정산 내역을 가리키는 자식 테이블부터 지운다
 	@AfterEach
@@ -151,5 +157,20 @@ class PayoutCreateUseCaseTransactionTest {
 			.filteredOn(item -> Integer.valueOf(200).equals(item.getOrderItemId()))
 			.extracting(PayoutItem::getTargetDate)
 			.containsOnly(TARGET_DATE);
+	}
+
+	@Test
+	@DisplayName("자동 보류는 정산 생성 트랜잭션 안에서만 건다. 트랜잭션 밖에서 부르면 예외가 나고 보류가 남지 않는다")
+	void autoHoldRequiresTransaction() {
+		Payout first = payoutRepository.save(Payout.first(1, 10, "대회 10", YearMonth.of(2026, 9), NOW,
+			new BusinessDayCalendar()));
+		Payout last = payoutRepository.save(Payout.finalStage(1, 10, "대회 10", RACE_DATE, NOW,
+			new BusinessDayCalendar()));
+
+		assertThatThrownBy(() -> payoutHoldUseCase.holdNewFirst(first, false, NOW))
+			.isInstanceOf(IllegalTransactionStateException.class);
+		assertThatThrownBy(() -> payoutHoldUseCase.holdNewFinal(last, Optional.empty(), false, NOW))
+			.isInstanceOf(IllegalTransactionStateException.class);
+		assertThat(payoutHoldRepository.count()).isZero();
 	}
 }
