@@ -12,11 +12,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -485,18 +491,7 @@ class KitDeliveryTest {
 		// 배송 표 전처럼 만든다: 새 배송을 지우고, 옛 칸(엔티티에서 뺀 컬럼)을 다시 붙여 값을 넣는다
 		jdbcTemplate.update("delete from order_shipment_item");
 		jdbcTemplate.update("delete from order_shipment");
-		jdbcTemplate.execute("""
-			alter table order_order_item add column if not exists kit_delivery_status varchar(20);
-			alter table order_order_item add column if not exists kit_carrier varchar(30);
-			alter table order_order_item add column if not exists kit_tracking_number varchar(50);
-			alter table order_order_item add column if not exists kit_shipped_at timestamp(6);
-			alter table order_order_item add column if not exists kit_delivered_at timestamp(6);
-			alter table order_order add column if not exists recipient_name varchar(50);
-			alter table order_order add column if not exists recipient_phone varchar(20);
-			alter table order_order add column if not exists zipcode varchar(10);
-			alter table order_order add column if not exists address varchar(255);
-			alter table order_order add column if not exists address_detail varchar(255)
-			""");
+		addLegacyColumns();
 		jdbcTemplate.update("update order_order set recipient_name = '김러너', recipient_phone = '010-1234-5678',"
 			+ " zipcode = '04700', address = '서울 성동구 왕십리로 00', address_detail = '101동 1001호'");
 		// 배포 뒤 SQL 전에 구매자가 주소를 고쳤다. 새 코드는 참가 신청만 고치므로 주문의 옛 칸은 옛 주소 그대로다
@@ -510,14 +505,8 @@ class KitDeliveryTest {
 			+ " kit_tracking_number = ?, kit_shipped_at = ?, kit_delivered_at = ? where order_id = ?",
 			CARRIER, TRACKING_NUMBER, shippedAt, shippedAt.plusDays(1), deliveredOrderId);
 
-		// SQL은 운영의 참가 신청 표 이름(order_participation, #237)을 쓴다. 테스트는 엔티티의 지금 표 이름으로 바꿔 돌린다
-		String participationTable = Participation.class.getAnnotation(Table.class).name().toLowerCase();
-		ByteArrayResource sql = new ByteArrayResource(Files.readString(
-				Path.of("../../docs/erd/order-shipment-migration-BUK-6.sql"))
-			.replace("order_participation", participationTable)
-			.getBytes(StandardCharsets.UTF_8));
-		new ResourceDatabasePopulator(sql).execute(jdbcTemplate.getDataSource());
-		new ResourceDatabasePopulator(sql).execute(jdbcTemplate.getDataSource());
+		runSql(migrationSqlText());
+		runSql(migrationSqlText());
 
 		assertThat(shipmentsOf(readyOrderId)).singleElement()
 			.satisfies(shipment -> {
@@ -548,6 +537,111 @@ class KitDeliveryTest {
 			.containsExactly(tuple(itemIdOf(deliveredOrderId), KitDeliveryStatus.DELIVERED),
 				tuple(itemIdOf(shippingOrderId), KitDeliveryStatus.SHIPPING),
 				tuple(itemIdOf(readyOrderId), KitDeliveryStatus.PREPARING));
+	}
+
+	@Test
+	@DisplayName("되돌리는 SQL은 배송 표 값을 옛 키트 칸·주문 배송지로 다시 쓰고, 다시 돌려도 결과가 같다")
+	void rollbackSql() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		raceCoursePort.put(StubRaceCoursePort.openCourse(OPEN_COURSE_ID, RACE_ID, 14, null,
+			LocalDate.now().plusDays(10)));
+		int shippedOrderId = paidOrder(MEMBER_ID);
+		LocalDateTime shippedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+		kitDeliveryUseCase.ship(SELLER_ID, itemIdOf(shippedOrderId), CARRIER, TRACKING_NUMBER, shippedAt);
+		// 보낸 뒤 신청서 주소를 고쳤다. 주문 칸에는 신청서가 아니라 실제로 보낸 배송의 주소가 가야 한다
+		changeAddress(MEMBER_ID, participationIdOf(shippedOrderId)).andExpect(status().isOk());
+		int readyOrderId = paidOrder(MEMBER_ID + 1);
+		changeAddress(MEMBER_ID + 1, participationIdOf(readyOrderId)).andExpect(status().isOk());
+		int canceledOrderId = paidOrder(MEMBER_ID + 2, OPEN_COURSE_ID);
+		mockMvc.perform(post("/api/v1/order/orders/" + canceledOrderId + "/items/" + itemIdOf(canceledOrderId)
+				+ "/cancel").header("X-Member-Id", MEMBER_ID + 2))
+			.andExpect(status().isOk());
+		int unpaidOrderId = createOrder(MEMBER_ID + 3);
+		addLegacyColumns();
+
+		String rollback = rollbackSqlText();
+		runSql(rollback);
+		runSql(rollback);
+
+		assertThat(legacyKitOf(shippedOrderId))
+			.containsEntry("kit_delivery_status", "SHIPPING")
+			.containsEntry("kit_carrier", CARRIER)
+			.containsEntry("kit_tracking_number", TRACKING_NUMBER)
+			.containsEntry("kit_shipped_at", Timestamp.valueOf(shippedAt));
+		assertThat(legacyKitOf(readyOrderId)).containsEntry("kit_delivery_status", "PREPARING");
+		assertThat(legacyKitOf(canceledOrderId)).containsEntry("kit_delivery_status", "PREPARING");
+		assertThat(legacyKitOf(unpaidOrderId)).containsEntry("kit_delivery_status", "PREPARING");
+		// 발송 대기 배송은 고친 주소를, 결제 전 주문은 참가 신청의 주소를 주문 칸에 둔다
+		assertThat(legacyAddressOf(readyOrderId)).containsEntry("address", "부산 해운대구 해운대로 00")
+			.containsEntry("recipient_name", "김가족");
+		assertThat(legacyAddressOf(shippedOrderId)).containsEntry("address", "서울 성동구 왕십리로 00")
+			.containsEntry("address_detail", "101동 1001호");
+		assertThat(legacyAddressOf(unpaidOrderId)).containsEntry("address", "서울 성동구 왕십리로 00");
+		// 파일의 되돌리기 확인 쿼리도 0이다
+		Matcher checks = Pattern.compile("(SELECT COUNT\\(\\*\\) AS rollback_\\w+.*?);", Pattern.DOTALL)
+			.matcher(rollback);
+		int checked = 0;
+		while (checks.find()) {
+			assertThat(jdbcTemplate.queryForObject(checks.group(1), Long.class)).isZero();
+			checked++;
+		}
+		assertThat(checked).isEqualTo(2);
+	}
+
+	// 배송 표 전의 옛 칸. 엔티티에서 빼서 테스트 DB에는 없으므로 다시 붙인다
+	private void addLegacyColumns() {
+		jdbcTemplate.execute("""
+			alter table order_order_item add column if not exists kit_delivery_status varchar(20);
+			alter table order_order_item add column if not exists kit_carrier varchar(30);
+			alter table order_order_item add column if not exists kit_tracking_number varchar(50);
+			alter table order_order_item add column if not exists kit_shipped_at timestamp(6);
+			alter table order_order_item add column if not exists kit_delivered_at timestamp(6);
+			alter table order_order add column if not exists recipient_name varchar(50);
+			alter table order_order add column if not exists recipient_phone varchar(20);
+			alter table order_order add column if not exists zipcode varchar(10);
+			alter table order_order add column if not exists address varchar(255);
+			alter table order_order add column if not exists address_detail varchar(255)
+			""");
+	}
+
+	// SQL은 운영의 참가 신청 표 이름(order_participation, #237)을 쓴다. 테스트는 엔티티의 지금 표 이름으로 바꿔 돌린다
+	private String migrationSqlText() throws Exception {
+		String participationTable = Participation.class.getAnnotation(Table.class).name().toLowerCase();
+		return Files.readString(Path.of("../../docs/erd/order-shipment-migration-BUK-6.sql"))
+			.replace("order_participation", participationTable);
+	}
+
+	// 파일에 주석으로 둔 되돌리기 부분만 꺼내 주석을 벗긴다
+	private String rollbackSqlText() throws Exception {
+		String text = migrationSqlText();
+		String block = text.substring(text.indexOf("-- [되돌리기 시작]"), text.indexOf("-- [되돌리기 끝]"));
+		return block.lines()
+			.skip(1)
+			.map(line -> line.startsWith("-- ") ? line.substring(3) : line.replaceFirst("^--", ""))
+			.collect(Collectors.joining("\n"));
+	}
+
+	// H2는 START TRANSACTION을 모른다. 트랜잭션 묶음은 MySQL에서 확인하고, 테스트는 그 두 줄만 빼고 돌린다
+	private void runSql(String sql) {
+		String withoutTransaction = sql.replace("START TRANSACTION;", "").replace("COMMIT;", "");
+		new ResourceDatabasePopulator(new ByteArrayResource(withoutTransaction.getBytes(StandardCharsets.UTF_8)))
+			.execute(jdbcTemplate.getDataSource());
+	}
+
+	private Map<String, Object> legacyKitOf(int orderId) {
+		return lowerKeys(jdbcTemplate.queryForMap("select kit_delivery_status, kit_carrier, kit_tracking_number,"
+			+ " kit_shipped_at from order_order_item where order_id = ?", orderId));
+	}
+
+	private Map<String, Object> legacyAddressOf(int orderId) {
+		return lowerKeys(jdbcTemplate.queryForMap(
+			"select recipient_name, address, address_detail from order_order where id = ?", orderId));
+	}
+
+	private static Map<String, Object> lowerKeys(Map<String, Object> row) {
+		Map<String, Object> lowered = new HashMap<>();
+		row.forEach((key, value) -> lowered.put(key.toLowerCase(), value));
+		return lowered;
 	}
 
 	private ResultActions changeAddress(int memberId, int participationId) throws Exception {
