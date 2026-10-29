@@ -51,6 +51,15 @@ const addDays = (date, n) => {
 	return d.toISOString().slice(0, 10);
 };
 const monthOf = date => date.slice(0, 7);
+const nextMonthOf = month => monthOf(addDays(month + '-01', 31));
+// 서버의 지급일 규칙과 같다: 그 달 20일, 주말이면 다음 월요일 (Payout.payDayOf, 세미는 주말만 휴일)
+const payDayOf = month => {
+	let day = month + '-20';
+	while ([0, 6].includes(new Date(day + 'T00:00:00Z').getUTCDay())) {
+		day = addDays(day, 1);
+	}
+	return day;
+};
 const fee = price => Math.floor(price * FEE_RATE);
 
 // 참가 신청 → 주문 → (결제) → (취소). 구매자는 매번 다른 회원 ID를 쓴다
@@ -156,7 +165,9 @@ const expectPayout = (name, p, target, itemIds) => {
 	const sales = itemIds.reduce((sum, id) => sum + priceOf(id), 0);
 	const fees = itemIds.reduce((sum, id) => sum + fee(priceOf(id)), 0);
 	check(`${name}: 정산 월 = 정산 대상일(${target})의 달`, p?.payoutMonth === monthOf(target), p?.payoutMonth);
-	note(`${name}: 지급 예정일`, p?.scheduledPayDate);
+	// 정산 월은 1차면 환불 마감일, 최종이면 대회일의 달이다. 어느 단계든 지급 예정일은 정산 월의 다음 달 20일이다
+	check(`${name}: 지급 예정일 = 정산 월의 다음 달 20일(휴일이면 다음 영업일)`,
+		p?.scheduledPayDate === payDayOf(nextMonthOf(p?.payoutMonth ?? '')), p?.scheduledPayDate);
 	check(`${name}: 매출 ${sales} / 수수료 ${fees} / 지급액 ${sales - fees}`,
 		p?.salesAmount === sales && p?.feeAmount === fees && p?.payoutAmount === sales - fees && p?.refundAmount === 0);
 	check(`${name}: 상태 CALCULATED`, p?.status === 'CALCULATED', p?.status);
