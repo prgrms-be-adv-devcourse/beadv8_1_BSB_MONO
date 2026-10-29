@@ -85,10 +85,10 @@ class PayoutCreateUseCaseTest {
 	private PayoutCreateUseCase useCaseSelling(List<SoldEntry> entries, SellerAccountPort sellerAccountPort,
 		List<RaceSchedule> schedules) {
 		// 테스트 전체가 트랜잭션 하나라 정산 내역별 트랜잭션은 보이지 않는다 (정산 내역별 트랜잭션은 PayoutCreateUseCaseTransactionTest)
-		PayoutGroupCreator payoutGroupCreator =
-			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
+		PayoutCreateStepUseCase payoutCreateStepUseCase =
+			new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
 				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
-		return new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, soldEntriesReturning(entries),
+		return new PayoutCreateUseCase(payoutRepository, payoutCreateStepUseCase, soldEntriesReturning(entries),
 			sellerAccountPort, new StubRacePort(RACE_NAMES, schedules, entries), summariesOf(entries));
 	}
 
@@ -305,10 +305,10 @@ class PayoutCreateUseCaseTest {
 			}
 			return working.findSoldEntries(raceId);
 		};
-		PayoutGroupCreator payoutGroupCreator =
-			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
+		PayoutCreateStepUseCase payoutCreateStepUseCase =
+			new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
 				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
-		PayoutCreateUseCase useCase = new PayoutCreateUseCase(payoutRepository, payoutGroupCreator, race20Down,
+		PayoutCreateUseCase useCase = new PayoutCreateUseCase(payoutRepository, payoutCreateStepUseCase, race20Down,
 			sellerId -> true, new StubRacePort(RACE_NAMES, List.of(), entries), summariesOf(entries));
 
 		useCase.run(TARGET_DATE, NOW);
@@ -446,10 +446,10 @@ class PayoutCreateUseCaseTest {
 			}
 			return working.summarizeSold(raceId);
 		};
-		PayoutGroupCreator payoutGroupCreator =
-			new PayoutGroupCreator(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
+		PayoutCreateStepUseCase payoutCreateStepUseCase =
+			new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, new BusinessDayCalendar(),
 				new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository));
-		PayoutCreateUseCase useCase = new PayoutCreateUseCase(payoutRepository, payoutGroupCreator,
+		PayoutCreateUseCase useCase = new PayoutCreateUseCase(payoutRepository, payoutCreateStepUseCase,
 			soldEntriesReturning(entries), sellerId -> true, new StubRacePort(RACE_NAMES, schedules, entries), flaky);
 
 		// 10/2: 1차는 판매 집계를 못 받아 실패, 최종은 1차 정산금 차감 없이 판매자 정산액 전부로 만들어진다

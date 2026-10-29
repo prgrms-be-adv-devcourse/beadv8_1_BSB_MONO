@@ -15,8 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.shared.member.web.MemberIdHeader;
-import com.bukang.payout.app.PayoutAdminVerifyUseCase;
-import com.bukang.payout.app.PayoutHoldUseCase;
+import com.bukang.payout.app.PayoutAdminFacade;
 import com.bukang.payout.dto.PayoutHoldDto;
 import com.bukang.payout.dto.PayoutHoldRequestDto;
 
@@ -35,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 관리자의 지급보류 걸기 · 풀기
  * 회원 ID는 게이트웨이가 토큰에서 꺼내 넣은 X-Member-Id 헤더를 믿는다. 게이트웨이는 역할을 보지 않으므로,
- * UseCase보다 먼저 회원 서비스에 물어 관리자가 아니면 403으로 막는다 (PRO-265)
+ * PayoutAdminFacade가 먼저 회원 서비스에 물어 관리자가 아니면 403으로 막는다 (PRO-265)
  */
 @Tag(name = "Payout", description = "지급보류 걸기, 지급보류 풀기 API (관리자)")
 @RestController
@@ -45,8 +44,7 @@ public class ApiV1PayoutHoldController {
 	// 서버 시간대와 상관없이 한국 날짜로 해제일을 판단한다 (지급 배치와 같은 기준)
 	private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
-	private final PayoutAdminVerifyUseCase payoutAdminVerifyUseCase;
-	private final PayoutHoldUseCase payoutHoldUseCase;
+	private final PayoutAdminFacade payoutAdminFacade;
 
 	// ResponseEntity.created()의 201은 springdoc이 추론하지 못하므로 응답 코드를 직접 명시한다
 	// 에러 응답은 GlobalExceptionHandler, PayoutExceptionHandler가 RsData(data: null) 형식으로 반환한다
@@ -95,9 +93,8 @@ public class ApiV1PayoutHoldController {
 		@PathVariable int payoutId,
 		@Valid @RequestBody PayoutHoldRequestDto request
 	) {
-		payoutAdminVerifyUseCase.verify(memberId);
-		PayoutHoldDto hold = payoutHoldUseCase.hold(
-			payoutId, request.getReasonType(), request.getReason(), memberId, LocalDateTime.now(ZONE));
+		PayoutHoldDto hold = payoutAdminFacade.hold(
+			memberId, payoutId, request.getReasonType(), request.getReason(), LocalDateTime.now(ZONE));
 		return ResponseEntity.created(URI.create("/api/v1/payout/holds/" + hold.getId()))
 			.body(RsData.of(HttpStatus.CREATED, "지급보류를 걸었습니다.", hold));
 	}
@@ -142,8 +139,7 @@ public class ApiV1PayoutHoldController {
 		@Parameter(description = "지급보류 ID (보류 걸기 응답의 id)", example = "1")
 		@PathVariable int holdId
 	) {
-		payoutAdminVerifyUseCase.verify(memberId);
-		PayoutHoldDto hold = payoutHoldUseCase.release(holdId, memberId, LocalDateTime.now(ZONE));
+		PayoutHoldDto hold = payoutAdminFacade.release(memberId, holdId, LocalDateTime.now(ZONE));
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "지급보류를 풀었습니다.", hold));
 	}
 }
