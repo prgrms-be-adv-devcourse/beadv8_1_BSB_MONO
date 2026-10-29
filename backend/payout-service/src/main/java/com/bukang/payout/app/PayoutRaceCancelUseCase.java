@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutHold;
-import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.out.PayoutRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -38,7 +37,7 @@ public class PayoutRaceCancelUseCase {
 		List<Payout> payouts = payoutRepository.findByRaceId(raceId);
 		int canceled = 0;
 		for (Payout payout : payouts) {
-			if (payout.getStatus() == PayoutStatus.CALCULATED || payout.getStatus() == PayoutStatus.HELD) {
+			if (payout.getStatus().isBeforePayment()) {
 				payout.cancel(PayoutHold.SYSTEM_MEMBER_ID, now, CANCEL_REASON);
 				canceled++;
 			}
