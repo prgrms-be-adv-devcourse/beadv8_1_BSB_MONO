@@ -58,7 +58,7 @@ include::{snippets}/payout-hold-create-conflict/http-response.adoc[]
 === 지급보류 풀기
 
 지급보류를 해제하고 정산 내역을 정산 예정(`CALCULATED`)으로 돌린다.
-지급 예정일은 다시 정한다. 1차 정산은 해제일 뒤 돌아오는 지급일(매월 20일, 휴일이면 다음 영업일)이며 해제일이 지급일 당일이면 다음 달 지급일이다. 최종 정산은 해제일 다음 영업일이다. 둘 다 원래 지급 예정일보다 앞당기지 않는다.
+지급 예정일은 다시 정한다. 1차 · 최종 모두 해제일 다음 날(주말에도 지급)이며, 원래 지급 예정일(1차는 환불 마감일 + 2일, 최종은 대회일 + 2일)보다 앞당기지 않는다.
 
 operation::payout-hold-release[snippets='http-request,request-headers,path-parameters,http-response,response-fields']
 
@@ -106,8 +106,13 @@ include::{snippets}/payout-recovery-complete-conflict/http-response.adoc[]
 === 정산 요약
 
 화면 위쪽 요약 카드(다음 정산일, 정산 예정액, 지급보류 건수)를 채운다. 조회 기간과 상관없이 지금 상태로 계산한다.
+지급 예정 정산 내역이 없으면 다음 정산일(`nextPayDate`)은 `null`, 정산 예정액은 0이다. 지급일이 대회마다 달라 대신 채울 정기 지급일이 없다.
+최종 정산은 같은 대회의 1차가 지급 완료된 뒤에만 지급하므로, 1차를 기다리는 최종은 다음 정산일 · 정산 예정액에서 뺀다.
 
 operation::payout-seller-summary[snippets='http-request,request-headers,http-response,response-fields']
+
+.지급 예정 정산 내역이 없을 때
+include::{snippets}/payout-seller-summary-empty/http-response.adoc[]
 
 [[payout-seller-payouts]]
 === 정산 내역

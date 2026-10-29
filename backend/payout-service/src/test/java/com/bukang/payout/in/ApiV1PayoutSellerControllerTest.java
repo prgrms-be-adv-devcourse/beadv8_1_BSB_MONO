@@ -2,6 +2,7 @@ package com.bukang.payout.in;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
 import static org.springframework.restdocs.headers.HeaderDocumentation.requestHeaders;
@@ -60,6 +61,8 @@ import jakarta.persistence.EntityManager;
 class ApiV1PayoutSellerControllerTest {
 	private static final int SELLER_ID = 1;
 	private static final int OTHER_SELLER_ID = 2;
+	// 정산 내역이 하나도 없는 판매자
+	private static final int NEW_SELLER_ID = 3;
 	// 판매자 1의 회원 ID. 판매자 ID와 다른 번호로 두어, 회원 ID를 그대로 판매자 ID로 쓰면 조회가 비게 한다
 	// 회원 2는 판매자 2와 같은 번호지만 판매자가 아니다 (회원 ID로 찾으면 남의 정산이 보이는 경우)
 	private static final int MEMBER_ID = 7;
@@ -155,7 +158,7 @@ class ApiV1PayoutSellerControllerTest {
 		request("/summary")
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("정산 요약을 조회했습니다."))
-			.andExpect(jsonPath("$.data.nextPayDate").value("2026-09-28"))
+			.andExpect(jsonPath("$.data.nextPayDate").value("2026-09-27"))
 			.andExpect(jsonPath("$.data.scheduledPayoutAmount").value(94_500))
 			.andExpect(jsonPath("$.data.heldCount").value(1))
 			.andDo(document("payout-seller-summary",
@@ -163,9 +166,65 @@ class ApiV1PayoutSellerControllerTest {
 				responseFields(
 					fieldWithPath("status").description("HTTP 상태 코드"),
 					fieldWithPath("message").description("결과 메시지"),
-					fieldWithPath("data.nextPayDate").description(
-						"다음 정산일. 지급 예정 정산 내역 중 가장 이른 지급 예정일, 없으면 오늘 뒤 돌아오는 정기 지급일(20일, 휴일이면 다음 영업일)"),
-					fieldWithPath("data.scheduledPayoutAmount").description("정산 예정액. 다음 정산일에 나갈 지급액 합계 (보류 제외)"),
+					fieldWithPath("data.nextPayDate").type(JsonFieldType.STRING).optional().description(
+						"다음 정산일. 지급 예정 정산 내역 중 가장 이른 지급 예정일 (1차를 기다리는 최종은 뺀다). "
+							+ "지급 예정 정산 내역이 없으면 null"),
+					fieldWithPath("data.scheduledPayoutAmount").description(
+						"정산 예정액. 다음 정산일에 나갈 지급액 합계 (보류 · 1차를 기다리는 최종 제외). 다음 정산일이 null이면 0"),
+					fieldWithPath("data.heldCount").description("지급보류 중인 정산 내역 수")
+				)));
+	}
+
+	@Test
+	@DisplayName("요약: 1차가 아직 지급되지 않아 기다리는 최종은 다음 정산일 · 정산 예정액에서 뺀다 (지급 배치가 건너뛰므로, PRO-188)")
+	void summarySkipsFinalWaitingForFirst() throws Exception {
+		given(sellerLookupPort.findSellerOf(MEMBER_ID))
+			.willReturn(Optional.of(new SellerOfMember(NEW_SELLER_ID, SellerStatus.APPROVED)));
+		transactionTemplate.executeWithoutResult(status -> {
+			// 대회 20: 1차(마감 9/10 → 9/12)는 보류, 최종(대회 9/15 → 9/17)은 정산 예정이지만 1차를 기다린다
+			Payout first = Payout.first(NEW_SELLER_ID, 20, "대회 20", LocalDate.of(2026, 9, 10),
+				LocalDateTime.of(2026, 9, 11, 3, 0), CALENDAR);
+			entityManager.persist(first);
+			entityManager.flush();
+			PayoutHold hold = first.hold(PayoutHoldReason.ACCOUNT_NOT_REGISTERED, "정산 계좌 등록 요청 중",
+				PayoutHold.SYSTEM_MEMBER_ID, LocalDateTime.of(2026, 9, 11, 3, 0));
+			entityManager.persist(hold);
+			entityManager.flush();
+			hold.assignHoldCode();
+			Payout waiting = savePayout(NEW_SELLER_ID, 20, LocalDate.of(2026, 9, 16));
+			waiting.addItem(400, 50_000L, FEE_RATE, LocalDate.of(2026, 9, 16));
+
+			// 대회 21: 1차 없이 만든 최종(대회 9/20 → 9/22)은 기다리지 않는다
+			Payout ready = savePayout(NEW_SELLER_ID, 21, LocalDate.of(2026, 9, 21));
+			ready.addItem(500, 30_000L, FEE_RATE, LocalDate.of(2026, 9, 21));
+		});
+
+		request("/summary")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.nextPayDate").value("2026-09-22"))
+			.andExpect(jsonPath("$.data.scheduledPayoutAmount").value(28_350))
+			.andExpect(jsonPath("$.data.heldCount").value(1));
+	}
+
+	@Test
+	@DisplayName("요약: 지급 예정 정산 내역이 없으면 다음 정산일은 null, 정산 예정액은 0이다 (정기 지급일이 없어 대신 채울 날이 없다)")
+	void summaryWithoutScheduledPayout() throws Exception {
+		given(sellerLookupPort.findSellerOf(MEMBER_ID))
+			.willReturn(Optional.of(new SellerOfMember(NEW_SELLER_ID, SellerStatus.APPROVED)));
+
+		request("/summary")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.nextPayDate").value(nullValue()))
+			.andExpect(jsonPath("$.data.scheduledPayoutAmount").value(0))
+			.andExpect(jsonPath("$.data.heldCount").value(0))
+			.andDo(document("payout-seller-summary-empty",
+				requestHeaders(MEMBER_ID_HEADER),
+				responseFields(
+					fieldWithPath("status").description("HTTP 상태 코드"),
+					fieldWithPath("message").description("결과 메시지"),
+					fieldWithPath("data.nextPayDate").type(JsonFieldType.STRING).optional()
+						.description("다음 정산일. 지급 예정 정산 내역이 없어 null"),
+					fieldWithPath("data.scheduledPayoutAmount").description("정산 예정액. 다음 정산일이 없어 0"),
 					fieldWithPath("data.heldCount").description("지급보류 중인 정산 내역 수")
 				)));
 	}
@@ -181,7 +240,7 @@ class ApiV1PayoutSellerControllerTest {
 			.andExpect(jsonPath("$.data[0].salesAmount").value(100_000))
 			.andExpect(jsonPath("$.data[0].feeAmount").value(5_500))
 			.andExpect(jsonPath("$.data[0].payoutAmount").value(94_500))
-			.andExpect(jsonPath("$.data[0].scheduledPayDate").value("2026-09-28"))
+			.andExpect(jsonPath("$.data[0].scheduledPayDate").value("2026-09-27"))
 			.andExpect(jsonPath("$.data[0].raceName").value("대회 10"))
 			.andExpect(jsonPath("$.data[1].status").value("HELD"))
 			.andDo(document("payout-seller-payouts",
@@ -209,7 +268,7 @@ class ApiV1PayoutSellerControllerTest {
 						+ "CANCELED: 대회 취소로 닫힘)"),
 					fieldWithPath("data[].settledAt").description("정산 내역을 만든 일시"),
 					fieldWithPath("data[].scheduledPayDate").description(
-						"지급 예정일 (보류를 풀면 다시 정한다. 1차는 해제일 뒤 돌아오는 20일, 최종은 해제일 다음 영업일)"),
+						"지급 예정일. 1차는 환불 마감일 + 2일, 최종은 대회일 + 2일 (보류를 풀면 원래 지급 예정일과 해제일 + 1일 중 늦은 날로 다시 정한다)"),
 					fieldWithPath("data[].paidAt").description("지급 완료 일시 (지급 전에는 null)")
 						.optional().type(JsonFieldType.STRING)
 				)));

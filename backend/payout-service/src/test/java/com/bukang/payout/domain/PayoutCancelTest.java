@@ -46,7 +46,7 @@ class PayoutCancelTest {
 		Payout payout = newPayout();
 		PayoutHold hold = hold(payout);
 		payout.release(hold, ADMIN_ID, HELD_AT.plusDays(1), CALENDAR);
-		payout.pay(LocalDateTime.of(2026, 11, 20, 4, 0));
+		payout.pay(LocalDateTime.of(2026, 10, 19, 4, 0));
 
 		assertThat(payout.getStatusHistories())
 			.extracting(PayoutStatusHistory::getFromStatus, PayoutStatusHistory::getToStatus,
@@ -88,7 +88,7 @@ class PayoutCancelTest {
 	@DisplayName("지급 완료된 정산 내역은 취소할 수 없다 (지급 뒤 대회 취소는 회수)")
 	void cannotCancelPaid() {
 		Payout payout = newPayout();
-		payout.pay(LocalDateTime.of(2026, 10, 20, 4, 0));
+		payout.pay(LocalDateTime.of(2026, 10, 19, 4, 0));
 
 		assertThatThrownBy(() -> payout.cancel(PayoutHold.SYSTEM_MEMBER_ID, CANCELED_AT, "대회 취소"))
 			.isInstanceOf(IllegalStateException.class);

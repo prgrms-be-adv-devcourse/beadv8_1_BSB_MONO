@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,7 +17,7 @@ import com.bukang.payout.domain.exception.PayoutHoldConflictException;
  */
 class PayoutPayingTest {
 	private static final BusinessDayCalendar CALENDAR = new BusinessDayCalendar();
-	private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 20, 4, 0);
+	private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 19, 4, 0);
 
 	private Payout newPayout() {
 		return Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
@@ -127,7 +126,7 @@ class PayoutPayingTest {
 		feeOnly.deductAdvance(47_250L);
 		feeOnly.addItem(100, 50_000L, new BigDecimal("0.0550"), LocalDate.of(2026, 9, 26));
 		// 1차 정산금 줄이 없는 1차 정산: 지급액 0원, 수수료 0원
-		Payout empty = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), NOW, CALENDAR);
+		Payout empty = Payout.first(1, 10, "테스트 대회", LocalDate.of(2026, 9, 30), NOW, CALENDAR);
 
 		assertThat(feeOnly.getPayoutAmount()).isZero();
 		assertThat(feeOnly.hasTransferAmount()).isTrue();
