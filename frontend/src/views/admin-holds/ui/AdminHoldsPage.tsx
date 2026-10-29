@@ -94,7 +94,7 @@ export function AdminHoldsPage() {
   return (
     <ConsolePage
       title="지급보류 관리"
-      description="보류한 금액은 지급 완료로 바꿀 수 없어요. 풀면 다음 정산일(매월 20일) 묶음에 넣어 지급해요."
+      description="보류한 금액은 지급 완료로 바꿀 수 없어요. 풀면 해제일 다음 날 지급해요(원래 지급일보다 앞당기지 않아요)."
       // TODO(api): 지급보류 목록 엑셀 내려받기
       actions={<Button variant="secondary">엑셀로 내려받기</Button>}
     >
@@ -160,7 +160,7 @@ export function AdminHoldsPage() {
             보류 해제
           </Button>
           <p className="text-caption text-text-tertiary">
-            해제하면 다음 정산일(11/20) 묶음에 넣어 지급해요.
+            해제하면 해제일 다음 날 지급해요(원래 지급일보다 앞당기지 않아요).
           </p>
         </div>
         <Divider />

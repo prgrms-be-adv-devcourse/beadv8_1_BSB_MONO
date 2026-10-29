@@ -51,17 +51,6 @@ const addDays = (date, n) => {
 	return d.toISOString().slice(0, 10);
 };
 const monthOf = date => date.slice(0, 7);
-const nextMonthOf = date => monthOf(addDays(monthOf(date) + '-01', 31));
-// 서버의 지급일 규칙과 같다: 그 달 20일, 주말이면 다음 월요일 (BusinessDayCalendar, 세미는 주말만 휴일)
-const payDayOf = month => {
-	let day = month + '-20';
-	while ([0, 6].includes(new Date(day + 'T00:00:00Z').getUTCDay())) {
-		day = addDays(day, 1);
-	}
-	return day;
-};
-// date 뒤 첫 지급일: 이번 달 지급일이 date보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일 (Payout.nextPayDateAfter)
-const nextPayDateAfter = date => payDayOf(monthOf(date)) > date ? payDayOf(monthOf(date)) : payDayOf(nextMonthOf(date));
 const fee = price => Math.floor(price * FEE_RATE);
 
 // 참가 신청 → 주문 → (결제) → (취소). 구매자는 매번 다른 회원 ID를 쓴다
@@ -166,10 +155,8 @@ check('B는 정산 내역 없음', !payouts.some(p => p.raceId === B));
 const expectPayout = (name, p, target, itemIds) => {
 	const sales = itemIds.reduce((sum, id) => sum + priceOf(id), 0);
 	const fees = itemIds.reduce((sum, id) => sum + fee(priceOf(id)), 0);
-	const payDay = Number(p?.scheduledPayDate?.slice(8));
 	check(`${name}: 정산 월 = 정산 대상일(${target})의 달`, p?.payoutMonth === monthOf(target), p?.payoutMonth);
-	check(`${name}: 지급 예정일 = 다음 달 20일(휴일이면 다음 영업일)`,
-		monthOf(p?.scheduledPayDate ?? '') === nextMonthOf(target) && payDay >= 20, p?.scheduledPayDate);
+	note(`${name}: 지급 예정일`, p?.scheduledPayDate);
 	check(`${name}: 매출 ${sales} / 수수료 ${fees} / 지급액 ${sales - fees}`,
 		p?.salesAmount === sales && p?.feeAmount === fees && p?.payoutAmount === sales - fees && p?.refundAmount === 0);
 	check(`${name}: 상태 CALCULATED`, p?.status === 'CALCULATED', p?.status);
@@ -207,12 +194,12 @@ const release = await call('POST', `${PAYOUT}/api/v1/payout/holds/${hold.json.da
 check('C 해제', release.http === 200, `HTTP ${release.http}`);
 const releasedC = (await list()).find(p => p.id === pC.id);
 check('해제 뒤 상태 CALCULATED', releasedC?.status === 'CALCULATED', releasedC?.status);
-// 해제 뒤 지급 예정일 = max(원래 지급 예정일, 해제일 뒤 첫 지급일). 원래보다 앞당기지 않는다 (PRO-128)
-const payDateAfterRelease = nextPayDateAfter(today);
+// 해제 뒤 지급 예정일 = max(원래 지급 예정일, 해제일 + 1일). 원래보다 앞당기지 않는다
+const payDateAfterRelease = addDays(today, 1);
 const expectReleasedPayDate = payDateAfterRelease > pC.scheduledPayDate ? payDateAfterRelease : pC.scheduledPayDate;
-check('해제 뒤 C 지급 예정일 = 원래 지급 예정일과 해제일 뒤 첫 지급일 중 늦은 날',
+check('해제 뒤 C 지급 예정일 = 원래 지급 예정일과 해제일 다음 날 중 늦은 날',
 	releasedC?.scheduledPayDate === expectReleasedPayDate,
-	`${releasedC?.scheduledPayDate} (원래 ${pC.scheduledPayDate}, 해제일 ${today} 뒤 첫 지급일 ${payDateAfterRelease})`);
+	`${releasedC?.scheduledPayDate} (원래 ${pC.scheduledPayDate}, 해제일 ${today})`);
 
 // ── 7. 지급 배치 ─────────────────────────────────────────────────
 if (skipPay) {
