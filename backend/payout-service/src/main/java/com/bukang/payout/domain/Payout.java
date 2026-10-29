@@ -39,8 +39,10 @@ import lombok.NoArgsConstructor;
 })
 public class Payout extends BaseIdAndTime {
 	private static final DateTimeFormatter CODE_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
-	// 정기 지급일: 정산 월의 다음 달 20일 (휴일이면 다음 영업일, payout.md 2-4)
+	// 1차 정산의 지급일: 정산 월의 다음 달 20일 (휴일이면 다음 영업일, payout.md 2-4)
 	private static final int PAY_DAY_OF_MONTH = 20;
+	// 최종 정산의 지급일: 대회일 + 3일 (휴일이면 다음 영업일). 지급 배치가 그날 04:00에 지급한다
+	private static final int FINAL_PAY_DAYS_AFTER_RACE = 3;
 
 	// 정산 ID: ST-정산 내역을 만든 날-16진수 4자리 (예: ST-20261029-0A3F)
 	// 끝 4자리를 PK에서 만들어 저장 뒤에 채우므로 NULL을 허용한다
@@ -92,7 +94,8 @@ public class Payout extends BaseIdAndTime {
 	private LocalDateTime settledAt;
 
 	// 지급 예정일. 지급 배치는 이 날이 지난 CALCULATED만 지급한다
-	// 보류를 풀 때(PRO-26) 해제일 뒤 돌아오는 지급일(20일)로 다시 정하므로, 배치는 보류 기록을 보지 않아도 된다
+	// 보류를 풀 때(PRO-26) 다시 정하므로(1차는 해제일 뒤 돌아오는 20일, 최종은 해제일 다음 영업일)
+	// 배치는 보류 기록을 보지 않아도 된다
 	@Column(nullable = false)
 	private LocalDate scheduledPayDate;
 
@@ -113,28 +116,31 @@ public class Payout extends BaseIdAndTime {
 	private List<PayoutStatusHistory> statusHistories = new ArrayList<>();
 
 	private Payout(int sellerId, int raceId, String raceName, PayoutStage payoutStage, YearMonth payoutMonth,
-		LocalDateTime settledAt, BusinessDayCalendar calendar) {
+		LocalDateTime settledAt, LocalDate scheduledPayDate) {
 		this.sellerId = sellerId;
 		this.raceId = raceId;
 		this.raceName = raceName;
 		this.payoutStage = payoutStage;
 		this.payoutMonth = payoutMonth.toString();
 		this.settledAt = settledAt;
-		this.scheduledPayDate = payDayOf(payoutMonth.plusMonths(1), calendar);
+		this.scheduledPayDate = scheduledPayDate;
 		// 정산 내역은 배치가 만든다
 		changeStatus(PayoutStatus.CALCULATED, PayoutHold.SYSTEM_MEMBER_ID, settledAt, null);
 	}
 
-	// 1차 정산 내역: 정산 월은 환불 마감일의 달이다
+	// 1차 정산 내역: 정산 월은 환불 마감일의 달이고, 지급 예정일은 정산 월의 다음 달 20일이다
 	public static Payout first(int sellerId, int raceId, String raceName, YearMonth payoutMonth,
 		LocalDateTime settledAt, BusinessDayCalendar calendar) {
-		return new Payout(sellerId, raceId, raceName, PayoutStage.FIRST, payoutMonth, settledAt, calendar);
+		return new Payout(sellerId, raceId, raceName, PayoutStage.FIRST, payoutMonth, settledAt,
+			payDayOf(payoutMonth.plusMonths(1), calendar));
 	}
 
-	// 최종 정산 내역: 정산 월은 대회일의 달이다. 1차 정산금 차감은 만든 뒤 deductAdvance로 쓴다
-	public static Payout finalStage(int sellerId, int raceId, String raceName, YearMonth payoutMonth,
+	// 최종 정산 내역: 정산 월은 대회일의 달이고, 지급 예정일은 대회일 + 3일(휴일이면 다음 영업일)이다
+	// 1차 정산금 차감은 만든 뒤 deductAdvance로 쓴다
+	public static Payout finalStage(int sellerId, int raceId, String raceName, LocalDate raceDate,
 		LocalDateTime settledAt, BusinessDayCalendar calendar) {
-		return new Payout(sellerId, raceId, raceName, PayoutStage.FINAL, payoutMonth, settledAt, calendar);
+		return new Payout(sellerId, raceId, raceName, PayoutStage.FINAL, YearMonth.from(raceDate), settledAt,
+			calendar.nextOrSame(raceDate.plusDays(FINAL_PAY_DAYS_AFTER_RACE)));
 	}
 
 	// 바깥에서 remove, clear로 원장 줄을 바꾸지 못하도록 읽기 전용으로 내보낸다 (추가는 Payout의 메서드로만)
@@ -311,7 +317,7 @@ public class Payout extends BaseIdAndTime {
 		return new PayoutHold(this, reasonType, reason, heldBy, heldAt);
 	}
 
-	// 지급보류 풀기: 정산 예정으로 돌리고 지급 예정일을 해제일 뒤 돌아오는 지급일로 다시 정한다 (payout.md 2-6)
+	// 지급보류 풀기: 정산 예정으로 돌리고 지급 예정일을 다시 정한다 (payout.md 2-6, payDateAfterRelease)
 	// 단, 원래 지급 예정일보다 앞당기지 않는다 (PRO-128). 보류를 걸 때는 지급 예정일을 바꾸지 않으므로
 	// 지금 값이 원래 지급 예정일(또는 이전 해제로 이미 늦춰진 날)이다
 	// 지급 배치는 상태와 지급 예정일만 보므로, 보류 기록을 보지 않아도 다음 지급일에 지급된다
@@ -327,7 +333,7 @@ public class Payout extends BaseIdAndTime {
 		}
 		hold.markReleased(releasedBy, releasedAt);
 		changeStatus(PayoutStatus.CALCULATED, releasedBy, releasedAt, null);
-		LocalDate payDateAfterRelease = nextPayDateAfter(releasedAt.toLocalDate(), calendar);
+		LocalDate payDateAfterRelease = payDateAfterRelease(releasedAt.toLocalDate(), calendar);
 		if (payDateAfterRelease.isAfter(scheduledPayDate)) {
 			this.scheduledPayDate = payDateAfterRelease;
 		}
@@ -358,6 +364,14 @@ public class Payout extends BaseIdAndTime {
 	private void changeStatus(PayoutStatus to, int changedBy, LocalDateTime changedAt, String reason) {
 		statusHistories.add(new PayoutStatusHistory(this, status, to, changedBy, changedAt, reason));
 		this.status = to;
+	}
+
+	// 보류를 푼 뒤의 지급일: 1차는 해제일 뒤 돌아오는 20일, 최종은 해제일 다음 영업일이다
+	private LocalDate payDateAfterRelease(LocalDate releaseDate, BusinessDayCalendar calendar) {
+		if (payoutStage == PayoutStage.FINAL) {
+			return calendar.nextOrSame(releaseDate.plusDays(1));
+		}
+		return nextPayDateAfter(releaseDate, calendar);
 	}
 
 	// date "뒤"의 지급일: 이번 달 지급일이 date보다 늦으면 그날, 아니면(당일 포함) 다음 달 지급일

@@ -102,8 +102,9 @@ public class ApiV1PayoutHoldController {
 	@PostMapping("/holds/{holdId}/release")
 	@Operation(summary = "지급보류 풀기",
 		description = "지급보류를 해제하고 정산 내역을 정산 예정(CALCULATED)으로 돌린다. "
-			+ "지급 예정일은 해제일 뒤 돌아오는 지급일(매월 20일, 휴일이면 다음 영업일)로 다시 정하며, "
-			+ "해제일이 지급일 당일이면 다음 달 지급일이다.")
+			+ "지급 예정일은 다시 정한다. 1차 정산은 해제일 뒤 돌아오는 지급일(매월 20일, 휴일이면 다음 영업일)이며 "
+			+ "해제일이 지급일 당일이면 다음 달 지급일이다. 최종 정산은 해제일 다음 영업일이다. "
+			+ "둘 다 원래 지급 예정일보다 앞당기지 않는다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "해제 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutApiExamples.RELEASE_SUCCESS))),

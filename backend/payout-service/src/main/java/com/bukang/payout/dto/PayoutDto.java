@@ -32,7 +32,8 @@ public class PayoutDto {
 	private final long payoutAmount;
 	private final PayoutStatus status;
 	private final LocalDateTime settledAt;
-	// 지급 예정일. 보류를 풀면 해제일 뒤 돌아오는 지급일로 바뀐다
+	// 지급 예정일. 1차는 정산 월 다음 달 20일, 최종은 대회일 + 3일 (휴일이면 다음 영업일)
+	// 보류를 풀면 다시 정한다: 1차는 해제일 뒤 돌아오는 20일, 최종은 해제일 다음 영업일
 	private final LocalDate scheduledPayDate;
 	// 지급 완료 전에는 null
 	private final LocalDateTime paidAt;

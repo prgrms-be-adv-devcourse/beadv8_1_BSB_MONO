@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class BusinessDayCalendar {
 
-	// date가 영업일이면 그날, 아니면 다음 영업일 (정기 지급일: 20일이 주말이면 다음 월요일)
+	// date가 영업일이면 그날, 아니면 다음 영업일 (1차 지급일 20일 · 최종 지급일 대회일 + 3일이 주말이면 다음 월요일)
 	public LocalDate nextOrSame(LocalDate date) {
 		LocalDate day = date;
 		while (isHoliday(day)) {

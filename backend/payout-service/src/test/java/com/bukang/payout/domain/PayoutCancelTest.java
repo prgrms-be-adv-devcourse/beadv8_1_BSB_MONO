@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,12 +15,12 @@ import com.bukang.payout.domain.exception.PayoutHoldConflictException;
 class PayoutCancelTest {
 	private static final BusinessDayCalendar CALENDAR = new BusinessDayCalendar();
 	private static final int ADMIN_ID = 99;
-	private static final LocalDateTime SETTLED_AT = LocalDateTime.of(2026, 9, 26, 3, 0);
+	private static final LocalDateTime SETTLED_AT = LocalDateTime.of(2026, 10, 18, 3, 0);
 	private static final LocalDateTime HELD_AT = LocalDateTime.of(2026, 10, 12, 10, 0);
 	private static final LocalDateTime CANCELED_AT = LocalDateTime.of(2026, 10, 15, 14, 0);
 
 	private Payout newPayout() {
-		return Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), SETTLED_AT, CALENDAR);
+		return Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17), SETTLED_AT, CALENDAR);
 	}
 
 	private PayoutHold hold(Payout payout) {
