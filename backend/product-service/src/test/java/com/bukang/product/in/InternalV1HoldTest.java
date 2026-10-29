@@ -440,6 +440,38 @@ class InternalV1HoldTest extends ProductIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("판매한 자리(1001)의 복구 메시지(product.hold.restore)가 두 번 와도 판매 수는 한 번만 줄고(1 → 0), "
+		+ "남은 자리는 정원 그대로이며 자리는 RESTORED다")
+	void restoreMessageTwiceIsIdempotent() throws Exception {
+		int courseId = registerOnSale(race().build()).courseId();
+		hold(courseId, PARTICIPATION_ID).andExpect(status().isOk());
+		sell(PARTICIPATION_ID).andExpect(status().isOk());
+		assertThat(courseOf(courseId).getIndividualSold()).isEqualTo(1);
+
+		restoreByMessage(PARTICIPATION_ID);
+		restoreByMessage(PARTICIPATION_ID);
+
+		RaceCourse raceCourse = courseOf(courseId);
+		assertThat(raceCourse.getIndividualSold()).isZero();
+		assertThat(raceCourse.getIndividualReserved()).isZero();
+		assertThat(raceCourse.individualRemaining()).isEqualTo(DEFAULT_QUOTA);
+		assertThat(holdOf(PARTICIPATION_ID).getStatus()).isEqualTo(HoldStatus.RESTORED);
+	}
+
+	@Test
+	@DisplayName("판매하지 않은 결제 대기 자리(1001)에 복구 메시지가 와도 예외 없이 건너뛰고 결제 대기 1석 그대로다")
+	void restoreMessageIgnoresHeldSeat() throws Exception {
+		int courseId = registerOnSale(race().build()).courseId();
+		hold(courseId, PARTICIPATION_ID).andExpect(status().isOk());
+
+		restoreByMessage(PARTICIPATION_ID);
+
+		assertThat(courseOf(courseId).getIndividualReserved()).isEqualTo(1);
+		assertThat(courseOf(courseId).getIndividualSold()).isZero();
+		assertThat(holdOf(PARTICIPATION_ID).getStatus()).isEqualTo(HoldStatus.HELD);
+	}
+
+	@Test
 	@DisplayName("판매하지 않은 결제 대기 자리(1001)와 확보한 적 없는 신청(99999)을 복구하면 restored=false이고 카운터는 그대로다")
 	void restoreNotSoldSeat() throws Exception {
 		int courseId = registerOnSale(race().build()).courseId();
@@ -626,6 +658,11 @@ class InternalV1HoldTest extends ProductIntegrationTest {
 	// 주문 서비스가 product.hold.cancel로 보내는 본문 그대로 리스너 메서드에 넘긴다
 	private void releaseByMessage(int participationId) {
 		productKafkaConsumer.handleHoldCancel("{\"participationId\": %d}".formatted(participationId));
+	}
+
+	// 주문 서비스가 product.hold.restore로 보내는 본문 그대로 리스너 메서드에 넘긴다
+	private void restoreByMessage(int participationId) {
+		productKafkaConsumer.handleHoldRestore("{\"participationId\":%d}".formatted(participationId));
 	}
 
 	// 끝 시각이 지난 것처럼 자리 행의 끝 시각을 1분 전으로 옮긴다 (시간이 지나기를 기다리지 않으려고)

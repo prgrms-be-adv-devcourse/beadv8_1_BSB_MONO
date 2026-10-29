@@ -37,7 +37,9 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.bukang.order.domain.ParticipantInfo;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.out.OrderOutboxKafkaEventRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.support.SeatOutboxMessages;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -66,10 +68,14 @@ class ApiV1ParticipationTest {
 	private StubSeatHoldPort seatHoldPort;
 
 	@Autowired
+	private OrderOutboxKafkaEventRepository orderOutboxKafkaEventRepository;
+
+	@Autowired
 	private StubRaceCoursePort raceCoursePort;
 
 	@BeforeEach
 	void setUp() {
+		orderOutboxKafkaEventRepository.deleteAll();
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null));
 	}
 
@@ -78,6 +84,7 @@ class ApiV1ParticipationTest {
 		participationRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
+		orderOutboxKafkaEventRepository.deleteAll();
 	}
 
 	@Test
@@ -275,7 +282,7 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
-	@DisplayName("남은 결제 전 신청서를 교체로 취소하면, 커밋 뒤 상품에 그 신청서의 자리를 풀어 달라고 한 번 알린다")
+	@DisplayName("남은 결제 전 신청서를 교체로 취소하면, 그 신청서의 자리 해제 메시지를 아웃박스에 한 번 남긴다 (커밋 뒤 상품에 간다)")
 	void replaceReleasesSeatOfCanceledParticipation() throws Exception {
 		int first = applyAndGetId(MEMBER_ID);
 
@@ -283,11 +290,11 @@ class ApiV1ParticipationTest {
 			.andExpect(status().isCreated());
 
 		// [결제하기]에서 상품은 자리를 잡았는데 주문이 롤백됐을 수 있어, 자리를 잡았는지 몰라도 보낸다(상품은 멱등)
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(first);
+		assertThat(releasedSeats()).containsExactly(first);
 	}
 
 	@Test
-	@DisplayName("교체 중 새 신청서 저장이 실패해 롤백되면 자리 해제를 보내지 않고, 남은 신청서도 그대로다")
+	@DisplayName("교체 중 새 신청서 저장이 실패해 롤백되면 자리 해제 메시지도 함께 롤백되어 남지 않고, 남은 신청서도 그대로다")
 	void replaceRollbackDoesNotReleaseSeat() throws Exception {
 		int first = applyAndGetId(MEMBER_ID);
 		doThrow(new IllegalStateException("저장 실패 (테스트)"))
@@ -297,23 +304,9 @@ class ApiV1ParticipationTest {
 			.andExpect(status().isInternalServerError());
 
 		// 보낸 뒤 롤백되면 살아 있는 신청서의 자리만 풀려, 그 신청서로 다시 결제할 수 없게 된다
-		assertThat(seatHoldPort.releasedParticipations()).isEmpty();
+		assertThat(releasedSeats()).isEmpty();
 		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.PENDING);
-	}
-
-	@Test
-	@DisplayName("자리 해제 알림을 보내지 못해도 교체는 커밋되어 201이다")
-	void replaceSucceedsEvenIfReleaseFails() throws Exception {
-		int first = applyAndGetId(MEMBER_ID);
-		seatHoldPort.failRelease(true);
-
-		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
-			.andExpect(status().isCreated());
-
-		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
-			.isEqualTo(ParticipationStatus.CANCELED);
-		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
 	}
 
 	@Test
@@ -570,8 +563,8 @@ class ApiV1ParticipationTest {
 		assertThat(canceled.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
 		assertThat(canceled.getActiveFlag()).isNull();
 		assertThat(canceled.getCanceledAt()).isNotNull();
-		// 자리만 잡히고 주문이 롤백된 신청서일 수 있어, 커밋 뒤 상품에 자리를 풀어 달라고 알린다
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(id);
+		// 자리만 잡히고 주문이 롤백된 신청서일 수 있어, 상품에 자리를 풀어 달라고 아웃박스에 남긴다
+		assertThat(releasedSeats()).containsExactly(id);
 
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
 		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "L"), true))
@@ -693,5 +686,13 @@ class ApiV1ParticipationTest {
 			{ "name": "%s", "birth": "%s", "gender": "MALE", "phone": "010-1234-5678",
 				"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "%s"%s }
 			""".formatted(name, birth, tshirtSize, shipping);
+	}
+
+	private List<Integer> restoredSeats() {
+		return SeatOutboxMessages.restored(orderOutboxKafkaEventRepository);
+	}
+
+	private List<Integer> releasedSeats() {
+		return SeatOutboxMessages.released(orderOutboxKafkaEventRepository);
 	}
 }
