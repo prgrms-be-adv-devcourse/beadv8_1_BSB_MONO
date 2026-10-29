@@ -6,6 +6,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import com.bukang.order.domain.Order;
+import com.bukang.order.domain.ShippingAddress;
 import com.bukang.order.domain.exception.OrderAccessDeniedException;
 import com.bukang.order.domain.exception.OrderNotFoundException;
 import com.bukang.order.domain.exception.OrderSearchPeriodException;
@@ -13,6 +14,7 @@ import com.bukang.order.dto.OrderDto;
 import com.bukang.order.dto.OrderPageDto;
 import com.bukang.order.out.OrderQueryRepository;
 import com.bukang.order.out.OrderRepository;
+import com.bukang.order.out.ParticipationRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -24,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 public class OrderQueryUseCase {
 	private final OrderRepository orderRepository;
 	private final OrderQueryRepository orderQueryRepository;
+	private final ParticipationRepository participationRepository;
 
 	public OrderPageDto findMine(int memberId, LocalDate from, LocalDate to, int page, int size) {
 		if (from != null && to != null && from.isAfter(to)) {
@@ -39,6 +42,13 @@ public class OrderQueryUseCase {
 		if (!order.isOwnedBy(memberId)) {
 			throw new OrderAccessDeniedException("본인의 주문만 볼 수 있습니다.");
 		}
-		return order.toDto();
+		if (!order.getShipments().isEmpty()) {
+			return order.toDto();
+		}
+		// 결제 전이라 배송이 아직 없으면 참가 신청의 배송지를 보여 준다 (BUK-6)
+		ShippingAddress applicationShippingAddress = participationRepository.findById(order.participationId())
+			.map(participation -> participation.getParticipant().getShippingAddress())
+			.orElse(null);
+		return order.toDto(applicationShippingAddress);
 	}
 }

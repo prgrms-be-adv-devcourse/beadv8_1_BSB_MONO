@@ -110,7 +110,8 @@ backend/
 │   │                          OrderFacade·OrderCreateUseCase·OrderPayUseCase·OrderCancelUseCase·OrderExpiryUseCase·
 │   │                          OrderQueryUseCase, SoldEntryQueryUseCase
 │   ├── domain/                Participation(BOOKING_PARTICIPATION), Cart·CartItem(ORDER_CART·_ITEM),
-│   │                          Order·OrderItem(ORDER_ORDER·_ITEM), 상태 enum, exception/
+│   │                          Order·OrderItem(ORDER_ORDER·_ITEM), Shipment·ShipmentItem(ORDER_SHIPMENT·_ITEM, 키트 배송),
+│   │                          상태 enum, exception/
 │   └── out/                   Repository, OrderQueryRepository(QueryDSL 내 주문 목록),
 │                              race/(RaceCoursePort 종목 정보), seat/(SeatHoldPort 자리 확보·판매·복구·해제),
 │                              wallet/(WalletPort 예치금 결제·환원·환불), payout/(RefundEligibilityPort 환불 가능 여부)

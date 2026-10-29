@@ -3,6 +3,7 @@ package com.bukang.order.in;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.Mockito.doReturn;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -43,7 +44,6 @@ import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
 import com.bukang.order.domain.QueueAdmission;
-import com.bukang.order.domain.ShippingAddress;
 import com.bukang.order.out.OrderItemRepository;
 import com.bukang.order.out.OrderRepository;
 import com.bukang.order.out.ParticipationRepository;
@@ -259,7 +259,7 @@ class ApiV1OrderTest {
 	}
 
 	@Test
-	@DisplayName("신청서에서 받은 키트 배송지가 주문에 그대로 옮겨진다 (ERD orders 배송지 칸)")
+	@DisplayName("결제 전 주문 응답에는 신청서에서 받은 키트 배송지가 보인다 (배송은 결제 때 만든다, BUK-6)")
 	void createCopiesShippingAddress() throws Exception {
 		int participationId = applyAndGetId(MEMBER_ID);
 
@@ -270,14 +270,10 @@ class ApiV1OrderTest {
 			.andExpect(jsonPath("$.data.shippingAddress.zipcode").value("04700"))
 			.andExpect(jsonPath("$.data.shippingAddress.address").value("서울 성동구 왕십리로 00"))
 			.andExpect(jsonPath("$.data.shippingAddress.addressDetail").value("101동 1001호"));
-
-		ShippingAddress saved = orderRepository.findAll().getFirst().getShippingAddress();
-		assertThat(saved.getZipcode()).isEqualTo("04700");
-		assertThat(saved.getAddress()).isEqualTo("서울 성동구 왕십리로 00");
 	}
 
 	@Test
-	@DisplayName("참가자 정보 수정이 주문을 찾은 뒤 [결제하기]가 주문을 만들면 409로 거절하고, 주문·신청서의 배송지는 그대로다")
+	@DisplayName("참가자 정보 수정이 주문을 찾은 뒤 [결제하기]가 주문을 만들면 409로 거절하고, 신청서의 배송지는 그대로다")
 	void changeParticipantWhileOrderCreated() throws Exception {
 		int participationId = applyAndGetId(MEMBER_ID);
 		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
@@ -299,13 +295,12 @@ class ApiV1OrderTest {
 			.andExpect(jsonPath("$.message").value("방금 주문이 만들어졌습니다. 잠시 뒤 다시 시도해주세요."))
 			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_CHANGE_RETRY"));
 
-		assertThat(orderRepository.findAll().getFirst().getShippingAddress().getZipcode()).isEqualTo("04700");
 		assertThat(participationRepository.findById(participationId).orElseThrow()
 			.getParticipant().getShippingAddress().getZipcode()).isEqualTo("04700");
 	}
 
 	@Test
-	@DisplayName("주문을 만든 뒤 참가자 정보에서 배송지를 고치면 주문의 배송지도 바뀐다 (키트는 주문의 배송지로 보낸다)")
+	@DisplayName("주문을 만든 뒤 참가자 정보에서 배송지를 고치면 결제 전 주문 응답의 배송지도 바뀐다")
 	void changeParticipantUpdatesOrderShippingAddress() throws Exception {
 		int participationId = applyAndGetId(MEMBER_ID);
 		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
@@ -321,11 +316,13 @@ class ApiV1OrderTest {
 					"""))
 			.andExpect(status().isOk());
 
-		ShippingAddress changed = orderRepository.findAll().getFirst().getShippingAddress();
-		assertThat(changed.getRecipientName()).isEqualTo("김가족");
-		assertThat(changed.getZipcode()).isEqualTo("48094");
-		assertThat(changed.getAddress()).isEqualTo("부산 해운대구 해운대로 00");
-		assertThat(changed.getAddressDetail()).isNull();
+		mockMvc.perform(get("/api/v1/order/orders/" + orderRepository.findAll().getFirst().getId())
+				.header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.shippingAddress.recipientName").value("김가족"))
+			.andExpect(jsonPath("$.data.shippingAddress.zipcode").value("48094"))
+			.andExpect(jsonPath("$.data.shippingAddress.address").value("부산 해운대구 해운대로 00"))
+			.andExpect(jsonPath("$.data.shippingAddress.addressDetail").isEmpty());
 	}
 
 	@Test
