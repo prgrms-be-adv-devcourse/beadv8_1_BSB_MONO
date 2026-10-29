@@ -12,8 +12,9 @@ import com.bukang.payout.app.PayoutPayUseCase;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 매일 새벽 지급 예정일이 된 정산 내역을 지급 완료로 바꾼다 (payout.md 2-6)
- * 20일에만 돌리지 않고 매일 돌린다: 20일이 주말이면 다음 월요일에 잡히고, 실행을 놓친 날은 다음 실행에서 따라잡는다
+ * 매일 새벽 지급 예정일이 된 정산 내역을 지급 완료로 바꾼다
+ * 매일 돌린다: 1차는 환불 마감일 + 2일, 최종은 대회일 + 2일이 지급일이라(주말에도 지급, 10/28 결정)
+ * 날마다 지급할 건이 생길 수 있고, 실행을 놓친 날은 다음 실행에서 따라잡는다
  */
 @Component
 @RequiredArgsConstructor
@@ -23,7 +24,7 @@ public class PayoutPayScheduler {
 
 	private final PayoutPayUseCase payoutPayUseCase;
 
-	// 정산 생성 배치(03:00) 뒤에 돈다. 같은 날 만든 정산 내역은 이번 달 분이라 순서가 결과를 바꾸지는 않는다
+	// 정산 생성 배치(03:00) 뒤에 돈다. 정산 내역은 지급 예정일 전날 만들어지므로 같은 날 만든 건은 이 배치에 걸리지 않는다
 	@Scheduled(cron = "0 0 4 * * *", zone = ZONE)
 	public void payPayouts() {
 		LocalDateTime now = LocalDateTime.now(ZoneId.of(ZONE));

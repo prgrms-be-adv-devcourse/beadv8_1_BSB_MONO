@@ -127,7 +127,7 @@ export function AdminSettlementsPage({ confirmOpen = false }: { confirmOpen?: bo
             className="w-full"
           />
           <p className="text-caption text-text-tertiary">
-            보류가 풀리면 다음 20일 묶음에 넣어 지급해요.
+            보류가 풀리면 해제일 다음 날 지급해요(원래 지급일보다 앞당기지 않아요).
           </p>
           {/* TODO(api): 관리자 목록 API가 생기면 실제 행에서만 켠다 */}
           <Button variant="danger" disabled>

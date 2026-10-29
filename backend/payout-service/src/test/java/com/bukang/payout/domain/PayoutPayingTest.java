@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,11 +17,11 @@ import com.bukang.payout.domain.exception.PayoutHoldConflictException;
  */
 class PayoutPayingTest {
 	private static final BusinessDayCalendar CALENDAR = new BusinessDayCalendar();
-	private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 20, 4, 0);
+	private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 19, 4, 0);
 
 	private Payout newPayout() {
-		return Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 0L,
-			LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
+		return Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
+			LocalDateTime.of(2026, 10, 18, 3, 0), CALENDAR);
 	}
 
 	@Test
@@ -122,11 +121,12 @@ class PayoutPayingTest {
 	@DisplayName("대금이 상계로 0원이어도 수수료가 남아 있으면 옮길 돈이 있다. 둘 다 0원이면 없다")
 	void hasTransferAmount() {
 		// 판매액 50,000 − 수수료 2,750 − 1차 정산금 차감 47,250 = 지급액 0원, 수수료 2,750
-		Payout feeOnly = Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 47_250L,
-			LocalDateTime.of(2026, 9, 26, 3, 0), CALENDAR);
+		Payout feeOnly = Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17),
+			LocalDateTime.of(2026, 10, 18, 3, 0), CALENDAR);
+		feeOnly.deductAdvance(47_250L);
 		feeOnly.addItem(100, 50_000L, new BigDecimal("0.0550"), LocalDate.of(2026, 9, 26));
 		// 1차 정산금 줄이 없는 1차 정산: 지급액 0원, 수수료 0원
-		Payout empty = Payout.first(1, 10, "테스트 대회", YearMonth.of(2026, 9), NOW, CALENDAR);
+		Payout empty = Payout.first(1, 10, "테스트 대회", LocalDate.of(2026, 9, 30), NOW, CALENDAR);
 
 		assertThat(feeOnly.getPayoutAmount()).isZero();
 		assertThat(feeOnly.hasTransferAmount()).isTrue();

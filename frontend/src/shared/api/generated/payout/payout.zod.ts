@@ -55,7 +55,7 @@ export const HoldResponse = zod.object({
 
 
 /**
- * 지급보류를 해제하고 정산 내역을 정산 예정(CALCULATED)으로 돌린다. 지급 예정일은 해제일 뒤 돌아오는 지급일(매월 20일, 휴일이면 다음 영업일)로 다시 정하며, 해제일이 지급일 당일이면 다음 달 지급일이다.
+ * 지급보류를 해제하고 정산 내역을 정산 예정(CALCULATED)으로 돌린다. 지급 예정일은 다시 정한다. 1차 · 최종 모두 해제일 다음 날(주말에도 지급)이며, 원래 지급 예정일(1차는 환불 마감일 + 2일, 최종은 대회일 + 2일)보다 앞당기지 않는다.
  * @summary 지급보류 풀기
  */
 export const ReleaseParams = zod.object({
@@ -99,7 +99,7 @@ export const SummaryResponse = zod.object({
   "status": zod.int().optional(),
   "message": zod.string().optional(),
   "data": zod.object({
-  "nextPayDate": zod.iso.date(),
+  "nextPayDate": zod.iso.date().nullable().describe('다음 정산일. 지급 예정 정산 내역이 없으면 null'),
   "scheduledPayoutAmount": zod.int(),
   "heldCount": zod.int()
 }).optional()

@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,12 +15,12 @@ import com.bukang.payout.domain.exception.PayoutHoldConflictException;
 class PayoutCancelTest {
 	private static final BusinessDayCalendar CALENDAR = new BusinessDayCalendar();
 	private static final int ADMIN_ID = 99;
-	private static final LocalDateTime SETTLED_AT = LocalDateTime.of(2026, 9, 26, 3, 0);
+	private static final LocalDateTime SETTLED_AT = LocalDateTime.of(2026, 10, 18, 3, 0);
 	private static final LocalDateTime HELD_AT = LocalDateTime.of(2026, 10, 12, 10, 0);
 	private static final LocalDateTime CANCELED_AT = LocalDateTime.of(2026, 10, 15, 14, 0);
 
 	private Payout newPayout() {
-		return Payout.finalStage(1, 10, "테스트 대회", YearMonth.of(2026, 9), 0L, SETTLED_AT, CALENDAR);
+		return Payout.finalStage(1, 10, "테스트 대회", LocalDate.of(2026, 10, 17), SETTLED_AT, CALENDAR);
 	}
 
 	private PayoutHold hold(Payout payout) {
@@ -46,7 +46,7 @@ class PayoutCancelTest {
 		Payout payout = newPayout();
 		PayoutHold hold = hold(payout);
 		payout.release(hold, ADMIN_ID, HELD_AT.plusDays(1), CALENDAR);
-		payout.pay(LocalDateTime.of(2026, 11, 20, 4, 0));
+		payout.pay(LocalDateTime.of(2026, 10, 19, 4, 0));
 
 		assertThat(payout.getStatusHistories())
 			.extracting(PayoutStatusHistory::getFromStatus, PayoutStatusHistory::getToStatus,
@@ -88,7 +88,7 @@ class PayoutCancelTest {
 	@DisplayName("지급 완료된 정산 내역은 취소할 수 없다 (지급 뒤 대회 취소는 회수)")
 	void cannotCancelPaid() {
 		Payout payout = newPayout();
-		payout.pay(LocalDateTime.of(2026, 10, 20, 4, 0));
+		payout.pay(LocalDateTime.of(2026, 10, 19, 4, 0));
 
 		assertThatThrownBy(() -> payout.cancel(PayoutHold.SYSTEM_MEMBER_ID, CANCELED_AT, "대회 취소"))
 			.isInstanceOf(IllegalStateException.class);
