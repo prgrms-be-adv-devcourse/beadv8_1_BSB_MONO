@@ -17,6 +17,7 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.stubbing.Answer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
@@ -154,13 +155,46 @@ class PayoutCreateUseCaseTransactionTest {
 		assertThat(payoutRepository.count()).isEqualTo(1);
 	}
 
+	@Test
+	@DisplayName("유일 제약 위반 뒤 다시 확인하는 조회가 실패하면, 그 정산 내역만 실패로 세고 다음 정산 내역을 계속 만든다")
+	void recheckFailureCountsAsFailedAndContinues() {
+		// 판매자 1의 최종 정산 내역은 다른 서버가 먼저 저장했고, 제약 위반 직후 다시 확인하는 조회에서 DB 연결이 끊긴다
+		payoutRepository.save(Payout.finalStage(1, 10, "대회 10", RACE_DATE, NOW, new BusinessDayCalendar()));
+		PayoutRepository racingRepository = racingRepository(repository ->
+				repository.existsBySellerIdAndRaceIdAndPayoutMonthAndPayoutStage(1, 10, "2026-09", PayoutStage.FINAL),
+			invocation -> {
+				throw new IllegalStateException("DB 연결 끊김");
+			});
+		SoldEntryPort soldEntryPort = raceId -> List.of(
+			new SoldEntry(100, 1, 10, 10, RACE_DATE, 50_000L),
+			new SoldEntry(200, 2, 10, 10, RACE_DATE, 30_000L));
+		PayoutCreateUseCase useCase = new PayoutCreateUseCase(racingRepository, payoutCreateStepUseCase,
+			soldEntryPort, sellerId -> true,
+			new StubRacePort(RACE_NAMES, List.of(), soldEntryPort.findSoldEntries(10)), raceId -> List.of());
+
+		PayoutCreateResultDto result = useCase.run(TARGET_DATE, NOW);
+
+		assertThat(result.failed()).isEqualTo(1);
+		assertThat(result.created()).isEqualTo(1);
+		assertThat(payoutRepository.findAll())
+			.extracting(Payout::getSellerId)
+			.containsExactlyInAnyOrder(1, 2);
+	}
+
 	// 실제 저장소에 그대로 넘기되, existsCheck가 고른 존재 확인만 처음 한 번은 '없음'으로 답하는 저장소
 	// 이 실행이 확인한 뒤에 다른 서버가 저장한 상황이다. 두 번째부터는 실제 DB 값을 돌려준다
 	private PayoutRepository notYetSavedOnFirstCheck(Predicate<PayoutRepository> existsCheck) {
+		return racingRepository(existsCheck,
+			invocation -> invocation.getMethod().invoke(payoutRepository, invocation.getArguments()));
+	}
+
+	// existsCheck가 고른 존재 확인은 처음 한 번 '없음'으로 답하고, 두 번째부터(제약 위반 뒤 다시 확인)는 recheck로 답한다
+	// existsCheck는 존재 확인 메서드를 고르는 데만 쓴다. doAnswer(...).when(racing)이 돌려준 스텁 대상에서
+	// 그 메서드를 실제 인자로 한 번 불러, 이름과 인자가 모두 같은 호출 하나만 가로챈다. 반환값은 쓰지 않는다
+	private PayoutRepository racingRepository(Predicate<PayoutRepository> existsCheck, Answer<?> recheck) {
 		PayoutRepository racing = mock(PayoutRepository.class, delegatesTo(payoutRepository));
 		AtomicBoolean checked = new AtomicBoolean(false);
-		existsCheck.test(doAnswer(invocation -> checked.getAndSet(true)
-			&& (boolean)invocation.getMethod().invoke(payoutRepository, invocation.getArguments()))
+		existsCheck.test(doAnswer(invocation -> checked.getAndSet(true) ? recheck.answer(invocation) : false)
 			.when(racing));
 		return racing;
 	}

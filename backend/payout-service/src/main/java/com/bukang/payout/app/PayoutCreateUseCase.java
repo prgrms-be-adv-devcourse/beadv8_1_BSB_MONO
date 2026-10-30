@@ -191,8 +191,18 @@ public class PayoutCreateUseCase {
 
 	// 존재 확인과 저장 사이에 다른 서버가 같은 정산 내역을 먼저 저장하면 DB 유일 제약에 걸린다 (PRO-120)
 	// 그 정산 내역은 이미 있으므로 실패가 아니다. 다른 제약 위반(값이 너무 김 등)이면 정산 내역이 없으므로 실패로 남긴다
+	// 다시 확인하는 조회도 실패하면(DB 연결 끊김 등) 있는지 모르므로 실패로 센다. 예외를 밖으로 던지면 반복이 끊겨
+	// 다음 정산 내역을 만들지 못한다 (PR #252 리뷰)
 	private static boolean isSavedByOther(RuntimeException exception, BooleanSupplier savedNow) {
-		return exception instanceof DataIntegrityViolationException && savedNow.getAsBoolean();
+		if (!(exception instanceof DataIntegrityViolationException)) {
+			return false;
+		}
+		try {
+			return savedNow.getAsBoolean();
+		} catch (RuntimeException recheckException) {
+			log.warn("유일 제약 위반 뒤 정산 내역이 있는지 다시 확인하지 못해 실패로 셉니다.", recheckException);
+			return false;
+		}
 	}
 
 	// 참가권에 복사된 대회일이 상품의 대회일과 다르면 주문 쪽 데이터가 어긋난 것이므로
