@@ -27,20 +27,25 @@ class MemberAdapterConfigTest {
 		.withUserConfiguration(FakeMemberNicknameAdapter.class, DisabledMemberNicknameAdapter.class);
 
 	@Test
-	@DisplayName("관리자 확인: mode가 http면 실제 회원 서비스 어댑터만, fake이거나 값이 없으면 가짜 어댑터만 등록된다")
+	@DisplayName("관리자 확인: mode가 http면 실제 회원 서비스 어댑터만, fake면 가짜 어댑터만 등록된다")
 	void adminMode() {
 		adminRunner.withPropertyValues("order.clients.member.mode=http").run(context ->
 			assertThat(context).getBean(MemberAdminPort.class).isInstanceOf(HttpMemberAdminAdapter.class));
 		adminRunner.withPropertyValues("order.clients.member.mode=fake").run(context ->
 			assertThat(context).getBean(MemberAdminPort.class).isInstanceOf(FakeMemberAdminAdapter.class));
-		adminRunner.run(context ->
-			assertThat(context).getBean(MemberAdminPort.class).isInstanceOf(FakeMemberAdminAdapter.class));
+	}
+
+	@Test
+	@DisplayName("mode 설정이 빠지면 가짜 어댑터를 켜지 않아 관리자 확인·닉네임 빈이 없다 (누구나 관리자가 되지 않게)")
+	void missingModeFailsClosed() {
+		adminRunner.run(context -> assertThat(context).doesNotHaveBean(MemberAdminPort.class));
+		nicknameRunner.run(context -> assertThat(context).doesNotHaveBean(MemberNicknamePort.class));
 	}
 
 	@Test
 	@DisplayName("닉네임: 가짜 어댑터는 시작 데이터 닉네임만 찾고, disabled면 닉네임 검색을 503으로 막는다")
 	void nicknameMode() {
-		nicknameRunner.run(context -> {
+		nicknameRunner.withPropertyValues("order.clients.nickname.mode=fake").run(context -> {
 			MemberNicknamePort port = context.getBean(MemberNicknamePort.class);
 			assertThat(port).isInstanceOf(FakeMemberNicknameAdapter.class);
 			assertThat(port.findMemberId("사용자1")).contains(4);

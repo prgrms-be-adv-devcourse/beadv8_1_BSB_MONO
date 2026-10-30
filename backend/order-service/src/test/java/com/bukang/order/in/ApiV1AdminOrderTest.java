@@ -141,6 +141,24 @@ class ApiV1AdminOrderTest {
 	}
 
 	@Test
+	@DisplayName("결제하지 않고 기한이 지난 주문도 기한 만료로 함께 나온다 (문의 대응, 10/30 결정)")
+	void includesExpired() throws Exception {
+		int expiredOrderId = createOrder(BUYER_ID, FIRST_COURSE_ID, false);
+		transactionTemplate.executeWithoutResult(status -> {
+			Order order = orderRepository.findById(expiredOrderId).orElseThrow();
+			order.expire(order.getPaymentDueAt());
+		});
+
+		search("nickname", BUYER_NICKNAME)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.totalElements").value(1))
+			.andExpect(jsonPath("$.data.orders[0].id").value(expiredOrderId))
+			.andExpect(jsonPath("$.data.orders[0].status").value("EXPIRED"))
+			.andExpect(jsonPath("$.data.orders[0].statusLabel").value("기한 만료"))
+			.andExpect(jsonPath("$.data.orders[0].paidAt").doesNotExist());
+	}
+
+	@Test
 	@DisplayName("주문번호로 찾으면 그 주문 한 줄만 나오고, 소문자로 넣어도 찾는다. 없는 주문번호는 빈 목록이다")
 	void byOrderNo() throws Exception {
 		int orderId = createOrder(BUYER_ID, FIRST_COURSE_ID, true);
