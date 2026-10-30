@@ -76,6 +76,8 @@ class ApiV1PayoutSellerControllerTest {
 
 	private static final Snippet ERROR_RESPONSE = responseFields(
 		fieldWithPath("status").description("HTTP 상태 코드"),
+		fieldWithPath("code").description("오류 코드 (예: 로그인 필요는 LOGIN_REQUIRED). 코드가 없는 오류는 이 필드가 없다")
+			.type(JsonFieldType.STRING).optional(),
 		fieldWithPath("message").description("실패 이유"),
 		fieldWithPath("data").description("실패 응답에서는 항상 null").type(JsonFieldType.NULL)
 	);
@@ -443,6 +445,7 @@ class ApiV1PayoutSellerControllerTest {
 	void missingMemberId() throws Exception {
 		mockMvc.perform(get(URL + "/summary"))
 			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("LOGIN_REQUIRED"))
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
 			.andDo(document("payout-seller-unauthorized", ERROR_RESPONSE));
 	}

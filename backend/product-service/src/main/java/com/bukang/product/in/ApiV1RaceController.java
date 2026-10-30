@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.global.web.IdempotencyKeyHeader;
+import com.bukang.common.shared.member.web.LoginMemberId;
 import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.product.app.ProductFacade;
 import com.bukang.product.app.RaceRegisterResult;
@@ -37,17 +38,18 @@ import com.bukang.product.dto.SellerRaceDto;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.annotation.Nullable;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 
@@ -108,8 +110,7 @@ public class ApiV1RaceController {
 				examples = @ExampleObject(value = RaceApiExamples.SELLER_NOT_APPROVED)))
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> register(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "중복 등록 방지 키. 같은 [등록하기] 재시도에는 같은 값을 보낸다 (예: UUID)",
 			example = "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43")
 		@RequestHeader(IdempotencyKeyHeader.NAME)
@@ -202,8 +203,7 @@ public class ApiV1RaceController {
 			}))
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> update(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId,
 		@Valid @RequestBody RaceSaveRequestDto request
@@ -245,8 +245,7 @@ public class ApiV1RaceController {
 			}))
 	})
 	public ResponseEntity<RsData<RaceSaveDto>> cancel(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId
 	) {
@@ -370,8 +369,7 @@ public class ApiV1RaceController {
 				examples = @ExampleObject(value = RaceApiExamples.SELLER_NOT_APPROVED)))
 	})
 	public ResponseEntity<RsData<List<SellerRaceDto>>> findMine(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 준다)", example = "9001")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId
+		@LoginMemberId int memberId
 	) {
 		return ResponseEntity.ok()
 			.body(RsData.of(HttpStatus.OK, "내 대회 목록을 조회했습니다.", productFacade.findMyRaces(memberId)));
@@ -397,10 +395,10 @@ public class ApiV1RaceController {
 				examples = @ExampleObject(value = RaceApiExamples.RACE_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<RaceDetailDto>> findRace(
-		@Parameter(description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 취소된 대회는 등록한 판매자만 본다)",
+		@Parameter(in = ParameterIn.HEADER, name = MemberIdHeader.NAME,
+			description = "요청한 회원 ID (로그인했을 때 게이트웨이가 넣어 준다. 취소된 대회는 등록한 판매자만 본다)",
 			example = "9001")
-		@RequestHeader(name = MemberIdHeader.NAME, required = false)
-		@Positive(message = MemberIdHeader.INVALID_MESSAGE) Integer memberId,
+		@LoginMemberId(required = false) @Nullable Integer memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@PathVariable int raceId
 	) {

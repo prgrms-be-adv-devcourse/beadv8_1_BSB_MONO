@@ -29,6 +29,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import com.bukang.common.shared.file.domain.FileType;
 import com.bukang.common.shared.kafka.KafkaTopics;
+import com.bukang.common.shared.member.web.MemberIdHeader;
 import com.bukang.common.shared.race.domain.RaceSaleStatus;
 import com.bukang.common.shared.seller.domain.SellerStatus;
 import com.bukang.common.shared.seller.domain.SellerType;
@@ -362,7 +363,7 @@ class ApiV1RaceRegisterTest extends ProductIntegrationTest {
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(jsonConverter.toJson(upcomingRace().build())));
 
-		expectError(result, HttpStatus.BAD_REQUEST, "요청 값의 형식이 올바르지 않습니다.");
+		expectError(result, HttpStatus.BAD_REQUEST, MemberIdHeader.INVALID_MESSAGE);
 		assertNothingSaved();
 	}
 

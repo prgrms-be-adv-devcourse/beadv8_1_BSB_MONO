@@ -35,7 +35,7 @@ public class MemberWithdrawUseCase {
 	private final CashBalancePort cashBalancePort;
 	private final ActiveTicketPort activeTicketPort;
 
-	public void withdraw(int memberId) {
+	public void withdraw(long memberId) {
 		// 줄을 잠가 같은 회원의 탈퇴가 겹치지 않게 한다. 뒤 요청은 앞 요청이 커밋한 뒤 탈퇴한 회원을 보고 404가 된다
 		Member member = memberRepository.findByIdForUpdate(memberId)
 			.filter(found -> !found.isWithdrawn())

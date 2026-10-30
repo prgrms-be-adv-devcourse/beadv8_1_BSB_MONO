@@ -5,13 +5,12 @@ import java.time.LocalDateTime;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
-import com.bukang.common.shared.member.web.MemberIdHeader;
+import com.bukang.common.shared.member.web.LoginMemberId;
 import com.bukang.order.app.QueueAdmissionUseCase;
 import com.bukang.order.dto.QueueAdmissionDto;
 
@@ -57,8 +56,7 @@ public class ApiV1QueueAdmissionController {
 				examples = @ExampleObject(value = QueueApiExamples.LOGIN_REQUIRED)))
 	})
 	public ResponseEntity<RsData<QueueAdmissionDto>> findAdmission(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "대회 ID", example = "1")
 		@RequestParam @Positive(message = "대회 ID가 올바르지 않습니다.") int raceId,
 		@Parameter(description = "종목 ID", example = "1")

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
 import com.bukang.common.global.web.IdempotencyKeyHeader;
-import com.bukang.common.shared.member.web.MemberIdHeader;
+import com.bukang.common.shared.member.web.LoginMemberId;
 import com.bukang.order.app.OrderCancelUseCase;
 import com.bukang.order.app.OrderCreateResult;
 import com.bukang.order.app.OrderFacade;
@@ -37,7 +37,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 
@@ -95,8 +94,7 @@ public class ApiV1OrderController {
 			}))
 	})
 	public ResponseEntity<RsData<OrderDto>> create(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "중복 주문 방지 키. 같은 [결제하기] 재시도에는 같은 값을 보낸다 (예: UUID)",
 			example = "6f1c2a7e-3b9d-4f0a-9c55-0d2e8b7a1f43")
 		@RequestHeader(IdempotencyKeyHeader.NAME)
@@ -150,8 +148,7 @@ public class ApiV1OrderController {
 			}))
 	})
 	public ResponseEntity<RsData<OrderDto>> pay(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "주문 ID", example = "1")
 		@PathVariable int orderId
 	) {
@@ -199,8 +196,7 @@ public class ApiV1OrderController {
 				examples = @ExampleObject(value = OrderApiExamples.PAYOUT_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<OrderDto>> cancelItem(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "주문 ID", example = "1")
 		@PathVariable int orderId,
 		@Parameter(description = "취소할 주문 상품 ID", example = "1")
@@ -230,8 +226,7 @@ public class ApiV1OrderController {
 				examples = @ExampleObject(value = OrderApiExamples.LOGIN_REQUIRED)))
 	})
 	public ResponseEntity<RsData<OrderPageDto>> findMine(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "조회 시작일 (주문 일자, 생략 가능)", example = "2026-10-01")
 		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
 		@Parameter(description = "조회 종료일 (이날 주문까지 포함, 생략 가능)", example = "2026-10-31")
@@ -267,8 +262,7 @@ public class ApiV1OrderController {
 				examples = @ExampleObject(value = OrderApiExamples.ORDER_NOT_FOUND)))
 	})
 	public ResponseEntity<RsData<OrderDto>> findById(
-		@Parameter(description = "요청한 회원 ID (게이트웨이가 넣어 줄 예정)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId int memberId,
 		@Parameter(description = "주문 ID", example = "1")
 		@PathVariable int orderId
 	) {

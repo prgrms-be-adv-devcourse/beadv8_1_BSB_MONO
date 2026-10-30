@@ -263,7 +263,7 @@ class ApiV1CartTest {
 		mockMvc.perform(get(BASE_URL))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."))
-			.andExpect(jsonPath("$.code").value("ORDER_LOGIN_REQUIRED"));
+			.andExpect(jsonPath("$.code").value("LOGIN_REQUIRED"));
 	}
 
 	// 같은 회원이 두 종목을 동시에 담고 응답 본문을 모은다
