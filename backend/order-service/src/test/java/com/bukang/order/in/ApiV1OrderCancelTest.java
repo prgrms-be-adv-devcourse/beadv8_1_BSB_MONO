@@ -19,6 +19,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.order.app.OrderCancelRetryUseCase;
 import com.bukang.order.app.OrderCancelUseCase;
+import com.bukang.order.app.RaceCancelRefundUseCase;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItem;
 import com.bukang.order.domain.OrderItemStatus;
@@ -112,10 +114,15 @@ class ApiV1OrderCancelTest {
 	@Autowired
 	private OrderCancelRetryUseCase orderCancelRetryUseCase;
 
+	@Autowired
+	private RaceCancelRefundUseCase raceCancelRefundUseCase;
+
 	@BeforeEach
 	void setUp() {
 		orderOutboxKafkaEventRepository.deleteAll();
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null));
+		// 재처리는 직전 회차의 30분 지난 건수를 기억한다. 앞 테스트가 남긴 값을 비운다 (지금은 취소 중이 없다)
+		orderCancelRetryUseCase.retry(LocalDateTime.now());
 	}
 
 	@AfterEach
@@ -495,7 +502,8 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
-	@DisplayName("취소를 시작한 지 30분이 지난 취소 중은 다시 부르지 않고 건수를 오류 로그로 남긴다")
+	@DisplayName("취소를 시작한 지 30분이 지난 취소 중은 다시 부르지 않고 건수를 오류 로그로 남긴다. "
+		+ "건수가 그대로면 다음 회차에는 남기지 않고, 바뀌면 다시 남긴다")
 	void retryGivesUpAfterThirtyMinutes(CapturedOutput output) throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);
 		walletPort.setRefundFails(true);
@@ -508,7 +516,48 @@ class ApiV1OrderCancelTest {
 		assertThat(result.completed() + result.pending()).isZero();
 		assertThat(walletPort.refundCalls()).hasSize(1);
 		assertThat(itemOf(paid.orderId()).getStatus()).isEqualTo(OrderItemStatus.CANCELING);
-		assertThat(output).contains("환불 결과를 모르는 취소 중이 1건 있습니다");
+		assertThat(givenUpLogs(output)).containsExactly("1건");
+
+		orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(32));
+		assertThat(givenUpLogs(output)).containsExactly("1건");
+
+		Paid other = paidOrder(OTHER_MEMBER_ID);
+		walletPort.setRefundFails(true);
+		cancel(OTHER_MEMBER_ID, other.orderId(), other.orderItemId()).andExpect(status().isAccepted());
+		orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(33));
+		assertThat(givenUpLogs(output)).containsExactly("1건", "2건");
+	}
+
+	// 30분 지난 취소 중 오류 로그에 찍힌 건수들 (남긴 순서대로)
+	private static List<String> givenUpLogs(CapturedOutput output) {
+		return Pattern.compile("환불 결과를 모르는 취소 중이 (\\d+건) 있습니다").matcher(output.getAll()).results()
+			.map(match -> match.group(1))
+			.toList();
+	}
+
+	@Test
+	@DisplayName("취소 중에 대회가 취소되면 일괄 환불은 그 상품을 건너뛰고, 재처리가 같은 주문 ID로 한 번만 환불해 취소로 마무리한다")
+	void raceCanceledWhileCanceling() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		walletPort.setRefundFails(true);
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+		walletPort.setRefundFails(false);
+		raceCoursePort.put(StubRaceCoursePort.canceled(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null)));
+
+		RaceCancelRefundUseCase.RefundResult raceResult =
+			raceCancelRefundUseCase.refundAll(RACE_ID, LocalDateTime.now());
+
+		assertThat(raceResult.refundedOrders()).isZero();
+		assertThat(walletPort.refundCalls()).hasSize(1);
+		assertThat(itemOf(paid.orderId()).getStatus()).isEqualTo(OrderItemStatus.CANCELING);
+
+		OrderCancelRetryUseCase.RetryResult result = orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(2));
+
+		assertThat(result.completed()).isEqualTo(1);
+		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
+		assertThat(itemOf(paid.orderId()).getStatus()).isEqualTo(OrderItemStatus.CANCELED);
+		assertThat(orderRepository.findById(paid.orderId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.CANCELED);
+		assertThat(restoredSeats()).containsExactly(paid.participationId());
 	}
 
 	@Test

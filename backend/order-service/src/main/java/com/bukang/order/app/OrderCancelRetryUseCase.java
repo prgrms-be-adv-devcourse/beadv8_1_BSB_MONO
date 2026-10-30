@@ -24,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  * - 거절(4xx): 돈이 움직이지 않았으므로 결제 완료로 되돌린다. 다시 부르지 않는다
  * - 모름(시간 초과·5xx): 취소 중으로 두고 다음 실행에서 다시 부른다. 시작한 지 WARN_AFTER가 넘었으면 warn을 남긴다.
  *   연달아 MAX_CONSECUTIVE_UNAVAILABLE번 모르면 예치금 장애로 보고 이번 실행을 멈춘다 (건마다 2초씩 기다리지 않게)
- * GIVE_UP_AFTER가 지난 취소 중은 부르지 않고 건수만 error로 남긴다. 사람이 예치금 기록과 맞춰 마무리하거나 되돌린다
+ * GIVE_UP_AFTER가 지난 취소 중은 부르지 않고 건수만 error로 남긴다(건수가 바뀐 회차에만). 사람이 예치금 기록과 맞춰 마무리하거나 되돌린다
  * 환불 기한은 다시 보지 않는다. 취소를 시작할 때 이미 판정했고, 그 뒤에 기한이 지나도 회원이 요청한 취소다
  * 1분이 지나기 전의 취소 중은 사용자 취소가 아직 환불을 기다리는 중일 수 있어 건드리지 않는다
  * 마무리·되돌리기는 주문을 잠그고 아직 취소 중일 때만 바꾸므로, 사용자 취소와 겹쳐도 한 번만 처리된다
@@ -46,6 +46,9 @@ public class OrderCancelRetryUseCase {
 	// 연달아 이만큼 환불 결과를 모르면 이번 실행을 멈춘다
 	static final int MAX_CONSECUTIVE_UNAVAILABLE = 3;
 
+	// 직전 회차의 30분 지난 취소 중 건수. 스케줄러가 한 쓰레드에서 차례로 부르지만, 테스트가 여러 쓰레드에서 부르므로 volatile
+	private volatile long lastGivenUp;
+
 	private final OrderItemRepository orderItemRepository;
 	private final OrderCancelUseCase orderCancelUseCase;
 	private final WalletPort walletPort;
@@ -56,7 +59,10 @@ public class OrderCancelRetryUseCase {
 
 	public RetryResult retry(LocalDateTime now) {
 		long givenUp = orderItemRepository.countCancelingBefore(now.minus(GIVE_UP_AFTER));
-		if (givenUp > 0) {
+		// 건수가 바뀐 회차에만 남긴다. 매분 같은 오류가 반복되면 새 장애 로그가 묻힌다
+		long previousGivenUp = lastGivenUp;
+		lastGivenUp = givenUp;
+		if (givenUp > 0 && givenUp != previousGivenUp) {
 			log.error("취소를 시작한 지 {}분이 지나도 환불 결과를 모르는 취소 중이 {}건 있습니다. 재처리가 더 부르지 않으니 "
 				+ "예치금 환불 기록과 맞춰 마무리하거나 결제 완료로 되돌려야 합니다.", GIVE_UP_AFTER.toMinutes(), givenUp);
 		}
