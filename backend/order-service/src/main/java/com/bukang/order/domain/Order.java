@@ -194,6 +194,22 @@ public class Order extends BaseIdAndTime {
 			.orElseThrow(() -> new OrderItemNotFoundException("주문에 없는 상품입니다."));
 	}
 
+	// 주문 상품 취소를 시작한다(결제 완료 → 취소 중). 주문 상태와 배송은 환불이 확인돼 마무리할 때(cancelItem) 바꾼다 (BUK-9)
+	public void startCancelItem(OrderItem item, LocalDateTime requestedAt) {
+		item.startCancel(requestedAt);
+	}
+
+	// 예치금이 환불을 거절해 취소 중을 결제 완료로 되돌린다. 주문 상태·배송은 시작 때 바꾸지 않았으므로 그대로다
+	public void revertCancelItem(OrderItem item) {
+		item.revertCancel();
+	}
+
+	// 참가 신청의 주문 상품이 취소 중인지. 환불 결과를 기다리는 동안 참가자 정보를 고치지 못하게 한다
+	public boolean isCanceling(int participationId) {
+		return items.stream()
+			.anyMatch(item -> item.getParticipationId() == participationId && item.isCanceling());
+	}
+
 	// 주문 상품 하나를 취소한다. 모두 취소되면 CANCELED, 일부만이면 PARTIAL_CANCELED (정책 5장, ERD D3)
 	// 아직 보내지 않은 키트 배송도 함께 취소해 판매자 목록에서 뺀다. 보낸 배송은 그대로 둔다 (BUK-6)
 	public void cancelItem(OrderItem item, LocalDateTime canceledAt) {
@@ -208,6 +224,7 @@ public class Order extends BaseIdAndTime {
 
 	// 대회가 취소됐다. 결제한 주문 상품을 모두 취소하고 취소한 상품을 돌려준다 (키트 포함 전액, 정책 1차 5장 4번)
 	// 결제 전이거나 이미 취소한 상품은 그대로 둔다. 같은 취소가 다시 와도 빈 목록이라 환불이 한 번만 일어난다
+	// 취소 중인 상품도 건너뛴다. 사용자 취소의 재처리가 같은 주문 ID로 환불하고 마무리한다 (BUK-9)
 	// 취소한 상품이 있으면 구매자에게 알리도록 이벤트를 발행한다 (환불까지 커밋된 뒤에 알린다)
 	public List<OrderItem> cancelPaidItems(LocalDateTime canceledAt) {
 		List<OrderItem> paidItems = items.stream()
