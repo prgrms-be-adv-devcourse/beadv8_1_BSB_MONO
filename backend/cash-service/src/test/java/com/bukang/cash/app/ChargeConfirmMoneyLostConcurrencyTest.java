@@ -1,7 +1,7 @@
 package com.bukang.cash.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
@@ -45,7 +45,7 @@ import com.bukang.cash.out.pg.PaymentClient;
 @SpringBootTest
 @ActiveProfiles("test")
 class ChargeConfirmMoneyLostConcurrencyTest {
-	private static final int CUSTOMER_ID = 3;
+	private static final long CUSTOMER_ID = 3;
 
 	@Autowired
 	private CashFacade cashFacade;
@@ -84,7 +84,7 @@ class ChargeConfirmMoneyLostConcurrencyTest {
 			pgCalled.countDown();
 			otherTxCommitted.await(5, TimeUnit.SECONDS);
 			return new PaymentApprovalResult(10_000, "toss_key_1");
-		}).when(paymentClient).approve(anyString(), anyString(), anyInt());
+		}).when(paymentClient).approve(anyString(), anyString(), anyLong());
 
 		ExecutorService executor = Executors.newSingleThreadExecutor();
 		Callable<CashChargeResponseDto> chargeTask = () ->
