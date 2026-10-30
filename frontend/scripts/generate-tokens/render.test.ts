@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-import { renderTokensCss } from './render.mjs'
+import { renderTokensCss, stalePending } from './render.mjs'
 
 const figma = JSON.parse(readFileSync('design-tokens/figma-variables.json', 'utf8'))
 const css = renderTokensCss(figma)
@@ -31,5 +31,30 @@ describe('renderTokensCss', () => {
 
   it('max-width 9999는 제한 없음(none)으로 쓴다', () => {
     expect(css).toContain('    --layout-form-max-width: none;')
+  })
+})
+
+describe('stalePending', () => {
+  it('지금 피그마 값은 PENDING 표와 같아 경고가 없다', () => {
+    expect(stalePending(figma)).toEqual([])
+  })
+
+  it('피그마 값이 바뀌거나 웹 값과 같아지거나 없어지면 알려 준다', () => {
+    const changed = structuredClone(figma)
+    changed.collections.Color.variables['color/text/info'].values.Light.alias = 'violet/700'
+    changed.collections.Color.variables['color/bg/segment'].values.Dark.alias = 'navy/600'
+    for (const mode of ['Mobile', 'Tablet', 'Desktop']) {
+      changed.collections.Layout.variables['layout/app-max-width'].values[mode] = 640
+    }
+    changed.textStyles = changed.textStyles.filter(
+      (s: { name: string }) => s.name !== 'Label/L Strong',
+    )
+
+    expect(stalePending(changed)).toEqual([
+      'color/text/info (Light): 피그마 값이 웹 값(violet/700)과 같아져 PENDING이 필요 없습니다',
+      'color/bg/segment (Dark): 피그마 값이 navy/700에서 navy/600로 바뀌었습니다',
+      'layout/app-max-width: 피그마 값이 480에서 640로 바뀌었습니다',
+      '텍스트 스타일 Label/L Strong: 피그마에 없습니다',
+    ])
   })
 })

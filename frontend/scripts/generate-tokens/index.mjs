@@ -2,10 +2,12 @@
 // 사용법 (frontend/ 폴더에서):
 //   pnpm tokens                      # src/app/tokens.css를 다시 만든다
 //   pnpm tokens --check              # 다시 만들었을 때 바뀌는 곳이 있으면 실패한다
-//   pnpm tokens --check-hash <hash>  # JSON이 피그마에서 받은 값과 같은지 확인한다 (design-tokens/figma-export.js의 hash)
+//   pnpm tokens --check-hash <hash>  # JSON이 피그마에서 받은 값과 같은지만 확인한다 (design-tokens/figma-export.js의 hash).
+//                                    # 파일은 쓰지 않는다. --check와 함께 주면 둘 다 확인한다
+// PENDING(피그마와 아직 다른 토큰)을 다시 확인해야 하면 경고를 출력한다. 실패로 끝나지는 않는다.
 import { readFileSync, writeFileSync } from 'node:fs'
 
-import { hashOf, renderTokensCss } from './render.mjs'
+import { hashOf, renderTokensCss, stalePending } from './render.mjs'
 
 const SOURCE = 'design-tokens/figma-variables.json'
 const OUTPUT = 'src/app/tokens.css'
@@ -22,6 +24,11 @@ if (hashIndex !== -1) {
     process.exit(1)
   }
   console.log(`ok   ${SOURCE} hash ${actual}`)
+  if (!args.includes('--check')) process.exit(0)
+}
+
+for (const warning of stalePending(figma)) {
+  console.warn(`warn PENDING ${warning}`)
 }
 
 const css = renderTokensCss(figma)

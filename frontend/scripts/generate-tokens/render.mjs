@@ -2,20 +2,53 @@
 // 이름은 피그마 이름의 '/'를 '-'로 바꿔 그대로 쓴다. (color/bg/surface → --color-bg-surface → bg-bg-surface)
 
 /**
- * 피그마와 값이 아직 다른 토큰. 화면이 바뀌지 않도록 지금 웹 값을 유지한다.
- * 피그마를 웹 값으로 고치거나 웹을 피그마 값으로 바꾸기로 정하면 여기서 지운다.
+ * 피그마와 값이 아직 다른 토큰. 화면이 바뀌지 않도록 지금 웹 값(web)을 유지한다.
+ * figma는 이 표를 만들 때의 피그마 값이다. 피그마가 이 값에서 바뀌거나 웹 값과 같아지면
+ * `pnpm tokens`가 경고한다(stalePending). 피그마를 웹 값으로 고치거나 웹을 피그마 값으로 바꾸기로 정하면 여기서 지운다.
  */
 export const PENDING = {
   /** 의미 색 Light · Dark 모드에서 피그마 원색 대신 쓸 원색 */
   color: {
-    'color/text/info': { Light: 'violet/700', Dark: 'violet/300' },
-    'color/bg/segment': { Dark: 'navy/800' },
-    'color/bg/badge-info': { Dark: 'navy/800' },
+    'color/text/info': {
+      Light: { web: 'violet/700', figma: 'navy/700' },
+      Dark: { web: 'violet/300', figma: 'navy/700' },
+    },
+    'color/bg/segment': { Dark: { web: 'navy/800', figma: 'navy/700' } },
+    'color/bg/badge-info': { Dark: { web: 'navy/800', figma: 'neutral/100' } },
   },
-  /** 레이아웃 값(px). 10/17 결정으로 회원 화면 기둥 폭은 600 */
-  layout: { 'layout/app-max-width': 600 },
+  /** 레이아웃 값(px). 10/17 결정으로 회원 화면 기둥 폭은 600. 피그마 값은 모든 모드에서 같다 */
+  layout: { 'layout/app-max-width': { web: 600, figma: 480 } },
   /** 아직 웹에 없는 텍스트 스타일 */
   skipTextStyles: ['Label/L Strong'],
+}
+
+/** PENDING 중 다시 확인해야 할 것. 피그마 값이 표의 figma와 달라졌거나, 피그마 스타일이 없어졌을 때 */
+export function stalePending(figma) {
+  const warnings = []
+  const check = (label, actual, { web, figma: recorded }) => {
+    if (actual === undefined) warnings.push(`${label}: 피그마에 없습니다`)
+    else if (actual === web)
+      warnings.push(`${label}: 피그마 값이 웹 값(${web})과 같아져 PENDING이 필요 없습니다`)
+    else if (actual !== recorded)
+      warnings.push(`${label}: 피그마 값이 ${recorded}에서 ${actual}로 바뀌었습니다`)
+  }
+  const colors = figma.collections.Color.variables
+  for (const [name, modes] of Object.entries(PENDING.color)) {
+    for (const [mode, entry] of Object.entries(modes)) {
+      check(`${name} (${mode})`, colors[name]?.values[mode]?.alias, entry)
+    }
+  }
+  const layout = figma.collections.Layout.variables
+  for (const [name, entry] of Object.entries(PENDING.layout)) {
+    const values = new Set(Object.values(layout[name]?.values ?? {}))
+    const actual = values.size === 1 ? [...values][0] : layout[name] && [...values].join('·')
+    check(name, actual, entry)
+  }
+  const styles = new Set(figma.textStyles.map((s) => s.name))
+  for (const name of PENDING.skipTextStyles) {
+    if (!styles.has(name)) warnings.push(`텍스트 스타일 ${name}: 피그마에 없습니다`)
+  }
+  return warnings
 }
 
 // 피그마에만 필요한 값이라 옮기지 않는다
@@ -57,8 +90,8 @@ function primitives(vars) {
 function semanticColors(vars, mode) {
   const lines = []
   for (const [name, v] of Object.entries(vars)) {
-    const pending = PENDING.color[name]?.[mode]
-    const light = PENDING.color[name]?.Light ?? v.values.Light.alias
+    const pending = PENDING.color[name]?.[mode]?.web
+    const light = PENDING.color[name]?.Light?.web ?? v.values.Light.alias
     const value = pending ?? v.values[mode].alias
     // Dark 모드는 Light와 다른 값만 적는다
     if (mode === 'Dark' && value === light) continue
@@ -110,7 +143,7 @@ function textStyles(styles) {
 }
 
 function layoutValue(name, value) {
-  const pending = PENDING.layout[name]
+  const pending = PENDING.layout[name]?.web
   if (pending !== undefined) return px(pending)
   if (name === 'layout/columns') return String(value)
   if (name.endsWith('max-width') && value === NO_LIMIT) return 'none'
