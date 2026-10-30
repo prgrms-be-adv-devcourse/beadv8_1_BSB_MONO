@@ -24,6 +24,8 @@ public class ProductKafkaDltConsumer {
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
 	private static final String HOLD_CANCEL_DLT = KafkaTopics.PRODUCT_HOLD_CANCEL
 		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
+	private static final String HOLD_RESTORE_DLT = KafkaTopics.PRODUCT_HOLD_RESTORE
+		+ ProductKafkaConsumer.DLT_TOPIC_SUFFIX;
 
 	@KafkaListener(topics = MEMBER_JOINED_DLT, groupId = GROUP_ID)
 	public void handleMemberJoinedDlt(String payload) {
@@ -44,5 +46,11 @@ public class ProductKafkaDltConsumer {
 	@KafkaListener(topics = HOLD_CANCEL_DLT, groupId = GROUP_ID)
 	public void handleHoldCancelDlt(String payload) {
 		log.error("처리하지 못한 임시 확보 해제 메시지: {}", payload);
+	}
+
+	// 되돌리지 못한 자리는 판매된 채 남아 정원보다 덜 팔린다. 원인을 고친 뒤 메시지를 다시 보내야 한다
+	@KafkaListener(topics = HOLD_RESTORE_DLT, groupId = GROUP_ID)
+	public void handleHoldRestoreDlt(String payload) {
+		log.error("처리하지 못한 판매 자리 복구 메시지: {}", payload);
 	}
 }

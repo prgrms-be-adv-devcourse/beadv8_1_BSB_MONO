@@ -9,12 +9,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bukang.common.global.rsdata.RsData;
-import com.bukang.common.shared.member.web.MemberIdHeader;
+import com.bukang.common.shared.member.web.LoginMemberId;
 import com.bukang.payout.app.PayoutAdminFacade;
 import com.bukang.payout.dto.PayoutHoldDto;
 import com.bukang.payout.dto.PayoutHoldRequestDto;
@@ -28,7 +27,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -87,10 +85,9 @@ public class ApiV1PayoutHoldController {
 				examples = @ExampleObject(value = PayoutApiExamples.MEMBER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<PayoutHoldDto>> hold(
-		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId long memberId,
 		@Parameter(description = "정산 내역 ID", example = "1")
-		@PathVariable int payoutId,
+		@PathVariable long payoutId,
 		@Valid @RequestBody PayoutHoldRequestDto request
 	) {
 		PayoutHoldDto hold = payoutAdminFacade.hold(
@@ -102,8 +99,8 @@ public class ApiV1PayoutHoldController {
 	@PostMapping("/holds/{holdId}/release")
 	@Operation(summary = "지급보류 풀기",
 		description = "지급보류를 해제하고 정산 내역을 정산 예정(CALCULATED)으로 돌린다. "
-			+ "지급 예정일은 해제일 뒤 돌아오는 지급일(매월 20일, 휴일이면 다음 영업일)로 다시 정하며, "
-			+ "해제일이 지급일 당일이면 다음 달 지급일이다.")
+			+ "지급 예정일은 다시 정한다. 1차 · 최종 모두 해제일 다음 날(주말에도 지급)이며, "
+			+ "원래 지급 예정일(1차는 환불 마감일 + 2일, 최종은 대회일 + 2일)보다 앞당기지 않는다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "해제 성공",
 			content = @Content(examples = @ExampleObject(value = PayoutApiExamples.RELEASE_SUCCESS))),
@@ -134,10 +131,9 @@ public class ApiV1PayoutHoldController {
 				examples = @ExampleObject(value = PayoutApiExamples.MEMBER_UNAVAILABLE)))
 	})
 	public ResponseEntity<RsData<PayoutHoldDto>> release(
-		@Parameter(description = "요청한 관리자 회원 ID (게이트웨이가 Access Token에서 꺼내 넣는다)", example = "1")
-		@RequestHeader(MemberIdHeader.NAME) @Positive(message = MemberIdHeader.INVALID_MESSAGE) int memberId,
+		@LoginMemberId long memberId,
 		@Parameter(description = "지급보류 ID (보류 걸기 응답의 id)", example = "1")
-		@PathVariable int holdId
+		@PathVariable long holdId
 	) {
 		PayoutHoldDto hold = payoutAdminFacade.release(memberId, holdId, LocalDateTime.now(ZONE));
 		return ResponseEntity.ok(RsData.of(HttpStatus.OK, "지급보류를 풀었습니다.", hold));

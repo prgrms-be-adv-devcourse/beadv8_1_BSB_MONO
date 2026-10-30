@@ -29,7 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class CashChargeConfirmUseCase {
-	private static final int MINIMUM_AMOUNT = 10_000;
+	private static final long MINIMUM_AMOUNT = 10_000;
 	// Toss가 confirm을 거절하면서 "이미 처리가 끝난 결제"라고 알리는 코드 (PRO-200)
 	// 타임아웃 뒤 재시도에서만 받을 수 있다 — 먼저 보낸 요청이 Toss 쪽에서는 실제로 승인됐을 수 있다는 뜻이다
 	private static final String ALREADY_PROCESSED_PAYMENT = "ALREADY_PROCESSED_PAYMENT";
@@ -40,7 +40,7 @@ public class CashChargeConfirmUseCase {
 	private final PaymentClient paymentClient;
 	private final TransactionTemplate transactionTemplate;
 
-	public CashChargeResponseDto confirmWalletCharge(int customerId, String paymentKey, String orderId, int amount) {
+	public CashChargeResponseDto confirmWalletCharge(long customerId, String paymentKey, String orderId, long amount) {
 		CashChargeResponseDto existingCompleted = transactionTemplate.execute(
 			status -> findExistingCompletedLocked(customerId, orderId));
 		if (existingCompleted != null) {
@@ -90,7 +90,7 @@ public class CashChargeConfirmUseCase {
 	// 수 있어서, Toss를 다시 불러봐야 진짜 상태를 알 수 있다. 다시 불렀을 때 실제로 이미 처리된 거였다면
 	// ALREADY_PROCESSED_PAYMENT로 거절되고, recoverIfAlreadyProcessed가 재조회로 COMPLETED까지 복구한다
 	// (PR 리뷰 지적). 다른 회원 소유인지 확인하는 멱등키 검증은 상태와 상관없이 여기서 그대로 한다
-	private CashChargeResponseDto findExistingCompletedLocked(int customerId, String orderId) {
+	private CashChargeResponseDto findExistingCompletedLocked(long customerId, String orderId) {
 		Wallet customerWallet = cashSupport.lockWallet(customerId);
 		WalletCharge existing = findMatchingCharge(customerWallet, orderId);
 		if (existing == null || existing.getStatus() != ChargeStatus.COMPLETED) {
@@ -101,7 +101,7 @@ public class CashChargeConfirmUseCase {
 
 	// 지갑을 다시 잠그고(짧은 트랜잭션), 그사이 같은 orderId로 먼저 끝난 요청이 없으면 FAILED로 기록한다
 	// 이미 기록이 있으면(COMPLETED든 FAILED든) 그대로 돌려준다 — 이 호출 자체가 실패했으니 새로 알려줄 성공이 없다
-	private CashChargeResponseDto recordFailedLocked(int customerId, String orderId, int amount) {
+	private CashChargeResponseDto recordFailedLocked(long customerId, String orderId, long amount) {
 		Wallet customerWallet = cashSupport.lockWallet(customerId);
 		WalletCharge existing = findMatchingCharge(customerWallet, orderId);
 		if (existing != null) {
@@ -118,7 +118,7 @@ public class CashChargeConfirmUseCase {
 	// 그 성공을 무시하면 돈은 빠졌는데 기록이 없는 상황이 된다 (PR 리뷰 지적). 기존 FAILED 행을 재사용해
 	// COMPLETED로 갱신한다
 	private CashChargeResponseDto recordCompletedLocked(
-		int customerId, String orderId, int amount, PaymentApprovalResult result
+		long customerId, String orderId, long amount, PaymentApprovalResult result
 	) {
 		Wallet customerWallet = cashSupport.lockWallet(customerId);
 		WalletCharge existing = findMatchingCharge(customerWallet, orderId);
@@ -145,7 +145,7 @@ public class CashChargeConfirmUseCase {
 		return existing;
 	}
 
-	private CashChargeResponseDto toDto(WalletCharge charge, int balance) {
+	private CashChargeResponseDto toDto(WalletCharge charge, long balance) {
 		return charge.getStatus() == ChargeStatus.COMPLETED
 			? CashChargeResponseDto.completed(balance)
 			: CashChargeResponseDto.failed(balance);

@@ -38,7 +38,11 @@ export interface PayoutHoldRequestDto {
 }
 
 export interface PayoutSummaryDto {
-  nextPayDate: string;
+  /**
+     * 다음 정산일. 지급 예정 정산 내역이 없으면 null
+     * @nullable
+     */
+  nextPayDate: string | null;
   scheduledPayoutAmount: number;
   heldCount: number;
 }

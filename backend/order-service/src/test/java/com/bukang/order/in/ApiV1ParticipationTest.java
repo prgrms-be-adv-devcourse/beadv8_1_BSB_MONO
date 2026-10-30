@@ -37,7 +37,9 @@ import org.springframework.test.web.servlet.ResultActions;
 import com.bukang.order.domain.ParticipantInfo;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
+import com.bukang.order.out.OrderOutboxKafkaEventRepository;
 import com.bukang.order.out.ParticipationRepository;
+import com.bukang.order.support.SeatOutboxMessages;
 import com.bukang.order.support.StubRaceCoursePort;
 import com.bukang.order.support.StubRaceCoursePortConfig;
 import com.bukang.order.support.StubSeatHoldPort;
@@ -49,10 +51,10 @@ import com.bukang.order.support.StubSeatHoldPortConfig;
 @Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class})
 class ApiV1ParticipationTest {
 	private static final String BASE_URL = "/api/v1/order/participations";
-	private static final int MEMBER_ID = 1;
-	private static final int OTHER_MEMBER_ID = 2;
-	private static final int COURSE_ID = 10;
-	private static final int RACE_ID = 100;
+	private static final long MEMBER_ID = 1;
+	private static final long OTHER_MEMBER_ID = 2;
+	private static final long COURSE_ID = 10;
+	private static final long RACE_ID = 100;
 	private static final String ADDRESS = "서울 성동구 왕십리로 00";
 
 	@Autowired
@@ -66,10 +68,14 @@ class ApiV1ParticipationTest {
 	private StubSeatHoldPort seatHoldPort;
 
 	@Autowired
+	private OrderOutboxKafkaEventRepository orderOutboxKafkaEventRepository;
+
+	@Autowired
 	private StubRaceCoursePort raceCoursePort;
 
 	@BeforeEach
 	void setUp() {
+		orderOutboxKafkaEventRepository.deleteAll();
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null));
 	}
 
@@ -78,6 +84,7 @@ class ApiV1ParticipationTest {
 		participationRepository.deleteAll();
 		raceCoursePort.clear();
 		seatHoldPort.clear();
+		orderOutboxKafkaEventRepository.deleteAll();
 	}
 
 	@Test
@@ -239,7 +246,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("같은 대회에 결제 전 신청서가 남아 있으면 그 신청서를 취소하고 새 신청서를 받는다 (같은 대회의 다른 종목이어도)")
 	void applyReplacesPendingParticipation() throws Exception {
-		int first = applyAndGetId(MEMBER_ID);
+		long first = applyAndGetId(MEMBER_ID);
 
 		// 주문 생성이 실패했거나 결제 없이 떠나 결제 전 신청서가 남은 뒤, 신청서 화면에 다시 들어와 저장한 상황
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
@@ -263,7 +270,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("다시 신청한 내용이 잘못되면(나이 제한 밖) 400이고, 남아 있던 결제 전 신청서는 취소하지 않는다")
 	void invalidApplyKeepsPendingParticipation() throws Exception {
-		int first = applyAndGetId(MEMBER_ID);
+		long first = applyAndGetId(MEMBER_ID);
 		String birth = LocalDate.now().minusYears(12).toString();
 
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김어린", birth, "S"), true))
@@ -275,21 +282,21 @@ class ApiV1ParticipationTest {
 	}
 
 	@Test
-	@DisplayName("남은 결제 전 신청서를 교체로 취소하면, 커밋 뒤 상품에 그 신청서의 자리를 풀어 달라고 한 번 알린다")
+	@DisplayName("남은 결제 전 신청서를 교체로 취소하면, 그 신청서의 자리 해제 메시지를 아웃박스에 한 번 남긴다 (커밋 뒤 상품에 간다)")
 	void replaceReleasesSeatOfCanceledParticipation() throws Exception {
-		int first = applyAndGetId(MEMBER_ID);
+		long first = applyAndGetId(MEMBER_ID);
 
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isCreated());
 
 		// [결제하기]에서 상품은 자리를 잡았는데 주문이 롤백됐을 수 있어, 자리를 잡았는지 몰라도 보낸다(상품은 멱등)
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(first);
+		assertThat(releasedSeats()).containsExactly(first);
 	}
 
 	@Test
-	@DisplayName("교체 중 새 신청서 저장이 실패해 롤백되면 자리 해제를 보내지 않고, 남은 신청서도 그대로다")
+	@DisplayName("교체 중 새 신청서 저장이 실패해 롤백되면 자리 해제 메시지도 함께 롤백되어 남지 않고, 남은 신청서도 그대로다")
 	void replaceRollbackDoesNotReleaseSeat() throws Exception {
-		int first = applyAndGetId(MEMBER_ID);
+		long first = applyAndGetId(MEMBER_ID);
 		doThrow(new IllegalStateException("저장 실패 (테스트)"))
 			.when(participationRepository).saveAndFlush(any(Participation.class));
 
@@ -297,23 +304,9 @@ class ApiV1ParticipationTest {
 			.andExpect(status().isInternalServerError());
 
 		// 보낸 뒤 롤백되면 살아 있는 신청서의 자리만 풀려, 그 신청서로 다시 결제할 수 없게 된다
-		assertThat(seatHoldPort.releasedParticipations()).isEmpty();
+		assertThat(releasedSeats()).isEmpty();
 		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.PENDING);
-	}
-
-	@Test
-	@DisplayName("자리 해제 알림을 보내지 못해도 교체는 커밋되어 201이다")
-	void replaceSucceedsEvenIfReleaseFails() throws Exception {
-		int first = applyAndGetId(MEMBER_ID);
-		seatHoldPort.failRelease(true);
-
-		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
-			.andExpect(status().isCreated());
-
-		assertThat(participationRepository.findById(first).orElseThrow().getStatus())
-			.isEqualTo(ParticipationStatus.CANCELED);
-		assertThat(activeCount(MEMBER_ID)).isEqualTo(1);
 	}
 
 	@Test
@@ -321,7 +314,7 @@ class ApiV1ParticipationTest {
 	void applyTwiceWhenAppliedOrConfirmed() throws Exception {
 		for (ParticipationStatus status : new ParticipationStatus[] {ParticipationStatus.APPLIED,
 			ParticipationStatus.CONFIRMED}) {
-			int id = applyAndGetId(MEMBER_ID);
+			long id = applyAndGetId(MEMBER_ID);
 			moveTo(id, status);
 
 			apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
@@ -365,7 +358,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("끝난 신청(취소 등)만 있으면 같은 대회에 다시 신청할 수 있다")
 	void applyAgainAfterCanceled() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 		finish(id, ParticipationStatus.CANCELED);
 
 		apply(MEMBER_ID, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
@@ -451,7 +444,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("본인 신청은 조회되고, 다른 회원의 신청은 403, 없는 신청은 404다")
 	void findById() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 
 		mockMvc.perform(get(BASE_URL + "/" + id).header("X-Member-Id", MEMBER_ID))
 			.andExpect(status().isOk())
@@ -472,7 +465,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("접수 마감 전에는 참가자 정보가 수정된다")
 	void changeParticipantBeforeClose() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 
 		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XL", "부산 해운대구 해운대로 00"))
 			.andExpect(status().isOk())
@@ -497,7 +490,7 @@ class ApiV1ParticipationTest {
 	@DisplayName("키트가 없는 종목은 참가자 정보를 고칠 때 보낸 배송지도 저장하지 않는다")
 	void changeParticipantCourseWithoutKit() throws Exception {
 		raceCoursePort.put(StubRaceCoursePort.courseWithoutKit(COURSE_ID, RACE_ID));
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 
 		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "", "서울 어딘가"))
 			.andExpect(status().isOk())
@@ -508,7 +501,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("참가자 정보를 고칠 때도 종목이 주지 않는 티셔츠 사이즈는 400이고 원래 사이즈가 남는다")
 	void changeParticipantUnavailableTshirtSize() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 
 		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XXXL"))
 			.andExpect(status().isBadRequest())
@@ -523,7 +516,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("접수 마감 뒤에는 참가자 정보 수정이 409로 거절된다")
 	void changeParticipantAfterClose() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 		raceCoursePort.put(StubRaceCoursePort.closedCourse(COURSE_ID, RACE_ID));
 
 		change(MEMBER_ID, id, participant("김러너", "1994-06-25", "XL"))
@@ -538,7 +531,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("다른 회원의 신청은 403, 끝난 신청은 409, 나이 제한 밖으로 고치면 400이다")
 	void changeParticipantRejected() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 
 		change(OTHER_MEMBER_ID, id, participant("박러너", "1990-01-01", "M"))
 			.andExpect(status().isForbidden());
@@ -558,7 +551,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("결제 전 신청서를 취소하면 끝난 신청이 되고, 같은 대회의 다른 종목으로 바로 다시 신청할 수 있다")
 	void cancelBeforePayment() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 
 		cancel(MEMBER_ID, id)
 			.andExpect(status().isOk())
@@ -570,8 +563,8 @@ class ApiV1ParticipationTest {
 		assertThat(canceled.getStatus()).isEqualTo(ParticipationStatus.CANCELED);
 		assertThat(canceled.getActiveFlag()).isNull();
 		assertThat(canceled.getCanceledAt()).isNotNull();
-		// 자리만 잡히고 주문이 롤백된 신청서일 수 있어, 커밋 뒤 상품에 자리를 풀어 달라고 알린다
-		assertThat(seatHoldPort.releasedParticipations()).containsExactly(id);
+		// 자리만 잡히고 주문이 롤백된 신청서일 수 있어, 상품에 자리를 풀어 달라고 아웃박스에 남긴다
+		assertThat(releasedSeats()).containsExactly(id);
 
 		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID + 1, RACE_ID, 14, null));
 		apply(MEMBER_ID, applyBody(COURSE_ID + 1, participant("김러너", "1994-06-25", "L"), true))
@@ -582,7 +575,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("다른 회원의 신청서는 403, 없는 신청서는 404이고 신청서는 그대로 남는다")
 	void cancelBeforePaymentNotOwned() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 
 		cancel(OTHER_MEMBER_ID, id)
 			.andExpect(status().isForbidden())
@@ -600,7 +593,7 @@ class ApiV1ParticipationTest {
 	@Test
 	@DisplayName("결제 대기·결제 완료·이미 끝난 신청서는 409이고 상태가 바뀌지 않는다")
 	void cancelBeforePaymentRejected() throws Exception {
-		int id = applyAndGetId(MEMBER_ID);
+		long id = applyAndGetId(MEMBER_ID);
 
 		moveTo(id, ParticipationStatus.APPLIED);
 		cancel(MEMBER_ID, id)
@@ -626,55 +619,55 @@ class ApiV1ParticipationTest {
 			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_CANCELABLE"));
 	}
 
-	private long activeCount(int memberId) {
+	private long activeCount(long memberId) {
 		return participationRepository.findAll().stream()
 			.filter(participation -> participation.getMemberId() == memberId)
 			.filter(participation -> Boolean.TRUE.equals(participation.getActiveFlag()))
 			.count();
 	}
 
-	private ResultActions apply(int memberId, String body) throws Exception {
+	private ResultActions apply(long memberId, String body) throws Exception {
 		return mockMvc.perform(post(BASE_URL)
 			.header("X-Member-Id", memberId)
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(body));
 	}
 
-	private ResultActions change(int memberId, int participationId, String participantBody) throws Exception {
+	private ResultActions change(long memberId, long participationId, String participantBody) throws Exception {
 		return mockMvc.perform(put(BASE_URL + "/" + participationId + "/participant")
 			.header("X-Member-Id", memberId)
 			.contentType(MediaType.APPLICATION_JSON)
 			.content(participantBody));
 	}
 
-	private ResultActions cancel(int memberId, int participationId) throws Exception {
+	private ResultActions cancel(long memberId, long participationId) throws Exception {
 		return mockMvc.perform(post(BASE_URL + "/" + participationId + "/cancel")
 			.header("X-Member-Id", memberId));
 	}
 
 	// [결제하기]·결제는 자리·예치금 스텁이 필요해, 이 테스트에서는 살아 있는 상태로 직접 옮긴다
-	private void moveTo(int participationId, ParticipationStatus status) {
+	private void moveTo(long participationId, ParticipationStatus status) {
 		Participation participation = participationRepository.findById(participationId).orElseThrow();
 		ReflectionTestUtils.setField(participation, "status", status);
 		ReflectionTestUtils.setField(participation, "activeFlag", status.isActive() ? Boolean.TRUE : null);
 		participationRepository.save(participation);
 	}
 
-	private int applyAndGetId(int memberId) throws Exception {
+	private long applyAndGetId(long memberId) throws Exception {
 		apply(memberId, applyBody(COURSE_ID, participant("김러너", "1994-06-25", "L"), true))
 			.andExpect(status().isCreated());
 		return participationRepository.findFirstByMemberIdOrderByIdDesc(memberId).orElseThrow().getId();
 	}
 
 	// 상태 전이 API(결제·취소)가 아직 없어 테스트에서 직접 끝난 신청으로 만든다
-	private void finish(int participationId, ParticipationStatus status) {
+	private void finish(long participationId, ParticipationStatus status) {
 		Participation participation = participationRepository.findById(participationId).orElseThrow();
 		ReflectionTestUtils.setField(participation, "status", status);
 		ReflectionTestUtils.setField(participation, "activeFlag", null);
 		participationRepository.save(participation);
 	}
 
-	private static String applyBody(int raceCourseId, String participant, boolean consent) {
+	private static String applyBody(long raceCourseId, String participant, boolean consent) {
 		return """
 			{ "raceCourseId": %d, "participant": %s, "thirdPartyConsent": %s }
 			""".formatted(raceCourseId, participant, consent);
@@ -693,5 +686,13 @@ class ApiV1ParticipationTest {
 			{ "name": "%s", "birth": "%s", "gender": "MALE", "phone": "010-1234-5678",
 				"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "%s"%s }
 			""".formatted(name, birth, tshirtSize, shipping);
+	}
+
+	private List<Long> restoredSeats() {
+		return SeatOutboxMessages.restored(orderOutboxKafkaEventRepository);
+	}
+
+	private List<Long> releasedSeats() {
+		return SeatOutboxMessages.released(orderOutboxKafkaEventRepository);
 	}
 }

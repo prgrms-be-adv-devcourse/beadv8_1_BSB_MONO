@@ -45,20 +45,20 @@ import jakarta.persistence.EntityManager;
 /**
  * 원장 방식 정산의 금액 시나리오 (PRO-214 완료 기준 1)
  * 대회 A, 판매자 1명, 참가권 5만 원 × 10장(101~110). 1장의 1차 몫 20,000, 수수료 2,750, 최종 몫 47,250
- * 환불 기한 2026-10-31 → 1차 생성 11/1, 지급 11/20. 대회일 12/13 → 최종 생성 12/14, 지급 2027-01-20
+ * 환불 기한 2026-10-31 토 → 1차 생성 11/1, 지급 11/2 월. 대회일 12/13 일 → 최종 생성 12/14, 지급 12/15 화
  * 모든 시나리오에서 정산 내역마다 원장 줄 합 = 지급액(payout_amount)인지도 확인한다
  */
 @DataJpaTest
 @ActiveProfiles("test")
 class PayoutLedgerScenarioTest {
-	private static final int SELLER_ID = 1;
-	private static final int RACE_ID = 7;
-	private static final int ADMIN_ID = 99;
+	private static final long SELLER_ID = 1;
+	private static final long RACE_ID = 7;
+	private static final long ADMIN_ID = 99;
 	private static final long PRICE = 50_000L;
 	private static final LocalDate REFUND_DEADLINE = LocalDate.of(2026, 10, 31);
 	private static final LocalDate RACE_DATE = LocalDate.of(2026, 12, 13);
-	private static final LocalDate FIRST_PAY_DATE = LocalDate.of(2026, 11, 20);
-	private static final LocalDate FINAL_PAY_DATE = LocalDate.of(2027, 1, 20);
+	private static final LocalDate FIRST_PAY_DATE = LocalDate.of(2026, 11, 2);
+	private static final LocalDate FINAL_PAY_DATE = LocalDate.of(2026, 12, 15);
 
 	@Autowired
 	private PayoutRepository payoutRepository;
@@ -84,7 +84,8 @@ class PayoutLedgerScenarioTest {
 	void setUp() {
 		BusinessDayCalendar calendar = new BusinessDayCalendar();
 		ledgerUseCase = new PayoutLedgerUseCase(payoutRepository, payoutItemRepository, payoutRecoveryRepository);
-		creator = new PayoutCreateStepUseCase(payoutRepository, payoutHoldRepository, calendar, ledgerUseCase);
+		creator = new PayoutCreateStepUseCase(payoutRepository, calendar, ledgerUseCase,
+			new PayoutHoldUseCase(payoutRepository, payoutHoldRepository, calendar));
 		payUseCase = new PayoutPayUseCase(new PayoutPayStepUseCase(payoutRepository), transfer -> {
 		});
 		raceCancelUseCase = new PayoutRaceCancelUseCase(payoutRepository, ledgerUseCase);
@@ -115,7 +116,7 @@ class PayoutLedgerScenarioTest {
 		payUseCase.run(payDate, payDate.atTime(9, 0));
 	}
 
-	private PayoutRecovery requestRecovery(int orderItemId, LocalDateTime at) {
+	private PayoutRecovery requestRecovery(long orderItemId, LocalDateTime at) {
 		return ledgerUseCase.recoverScheduleChange(SELLER_ID, RACE_ID, RACE_ID, orderItemId, PRICE, at)
 			.orElseThrow();
 	}
@@ -207,17 +208,17 @@ class PayoutLedgerScenarioTest {
 	@Test
 	@DisplayName("코스가 둘인 대회: 1차 정산금은 코스마다 한 줄, 최종 판매 · 수수료 줄에도 코스가 남아 코스별로 더할 수 있다")
 	void twoCourses() {
-		int course10k = 71;
-		int course5k = 72;
+		long course10k = 71;
+		long course5k = 72;
 		creator.createFirst(new FirstPayoutSource(SELLER_ID, RACE_ID, "대회 A", true, List.of(
 			new CourseSale(course10k, 50_000L * 6, 6),
 			new CourseSale(course5k, 30_000L * 4, 4))), REFUND_DEADLINE, REFUND_DEADLINE.plusDays(1).atTime(3, 0));
 		pay(FIRST_PAY_DATE);
 		List<SoldEntry> entries = new ArrayList<>();
-		for (int id = 101; id <= 106; id++) {
+		for (long id = 101; id <= 106; id++) {
 			entries.add(new SoldEntry(id, SELLER_ID, RACE_ID, course10k, RACE_DATE, 50_000L));
 		}
-		for (int id = 107; id <= 110; id++) {
+		for (long id = 107; id <= 110; id++) {
 			entries.add(new SoldEntry(id, SELLER_ID, RACE_ID, course5k, RACE_DATE, 30_000L));
 		}
 		creator.createFinal(new FinalPayoutSource(SELLER_ID, RACE_ID, "대회 A", true, entries), RACE_DATE,
@@ -235,9 +236,9 @@ class PayoutLedgerScenarioTest {
 		assertEveryPayoutLineSumMatches();
 	}
 
-	private long courseSum(Payout payout, int raceCourseId) {
+	private long courseSum(Payout payout, long raceCourseId) {
 		return payout.getItems().stream()
-			.filter(item -> Integer.valueOf(raceCourseId).equals(item.getRaceCourseId()))
+			.filter(item -> Long.valueOf(raceCourseId).equals(item.getRaceCourseId()))
 			.mapToLong(PayoutItem::getAmount)
 			.sum();
 	}
@@ -266,9 +267,9 @@ class PayoutLedgerScenarioTest {
 			.isEqualTo(PayoutRecoveryCompletion.OFFSET);
 		// 108 · 109는 관리자가 입금을 확인했고, 110은 최종 정산 내역에서 빼서 갚을 돈이 0이 되어 시스템이 상계로 완료
 		assertCompletions(
-			tuple(108, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(109, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(110, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
+			tuple(108L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(109L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(110L, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
 		pay(FINAL_PAY_DATE);
 		assertThat(sellerReceived()).isEqualTo(330_750L);
 		assertEveryPayoutLineSumMatches();
@@ -278,7 +279,7 @@ class PayoutLedgerScenarioTest {
 	@DisplayName("108번 1차 지급 전 환불: 요청 즉시 1차 정산 내역에서 상계해 지급 180,000, 회수는 바로 완료")
 	void refundBeforeFirstPay() {
 		createFirst();
-		PayoutRecovery r108 = requestRecovery(108, LocalDateTime.of(2026, 11, 5, 10, 0));
+		PayoutRecovery r108 = requestRecovery(108, LocalDateTime.of(2026, 11, 1, 10, 0));
 
 		assertThat(r108.getStatus()).isEqualTo(PayoutRecoveryStatus.COMPLETED);
 		assertThat(r108.getCompletion()).isEqualTo(PayoutRecoveryCompletion.OFFSET);
@@ -328,20 +329,20 @@ class PayoutLedgerScenarioTest {
 		// 103~107은 20,000씩 입금, 108은 남은 5,500을 입금해 갚을 돈이 0이 된다
 		// 그때 남은 109 · 110은 최종 정산 내역에서 상계로 갚은 몫이라 입금 없이 상계로 함께 완료
 		assertCompletions(
-			tuple(103, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(104, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(105, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(106, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(107, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(108, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(109, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID),
-			tuple(110, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
+			tuple(103L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(104L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(105L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(106L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(107L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(108L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(109L, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID),
+			tuple(110L, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
 		assertThat(payoutItemRepository.findAll())
 			.filteredOn(item -> item.getRecordType() == PayoutRecordType.RECOVERY_RECEIVED)
 			.extracting(item -> item.getRecovery().getOrderItemId(), PayoutItem::getAmount)
 			.containsExactlyInAnyOrder(
-				tuple(103, -20_000L), tuple(104, -20_000L), tuple(105, -20_000L), tuple(106, -20_000L),
-				tuple(107, -20_000L), tuple(108, -5_500L));
+				tuple(103L, -20_000L), tuple(104L, -20_000L), tuple(105L, -20_000L), tuple(106L, -20_000L),
+				tuple(107L, -20_000L), tuple(108L, -5_500L));
 		assertThat(sellerReceived()).isEqualTo(94_500L);
 		assertEveryPayoutLineSumMatches();
 	}
@@ -368,8 +369,8 @@ class PayoutLedgerScenarioTest {
 			.extracting(PayoutItem::getAmount)
 			.containsExactly(-60_000L);
 		assertCompletions(
-			tuple(108, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
-			tuple(109, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
+			tuple(108L, PayoutRecoveryCompletion.DEPOSIT, ADMIN_ID),
+			tuple(109L, PayoutRecoveryCompletion.OFFSET, PayoutHold.SYSTEM_MEMBER_ID));
 	}
 
 	@Test
@@ -422,7 +423,7 @@ class PayoutLedgerScenarioTest {
 	@DisplayName("1차 지급 전 대회 취소: 반대 줄로 되돌려 ADVANCE 0, 1차 정산 내역 줄 합 0, 회수 없음")
 	void raceCanceledBeforeFirstPay() {
 		createFirst();
-		raceCancelUseCase.cancelRace(RACE_ID, LocalDateTime.of(2026, 11, 10, 10, 0));
+		raceCancelUseCase.cancelRace(RACE_ID, LocalDateTime.of(2026, 11, 1, 10, 0));
 
 		Payout first = payout(PayoutStage.FIRST);
 		assertThat(first.getStatus()).isEqualTo(PayoutStatus.CANCELED);
@@ -445,7 +446,7 @@ class PayoutLedgerScenarioTest {
 			.isInstanceOf(PayoutRecoveryConflictException.class);
 		entityManager.flush();
 		assertThat(payoutItemRepository.findAll())
-			.filteredOn(item -> Integer.valueOf(108).equals(item.getOrderItemId()))
+			.filteredOn(item -> Long.valueOf(108L).equals(item.getOrderItemId()))
 			.extracting(PayoutItem::getRecordType)
 			.containsExactlyInAnyOrder(PayoutRecordType.RECOVERY_REQUESTED, PayoutRecordType.RECEIVABLE_ADDED);
 	}

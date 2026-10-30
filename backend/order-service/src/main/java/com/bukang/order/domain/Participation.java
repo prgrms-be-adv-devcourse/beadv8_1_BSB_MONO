@@ -45,17 +45,17 @@ import lombok.NoArgsConstructor;
 )
 public class Participation extends BaseIdAndTime {
 	@Column(name = "race_id", nullable = false)
-	private int raceId;
+	private long raceId;
 
 	@Column(name = "race_course_id", nullable = false)
-	private int raceCourseId;
+	private long raceCourseId;
 
 	@Column(name = "member_id", nullable = false)
-	private int memberId;
+	private long memberId;
 
 	// 크루원 신청만 채운다. 세미는 늘 NULL (최종 프로젝트)
 	@Column(name = "crew_application_id")
-	private Integer crewApplicationId;
+	private Long crewApplicationId;
 
 	@Enumerated(STRING)
 	@Column(name = "participation_type", nullable = false, columnDefinition = "varchar(20)")
@@ -92,7 +92,7 @@ public class Participation extends BaseIdAndTime {
 	@Column(name = "canceled_at")
 	private LocalDateTime canceledAt;
 
-	private Participation(int memberId, int raceId, int raceCourseId, ParticipantInfo participant,
+	private Participation(long memberId, long raceId, long raceCourseId, ParticipantInfo participant,
 		LocalDateTime consentedAt) {
 		this.memberId = memberId;
 		this.raceId = raceId;
@@ -105,12 +105,12 @@ public class Participation extends BaseIdAndTime {
 	}
 
 	// 개인 신청서. 제3자 제공 동의를 받은 뒤에만 만든다 (요청 DTO가 검사)
-	public static Participation individual(int memberId, int raceId, int raceCourseId, ParticipantInfo participant,
+	public static Participation individual(long memberId, long raceId, long raceCourseId, ParticipantInfo participant,
 		LocalDateTime consentedAt) {
 		return new Participation(memberId, raceId, raceCourseId, participant, consentedAt);
 	}
 
-	public boolean isOwnedBy(int targetMemberId) {
+	public boolean isOwnedBy(long targetMemberId) {
 		return memberId == targetMemberId;
 	}
 
@@ -173,7 +173,7 @@ public class Participation extends BaseIdAndTime {
 			case PENDING -> {
 				changeStatus(ParticipationStatus.CANCELED);
 				this.canceledAt = canceledAt;
-				// [결제하기]에서 자리만 잡히고 주문은 롤백됐을 수 있어, 커밋 뒤 상품에 자리를 풀어 달라고 알린다
+				// [결제하기]에서 자리만 잡히고 주문은 롤백됐을 수 있어, 상품에 자리를 풀어 달라고 알린다 (아웃박스 → 커밋 뒤 Kafka)
 				publishEvent(new ParticipationCanceledBeforePaymentEvent(getId()));
 			}
 			case APPLIED -> throw new ParticipationNotCancelableException(

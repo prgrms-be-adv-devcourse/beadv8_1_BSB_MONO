@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bukang.payout.domain.Payout;
 import com.bukang.payout.domain.PayoutHold;
-import com.bukang.payout.domain.PayoutStatus;
 import com.bukang.payout.out.PayoutRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -34,11 +33,11 @@ public class PayoutRaceCancelUseCase {
 	// 한 트랜잭션으로 묶는다. 지급 배치와 부딪혀 낙관적 락으로 실패하면 모두 되돌리고, 메시지를 다시 처리한다
 	// 다시 처리해도 이미 닫은 정산 내역은 CANCELED라 건너뛰고, 회수는 이미 있으면 만들지 않는다
 	@Transactional
-	public CancelResult cancelRace(int raceId, LocalDateTime now) {
+	public CancelResult cancelRace(long raceId, LocalDateTime now) {
 		List<Payout> payouts = payoutRepository.findByRaceId(raceId);
 		int canceled = 0;
 		for (Payout payout : payouts) {
-			if (payout.getStatus() == PayoutStatus.CALCULATED || payout.getStatus() == PayoutStatus.HELD) {
+			if (payout.getStatus().isBeforePayment()) {
 				payout.cancel(PayoutHold.SYSTEM_MEMBER_ID, now, CANCEL_REASON);
 				canceled++;
 			}

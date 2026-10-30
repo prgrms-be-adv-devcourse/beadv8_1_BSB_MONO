@@ -1,5 +1,9 @@
 package com.bukang.payout.domain;
 
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Set;
+
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -19,5 +23,13 @@ public enum PayoutStatus {
 	PAID("지급 완료"),
 	CANCELED("취소");
 
+	// 지급 전: 캐시 서비스로 아직 보내지 않은 상태. 상계 · 대회 취소는 이 상태에서만 정산 내역을 바꾼다
+	// 상태를 새로 만들면 여기 넣을지 정한다 (PayoutStatusTest가 분류를 고정한다)
+	public static final Set<PayoutStatus> BEFORE_PAYMENT = Collections.unmodifiableSet(EnumSet.of(CALCULATED, HELD));
+
 	private final String korean;
+
+	public boolean isBeforePayment() {
+		return BEFORE_PAYMENT.contains(this);
+	}
 }

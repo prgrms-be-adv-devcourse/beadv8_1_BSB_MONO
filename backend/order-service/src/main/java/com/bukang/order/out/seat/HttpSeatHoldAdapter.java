@@ -1,23 +1,15 @@
 package com.bukang.order.out.seat;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-import com.bukang.common.global.json.JsonConverter;
 import com.bukang.common.global.rsdata.RsData;
-import com.bukang.common.shared.kafka.KafkaTopics;
-import com.bukang.common.shared.race.event.HoldCancelEvent;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.domain.exception.ParticipationNotPayableException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
@@ -28,13 +20,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 상품 서비스(B)의 내부 API로 자리를 확보·판매·복구한다 (PRO-165, B PRO-96)
+ * 상품 서비스(B)의 내부 API로 자리를 확보·판매한다 (PRO-165, B PRO-96)
  * POST /internal/v1/product/holds {raceCourseId, participationId, expiresAt} → {held, expiresAt}
  * POST /internal/v1/product/holds/{participationId}/sell → {result: SOLD | EXPIRED}
- * POST /internal/v1/product/holds/{participationId}/restore → {restored}
- * 매진·기한 지남은 B가 오류가 아니라 200과 결과로 준다. 세 요청 모두 참가 신청 ID로 멱등이라,
+ * 매진·기한 지남은 B가 오류가 아니라 200과 결과로 준다. 두 요청 모두 참가 신청 ID로 멱등이라,
  * 응답을 못 받으면(시간 초과·5xx) 주문을 바꾸지 않고 503으로 끝내 같은 요청을 다시 하게 한다
- * 결제 안 한 자리 해제는 API가 아니라 Kafka(product.hold.cancel)로 알린다(PRO-166)
+ * 판매 자리 복구와 결제 안 한 자리 해제는 API가 아니라 주문 아웃박스 → Kafka로 알린다 (PRO-166, PRO-270)
  * 등록은 ProductClientConfig가 한다 (order.clients.product.mode=http)
  */
 @Slf4j
@@ -42,11 +33,8 @@ import lombok.extern.slf4j.Slf4j;
 public class HttpSeatHoldAdapter implements SeatHoldPort {
 	static final String HOLD_PATH = "/internal/v1/product/holds";
 	static final String SELL_PATH = "/internal/v1/product/holds/{participationId}/sell";
-	static final String RESTORE_PATH = "/internal/v1/product/holds/{participationId}/restore";
 	static final String UNAVAILABLE_MESSAGE = "상품 서비스에 연결하지 못했습니다. 잠시 뒤 다시 시도해주세요.";
 	static final String HOLD_REJECTED_MESSAGE = "자리를 확보할 수 없는 신청입니다.";
-	// 자리 해제 메시지를 브로커가 받았는지 기다리는 최대 시간 (만료 처리·결제 전 취소 한 건이 이보다 오래 붙잡히지 않게)
-	static final Duration RELEASE_TIMEOUT = Duration.ofSeconds(3);
 
 	private static final ParameterizedTypeReference<RsData<HoldBody>> HOLD_TYPE = new ParameterizedTypeReference<>() {
 	};
@@ -54,11 +42,9 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 	};
 
 	private final RestClient restClient;
-	private final KafkaTemplate<String, String> kafkaTemplate;
-	private final JsonConverter jsonConverter;
 
 	@Override
-	public SeatHoldResult hold(int raceCourseId, int participationId, LocalDateTime expiresAt) {
+	public SeatHoldResult hold(long raceCourseId, long participationId, LocalDateTime expiresAt) {
 		RsData<HoldBody> response;
 		try {
 			response = restClient.post()
@@ -89,7 +75,7 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 	}
 
 	@Override
-	public SeatSellResult sell(int participationId) {
+	public SeatSellResult sell(long participationId) {
 		RsData<SellBody> response;
 		try {
 			response = restClient.post()
@@ -110,44 +96,7 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 		return body.result();
 	}
 
-	@Override
-	public void restore(int participationId) {
-		try {
-			restClient.post()
-				.uri(RESTORE_PATH, participationId)
-				.retrieve()
-				.toBodilessEntity();
-		} catch (HttpClientErrorException exception) {
-			throw contractError("자리 복구", participationId, exception);
-		} catch (RestClientException exception) {
-			throw unavailable("자리 복구", participationId, exception);
-		}
-	}
-
-	// 참가 신청 ID를 key로 보내 같은 자리의 메시지가 순서대로 처리되게 한다 (HoldCancelEvent)
-	// 브로커가 받았는지 RELEASE_TIMEOUT까지 기다린다. 보내지 못하면 503 예외로 만료를 롤백시켜 다음 실행에서 다시 보낸다
-	@Override
-	public void release(int participationId) {
-		String payload = jsonConverter.toJson(new HoldCancelEvent(participationId));
-		try {
-			kafkaTemplate.send(KafkaTopics.PRODUCT_HOLD_CANCEL, String.valueOf(participationId), payload)
-				.get(RELEASE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-		} catch (InterruptedException exception) {
-			Thread.currentThread().interrupt();
-			throw releaseFailed(participationId, exception);
-		} catch (ExecutionException | TimeoutException | RuntimeException exception) {
-			// 브로커에 연결하지 못하면 send()가 max.block.ms까지 기다리다 예외를 던지고, 받지 못하면 시간 초과다
-			throw releaseFailed(participationId, exception);
-		}
-	}
-
-	private ExternalServiceUnavailableException releaseFailed(int participationId, Exception exception) {
-		log.warn("자리 해제 메시지를 보내지 못했습니다. participationId={}, cause={}",
-			participationId, exception.toString());
-		return new ExternalServiceUnavailableException(UNAVAILABLE_MESSAGE);
-	}
-
-	private ExternalServiceUnavailableException unavailable(String action, int participationId,
+	private ExternalServiceUnavailableException unavailable(String action, long participationId,
 		RestClientException exception) {
 		log.warn("상품 서비스에 {}를 요청하지 못했습니다. participationId={}, cause={}",
 			action, participationId, exception.toString());
@@ -155,7 +104,7 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 	}
 
 	// 4xx는 다시 시도해도 풀리지 않는다. 경로·요청 계약이 어긋났을 수 있어 장애와 구분해 남긴다
-	private ExternalServiceUnavailableException contractError(String action, int participationId,
+	private ExternalServiceUnavailableException contractError(String action, long participationId,
 		HttpClientErrorException exception) {
 		log.error("상품 서비스가 {} 요청을 거절했습니다. 계약(경로·요청)을 확인해야 합니다. status={}, participationId={}, body={}",
 			action, exception.getStatusCode(), participationId,
@@ -173,7 +122,7 @@ public class HttpSeatHoldAdapter implements SeatHoldPort {
 		}
 	}
 
-	record HoldRequest(int raceCourseId, int participationId, LocalDateTime expiresAt) {
+	record HoldRequest(long raceCourseId, long participationId, LocalDateTime expiresAt) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

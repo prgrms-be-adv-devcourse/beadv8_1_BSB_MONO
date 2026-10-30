@@ -33,7 +33,7 @@ class PayoutItemConstraintTest {
 	private EntityManager entityManager;
 
 	private Payout finalPayout(YearMonth month) {
-		return Payout.finalStage(1, 7, "대회 A", month, SETTLED_AT, CALENDAR);
+		return Payout.finalStage(1, 7, "대회 A", month.atDay(15), SETTLED_AT, CALENDAR);
 	}
 
 	@Test
@@ -56,12 +56,12 @@ class PayoutItemConstraintTest {
 	@Test
 	@DisplayName("같은 1차 정산 내역에 1차 정산금 줄을 두 번 넣으면 저장에 실패한다 (bundle_key)")
 	void advancePaidTwice() {
-		Payout first = Payout.first(1, 7, "대회 A", YearMonth.of(2026, 10), SETTLED_AT, CALENDAR);
+		Payout first = Payout.first(1, 7, "대회 A", LocalDate.of(2026, 10, 31), SETTLED_AT, CALENDAR);
 		first.recordAdvance(7, 50_000L, 1, TARGET_DATE);
 		entityManager.persist(first);
 		entityManager.flush();
 
-		PayoutItem again = PayoutItem.ofPayout(first, PayoutRecordType.ADVANCE_PAID, null, 7, 20_000L, null,
+		PayoutItem again = PayoutItem.ofPayout(first, PayoutRecordType.ADVANCE_PAID, null, 7L, 20_000L, null,
 			TARGET_DATE);
 
 		assertThatThrownBy(() -> {

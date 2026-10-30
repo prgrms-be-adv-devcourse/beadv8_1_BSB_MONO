@@ -12,7 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 가짜 어댑터: 상품 서비스를 띄우지 않고 개발할 때, 종목마다 정원 100석을 메모리에 두고 주문이 보낸 기한까지 자리를 내준다
- * 확보한 자리의 기한을 기억해 기한 안 판매, 판매하지 않은 자리 해제까지 흉내 낸다. 판매 복구는 하지 않는다
+ * 확보한 자리의 기한을 기억해 기한 안 판매까지 흉내 낸다. 복구·해제는 아웃박스 → Kafka로 상품 서비스에 가므로(PRO-270)
+ * 여기서는 자리가 정원으로 돌아오지 않는다 (가짜 정원 100석이 줄기만 한다)
  * 앱을 다시 켜면 처음으로 돌아간다. order.clients.product.mode=fake(기본값)일 때만 쓰고, http면 HttpSeatHoldAdapter가 부른다
  */
 @Slf4j
@@ -21,9 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 public class FakeSeatHoldAdapter implements SeatHoldPort {
 	private static final int SEATS_PER_COURSE = 100;
 
-	private final Map<Integer, Integer> remainingSeats = new ConcurrentHashMap<>();
-	private final Map<Integer, Hold> holds = new ConcurrentHashMap<>();
-	private final Set<Integer> sold = ConcurrentHashMap.newKeySet();
+	private final Map<Long, Integer> remainingSeats = new ConcurrentHashMap<>();
+	private final Map<Long, Hold> holds = new ConcurrentHashMap<>();
+	private final Set<Long> sold = ConcurrentHashMap.newKeySet();
 
 	// 호출마다 경고를 남기면 로그가 묻히므로, 앱을 켤 때 한 번만 알린다
 	public FakeSeatHoldAdapter() {
@@ -31,7 +32,7 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 	}
 
 	@Override
-	public SeatHoldResult hold(int raceCourseId, int participationId, LocalDateTime expiresAt) {
+	public SeatHoldResult hold(long raceCourseId, long participationId, LocalDateTime expiresAt) {
 		// "남은 자리가 1 이상일 때만 줄인다"를 종목별로 원자적으로 처리한다 (B의 조건부 UPDATE 흉내)
 		boolean[] held = {false};
 		remainingSeats.compute(raceCourseId, (id, remaining) -> {
@@ -51,7 +52,7 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 	}
 
 	@Override
-	public SeatSellResult sell(int participationId) {
+	public SeatSellResult sell(long participationId) {
 		// 이미 판매한 자리는 기한과 상관없이 SOLD (같은 주문 재결제, SeatHoldPort.sell)
 		if (sold.contains(participationId)) {
 			return SeatSellResult.SOLD;
@@ -65,22 +66,6 @@ public class FakeSeatHoldAdapter implements SeatHoldPort {
 		return SeatSellResult.SOLD;
 	}
 
-	@Override
-	public void restore(int participationId) {
-		log.debug("가짜 정원 복구 participationId={}", participationId);
-	}
-
-	// 판매하지 않은 자리만 정원으로 되돌린다 (B의 해제와 같은 규칙)
-	@Override
-	public void release(int participationId) {
-		Hold hold = holds.remove(participationId);
-		if (hold == null || sold.contains(participationId)) {
-			return;
-		}
-		remainingSeats.computeIfPresent(hold.raceCourseId(), (id, seats) -> seats + 1);
-		log.debug("가짜 자리 해제 participationId={}", participationId);
-	}
-
-	private record Hold(int raceCourseId, LocalDateTime expiresAt) {
+	private record Hold(long raceCourseId, LocalDateTime expiresAt) {
 	}
 }
