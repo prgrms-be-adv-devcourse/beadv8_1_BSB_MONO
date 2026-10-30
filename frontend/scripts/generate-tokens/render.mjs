@@ -7,23 +7,16 @@
  * `pnpm tokens`가 경고한다(stalePending). 피그마를 웹 값으로 고치거나 웹을 피그마 값으로 바꾸기로 정하면 여기서 지운다.
  */
 export const PENDING = {
-  /** 의미 색 Light · Dark 모드에서 피그마 원색 대신 쓸 원색 */
-  color: {
-    'color/text/info': {
-      Light: { web: 'violet/700', figma: 'navy/700' },
-      Dark: { web: 'violet/300', figma: 'navy/700' },
-    },
-    'color/bg/segment': { Dark: { web: 'navy/800', figma: 'navy/700' } },
-    'color/bg/badge-info': { Dark: { web: 'navy/800', figma: 'neutral/100' } },
-  },
-  /** 레이아웃 값(px). 10/17 결정으로 회원 화면 기둥 폭은 600. 피그마 값은 모든 모드에서 같다 */
-  layout: { 'layout/app-max-width': { web: 600, figma: 480 } },
+  /** 의미 색 Light · Dark 모드에서 피그마 원색 대신 쓸 원색. 예: 'color/text/info': { Dark: { web: 'violet/300', figma: 'navy/700' } } */
+  color: {},
+  /** 레이아웃 값(px). 예: 'layout/app-max-width': { web: 600, figma: 480 } (피그마 값은 모든 모드에서 같을 때) */
+  layout: {},
   /** 아직 웹에 없는 텍스트 스타일 */
   skipTextStyles: ['Label/L Strong'],
 }
 
 /** PENDING 중 다시 확인해야 할 것. 피그마 값이 표의 figma와 달라졌거나, 피그마 스타일이 없어졌을 때 */
-export function stalePending(figma) {
+export function stalePending(figma, pending = PENDING) {
   const warnings = []
   const check = (label, actual, { web, figma: recorded }) => {
     if (actual === undefined) warnings.push(`${label}: 피그마에 없습니다`)
@@ -33,19 +26,19 @@ export function stalePending(figma) {
       warnings.push(`${label}: 피그마 값이 ${recorded}에서 ${actual}로 바뀌었습니다`)
   }
   const colors = figma.collections.Color.variables
-  for (const [name, modes] of Object.entries(PENDING.color)) {
+  for (const [name, modes] of Object.entries(pending.color)) {
     for (const [mode, entry] of Object.entries(modes)) {
       check(`${name} (${mode})`, colors[name]?.values[mode]?.alias, entry)
     }
   }
   const layout = figma.collections.Layout.variables
-  for (const [name, entry] of Object.entries(PENDING.layout)) {
+  for (const [name, entry] of Object.entries(pending.layout)) {
     const values = new Set(Object.values(layout[name]?.values ?? {}))
     const actual = values.size === 1 ? [...values][0] : layout[name] && [...values].join('·')
     check(name, actual, entry)
   }
   const styles = new Set(figma.textStyles.map((s) => s.name))
-  for (const name of PENDING.skipTextStyles) {
+  for (const name of pending.skipTextStyles) {
     if (!styles.has(name)) warnings.push(`텍스트 스타일 ${name}: 피그마에 없습니다`)
   }
   return warnings

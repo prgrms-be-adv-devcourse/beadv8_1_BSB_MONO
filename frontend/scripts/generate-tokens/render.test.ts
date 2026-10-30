@@ -40,20 +40,23 @@ describe('stalePending', () => {
   })
 
   it('피그마 값이 바뀌거나 웹 값과 같아지거나 없어지면 알려 준다', () => {
-    const changed = structuredClone(figma)
-    changed.collections.Color.variables['color/text/info'].values.Light.alias = 'violet/700'
-    changed.collections.Color.variables['color/bg/segment'].values.Dark.alias = 'navy/600'
-    for (const mode of ['Mobile', 'Tablet', 'Desktop']) {
-      changed.collections.Layout.variables['layout/app-max-width'].values[mode] = 640
+    const pending = {
+      color: {
+        'color/text/info': { Light: { web: 'violet/700', figma: 'navy/700' } },
+        'color/bg/segment': { Dark: { web: 'navy/900', figma: 'navy/700' } },
+      },
+      layout: { 'layout/app-max-width': { web: 640, figma: 480 } },
+      skipTextStyles: ['Label/L Strong'],
     }
+    const changed = structuredClone(figma)
     changed.textStyles = changed.textStyles.filter(
       (s: { name: string }) => s.name !== 'Label/L Strong',
     )
 
-    expect(stalePending(changed)).toEqual([
+    expect(stalePending(changed, pending)).toEqual([
       'color/text/info (Light): 피그마 값이 웹 값(violet/700)과 같아져 PENDING이 필요 없습니다',
-      'color/bg/segment (Dark): 피그마 값이 navy/700에서 navy/600로 바뀌었습니다',
-      'layout/app-max-width: 피그마 값이 480에서 640로 바뀌었습니다',
+      'color/bg/segment (Dark): 피그마 값이 navy/700에서 navy/800로 바뀌었습니다',
+      'layout/app-max-width: 피그마 값이 480에서 600로 바뀌었습니다',
       '텍스트 스타일 Label/L Strong: 피그마에 없습니다',
     ])
   })

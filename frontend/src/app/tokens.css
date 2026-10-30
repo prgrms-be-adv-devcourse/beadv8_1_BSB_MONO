@@ -4,10 +4,6 @@
  * 값을 바꾸려면 피그마 변수를 고치고 다시 내보낸 뒤 `pnpm tokens`를 돌린다.
  * Tailwind 기본 색·글자 크기·둥글기·그림자·화면 폭 기준은 지워서 시안에 없는 값을 쓰지 못하게 한다.
  * 피그마와 값이 아직 다른 토큰은 웹 값을 유지한다(scripts/generate-tokens/render.mjs의 PENDING):
- *   color/text/info (Light, Dark)
- *   color/bg/segment (Dark)
- *   color/bg/badge-info (Dark)
- *   layout/app-max-width
  *   텍스트 스타일 Label/L Strong
  */
 
@@ -146,7 +142,7 @@
   --color-bg-hero-raised: var(--color-navy-800);
   --color-bg-track-on-hero: var(--color-navy-700);
   --color-text-on-hero-accent: var(--color-lime-400);
-  /* 네이비 Hero 안의 완료(100%) 표시 */
+  /* 네이비 Hero 안의 완료(100%) 글자예요. 막대 채우기는 color/bg/success-on-hero를 써요. */
   --color-text-on-hero-success: var(--color-green-400);
   /* Accent(라임) 버튼 hover 바탕 */
   --color-bg-accent-hover: var(--color-lime-500);
@@ -159,11 +155,15 @@
   /* Badge 배경. 라이트는 100단계로 -subtle(50)보다 진하게 둬 상태끼리 구분되게 한다. */
   --color-bg-badge-danger: var(--color-red-100);
   /* Badge 배경. 라이트는 100단계로 -subtle(50)보다 진하게 둬 상태끼리 구분되게 한다. */
-  --color-bg-badge-info: var(--color-neutral-100);
+  --color-bg-badge-info: var(--color-violet-100);
   /* 세그먼트 탭(TabBar) 바탕. 선택된 Tab은 color/bg/surface 알약으로 떠요. */
   --color-bg-segment: var(--color-navy-100);
   /* 확인 창 · 시트 뒤 어두운 막. 칠 불투명도 45%와 함께 써요. */
   --color-bg-overlay: var(--color-navy-950);
+  /* 사진·포스터 위 흰 글자예요. 라이트·다크 모두 흰색이에요. */
+  --color-text-on-image: var(--color-neutral-0);
+  /* 네이비 Hero 안의 완료(100%) 막대 채우기예요. 글자는 color/text/on-hero-success를 써요. */
+  --color-bg-success-on-hero: var(--color-green-400);
 
   /* 간격 (Spacing 컬렉션). 피그마 spacing/N = N × 4px. p-4(16px), gap-0.5(2px)처럼 피그마 번호를 그대로 쓴다. */
   --spacing: 0.25rem;
@@ -301,7 +301,7 @@
     --color-bg-badge-success: var(--color-green-900);
     --color-bg-badge-warning: var(--color-amber-900);
     --color-bg-badge-danger: var(--color-red-900);
-    --color-bg-badge-info: var(--color-navy-800);
+    --color-bg-badge-info: var(--color-violet-900);
     --color-bg-segment: var(--color-navy-800);
   }
 

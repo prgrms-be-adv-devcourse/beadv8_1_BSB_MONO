@@ -180,7 +180,7 @@
         },
         "color/text/info": {
           "type": "COLOR",
-          "values": { "Light": { "alias": "navy/700" }, "Dark": { "alias": "navy/700" } }
+          "values": { "Light": { "alias": "violet/700" }, "Dark": { "alias": "violet/300" } }
         },
         "color/border/default": {
           "type": "COLOR",
@@ -268,7 +268,7 @@
         "color/text/on-hero-success": {
           "type": "COLOR",
           "values": { "Light": { "alias": "green/400" }, "Dark": { "alias": "green/400" } },
-          "description": "네이비 Hero 안의 완료(100%) 표시"
+          "description": "네이비 Hero 안의 완료(100%) 글자예요. 막대 채우기는 color/bg/success-on-hero를 써요."
         },
         "color/bg/accent-hover": {
           "type": "COLOR",
@@ -297,47 +297,125 @@
         },
         "color/bg/badge-info": {
           "type": "COLOR",
-          "values": { "Light": { "alias": "neutral/100" }, "Dark": { "alias": "neutral/100" } },
+          "values": { "Light": { "alias": "violet/100" }, "Dark": { "alias": "violet/900" } },
           "description": "Badge 배경. 라이트는 100단계로 -subtle(50)보다 진하게 둬 상태끼리 구분되게 한다."
         },
         "color/bg/segment": {
           "type": "COLOR",
-          "values": { "Light": { "alias": "navy/100" }, "Dark": { "alias": "navy/700" } },
+          "values": { "Light": { "alias": "navy/100" }, "Dark": { "alias": "navy/800" } },
           "description": "세그먼트 탭(TabBar) 바탕. 선택된 Tab은 color/bg/surface 알약으로 떠요."
         },
         "color/bg/overlay": {
           "type": "COLOR",
           "values": { "Light": { "alias": "navy/950" }, "Dark": { "alias": "navy/950" } },
           "description": "확인 창 · 시트 뒤 어두운 막. 칠 불투명도 45%와 함께 써요."
+        },
+        "color/text/on-image": {
+          "type": "COLOR",
+          "values": { "Light": { "alias": "neutral/0" }, "Dark": { "alias": "neutral/0" } },
+          "description": "사진·포스터 위 흰 글자예요. 라이트·다크 모두 흰색이에요."
+        },
+        "color/bg/success-on-hero": {
+          "type": "COLOR",
+          "values": { "Light": { "alias": "green/400" }, "Dark": { "alias": "green/400" } },
+          "description": "네이비 Hero 안의 완료(100%) 막대 채우기예요. 글자는 color/text/on-hero-success를 써요."
         }
       }
     },
     "Spacing": {
       "modes": ["Value"],
       "variables": {
-        "spacing/0": { "type": "FLOAT", "values": { "Value": 0 } },
-        "spacing/0-5": { "type": "FLOAT", "values": { "Value": 2 } },
-        "spacing/1": { "type": "FLOAT", "values": { "Value": 4 } },
-        "spacing/2": { "type": "FLOAT", "values": { "Value": 8 } },
-        "spacing/3": { "type": "FLOAT", "values": { "Value": 12 } },
-        "spacing/4": { "type": "FLOAT", "values": { "Value": 16 } },
-        "spacing/5": { "type": "FLOAT", "values": { "Value": 20 } },
-        "spacing/6": { "type": "FLOAT", "values": { "Value": 24 } },
-        "spacing/8": { "type": "FLOAT", "values": { "Value": 32 } },
-        "spacing/10": { "type": "FLOAT", "values": { "Value": 40 } },
-        "spacing/12": { "type": "FLOAT", "values": { "Value": 48 } },
-        "spacing/16": { "type": "FLOAT", "values": { "Value": 64 } }
+        "spacing/0": { "type": "FLOAT", "values": { "Value": 0 }, "description": "여백 없음." },
+        "spacing/0-5": {
+          "type": "FLOAT",
+          "values": { "Value": 2 },
+          "description": "2px. 글자와 작은 아이콘처럼 거의 붙어 있는 요소 사이."
+        },
+        "spacing/1": {
+          "type": "FLOAT",
+          "values": { "Value": 4 },
+          "description": "4px. 배지 안쪽 세로 여백, 아이콘과 글자 사이."
+        },
+        "spacing/2": {
+          "type": "FLOAT",
+          "values": { "Value": 8 },
+          "description": "8px. 한 묶음 안 요소 사이(라벨과 입력칸, 버튼 두 개)."
+        },
+        "spacing/3": {
+          "type": "FLOAT",
+          "values": { "Value": 12 },
+          "description": "12px. 목록 항목 사이, 작은 카드 안쪽 여백."
+        },
+        "spacing/4": {
+          "type": "FLOAT",
+          "values": { "Value": 16 },
+          "description": "16px. 카드 안쪽 여백, 모바일 화면 양옆 여백."
+        },
+        "spacing/5": {
+          "type": "FLOAT",
+          "values": { "Value": 20 },
+          "description": "20px. 큰 카드·시트 안쪽 여백."
+        },
+        "spacing/6": {
+          "type": "FLOAT",
+          "values": { "Value": 24 },
+          "description": "24px. 카드 안 구역 사이, 확인 창 안쪽 여백."
+        },
+        "spacing/8": {
+          "type": "FLOAT",
+          "values": { "Value": 32 },
+          "description": "32px. 화면 안 섹션 사이."
+        },
+        "spacing/10": {
+          "type": "FLOAT",
+          "values": { "Value": 40 },
+          "description": "40px. 큰 섹션 사이, 데스크톱 화면 양옆 여백."
+        },
+        "spacing/12": {
+          "type": "FLOAT",
+          "values": { "Value": 48 },
+          "description": "48px. 페이지 위아래 여백."
+        },
+        "spacing/16": {
+          "type": "FLOAT",
+          "values": { "Value": 64 },
+          "description": "64px. 랜딩처럼 넓은 화면의 섹션 사이."
+        }
       }
     },
     "Radius": {
       "modes": ["Value"],
       "variables": {
-        "radius/none": { "type": "FLOAT", "values": { "Value": 0 } },
-        "radius/sm": { "type": "FLOAT", "values": { "Value": 6 } },
-        "radius/md": { "type": "FLOAT", "values": { "Value": 10 } },
-        "radius/lg": { "type": "FLOAT", "values": { "Value": 16 } },
-        "radius/xl": { "type": "FLOAT", "values": { "Value": 24 } },
-        "radius/full": { "type": "FLOAT", "values": { "Value": 9999 } }
+        "radius/none": {
+          "type": "FLOAT",
+          "values": { "Value": 0 },
+          "description": "모서리 없음. 화면 전체 바탕, 사진 자르기 영역."
+        },
+        "radius/sm": {
+          "type": "FLOAT",
+          "values": { "Value": 6 },
+          "description": "6px. 배지, 체크박스, 선택 목록 항목처럼 작은 요소."
+        },
+        "radius/md": {
+          "type": "FLOAT",
+          "values": { "Value": 10 },
+          "description": "10px. 버튼, 입력칸, 칩, 토스트."
+        },
+        "radius/lg": {
+          "type": "FLOAT",
+          "values": { "Value": 16 },
+          "description": "16px. 카드, 확인 창(Dialog), 알림(Alert)."
+        },
+        "radius/xl": {
+          "type": "FLOAT",
+          "values": { "Value": 24 },
+          "description": "24px. 바텀시트 위쪽 모서리."
+        },
+        "radius/full": {
+          "type": "FLOAT",
+          "values": { "Value": 9999 },
+          "description": "알약·원 모양. 라디오, 스위치, 진행 막대, 아바타."
+        }
       }
     },
     "Icon": {
@@ -422,7 +500,7 @@
         },
         "layout/app-max-width": {
           "type": "FLOAT",
-          "values": { "Mobile": 480, "Tablet": 480, "Desktop": 480 },
+          "values": { "Mobile": 600, "Tablet": 600, "Desktop": 600 },
           "description": "회원 화면 App 방식(기본)의 가운데 기둥 최대 너비예요. PC에서도 이 너비 안에 모바일 화면을 그대로 보여 줘요."
         }
       }
