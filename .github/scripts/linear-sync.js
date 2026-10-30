@@ -90,17 +90,26 @@ function isNotFound(error) {
 
 // fromTypes 상태인 이슈만 toType 상태(이름이 toName이면 그것, 없으면 첫 번째)로 옮긴다
 async function moveState(apiKey, issueId, fromTypes, toType, toName) {
-  const data = await linear(
-    apiKey,
-    `query($id: String!, $type: String!) {
-      issue(id: $id) {
-        id
-        state { type }
-        team { states(filter: { type: { eq: $type } }) { nodes { id name } } }
-      }
-    }`,
-    { id: issueId, type: toType },
-  )
+  let data
+  try {
+    data = await linear(
+      apiKey,
+      `query($id: String!, $type: String!) {
+        issue(id: $id) {
+          id
+          state { type }
+          team { states(filter: { type: { eq: $type } }) { nodes { id name } } }
+        }
+      }`,
+      { id: issueId, type: toType },
+    )
+  } catch (e) {
+    // 없는 이슈 번호는 attachPr처럼 실패로 세지 않고 건너뛴다
+    if (isNotFound(e)) {
+      return 'not found, skipped'
+    }
+    throw e
+  }
   const { issue } = data
   if (!issue) {
     return 'not found, skipped'
