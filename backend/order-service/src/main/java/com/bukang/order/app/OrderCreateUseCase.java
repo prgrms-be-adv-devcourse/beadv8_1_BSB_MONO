@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.QueueAdmission;
+import com.bukang.order.domain.ShippingAddress;
 import com.bukang.order.domain.exception.ApplicationPeriodException;
 import com.bukang.order.domain.exception.OrderConflictException;
 import com.bukang.order.domain.exception.ParticipationAccessDeniedException;
@@ -62,7 +63,7 @@ public class OrderCreateUseCase {
 			if (!existing.get().isFor(participationId)) {
 				throw OrderConflictException.keyReused("이미 다른 주문에 쓴 Idempotency-Key입니다. 새 키로 다시 요청해주세요.");
 			}
-			return OrderCreateResult.existing(existing.get().toDto());
+			return OrderCreateResult.existing(existing.get().toDto(applicationShippingAddress(participation)));
 		}
 
 		// 매진으로 이미 끝난 신청서로 다시 요청하면(같은 키 재시도 포함) 처음과 같은 매진 결과를 돌려준다
@@ -103,7 +104,12 @@ public class OrderCreateUseCase {
 			throw exception;
 		}
 		order.assignOrderNo();
-		return OrderCreateResult.created(order.toDto());
+		return OrderCreateResult.created(order.toDto(applicationShippingAddress(participation)));
+	}
+
+	// 결제 전이라 배송이 없을 때 주문 응답에 보여 줄 배송지 (Order.toDto)
+	private static ShippingAddress applicationShippingAddress(Participation participation) {
+		return participation.getParticipant().getShippingAddress();
 	}
 
 	// 대기열 데이터가 잘못돼 끝 시각이 너무 멀면, 매진 자리를 오래 묶지 않게 정책상 최대 입장 시간으로 자른다

@@ -14,19 +14,21 @@ import org.hibernate.annotations.BatchSize;
 import com.bukang.common.global.jpa.entity.BaseIdAndTime;
 import com.bukang.order.domain.event.OrderExpiredEvent;
 import com.bukang.order.domain.event.OrderRaceCanceledEvent;
+import com.bukang.order.domain.exception.KitNotShippableException;
 import com.bukang.order.domain.exception.OrderItemNotFoundException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
 import com.bukang.order.dto.OrderDto;
+import com.bukang.order.dto.OrderItemDto;
 import com.bukang.order.dto.OrderSummaryDto;
 import com.bukang.order.dto.ShippingAddressDto;
 import com.bukang.order.out.race.RaceCourseInfo;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -87,14 +89,18 @@ public class Order extends BaseIdAndTime {
 	@Column(name = "paid_at")
 	private LocalDateTime paidAt;
 
-	// 키트 배송지 (ERD v5 orders.recipient_name ~ address_detail). 신청서에서 받은 값을 주문할 때 옮긴다. 키트가 없으면 null
-	@Embedded
-	private ShippingAddress shippingAddress;
-
 	// 주문 목록(PRO-43)에서 주문마다 상품을 따로 읽지 않도록 여러 주문의 상품을 한 번에 읽는다
 	@BatchSize(size = 100)
 	@OneToMany(mappedBy = "order", cascade = ALL)
 	private List<OrderItem> items = new ArrayList<>();
+
+	// 키트 배송 (BUK-6). 키트가 있는 참가권을 결제하면 1건 생긴다. 배송지는 주문이 아니라 배송에 둔다
+	// DB의 옛 배송지 컬럼(recipient_name ~ address_detail)은 값을 배송으로 옮긴 뒤 다음 배포에서 지운다
+	// 만든 순서로 읽는다. 재발송이 생기면 마지막 배송이 지금 배송이다 (findKitShipment)
+	@BatchSize(size = 100)
+	@OneToMany(mappedBy = "order", cascade = ALL)
+	@OrderBy("id")
+	private List<Shipment> shipments = new ArrayList<>();
 
 	private Order(int buyerId, int raceId, String idempotencyKey, LocalDateTime paymentDueAt) {
 		this.buyerId = buyerId;
@@ -108,15 +114,15 @@ public class Order extends BaseIdAndTime {
 	public static Order forParticipation(Participation participation, RaceCourseInfo course, String idempotencyKey,
 		LocalDateTime paymentDueAt) {
 		Order order = new Order(participation.getMemberId(), course.raceId(), idempotencyKey, paymentDueAt);
-		order.shippingAddress = ShippingAddress.copyOf(participation.getParticipant().getShippingAddress());
 		order.items.add(OrderItem.ticket(order, participation, course));
 		order.totalAmount = order.items.stream().mapToInt(OrderItem::getAmount).sum();
 		return order;
 	}
 
-	// 참가자 정보에서 배송지를 고치면 주문의 배송지도 같이 바꾼다. 키트는 주문의 배송지로 보낸다 (ERD orders·delivery)
-	public void changeShippingAddress(ShippingAddress newShippingAddress) {
-		this.shippingAddress = ShippingAddress.copyOf(newShippingAddress);
+	// 참가자 정보에서 배송지를 고치면 아직 보내지 않은(발송 대기) 배송의 받는 분·주소도 바꾼다
+	// 이미 보낸 배송은 보낸 곳 그대로 둔다 (BUK-6)
+	public void changeKitShippingAddress(ShippingAddress newShippingAddress) {
+		shipments.forEach(shipment -> shipment.changeShippingAddressIfReady(newShippingAddress));
 	}
 
 	// 저장해 ID를 받은 뒤 부른다
@@ -165,7 +171,10 @@ public class Order extends BaseIdAndTime {
 	}
 
 	// 예치금 차감과 자리 판매가 끝났다. 주문과 주문 상품을 함께 결제 완료로 바꾼다
-	public void markPaid(LocalDateTime paidAt) {
+	// 키트가 있으면 주문 상품을 한 상자로 보낼 발송 대기 배송을 만든다 (BUK-6)
+	// kitShippingAddress는 참가 신청의 배송지다. 키트가 없는 종목은 신청서에 배송지를 남기지 않아 null이다
+	// (ParticipationApplyUseCase.checkShippingAddress가 신청·수정 때 키트 여부에 맞춰 넣고 뺀다)
+	public void markPaid(LocalDateTime paidAt, ShippingAddress kitShippingAddress) {
 		if (status != OrderStatus.CREATED) {
 			throw new OrderNotPayableException(
 				"결제할 수 없는 주문입니다(현재 상태: %s).".formatted(status.getLabel()));
@@ -173,6 +182,9 @@ public class Order extends BaseIdAndTime {
 		this.status = OrderStatus.PAID;
 		this.paidAt = paidAt;
 		items.forEach(OrderItem::markPaid);
+		if (kitShippingAddress != null) {
+			shipments.add(Shipment.ready(this, items, kitShippingAddress));
+		}
 	}
 
 	public OrderItem findItem(int orderItemId) {
@@ -183,8 +195,12 @@ public class Order extends BaseIdAndTime {
 	}
 
 	// 주문 상품 하나를 취소한다. 모두 취소되면 CANCELED, 일부만이면 PARTIAL_CANCELED (정책 5장, ERD D3)
+	// 아직 보내지 않은 키트 배송도 함께 취소해 판매자 목록에서 뺀다. 보낸 배송은 그대로 둔다 (BUK-6)
 	public void cancelItem(OrderItem item, LocalDateTime canceledAt) {
 		item.cancel(canceledAt);
+		shipments.stream()
+			.filter(shipment -> shipment.contains(item))
+			.forEach(shipment -> shipment.cancelIfReadyAndAllCanceled(items, canceledAt));
 		this.canceledAmount += item.getAmount();
 		boolean allCanceled = items.stream().allMatch(each -> each.getStatus() == OrderItemStatus.CANCELED);
 		this.status = allCanceled ? OrderStatus.CANCELED : OrderStatus.PARTIAL_CANCELED;
@@ -205,6 +221,46 @@ public class Order extends BaseIdAndTime {
 		return paidItems;
 	}
 
+	// 판매자가 키트를 보냈다(발송 대기 → 배송 중). 결제한 참가권의 키트만, 한 번만 발송한다
+	// 환불 기한이 지났는지는 종목 정보를 알아야 해서 부르는 쪽(KitDeliveryUseCase)이 확인한다
+	public void shipKit(OrderItem item, String carrier, String trackingNumber, LocalDateTime shippedAt) {
+		checkKitShippable(item);
+		findKitShipment(item).ship(carrier, trackingNumber, shippedAt);
+	}
+
+	// 키트를 보낼 수 있는 주문 상품인지 (결제 완료, 키트 있음, 아직 안 보냄)
+	public void checkKitShippable(OrderItem item) {
+		Shipment shipment = findKitShipment(item);
+		if (shipment == null && item.getStatus() == OrderItemStatus.PAID) {
+			throw new KitNotShippableException("키트가 없는 참가권입니다.");
+		}
+		if (shipment != null && shipment.isShipped()) {
+			throw new KitNotShippableException("이미 발송한 키트입니다.");
+		}
+		if (item.getStatus() != OrderItemStatus.PAID) {
+			throw new KitNotShippableException(
+				"결제한 참가권의 키트만 발송할 수 있습니다(현재 상태: %s).".formatted(item.getStatus().getLabel()));
+		}
+	}
+
+	// 구매자가 키트를 받았다(배송 중 → 배송 완료). 보낸 키트만, 한 번만 완료한다
+	public void completeKitDelivery(OrderItem item, LocalDateTime deliveredAt) {
+		Shipment shipment = findKitShipment(item);
+		if (shipment == null) {
+			throw new KitNotShippableException(item.getStatus() == OrderItemStatus.PAID
+				? "키트가 없는 참가권입니다." : "아직 발송하지 않은 키트입니다.");
+		}
+		shipment.completeDelivery(deliveredAt);
+	}
+
+	// 주문 상품이 든 배송. 재발송이 생기면 여러 건일 수 있어 가장 나중 것을 쓴다. 키트가 없거나 결제 전이면 null
+	private Shipment findKitShipment(OrderItem item) {
+		return shipments.reversed().stream()
+			.filter(shipment -> shipment.contains(item))
+			.findFirst()
+			.orElse(null);
+	}
+
 	// 개인 예매 주문은 참가 신청 1건짜리다 (결제 1건 = 참가 신청 1건)
 	public int participationId() {
 		return items.getFirst().getParticipationId();
@@ -214,7 +270,20 @@ public class Order extends BaseIdAndTime {
 		return buyerId == memberId;
 	}
 
+	// 결제해 배송이 생긴 주문의 응답. 배송이 없으면(결제 전·키트 없음) 배송지는 비어 있다
 	public OrderDto toDto() {
+		return toDto(null);
+	}
+
+	/**
+	 * 주문 응답. 배송지·키트 배송 칸은 배송에서 채운다 (BUK-6)
+	 * 결제 전이라 배송이 아직 없으면 applicationShippingAddress(참가 신청의 배송지)를 보여 주고,
+	 * 그 배송지가 있으면(키트 있는 종목) 키트 배송 상태를 배송 준비로 보낸다. 배송 표 전과 같은 응답이다
+	 */
+	public OrderDto toDto(ShippingAddress applicationShippingAddress) {
+		Shipment latest = shipments.isEmpty() ? null : shipments.getLast();
+		ShippingAddress shippingAddress = latest == null ? applicationShippingAddress : latest.getShippingAddress();
+		KitDeliveryStatus kitWithoutShipment = applicationShippingAddress == null ? null : KitDeliveryStatus.PREPARING;
 		return new OrderDto(
 			getId(),
 			getCreateDate(),
@@ -227,8 +296,13 @@ public class Order extends BaseIdAndTime {
 			paymentDueAt,
 			paidAt,
 			ShippingAddressDto.from(shippingAddress),
-			items.stream().map(OrderItem::toDto).toList()
+			items.stream().map(item -> item.toDto(kitWithoutShipment, findKitShipment(item))).toList()
 		);
+	}
+
+	// 주문 상품 하나의 응답 (판매자 키트 발송·배송 완료)
+	public OrderItemDto toItemDto(OrderItem item) {
+		return item.toDto(null, findKitShipment(item));
 	}
 
 	public OrderSummaryDto toSummaryDto() {

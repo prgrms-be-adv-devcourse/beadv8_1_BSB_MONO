@@ -63,7 +63,8 @@ public class OrderPayUseCase {
 			throw OrderNotPayableException.deadlinePassed("결제 기한이 지나 결제하지 못했습니다. 빠져나간 예치금은 돌려드렸습니다.");
 		}
 
-		order.markPaid(now);
+		// 키트가 있으면 이 때 참가 신청의 배송지로 발송 대기 배송을 만든다 (BUK-6)
+		order.markPaid(now, participation.getParticipant().getShippingAddress());
 		participation.markConfirmed(now);
 		return new OrderPayResult(order.toDto(), false);
 	}

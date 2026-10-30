@@ -5,14 +5,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +31,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -31,6 +44,9 @@ import com.bukang.order.domain.KitDeliveryStatus;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItem;
 import com.bukang.order.domain.OrderItemStatus;
+import com.bukang.order.domain.Participation;
+import com.bukang.order.domain.Shipment;
+import com.bukang.order.domain.ShipmentStatus;
 import com.bukang.order.domain.exception.KitNotShippableException;
 import com.bukang.order.domain.exception.KitShippingInfoInvalidException;
 import com.bukang.order.domain.exception.OrderAccessDeniedException;
@@ -52,8 +68,11 @@ import com.bukang.order.support.StubWalletPort;
 import com.bukang.order.support.StubWalletPortConfig;
 import com.jayway.jsonpath.JsonPath;
 
+import jakarta.persistence.Table;
+
 /**
  * 판매자가 키트를 발송 처리하고, 구매자 주문 조회에 배송 상태가 보이는지 본다 (PRO-136)
+ * 결제·취소·대회 취소·주소 수정이 배송(ORDER_SHIPMENT)을 어떻게 바꾸는지도 본다 (BUK-6)
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -90,6 +109,12 @@ class KitDeliveryTest {
 
 	@Autowired
 	private KitDeliveryUseCase kitDeliveryUseCase;
+
+	@Autowired
+	private RaceCancelRefundUseCase raceCancelRefundUseCase;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@Autowired
 	private StubRaceCoursePort raceCoursePort;
@@ -134,7 +159,7 @@ class KitDeliveryTest {
 			.andExpect(jsonPath("$.data.items[0].kitCarrier").value(CARRIER))
 			.andExpect(jsonPath("$.data.items[0].kitTrackingNumber").value(TRACKING_NUMBER))
 			.andExpect(jsonPath("$.data.items[0].kitDeliveredAt").isEmpty());
-		assertThat(itemOf(orderId).getKitShippedAt()).isEqualTo(shippedAt);
+		assertThat(shipmentOf(orderId).getShippedAt()).isEqualTo(shippedAt);
 
 		LocalDateTime deliveredAt = shippedAt.plusDays(2);
 		kitDeliveryUseCase.completeDelivery(SELLER_ID, itemId, deliveredAt);
@@ -142,7 +167,7 @@ class KitDeliveryTest {
 		findOrder(orderId)
 			.andExpect(jsonPath("$.data.items[0].kitDeliveryStatus").value("DELIVERED"))
 			.andExpect(jsonPath("$.data.items[0].kitDeliveredAt").isNotEmpty());
-		assertThat(itemOf(orderId).getKitDeliveredAt()).isEqualTo(deliveredAt);
+		assertThat(shipmentOf(orderId).getDeliveredAt()).isEqualTo(deliveredAt);
 	}
 
 	@Test
@@ -247,7 +272,7 @@ class KitDeliveryTest {
 			.containsExactly(tuple(itemId, OrderItemStatus.CANCELED));
 		assertThat(kitDeliveryUseCase.summarize(SELLER_ID, null, LocalDateTime.now()).getShipping()).isEqualTo(1);
 		kitDeliveryUseCase.completeDelivery(SELLER_ID, itemId, LocalDateTime.now());
-		assertThat(itemOf(orderId).getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.DELIVERED);
+		assertThat(shipmentOf(orderId).getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
 	}
 
 	@Test
@@ -262,9 +287,9 @@ class KitDeliveryTest {
 		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemId, CARRIER, null, LocalDateTime.now()))
 			.isInstanceOf(KitShippingInfoInvalidException.class);
 		assertThatThrownBy(() -> kitDeliveryUseCase.ship(SELLER_ID, itemId, CARRIER,
-			"1".repeat(OrderItem.MAX_TRACKING_NUMBER_LENGTH + 1), LocalDateTime.now()))
+			"1".repeat(Shipment.MAX_TRACKING_NUMBER_LENGTH + 1), LocalDateTime.now()))
 			.isInstanceOf(KitShippingInfoInvalidException.class);
-		assertThat(itemOf(orderId).getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.PREPARING);
+		assertThat(shipmentOf(orderId).getStatus()).isEqualTo(ShipmentStatus.READY);
 
 		// 종목을 묻기 전에 막으므로, 상품 서비스에 종목이 없어도 입력 오류로 알린다
 		raceCoursePort.clear();
@@ -295,7 +320,7 @@ class KitDeliveryTest {
 		assertThatThrownBy(() -> ship(itemIdOf(orderId)))
 			.isInstanceOf(KitNotShippableException.class)
 			.hasMessage("아직 환불할 수 있는 참가권이라 발송할 수 없습니다(환불 기한: %s).".formatted(refundDeadline));
-		assertThat(itemOf(orderId).getKitDeliveryStatus()).isEqualTo(KitDeliveryStatus.PREPARING);
+		assertThat(shipmentOf(orderId).getStatus()).isEqualTo(ShipmentStatus.READY);
 	}
 
 	@Test
@@ -347,6 +372,288 @@ class KitDeliveryTest {
 		assertThatThrownBy(() -> ship(itemIdOf(orderId)))
 			.isInstanceOf(KitNotShippableException.class)
 			.hasMessage("키트가 없는 참가권입니다.");
+	}
+
+	@Test
+	@DisplayName("결제하면 키트 배송 1건이 발송 대기로 생기고, 받는 분·주소는 참가 신청의 값이 복사된다 (BUK-6)")
+	void payCreatesReadyShipment() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().plusDays(10)));
+		int unpaidOrderId = createOrder(MEMBER_ID + 1);
+		int orderId = paidOrder();
+
+		Shipment shipment = shipmentOf(orderId);
+		assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.READY);
+		assertThat(shipment.getItems()).singleElement()
+			.satisfies(item -> {
+				assertThat(item.getOrderItemId()).isEqualTo(itemIdOf(orderId));
+				assertThat(item.getQuantity()).isEqualTo(1);
+			});
+		assertThat(shipment.getShippingAddress().getRecipientName()).isEqualTo("김러너");
+		assertThat(shipment.getShippingAddress().getZipcode()).isEqualTo("04700");
+		assertThat(shipment.getShippingAddress().getAddress()).isEqualTo("서울 성동구 왕십리로 00");
+		assertThat(shipment.getShippingAddress().getAddressDetail()).isEqualTo("101동 1001호");
+		assertThat(shipment.getDeliveryMemo()).isNull();
+		// 결제 전 주문에는 배송이 없다
+		assertThat(shipmentsOf(unpaidOrderId)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("같은 결제 요청이 두 번 와도 배송은 1건이다")
+	void payTwiceCreatesOneShipment() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().plusDays(10)));
+		int orderId = paidOrder();
+
+		OrderPayResult again = transactionTemplate.execute(status ->
+			orderPayUseCase.pay(MEMBER_ID, orderId, LocalDateTime.now()));
+
+		assertThat(again.alreadyPaid()).isTrue();
+		assertThat(shipmentsOf(orderId)).hasSize(1);
+		assertThat(jdbcTemplate.queryForObject("select count(*) from order_shipment_item", Long.class)).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("키트가 없는 종목은 결제해도 배송이 생기지 않는다")
+	void payWithoutKitCreatesNoShipment() throws Exception {
+		raceCoursePort.put(StubRaceCoursePort.courseWithoutKit(COURSE_ID, RACE_ID));
+
+		assertThat(shipmentsOf(paidOrder())).isEmpty();
+	}
+
+	@Test
+	@DisplayName("발송 전에 참가권을 취소하면 배송도 취소되어 판매자 목록·건수에서 빠지고, 구매자 응답은 그대로다")
+	void cancelBeforeShippingCancelsShipment() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().plusDays(10)));
+		int orderId = paidOrder();
+		int itemId = itemIdOf(orderId);
+
+		mockMvc.perform(post("/api/v1/order/orders/" + orderId + "/items/" + itemId + "/cancel")
+				.header("X-Member-Id", MEMBER_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.items[0].kitDeliveryStatus").value("PREPARING"))
+			.andExpect(jsonPath("$.data.shippingAddress.address").value("서울 성동구 왕십리로 00"));
+
+		Shipment shipment = shipmentOf(orderId);
+		assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.CANCELED);
+		assertThat(shipment.getCanceledAt()).isNotNull();
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, null, 0, 20).getKits()).isEmpty();
+		assertThat(kitDeliveryUseCase.summarize(SELLER_ID, null, LocalDateTime.now()).getPreparing()).isZero();
+	}
+
+	@Test
+	@DisplayName("대회가 취소되면 발송 전 배송만 취소되고, 이미 보낸 배송은 배송 중으로 남는다")
+	void raceCancelCancelsOnlyReadyShipments() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		int shippedOrderId = paidOrder(MEMBER_ID);
+		int readyOrderId = paidOrder(MEMBER_ID + 1);
+		ship(itemIdOf(shippedOrderId));
+
+		raceCancelRefundUseCase.refundAll(RACE_ID, LocalDateTime.now());
+
+		assertThat(shipmentOf(readyOrderId).getStatus()).isEqualTo(ShipmentStatus.CANCELED);
+		assertThat(shipmentOf(shippedOrderId).getStatus()).isEqualTo(ShipmentStatus.SHIPPING);
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, null, 0, 20).getKits())
+			.extracting(SellerKitDto::getOrderItemId, SellerKitDto::getOrderItemStatus)
+			.containsExactly(tuple(itemIdOf(shippedOrderId), OrderItemStatus.CANCELED));
+	}
+
+	@Test
+	@DisplayName("참가자 정보에서 주소를 바꾸면 발송 대기 배송은 따라 바뀌고, 이미 보낸 배송의 주소는 그대로다")
+	void changeAddressAfterShipping() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		int readyOrderId = paidOrder(MEMBER_ID);
+		int shippedOrderId = paidOrder(MEMBER_ID + 1);
+		ship(itemIdOf(shippedOrderId));
+
+		changeAddress(MEMBER_ID, participationIdOf(readyOrderId)).andExpect(status().isOk());
+		changeAddress(MEMBER_ID + 1, participationIdOf(shippedOrderId)).andExpect(status().isOk());
+
+		assertThat(shipmentOf(readyOrderId).getShippingAddress().getAddress()).isEqualTo("부산 해운대구 해운대로 00");
+		assertThat(shipmentOf(readyOrderId).getShippingAddress().getRecipientName()).isEqualTo("김가족");
+		assertThat(shipmentOf(shippedOrderId).getShippingAddress().getAddress()).isEqualTo("서울 성동구 왕십리로 00");
+		assertThat(shipmentOf(shippedOrderId).getShippingAddress().getRecipientName()).isEqualTo("김러너");
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, KitDeliveryStatus.SHIPPING, 0, 20).getKits())
+			.singleElement()
+			.satisfies(row -> assertThat(row.getShippingAddress().getAddress()).isEqualTo("서울 성동구 왕십리로 00"));
+	}
+
+	@Test
+	@DisplayName("옛 키트 칸을 배송 표로 옮기는 SQL은 상태·송장과 참가 신청의 최신 주소를 옮기고, 다시 돌려도 두 번 만들지 않는다")
+	void migrationSql() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().plusDays(10)));
+		int readyOrderId = paidOrder(MEMBER_ID);
+		int shippingOrderId = paidOrder(MEMBER_ID + 1);
+		int deliveredOrderId = paidOrder(MEMBER_ID + 2);
+		int canceledOrderId = paidOrder(MEMBER_ID + 3);
+		mockMvc.perform(post("/api/v1/order/orders/" + canceledOrderId + "/items/" + itemIdOf(canceledOrderId)
+				+ "/cancel").header("X-Member-Id", MEMBER_ID + 3))
+			.andExpect(status().isOk());
+		int unpaidOrderId = createOrder(MEMBER_ID + 4);
+		// 배송 표 전처럼 만든다: 새 배송을 지우고, 옛 칸(엔티티에서 뺀 컬럼)을 다시 붙여 값을 넣는다
+		jdbcTemplate.update("delete from order_shipment_item");
+		jdbcTemplate.update("delete from order_shipment");
+		addLegacyColumns();
+		jdbcTemplate.update("update order_order set recipient_name = '김러너', recipient_phone = '010-1234-5678',"
+			+ " zipcode = '04700', address = '서울 성동구 왕십리로 00', address_detail = '101동 1001호'");
+		// 배포 뒤 SQL 전에 구매자가 주소를 고쳤다. 새 코드는 참가 신청만 고치므로 주문의 옛 칸은 옛 주소 그대로다
+		changeAddress(MEMBER_ID, participationIdOf(readyOrderId)).andExpect(status().isOk());
+		jdbcTemplate.update("update order_order_item set kit_delivery_status = 'PREPARING'");
+		LocalDateTime shippedAt = LocalDateTime.now().minusDays(2).truncatedTo(ChronoUnit.MICROS);
+		jdbcTemplate.update("update order_order_item set kit_delivery_status = 'SHIPPING', kit_carrier = ?,"
+			+ " kit_tracking_number = ?, kit_shipped_at = ? where order_id = ?",
+			CARRIER, TRACKING_NUMBER, shippedAt, shippingOrderId);
+		jdbcTemplate.update("update order_order_item set kit_delivery_status = 'DELIVERED', kit_carrier = ?,"
+			+ " kit_tracking_number = ?, kit_shipped_at = ?, kit_delivered_at = ? where order_id = ?",
+			CARRIER, TRACKING_NUMBER, shippedAt, shippedAt.plusDays(1), deliveredOrderId);
+
+		runSql(migrationSqlText());
+		runSql(migrationSqlText());
+
+		assertThat(shipmentsOf(readyOrderId)).singleElement()
+			.satisfies(shipment -> {
+				assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.READY);
+				assertThat(shipment.getShippingAddress().getRecipientName()).isEqualTo("김가족");
+				assertThat(shipment.getShippingAddress().getAddress()).isEqualTo("부산 해운대구 해운대로 00");
+				assertThat(shipment.getShippingAddress().getAddressDetail()).isNull();
+				assertThat(shipment.getItems()).singleElement()
+					.satisfies(item -> assertThat(item.getOrderItemId()).isEqualTo(itemIdOf(readyOrderId)));
+			});
+		assertThat(shipmentsOf(shippingOrderId)).singleElement()
+			.satisfies(shipment -> {
+				assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.SHIPPING);
+				assertThat(shipment.getCarrier()).isEqualTo(CARRIER);
+				assertThat(shipment.getTrackingNumber()).isEqualTo(TRACKING_NUMBER);
+				assertThat(shipment.getShippedAt()).isEqualTo(shippedAt);
+				assertThat(shipment.getShippingAddress().getAddressDetail()).isEqualTo("101동 1001호");
+			});
+		assertThat(shipmentOf(deliveredOrderId).getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
+		assertThat(shipmentOf(deliveredOrderId).getDeliveredAt()).isEqualTo(shippedAt.plusDays(1));
+		assertThat(shipmentOf(canceledOrderId).getStatus()).isEqualTo(ShipmentStatus.CANCELED);
+		assertThat(shipmentOf(canceledOrderId).getCanceledAt()).isNotNull();
+		assertThat(shipmentsOf(unpaidOrderId)).isEmpty();
+		assertThat(jdbcTemplate.queryForObject("select count(*) from order_shipment_item", Long.class)).isEqualTo(4);
+		// 옮긴 배송으로 판매자 화면이 배송 표 전과 같이 보인다
+		assertThat(kitDeliveryUseCase.findKits(SELLER_ID, null, null, 0, 20).getKits())
+			.extracting(SellerKitDto::getOrderItemId, SellerKitDto::getKitDeliveryStatus)
+			.containsExactly(tuple(itemIdOf(deliveredOrderId), KitDeliveryStatus.DELIVERED),
+				tuple(itemIdOf(shippingOrderId), KitDeliveryStatus.SHIPPING),
+				tuple(itemIdOf(readyOrderId), KitDeliveryStatus.PREPARING));
+	}
+
+	@Test
+	@DisplayName("되돌리는 SQL은 배송 표 값을 옛 키트 칸·주문 배송지로 다시 쓰고, 다시 돌려도 결과가 같다")
+	void rollbackSql() throws Exception {
+		raceCoursePort.put(courseWithRefundDeadline(LocalDate.now().minusDays(1)));
+		raceCoursePort.put(StubRaceCoursePort.openCourse(OPEN_COURSE_ID, RACE_ID, 14, null,
+			LocalDate.now().plusDays(10)));
+		int shippedOrderId = paidOrder(MEMBER_ID);
+		LocalDateTime shippedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+		kitDeliveryUseCase.ship(SELLER_ID, itemIdOf(shippedOrderId), CARRIER, TRACKING_NUMBER, shippedAt);
+		// 보낸 뒤 신청서 주소를 고쳤다. 주문 칸에는 신청서가 아니라 실제로 보낸 배송의 주소가 가야 한다
+		changeAddress(MEMBER_ID, participationIdOf(shippedOrderId)).andExpect(status().isOk());
+		int readyOrderId = paidOrder(MEMBER_ID + 1);
+		changeAddress(MEMBER_ID + 1, participationIdOf(readyOrderId)).andExpect(status().isOk());
+		int canceledOrderId = paidOrder(MEMBER_ID + 2, OPEN_COURSE_ID);
+		mockMvc.perform(post("/api/v1/order/orders/" + canceledOrderId + "/items/" + itemIdOf(canceledOrderId)
+				+ "/cancel").header("X-Member-Id", MEMBER_ID + 2))
+			.andExpect(status().isOk());
+		int unpaidOrderId = createOrder(MEMBER_ID + 3);
+		addLegacyColumns();
+
+		String rollback = rollbackSqlText();
+		runSql(rollback);
+		runSql(rollback);
+
+		assertThat(legacyKitOf(shippedOrderId))
+			.containsEntry("kit_delivery_status", "SHIPPING")
+			.containsEntry("kit_carrier", CARRIER)
+			.containsEntry("kit_tracking_number", TRACKING_NUMBER)
+			.containsEntry("kit_shipped_at", Timestamp.valueOf(shippedAt));
+		assertThat(legacyKitOf(readyOrderId)).containsEntry("kit_delivery_status", "PREPARING");
+		assertThat(legacyKitOf(canceledOrderId)).containsEntry("kit_delivery_status", "PREPARING");
+		assertThat(legacyKitOf(unpaidOrderId)).containsEntry("kit_delivery_status", "PREPARING");
+		// 발송 대기 배송은 고친 주소를, 결제 전 주문은 참가 신청의 주소를 주문 칸에 둔다
+		assertThat(legacyAddressOf(readyOrderId)).containsEntry("address", "부산 해운대구 해운대로 00")
+			.containsEntry("recipient_name", "김가족");
+		assertThat(legacyAddressOf(shippedOrderId)).containsEntry("address", "서울 성동구 왕십리로 00")
+			.containsEntry("address_detail", "101동 1001호");
+		assertThat(legacyAddressOf(unpaidOrderId)).containsEntry("address", "서울 성동구 왕십리로 00");
+		// 파일의 되돌리기 확인 쿼리도 0이다
+		Matcher checks = Pattern.compile("(SELECT COUNT\\(\\*\\) AS rollback_\\w+.*?);", Pattern.DOTALL)
+			.matcher(rollback);
+		int checked = 0;
+		while (checks.find()) {
+			assertThat(jdbcTemplate.queryForObject(checks.group(1), Long.class)).isZero();
+			checked++;
+		}
+		assertThat(checked).isEqualTo(2);
+	}
+
+	// 배송 표 전의 옛 칸. 엔티티에서 빼서 테스트 DB에는 없으므로 다시 붙인다
+	private void addLegacyColumns() {
+		jdbcTemplate.execute("""
+			alter table order_order_item add column if not exists kit_delivery_status varchar(20);
+			alter table order_order_item add column if not exists kit_carrier varchar(30);
+			alter table order_order_item add column if not exists kit_tracking_number varchar(50);
+			alter table order_order_item add column if not exists kit_shipped_at timestamp(6);
+			alter table order_order_item add column if not exists kit_delivered_at timestamp(6);
+			alter table order_order add column if not exists recipient_name varchar(50);
+			alter table order_order add column if not exists recipient_phone varchar(20);
+			alter table order_order add column if not exists zipcode varchar(10);
+			alter table order_order add column if not exists address varchar(255);
+			alter table order_order add column if not exists address_detail varchar(255)
+			""");
+	}
+
+	// SQL은 운영의 참가 신청 표 이름(order_participation, #237)을 쓴다. 테스트는 엔티티의 지금 표 이름으로 바꿔 돌린다
+	private String migrationSqlText() throws Exception {
+		String participationTable = Participation.class.getAnnotation(Table.class).name().toLowerCase();
+		return Files.readString(Path.of("../../docs/erd/order-shipment-migration-BUK-6.sql"))
+			.replace("order_participation", participationTable);
+	}
+
+	// 파일에 주석으로 둔 되돌리기 부분만 꺼내 주석을 벗긴다
+	private String rollbackSqlText() throws Exception {
+		String text = migrationSqlText();
+		String block = text.substring(text.indexOf("-- [되돌리기 시작]"), text.indexOf("-- [되돌리기 끝]"));
+		return block.lines()
+			.skip(1)
+			.map(line -> line.startsWith("-- ") ? line.substring(3) : line.replaceFirst("^--", ""))
+			.collect(Collectors.joining("\n"));
+	}
+
+	// H2는 START TRANSACTION을 모른다. 트랜잭션 묶음은 MySQL에서 확인하고, 테스트는 그 두 줄만 빼고 돌린다
+	private void runSql(String sql) {
+		String withoutTransaction = sql.replace("START TRANSACTION;", "").replace("COMMIT;", "");
+		new ResourceDatabasePopulator(new ByteArrayResource(withoutTransaction.getBytes(StandardCharsets.UTF_8)))
+			.execute(jdbcTemplate.getDataSource());
+	}
+
+	private Map<String, Object> legacyKitOf(int orderId) {
+		return lowerKeys(jdbcTemplate.queryForMap("select kit_delivery_status, kit_carrier, kit_tracking_number,"
+			+ " kit_shipped_at from order_order_item where order_id = ?", orderId));
+	}
+
+	private Map<String, Object> legacyAddressOf(int orderId) {
+		return lowerKeys(jdbcTemplate.queryForMap(
+			"select recipient_name, address, address_detail from order_order where id = ?", orderId));
+	}
+
+	private static Map<String, Object> lowerKeys(Map<String, Object> row) {
+		Map<String, Object> lowered = new HashMap<>();
+		row.forEach((key, value) -> lowered.put(key.toLowerCase(), value));
+		return lowered;
+	}
+
+	private ResultActions changeAddress(int memberId, int participationId) throws Exception {
+		return mockMvc.perform(put("/api/v1/order/participations/" + participationId + "/participant")
+			.header("X-Member-Id", memberId)
+			.contentType(MediaType.APPLICATION_JSON)
+			.content("""
+				{ "name": "김러너", "birth": "1994-06-25", "gender": "MALE", "phone": "010-1234-5678",
+					"emergencyContactName": "김가족", "emergencyContactPhone": "010-9876-5432", "tshirtSize": "L",
+					"shippingAddress": { "recipientName": "김가족", "recipientPhone": "010-9876-5432",
+						"zipcode": "48094", "address": "부산 해운대구 해운대로 00" } }
+				"""));
 	}
 
 	private RaceCourseInfo courseWithRefundDeadline(LocalDate refundDeadline) {
@@ -409,6 +716,23 @@ class KitDeliveryTest {
 			Order order = orderRepository.findById(orderId).orElseThrow();
 			return order.getItems().getFirst();
 		});
+	}
+
+	private Shipment shipmentOf(int orderId) {
+		return shipmentsOf(orderId).getFirst();
+	}
+
+	// 배송과 상자 속 주문 상품을 트랜잭션 안에서 읽어 둔다
+	private List<Shipment> shipmentsOf(int orderId) {
+		return transactionTemplate.execute(status -> {
+			List<Shipment> shipments = orderRepository.findById(orderId).orElseThrow().getShipments();
+			shipments.forEach(shipment -> shipment.getItems().size());
+			return List.copyOf(shipments);
+		});
+	}
+
+	private int participationIdOf(int orderId) {
+		return itemOf(orderId).getParticipationId();
 	}
 
 	private int itemIdOf(int orderId) {
