@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -23,8 +24,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
@@ -33,8 +37,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.bukang.order.app.OrderCancelRetryUseCase;
+import com.bukang.order.app.OrderCancelUseCase;
 import com.bukang.order.domain.Order;
 import com.bukang.order.domain.OrderItem;
+import com.bukang.order.domain.OrderItemStatus;
 import com.bukang.order.domain.OrderStatus;
 import com.bukang.order.domain.Participation;
 import com.bukang.order.domain.ParticipationStatus;
@@ -57,6 +64,7 @@ import com.jayway.jsonpath.JsonPath;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ExtendWith(OutputCaptureExtension.class)
 @ActiveProfiles("test")
 @Import({StubRaceCoursePortConfig.class, StubSeatHoldPortConfig.class, StubWalletPortConfig.class,
 	StubRefundEligibilityPortConfig.class})
@@ -97,6 +105,12 @@ class ApiV1OrderCancelTest {
 
 	@Autowired
 	private TransactionTemplate transactionTemplate;
+
+	@Autowired
+	private OrderCancelUseCase orderCancelUseCase;
+
+	@Autowired
+	private OrderCancelRetryUseCase orderCancelRetryUseCase;
 
 	@BeforeEach
 	void setUp() {
@@ -359,20 +373,233 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
-	@DisplayName("예치금 환불이 실패하면(503) 취소가 롤백되어 주문은 결제 완료로 남고, 자리 복구도 남지 않아 "
-		+ "정원보다 더 팔리지 않는다")
-	void refundFailureLeavesNoSeatRestore() throws Exception {
+	@DisplayName("예치금이 환불을 거절하면(4xx) 503으로 답하고 결제 완료로 되돌아가며, 자리 복구도 남지 않아 정원보다 더 팔리지 않는다. "
+		+ "되돌린 뒤에는 다시 취소할 수 있다")
+	void refundRejectedRevertsToPaid() throws Exception {
 		Paid paid = paidOrder(MEMBER_ID);
-		setRefundDeadline(LocalDate.now());
-		walletPort.setRefundFails(true);
+		walletPort.setRefundRejects(true);
 
 		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
-			.andExpect(status().isServiceUnavailable());
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.code").value("ORDER_EXTERNAL_SERVICE_UNAVAILABLE"));
 
 		assertThat(restoredSeats()).isEmpty();
+		OrderItem item = itemOf(paid.orderId());
+		assertThat(item.getStatus()).isEqualTo(OrderItemStatus.PAID);
+		assertThat(item.getCancelRequestedAt()).isNull();
 		assertThat(orderRepository.findById(paid.orderId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
 		assertThat(participationRepository.findById(paid.participationId()).orElseThrow().getStatus())
 			.isEqualTo(ParticipationStatus.CONFIRMED);
+
+		walletPort.setRefundRejects(false);
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isOk());
+		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
+	}
+
+	@Test
+	@DisplayName("예치금 환불 응답을 받지 못하면(시간 초과·5xx) 202 취소 처리 중으로 답하고, 주문 상품은 취소 중으로 남는다. "
+		+ "환불이 확인되기 전이라 자리 복구는 아직 남기지 않는다")
+	void refundUnknownLeavesCanceling() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		walletPort.setRefundFails(true);
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.message").value("취소 처리 중입니다. 예치금 환불이 확인되면 취소가 마무리됩니다."))
+			.andExpect(jsonPath("$.data.status").value("PAID"))
+			.andExpect(jsonPath("$.data.items[0].status").value("CANCELING"));
+
+		mockMvc.perform(get(BASE_URL + "/" + paid.orderId()).header("X-Member-Id", MEMBER_ID))
+			.andExpect(jsonPath("$.data.items[0].status").value("CANCELING"));
+		assertThat(restoredSeats()).isEmpty();
+		assertThat(participationRepository.findById(paid.participationId()).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.CONFIRMED);
+	}
+
+	@Test
+	@DisplayName("환불 응답이 시간 초과여도 취소 중으로 남고, 1분이 지나면 재처리가 같은 주문 ID로 환불을 다시 불러 취소로 마무리한다. "
+		+ "예치금은 이미 환불했으므로 돈은 한 번만 움직인다")
+	void refundTimeoutThenRetryCompletes() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		walletPort.setRefundTimesOut(true);
+		LocalDateTime requestedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+		assertThat(itemOf(paid.orderId()).getCancelRequestedAt()).isAfterOrEqualTo(requestedAt);
+		walletPort.setRefundTimesOut(false);
+
+		// 1분이 지나기 전에는 사용자 취소가 아직 기다리는 중일 수 있어 부르지 않는다
+		assertThat(orderCancelRetryUseCase.retry(LocalDateTime.now()).completed()).isZero();
+		assertThat(walletPort.refundCalls()).hasSize(1);
+
+		OrderCancelRetryUseCase.RetryResult result = orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(2));
+
+		assertThat(result.completed()).isEqualTo(1);
+		assertThat(walletPort.refundCalls()).containsExactly(new StubWalletPort.Call(paid.orderId(), MEMBER_ID),
+			new StubWalletPort.Call(paid.orderId(), MEMBER_ID));
+		assertThat(walletPort.refundedAmounts()).containsExactly(TICKET_PRICE);
+		assertThat(restoredSeats()).containsExactly(paid.participationId());
+		assertThat(itemOf(paid.orderId()).getStatus()).isEqualTo(OrderItemStatus.CANCELED);
+		Order order = orderRepository.findById(paid.orderId()).orElseThrow();
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+		assertThat(order.getCanceledAmount()).isEqualTo(TICKET_PRICE);
+		assertThat(participationRepository.findById(paid.participationId()).orElseThrow().getStatus())
+			.isEqualTo(ParticipationStatus.CANCELED);
+
+		// 다시 돌려도 더 할 일이 없다
+		assertThat(orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(3)).completed()).isZero();
+		assertThat(walletPort.refundCalls()).hasSize(2);
+	}
+
+	@Test
+	@DisplayName("취소 중인 상품을 다시 취소하면 409 취소 처리 중이고 환불을 부르지 않는다. 참가자 정보도 고칠 수 없다")
+	void cancelWhileCanceling() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		walletPort.setRefundFails(true);
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId())
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("취소 처리 중인 상품입니다. 잠시 뒤 주문 내역에서 확인해주세요."))
+			.andExpect(jsonPath("$.code").value("ORDER_ITEM_NOT_CANCELABLE"));
+		changeParticipantName(MEMBER_ID, paid.participationId(), "박러너")
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("취소 처리 중인 참가권이라 참가자 정보를 고칠 수 없습니다."))
+			.andExpect(jsonPath("$.code").value("ORDER_PARTICIPATION_NOT_EDITABLE"));
+
+		assertThat(walletPort.refundCalls()).hasSize(1);
+		assertThat(participationRepository.findById(paid.participationId()).orElseThrow().getParticipant().getName())
+			.isEqualTo("김러너");
+	}
+
+	@Test
+	@DisplayName("재처리 중 예치금이 환불을 거절하면(4xx) 결제 완료로 되돌리고, 다음 재처리부터는 부르지 않는다")
+	void retryRejectedReverts() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		walletPort.setRefundFails(true);
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+		walletPort.setRefundFails(false);
+		walletPort.setRefundRejects(true);
+
+		OrderCancelRetryUseCase.RetryResult result = orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(2));
+
+		assertThat(result.reverted()).isEqualTo(1);
+		OrderItem item = itemOf(paid.orderId());
+		assertThat(item.getStatus()).isEqualTo(OrderItemStatus.PAID);
+		assertThat(item.getCancelRequestedAt()).isNull();
+		assertThat(restoredSeats()).isEmpty();
+		assertThat(walletPort.refundCalls()).hasSize(2);
+
+		orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(3));
+		assertThat(walletPort.refundCalls()).hasSize(2);
+	}
+
+	@Test
+	@DisplayName("취소를 시작한 지 30분이 지난 취소 중은 다시 부르지 않고 건수를 오류 로그로 남긴다")
+	void retryGivesUpAfterThirtyMinutes(CapturedOutput output) throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		walletPort.setRefundFails(true);
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+		walletPort.setRefundFails(false);
+
+		OrderCancelRetryUseCase.RetryResult result = orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(31));
+
+		assertThat(result.givenUp()).isEqualTo(1);
+		assertThat(result.completed() + result.pending()).isZero();
+		assertThat(walletPort.refundCalls()).hasSize(1);
+		assertThat(itemOf(paid.orderId()).getStatus()).isEqualTo(OrderItemStatus.CANCELING);
+		assertThat(output).contains("환불 결과를 모르는 취소 중이 1건 있습니다");
+	}
+
+	@Test
+	@DisplayName("재처리에서도 환불 결과를 모르면 취소 중으로 두고, 시작한 지 5분이 넘었으면 경고를 남긴다. "
+		+ "연달아 3번 모르면 그 회차를 멈춘다")
+	void retryStopsAfterThreeUnavailable(CapturedOutput output) throws Exception {
+		List<Paid> paids = new ArrayList<>();
+		for (int memberId = 1; memberId <= 4; memberId++) {
+			paids.add(paidOrder(memberId));
+		}
+		walletPort.setRefundFails(true);
+		for (Paid paid : paids) {
+			cancel(paid.memberId(), paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+		}
+
+		OrderCancelRetryUseCase.RetryResult result = orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(6));
+
+		assertThat(result.pending()).isEqualTo(3);
+		assertThat(walletPort.refundCalls()).hasSize(4 + 3);
+		assertThat(paids).allSatisfy(paid ->
+			assertThat(itemOf(paid.orderId()).getStatus()).isEqualTo(OrderItemStatus.CANCELING));
+		assertThat(output).contains("분이 넘었는데 예치금 환불 결과를 모릅니다", "연달아 3번 받지 못해 이번 취소 재처리를 멈춥니다");
+	}
+
+	@Test
+	@DisplayName("재처리 두 개(또는 사용자 취소의 마무리와 재처리)가 겹쳐도 취소·자리 복구는 한 번만 일어난다")
+	void concurrentCompleteOnce() throws Exception {
+		int rounds = 5;
+		for (int memberId = 1; memberId <= rounds; memberId++) {
+			Paid paid = paidOrder(memberId);
+			walletPort.setRefundTimesOut(true);
+			cancel(memberId, paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+			walletPort.setRefundTimesOut(false);
+			LocalDateTime later = LocalDateTime.now().plusMinutes(2);
+
+			CountDownLatch start = new CountDownLatch(1);
+			List<Callable<Object>> jobs = List.of(
+				() -> {
+					start.await();
+					return orderCancelRetryUseCase.retry(later);
+				},
+				() -> {
+					start.await();
+					return orderCancelUseCase.completeCancel(paid.orderId(), paid.orderItemId(), later);
+				});
+			try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+				List<Future<Object>> futures = jobs.stream().map(executor::submit).toList();
+				start.countDown();
+				for (Future<Object> future : futures) {
+					future.get();
+				}
+			}
+
+			assertThat(restoredSeats()).containsExactly(paid.participationId());
+			Order order = orderRepository.findById(paid.orderId()).orElseThrow();
+			assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+			assertThat(order.getCanceledAmount()).isEqualTo(TICKET_PRICE);
+			orderOutboxKafkaEventRepository.deleteAll();
+		}
+		assertThat(walletPort.refundedAmounts()).hasSize(rounds).containsOnly(TICKET_PRICE);
+	}
+
+	@Test
+	@DisplayName("사용자 취소도 재처리도 예치금 환불은 DB 트랜잭션 밖에서 부른다 (환불을 기다리는 동안 주문 잠금·커넥션을 쥐지 않는다)")
+	void refundOutsideTransaction() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		walletPort.setRefundFails(true);
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+		walletPort.setRefundFails(false);
+		orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(2));
+
+		Paid other = paidOrder(OTHER_MEMBER_ID);
+		cancel(OTHER_MEMBER_ID, other.orderId(), other.orderItemId()).andExpect(status().isOk());
+
+		assertThat(walletPort.refundInTransaction()).hasSize(3).containsOnly(false);
+	}
+
+	@Test
+	@DisplayName("취소 중인 참가권은 환불 결과를 모르는 판매라 정산용 판매 내역·요약과 탈퇴 확인용 참가권 수에 남는다")
+	void cancelingStaysSold() throws Exception {
+		Paid paid = paidOrder(MEMBER_ID);
+		walletPort.setRefundFails(true);
+		cancel(MEMBER_ID, paid.orderId(), paid.orderItemId()).andExpect(status().isAccepted());
+
+		mockMvc.perform(get("/internal/v1/order/sold-entries").param("raceId", String.valueOf(RACE_ID)))
+			.andExpect(jsonPath("$.data.length()").value(1))
+			.andExpect(jsonPath("$.data[0].orderItemId").value(paid.orderItemId()));
+		mockMvc.perform(get("/internal/v1/order/sold-summary").param("raceId", String.valueOf(RACE_ID)))
+			.andExpect(jsonPath("$.data[0].ticketCount").value(1));
+		mockMvc.perform(get("/internal/v1/order/members/" + MEMBER_ID + "/active-tickets/count"))
+			.andExpect(jsonPath("$.data.count").value(1));
 	}
 
 	@Test
@@ -439,7 +666,7 @@ class ApiV1OrderCancelTest {
 				""".formatted(name)));
 	}
 
-	private record Paid(int orderId, int orderItemId, int participationId) {
+	private record Paid(int memberId, int orderId, int orderItemId, int participationId) {
 	}
 
 	// 신청서 → [결제하기] → 결제까지 마친 주문
@@ -448,7 +675,7 @@ class ApiV1OrderCancelTest {
 		mockMvc.perform(post(BASE_URL + "/" + orderId + "/payment").header("X-Member-Id", memberId))
 			.andExpect(status().isOk());
 		OrderItem item = itemOf(orderId);
-		return new Paid(orderId, item.getId(), item.getParticipationId());
+		return new Paid(memberId, orderId, item.getId(), item.getParticipationId());
 	}
 
 	private OrderItem itemOf(int orderId) {

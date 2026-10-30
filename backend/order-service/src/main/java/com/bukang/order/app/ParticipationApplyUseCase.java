@@ -17,6 +17,7 @@ import com.bukang.order.domain.exception.ApplicationPeriodException;
 import com.bukang.order.domain.exception.DuplicateParticipationException;
 import com.bukang.order.domain.exception.ParticipationAccessDeniedException;
 import com.bukang.order.domain.exception.ParticipationChangeRetryException;
+import com.bukang.order.domain.exception.ParticipationNotEditableException;
 import com.bukang.order.domain.exception.ParticipationNotFoundException;
 import com.bukang.order.domain.exception.RaceCourseNotFoundException;
 import com.bukang.order.domain.exception.ShippingAddressRequiredException;
@@ -113,6 +114,10 @@ public class ParticipationApplyUseCase {
 		Participation participation = participationRepository.findByIdForUpdate(participationId)
 			.orElseThrow(() -> new ParticipationNotFoundException("존재하지 않는 참가 신청입니다."));
 		checkOwner(participation, memberId);
+		// 취소 중이면 환불 결과를 기다리는 중이라 곧 취소될 수 있다. 결과가 나올 때까지 고치지 못하게 한다 (BUK-9)
+		if (order.filter(found -> found.isCanceling(participationId)).isPresent()) {
+			throw new ParticipationNotEditableException("취소 처리 중인 참가권이라 참가자 정보를 고칠 수 없습니다.");
+		}
 		// 주문을 찾은 뒤 신청서를 잠그기 전에 [결제하기]가 주문을 만들고 결제했으면, 그 배송에는 옛 배송지가 복사돼 있다
 		// 신청서를 잡은 채 주문을 잠그면 결제(주문 → 참가 신청)와 서로 기다릴 수 있으므로, 거절하고 다시 시도하게 한다
 		if (orderId.isEmpty() && orderItemRepository.findOrderIdByParticipationId(participationId).isPresent()) {
