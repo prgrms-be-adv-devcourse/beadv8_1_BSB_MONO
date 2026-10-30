@@ -45,7 +45,7 @@ export type AnalyticsEvents = {
     courseCount: number
     /** 내 대회 목록을 아직 못 받았으면 뺀다 */
     isFirstRace?: boolean
-    /** 판매자 승인일을 모르면 뺀다 */
+    /** 판매자 승인일을 모르거나 날짜를 읽지 못하면(NaN) 뺀다 */
     daysSinceApproval?: number
   }
 }
@@ -153,27 +153,33 @@ const PAYLOADS: { [K in AnalyticsEventName]: (params: AnalyticsEvents[K]) => Dat
     race_id: raceId,
     course_count: courseCount,
     ...(isFirstRace === undefined ? {} : { is_first_race: isFirstRace }),
-    ...(daysSinceApproval === undefined ? {} : { days_since_approval: daysSinceApproval }),
+    ...(Number.isFinite(daysSinceApproval) ? { days_since_approval: daysSinceApproval } : {}),
   }),
 }
 
 /**
  * GTM으로 이벤트를 보낸다(window.dataLayer). 화면 주소는 조회 값(? 뒤)을 빼고 붙인다.
- * 충전 결과 화면의 토스 결제 값, 로그인 화면의 돌아갈 주소가 GA4에 남지 않게 한다.
+ * 충전 결과 화면의 토스 결제 값, 로그인 화면의 돌아갈 주소가 이 함수가 보내는 이벤트에 남지 않게 한다.
+ * GA4가 자동으로 보내는 페이지 조회(page_view)의 주소는 여기서 막을 수 없어 GTM 설정에서 조회 값을 뺀다.
  * GTM이 꺼져 있거나 어드민 화면이면 아무것도 보내지 않는다.
+ * 추적이 실패해도 결제 · 충전 · 등록 같은 화면 동작이 멈추지 않도록 예외를 밖으로 던지지 않는다.
  */
 export function trackEvent<K extends AnalyticsEventName>(name: K, params: AnalyticsEvents[K]) {
-  if (typeof window === 'undefined' || !trackingGtmId()) return
-  const { origin, pathname } = window.location
-  if (isAdminPath(pathname)) return
-  const payload = PAYLOADS[name](params)
-  const dataLayer = (window.dataLayer ??= [])
-  // 앞 이벤트의 ecommerce 값이 다음 이벤트에 섞이지 않게 먼저 비운다 (GTM 권장 방식)
-  if ('ecommerce' in payload) dataLayer.push({ ecommerce: null })
-  dataLayer.push({
-    event: name,
-    site_area: siteArea(pathname),
-    page_location: `${origin}${pathname}`,
-    ...payload,
-  })
+  try {
+    if (typeof window === 'undefined' || !trackingGtmId()) return
+    const { origin, pathname } = window.location
+    if (isAdminPath(pathname)) return
+    const payload = PAYLOADS[name](params)
+    const dataLayer = (window.dataLayer ??= [])
+    // 앞 이벤트의 ecommerce 값이 다음 이벤트에 섞이지 않게 먼저 비운다 (GTM 권장 방식)
+    if ('ecommerce' in payload) dataLayer.push({ ecommerce: null })
+    dataLayer.push({
+      event: name,
+      site_area: siteArea(pathname),
+      page_location: `${origin}${pathname}`,
+      ...payload,
+    })
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') console.warn(`[analytics] ${name} 전송 실패`, error)
+  }
 }

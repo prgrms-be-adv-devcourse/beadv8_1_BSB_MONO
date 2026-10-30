@@ -289,9 +289,12 @@ function OrderCheckout({
   const status = order.data?.status
   // 결제할 수 있는 주문이 보일 때 한 번. 모자란 금액은 잔액을 받은 뒤 화면 계산과 같은 값으로 보낸다
   const payable = status === 'CREATED' ? order.data : undefined
+  // 충전을 다녀와 다시 열린 화면(charged)은 같은 주문의 결제 시작을 한 번 더 세지 않는다
   useTrackOnce(
     'begin_checkout',
-    payable ? { items: orderTrackItems(payable), value: payable.totalAmount ?? 0 } : null,
+    payable && !charged
+      ? { items: orderTrackItems(payable), value: payable.totalAmount ?? 0 }
+      : null,
   )
   const shortage =
     payable && deposit.balance !== undefined

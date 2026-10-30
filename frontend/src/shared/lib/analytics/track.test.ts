@@ -123,6 +123,17 @@ describe('trackEvent', () => {
     })
   })
 
+  it('승인일을 읽지 못해 날수가 NaN이면 빼고 보낸다', () => {
+    visit('/seller/races/new')
+    trackEvent('seller_race_register', { raceId: '9', courseCount: 1, daysSinceApproval: NaN })
+    expect(window.dataLayer?.[0]).not.toHaveProperty('days_since_approval')
+  })
+
+  it('dataLayer가 배열이 아니어도 예외를 던지지 않는다', () => {
+    window.dataLayer = 'broken' as unknown as []
+    expect(() => trackEvent('queue_enter', { raceId: '7' })).not.toThrow()
+  })
+
   it('어드민 화면에서는 아무것도 보내지 않는다', () => {
     visit('/admin/sellers')
     trackEvent('view_item_list', { hasKeyword: false, resultCount: 3 })
