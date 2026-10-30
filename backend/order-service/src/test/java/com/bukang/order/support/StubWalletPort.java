@@ -8,6 +8,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import com.bukang.order.domain.exception.ExternalServiceRejectedException;
 import com.bukang.order.domain.exception.ExternalServiceUnavailableException;
 import com.bukang.order.domain.exception.OrderNotPayableException;
@@ -20,7 +22,8 @@ import com.bukang.order.out.wallet.WalletPort;
  * 되돌린 주문으로 다시 결제하면 거절한다 (D가 결제 취소로 막아 둔 주문은 409, WalletPort.cancelPayment)
  * 환불(refund)은 그 주문에서 차감한 금액 전액을 주문마다 한 번만 돌려준다
  * 응답 시간 초과를 흉내 낼 수 있다: 결제는 차감까지 끝낸 뒤 예외를 던지고(D는 처리했지만 응답을 못 받음),
- * 결제 취소는 아무것도 하지 않고 예외를 던진다
+ * 결제 취소는 아무것도 하지 않고 예외를 던진다. 환불은 둘 다 흉내 낸다: 처리 전 장애(setRefundFails)와 처리 후 시간 초과(setRefundTimesOut)
+ * 환불을 부른 순간 DB 트랜잭션 안이었는지 남긴다 (환불 HTTP 동안 잠금·커넥션을 쥐지 않는지 확인)
  * 결제를 차감 직전에 멈춰 둘 수 있다 (holdPay): 결제가 주문을 잠근 채 D를 기다리는 순간에 다른 작업을 끼워 넣을 때 쓴다
  */
 public class StubWalletPort implements WalletPort {
@@ -39,6 +42,8 @@ public class StubWalletPort implements WalletPort {
 	private boolean cancelFails;
 	private boolean refundFails;
 	private boolean refundRejects;
+	private boolean refundTimesOut;
+	private final List<Boolean> refundInTransaction = new CopyOnWriteArrayList<>();
 	private volatile CountDownLatch payEntered;
 	private volatile CountDownLatch payReleased;
 
@@ -98,6 +103,7 @@ public class StubWalletPort implements WalletPort {
 	@Override
 	public synchronized void refund(int orderId, int memberId) {
 		refundCalls.add(new Call(orderId, memberId));
+		refundInTransaction.add(TransactionSynchronizationManager.isActualTransactionActive());
 		if (refundFails) {
 			throw new ExternalServiceUnavailableException(TIMEOUT_MESSAGE);
 		}
@@ -109,6 +115,9 @@ public class StubWalletPort implements WalletPort {
 		if (amount != null) {
 			refundedAmounts.add(amount);
 			balance += amount;
+		}
+		if (refundTimesOut) {
+			throw new ExternalServiceUnavailableException(TIMEOUT_MESSAGE);
 		}
 	}
 
@@ -150,6 +159,16 @@ public class StubWalletPort implements WalletPort {
 	// 환불이 실패하게 한다 (예치금 서비스 장애)
 	public synchronized void setRefundFails(boolean refundFails) {
 		this.refundFails = refundFails;
+	}
+
+	// 환불 응답 시간 초과를 흉내 낸다. 환불은 되고(D는 처리함) 주문 쪽은 예외를 받는다
+	public synchronized void setRefundTimesOut(boolean refundTimesOut) {
+		this.refundTimesOut = refundTimesOut;
+	}
+
+	// 환불을 부를 때마다 DB 트랜잭션 안이었는지
+	public List<Boolean> refundInTransaction() {
+		return refundInTransaction;
 	}
 
 	// 환불을 D가 거절하게 한다 (다시 해도 안 되는 실패, 409)
@@ -203,6 +222,8 @@ public class StubWalletPort implements WalletPort {
 		cancelFails = false;
 		refundFails = false;
 		refundRejects = false;
+		refundTimesOut = false;
+		refundInTransaction.clear();
 		releasePay();
 		payEntered = null;
 		payReleased = null;

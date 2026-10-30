@@ -18,6 +18,8 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Integer> {
 	 * 판매자의 키트 주문 목록 (PRO-136). 배송 상자에 든 주문 상품마다 한 줄이다. 대회·배송 상태로 거른다(null이면 거르지 않음)
 	 * 발송 전에 취소된 배송은 빠진다. 보낸 뒤 취소된 참가권(대회 취소 환불 등)도 키트는 가고 있으므로 남겨,
 	 * 판매자가 배송 완료까지 바꿀 수 있게 한다
+	 * 취소 중(환불 결과를 기다림)인 참가권도 빠진다. 곧 취소될 수 있어 보내면 안 되고, 발송도 막힌다(Order.checkKitShippable).
+	 * 환불이 거절돼 결제 완료로 돌아오면 다시 보인다 (BUK-9). 아래 건수 조회도 같은 조건이다
 	 * 받는 분·주소는 배송에 복사한 값을, 참가자 이름·티셔츠 사이즈는 참가 신청의 값을 쓴다
 	 */
 	@Query(value = """
@@ -31,6 +33,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Integer> {
 			join Participation p on p.id = i.participationId
 		where i.sellerId = :sellerId
 			and s.status <> com.bukang.order.domain.ShipmentStatus.CANCELED
+			and i.status <> com.bukang.order.domain.OrderItemStatus.CANCELING
 			and (:raceId is null or i.raceId = :raceId)
 			and (:status is null or s.status = :status)
 		order by i.id desc
@@ -42,6 +45,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Integer> {
 			join Participation p on p.id = i.participationId
 		where i.sellerId = :sellerId
 			and s.status <> com.bukang.order.domain.ShipmentStatus.CANCELED
+			and i.status <> com.bukang.order.domain.OrderItemStatus.CANCELING
 			and (:raceId is null or i.raceId = :raceId)
 			and (:status is null or s.status = :status)
 		""")
@@ -56,6 +60,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Integer> {
 			join OrderItem i on i.id = si.orderItemId
 		where i.sellerId = :sellerId
 			and s.status <> com.bukang.order.domain.ShipmentStatus.CANCELED
+			and i.status <> com.bukang.order.domain.OrderItemStatus.CANCELING
 			and (:raceId is null or i.raceId = :raceId)
 		group by s.status
 		""")
@@ -69,6 +74,7 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Integer> {
 			join OrderItem i on i.id = si.orderItemId
 		where i.sellerId = :sellerId
 			and s.status = com.bukang.order.domain.ShipmentStatus.READY
+			and i.status <> com.bukang.order.domain.OrderItemStatus.CANCELING
 			and (:raceId is null or i.raceId = :raceId)
 		group by i.raceCourseId
 		""")

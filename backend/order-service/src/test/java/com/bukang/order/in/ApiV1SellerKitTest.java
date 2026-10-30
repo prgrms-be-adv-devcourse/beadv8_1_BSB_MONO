@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.bukang.order.app.OrderCancelUseCase;
 import com.bukang.order.app.OrderCreateResult;
 import com.bukang.order.app.OrderCreateUseCase;
 import com.bukang.order.app.OrderPayUseCase;
@@ -80,6 +81,9 @@ class ApiV1SellerKitTest {
 
 	@Autowired
 	private OrderPayUseCase orderPayUseCase;
+
+	@Autowired
+	private OrderCancelUseCase orderCancelUseCase;
 
 	@Autowired
 	private StubRaceCoursePort raceCoursePort;
@@ -142,6 +146,33 @@ class ApiV1SellerKitTest {
 			.andExpect(jsonPath("$.data.items[0].kitCarrier").value("CJ대한통운"));
 		mockMvc.perform(get(BASE_URL).header("X-Member-Id", SELLER_MEMBER_ID).param("status", "DELIVERED"))
 			.andExpect(jsonPath("$.data.totalElements").value(1));
+	}
+
+	@Test
+	@DisplayName("취소 중(환불 결과를 기다림)인 참가권의 키트는 판매자 목록·건수에서 빠지고, 결제 완료로 되돌아오면 다시 보인다")
+	void cancelingKitHidden() throws Exception {
+		approveSellers();
+		raceCoursePort.put(StubRaceCoursePort.openCourse(COURSE_ID, RACE_ID, 14, null, LocalDate.now().plusDays(5)));
+		int orderId = paidOrder();
+		int itemId = itemIdOf(orderId);
+		transactionTemplate.executeWithoutResult(status -> {
+			Order order = orderRepository.findByIdForUpdate(orderId).orElseThrow();
+			order.startCancelItem(order.findItem(itemId), LocalDateTime.now());
+		});
+
+		mockMvc.perform(get(BASE_URL).header("X-Member-Id", SELLER_MEMBER_ID))
+			.andExpect(jsonPath("$.data.totalElements").value(0));
+		mockMvc.perform(get(BASE_URL + "/summary").header("X-Member-Id", SELLER_MEMBER_ID))
+			.andExpect(jsonPath("$.data.preparing").value(0))
+			.andExpect(jsonPath("$.data.beforeRefundDeadline").value(0));
+
+		orderCancelUseCase.revertCancel(orderId, itemId);
+
+		mockMvc.perform(get(BASE_URL).header("X-Member-Id", SELLER_MEMBER_ID))
+			.andExpect(jsonPath("$.data.totalElements").value(1));
+		mockMvc.perform(get(BASE_URL + "/summary").header("X-Member-Id", SELLER_MEMBER_ID))
+			.andExpect(jsonPath("$.data.preparing").value(1))
+			.andExpect(jsonPath("$.data.beforeRefundDeadline").value(1));
 	}
 
 	@Test
