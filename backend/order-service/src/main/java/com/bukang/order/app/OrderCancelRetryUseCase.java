@@ -68,33 +68,68 @@ public class OrderCancelRetryUseCase {
 		int pending = 0;
 		int consecutiveUnavailable = 0;
 		for (CancelingOrderItemDto target : targets) {
-			try {
-				walletPort.refund(target.orderId(), target.buyerId());
-			} catch (ExternalServiceRejectedException exception) {
-				consecutiveUnavailable = 0;
-				if (orderCancelUseCase.revertCancel(target.orderId(), target.orderItemId())) {
-					reverted++;
-					// 취소 중인 동안 대회가 취소됐으면 일괄 환불이 이 상품을 건너뛰었다. 되돌린 뒤에는 그 환불이 빠진다
-					log.warn("예치금이 환불을 거절해 취소 중을 결제 완료로 되돌렸습니다. 대회가 취소됐으면 환불을 따로 확인해야 합니다. "
-						+ "orderId={}, orderItemId={}", target.orderId(), target.orderItemId());
+			Outcome outcome = retryOne(target, now);
+			consecutiveUnavailable = outcome == Outcome.UNKNOWN ? consecutiveUnavailable + 1 : 0;
+			switch (outcome) {
+				case COMPLETED -> completed++;
+				case REVERTED -> reverted++;
+				case UNKNOWN -> pending++;
+				default -> {
 				}
-				continue;
-			} catch (ExternalServiceUnavailableException exception) {
-				pending++;
-				consecutiveUnavailable++;
-				warnIfLong(target, now);
-				if (consecutiveUnavailable >= MAX_CONSECUTIVE_UNAVAILABLE) {
-					log.warn("예치금 환불 결과를 연달아 {}번 받지 못해 이번 취소 재처리를 멈춥니다. 남은 건은 다음 실행에서 부릅니다.",
-						MAX_CONSECUTIVE_UNAVAILABLE);
-					break;
-				}
-				continue;
 			}
-			consecutiveUnavailable = 0;
-			orderCancelUseCase.completeCancel(target.orderId(), target.orderItemId(), now);
-			completed++;
+			if (consecutiveUnavailable >= MAX_CONSECUTIVE_UNAVAILABLE) {
+				log.warn("예치금 환불 결과를 연달아 {}번 받지 못해 이번 취소 재처리를 멈춥니다. 남은 건은 다음 실행에서 부릅니다.",
+					MAX_CONSECUTIVE_UNAVAILABLE);
+				break;
+			}
 		}
 		return new RetryResult(completed, reverted, pending, givenUp);
+	}
+
+	// 한 건의 결과. SKIPPED: 다른 쪽이 먼저 끝냈거나, 예상 못 한 오류라 다음 실행에서 다시 본다
+	private enum Outcome {
+		COMPLETED, REVERTED, UNKNOWN, SKIPPED
+	}
+
+	// 한 건을 다시 환불하고 마무리·되돌린다. 예상 못 한 오류는 이 건만 남기고 다음 건으로 넘어간다
+	// (한 건이 늘 실패해도 맨 앞에 있어 뒤의 취소 중이 마무리되지 못하는 일을 막는다)
+	private Outcome retryOne(CancelingOrderItemDto target, LocalDateTime now) {
+		try {
+			walletPort.refund(target.orderId(), target.buyerId());
+		} catch (ExternalServiceRejectedException exception) {
+			return revert(target);
+		} catch (ExternalServiceUnavailableException exception) {
+			warnIfLong(target, now);
+			return Outcome.UNKNOWN;
+		} catch (RuntimeException exception) {
+			log.error("취소 재처리 중 환불 요청에서 예상 못 한 오류가 났습니다. orderId={}, orderItemId={}",
+				target.orderId(), target.orderItemId(), exception);
+			return Outcome.SKIPPED;
+		}
+		try {
+			orderCancelUseCase.completeCancel(target.orderId(), target.orderItemId(), now);
+			return Outcome.COMPLETED;
+		} catch (RuntimeException exception) {
+			log.error("환불은 확인했지만 취소를 마무리하지 못했습니다. 다음 실행에서 다시 마무리합니다. orderId={}, orderItemId={}",
+				target.orderId(), target.orderItemId(), exception);
+			return Outcome.SKIPPED;
+		}
+	}
+
+	private Outcome revert(CancelingOrderItemDto target) {
+		try {
+			if (!orderCancelUseCase.revertCancel(target.orderId(), target.orderItemId())) {
+				return Outcome.SKIPPED;
+			}
+		} catch (RuntimeException exception) {
+			log.error("예치금이 환불을 거절했지만 결제 완료로 되돌리지 못했습니다. 다음 실행에서 다시 봅니다. orderId={}, orderItemId={}",
+				target.orderId(), target.orderItemId(), exception);
+			return Outcome.SKIPPED;
+		}
+		// 취소 중인 동안 대회가 취소됐으면 일괄 환불이 이 상품을 건너뛰었다. 되돌린 뒤에는 그 환불이 빠진다
+		log.warn("예치금이 환불을 거절해 취소 중을 결제 완료로 되돌렸습니다. 대회가 취소됐으면 환불을 따로 확인해야 합니다. "
+			+ "orderId={}, orderItemId={}", target.orderId(), target.orderItemId());
+		return Outcome.REVERTED;
 	}
 
 	private void warnIfLong(CancelingOrderItemDto target, LocalDateTime now) {

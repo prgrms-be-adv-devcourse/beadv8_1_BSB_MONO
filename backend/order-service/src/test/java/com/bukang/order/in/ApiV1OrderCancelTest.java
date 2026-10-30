@@ -534,6 +534,26 @@ class ApiV1OrderCancelTest {
 	}
 
 	@Test
+	@DisplayName("재처리에서 한 건이 예상 못 한 오류로 마무리되지 않아도 그 건만 남기고 다음 건을 마무리한다")
+	void retryContinuesAfterUnexpectedError(CapturedOutput output) throws Exception {
+		Paid broken = paidOrder(MEMBER_ID);
+		Paid healthy = paidOrder(OTHER_MEMBER_ID);
+		walletPort.setRefundFails(true);
+		cancel(MEMBER_ID, broken.orderId(), broken.orderItemId()).andExpect(status().isAccepted());
+		cancel(OTHER_MEMBER_ID, healthy.orderId(), healthy.orderItemId()).andExpect(status().isAccepted());
+		walletPort.setRefundFails(false);
+		// 먼저 시작한 건의 참가 신청이 없어 마무리가 실패한다
+		participationRepository.deleteById(broken.participationId());
+
+		OrderCancelRetryUseCase.RetryResult result = orderCancelRetryUseCase.retry(LocalDateTime.now().plusMinutes(2));
+
+		assertThat(result.completed()).isEqualTo(1);
+		assertThat(itemOf(broken.orderId()).getStatus()).isEqualTo(OrderItemStatus.CANCELING);
+		assertThat(itemOf(healthy.orderId()).getStatus()).isEqualTo(OrderItemStatus.CANCELED);
+		assertThat(output).contains("환불은 확인했지만 취소를 마무리하지 못했습니다");
+	}
+
+	@Test
 	@DisplayName("재처리 두 개(또는 사용자 취소의 마무리와 재처리)가 겹쳐도 취소·자리 복구는 한 번만 일어난다")
 	void concurrentCompleteOnce() throws Exception {
 		int rounds = 5;

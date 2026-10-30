@@ -85,11 +85,22 @@ public class OrderCancelUseCase {
 		} catch (ExternalServiceUnavailableException exception) {
 			log.warn("예치금 환불 결과를 몰라 취소 중으로 둡니다. 재처리가 마무리합니다. orderId={}, orderItemId={}, cause={}",
 				orderId, orderItemId, exception.getMessage());
-			OrderDto order = transactionTemplate.execute(status -> orderRepository.findById(orderId)
-				.orElseThrow(() -> new OrderNotFoundException("존재하지 않는 주문입니다.")).toDto());
-			return new CancelResult(order, 0, true);
+			return pending(orderId);
 		}
-		return completeCancel(orderId, orderItemId, now);
+		try {
+			return completeCancel(orderId, orderItemId, now);
+		} catch (RuntimeException exception) {
+			// 돈은 이미 돌려줬다. 실패로 답하면 회원이 다시 눌러도 409라, 취소 중으로 두고 재처리가 마무리하게 한다
+			log.error("환불은 됐지만 취소를 마무리하지 못해 취소 중으로 둡니다. 재처리가 마무리합니다. orderId={}, orderItemId={}",
+				orderId, orderItemId, exception);
+			return pending(orderId);
+		}
+	}
+
+	private CancelResult pending(int orderId) {
+		OrderDto order = transactionTemplate.execute(status -> orderRepository.findById(orderId)
+			.orElseThrow(() -> new OrderNotFoundException("존재하지 않는 주문입니다.")).toDto());
+		return new CancelResult(order, 0, true);
 	}
 
 	// 판정에 필요한 값만 잠그지 않고 읽는다. 없는 주문·남의 주문·결제 전 상품은 다른 서비스를 부르기 전에 거른다
