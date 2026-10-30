@@ -27,11 +27,25 @@ public class OrderQueryRepository {
 	private final JPAQueryFactory queryFactory;
 
 	public Page<Order> findMine(int buyerId, LocalDate from, LocalDate to, Pageable pageable) {
-		BooleanExpression condition = Expressions.allOf(
+		return find(Expressions.allOf(
 			order.buyerId.eq(buyerId),
 			orderedFrom(from),
 			orderedTo(to)
-		);
+		), pageable);
+	}
+
+	/**
+	 * 관리자 회원·주문 조회 (BUK-26). 구매자 ID 또는 주문번호 하나로 찾고, 상태와 상관없이 모두 최신순으로 돌려준다
+	 * 구매자로 찾으면 idx_order_buyer, 주문번호로 찾으면 idx_order_no를 탄다
+	 */
+	public Page<Order> findForAdmin(Integer buyerId, String orderNo, Pageable pageable) {
+		return find(Expressions.allOf(
+			buyerId != null ? order.buyerId.eq(buyerId) : null,
+			orderNo != null ? order.orderNo.eq(orderNo) : null
+		), pageable);
+	}
+
+	private Page<Order> find(BooleanExpression condition, Pageable pageable) {
 		List<Order> orders = queryFactory.selectFrom(order)
 			.where(condition)
 			.orderBy(order.id.desc())
