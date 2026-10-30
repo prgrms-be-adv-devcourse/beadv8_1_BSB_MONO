@@ -1,7 +1,7 @@
 package com.bukang.cash.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 
@@ -41,7 +41,7 @@ import com.bukang.cash.out.pg.PaymentClient;
 @SpringBootTest
 @ActiveProfiles("test")
 class ChargeConfirmFailedThenCompletedRaceTest {
-	private static final int CUSTOMER_ID = 3;
+	private static final long CUSTOMER_ID = 3;
 
 	@Autowired
 	private CashFacade cashFacade;
@@ -76,13 +76,13 @@ class ChargeConfirmFailedThenCompletedRaceTest {
 		CountDownLatch bFailedCommitted = new CountDownLatch(1);
 
 		// A: Toss 호출에 들어서면 신호를 보내고, B가 FAILED를 커밋할 때까지 기다렸다가 승인을 돌려준다
-		given(paymentClient.approve(eq("pay_a"), eq("order_1"), anyInt())).willAnswer(invocation -> {
+		given(paymentClient.approve(eq("pay_a"), eq("order_1"), anyLong())).willAnswer(invocation -> {
 			aReachedToss.countDown();
 			bFailedCommitted.await(5, TimeUnit.SECONDS);
 			return new PaymentApprovalResult(10_000, "toss_key_a");
 		});
 		// B: 즉시 (money-lost와 무관한 임의의 사유로) 거절
-		given(paymentClient.approve(eq("pay_b"), eq("order_1"), anyInt()))
+		given(paymentClient.approve(eq("pay_b"), eq("order_1"), anyLong()))
 			.willThrow(new PaymentApprovalFailedException("한도를 초과했습니다."));
 
 		ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -123,7 +123,7 @@ class ChargeConfirmFailedThenCompletedRaceTest {
 		});
 	}
 
-	private void assertBalance(int holderId, int expected) {
+	private void assertBalance(long holderId, int expected) {
 		assertThat(walletRepository.findById(holderId).orElseThrow().getBalance()).isEqualTo(expected);
 	}
 }
