@@ -10,6 +10,16 @@
 -- 0) 돌리기 전에 옛 칸이 있는 두 표를 백업한다 (PR #241 본문의 배포 절차)
 --    mysqldump --single-transaction -u <사용자> -p bukang-db order_order order_order_item > before-BUK-6.sql
 -- 1)·2)는 DML만 있어 한 트랜잭션으로 묶는다. 중간에 실패하면 ROLLBACK으로 둘 다 되돌아간다
+-- INSERT…SELECT는 읽는 행(order_order_item 등)을 끝날 때까지 잠그므로, 사용이 적은 시각에 돌린다
+
+-- 0-1) 돌리기 전 확인: 키트 주문 상품이 2개 이상인 주문. 0건이어야 한다
+--      1)은 주문 하나에 키트 하나를 전제로 주문마다 배송 1건을 만든다. 나오면 돌리지 말고 그 주문부터 본다
+SELECT order_id, COUNT(*) AS kit_items
+FROM order_order_item
+WHERE kit_delivery_status IS NOT NULL
+GROUP BY order_id
+HAVING COUNT(*) > 1;
+
 
 START TRANSACTION;
 
@@ -48,6 +58,7 @@ COMMIT;
 
 -- 3) 확인 (결과를 눈으로 본다. 1)·2)를 돌린 직후 둘 다 0이어야 한다)
 -- 3-1) 옮겨야 하는데 배송 상자에 없는 키트 주문 상품 수
+--      0이 아니면 참가 신청 표 이름(order_participation)이 바뀌었는지부터 본다. 1)은 그 표와 조인한 줄만 옮긴다
 SELECT COUNT(*) AS not_migrated
 FROM order_order_item i
 WHERE i.kit_delivery_status IS NOT NULL
@@ -71,7 +82,9 @@ WHERE i.kit_delivery_status IS NOT NULL
 -- 4) 되돌리기 (이전 앱으로 되돌릴 때만. 평소에는 돌리지 않으므로 주석으로 둔다)
 --    배송 표의 값을 옛 kit_* 칸과 주문 배송지 칸에 다시 쓴다. 다시 돌려도 결과가 같다
 --    언제: 이전 앱이 뜬 직후 바로. 늦으면 이전 앱에서 판매자가 넣은 송장을 배송 표의 옛 값으로 덮는다
---    다시 BUK-6을 배포할 때는 배송 표를 비운 뒤(TRUNCATE order_shipment_item, order_shipment) 1)·2)를 다시 돌린다
+--    다시 BUK-6을 배포할 때는 배송 표를 비운 뒤 1)·2)를 다시 돌린다. 비우기는 1)·2)와 같은 트랜잭션 안에서
+--    자식 → 부모 순으로 DELETE FROM order_shipment_item; DELETE FROM order_shipment; 를 먼저 둔다
+--    (TRUNCATE는 안 된다: MySQL은 외래 키로 참조되는 부모 표를 자식이 비어 있어도 TRUNCATE하지 못한다, ERROR 1701)
 --    (1)은 배송이 있는 주문을 건너뛰므로, 비우지 않으면 되돌린 동안 바뀐 발송 정보가 옮겨지지 않는다)
 -- [되돌리기 시작]
 -- START TRANSACTION;
