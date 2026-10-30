@@ -35,9 +35,7 @@ public class ApiV1AdminOrderController {
 
 	@GetMapping
 	@Operation(summary = "회원·주문 조회 (관리자)",
-		description = "회원 닉네임 또는 주문번호 하나로 주문을 찾아 최신순으로 돌려준다 (피그마 V2 A04). "
-			+ "결제 대기·기한 만료·취소한 주문도 함께 보여 주고, 결제하지 않은 주문은 paidAt이 null이다. "
-			+ "관리자인지는 회원 서비스에 묻는다. 닉네임 검색은 회원 서비스에 닉네임 조회 API가 생기기 전까지 운영에서 503이다.")
+		description = "관리자가 회원 닉네임 또는 주문번호 하나로 찾은 주문을 결제 대기·기한 만료·취소까지 모두 최신순으로 돌려준다.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "조회 성공 (회원은 있는데 주문이 없거나, 없는 주문번호면 빈 목록)",
 			content = @Content(examples = @ExampleObject(value = AdminOrderApiExamples.LIST_SUCCESS))),

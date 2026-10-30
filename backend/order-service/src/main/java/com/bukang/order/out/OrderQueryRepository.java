@@ -39,6 +39,10 @@ public class OrderQueryRepository {
 	 * 구매자로 찾으면 idx_order_buyer, 주문번호로 찾으면 idx_order_no를 탄다
 	 */
 	public Page<Order> findForAdmin(Integer buyerId, String orderNo, Pageable pageable) {
+		// 조건이 하나도 없으면 모든 회원의 주문이 나오므로 막는다
+		if ((buyerId == null) == (orderNo == null)) {
+			throw new IllegalArgumentException("구매자 ID와 주문번호 중 하나만 넣어야 합니다.");
+		}
 		return find(Expressions.allOf(
 			buyerId != null ? order.buyerId.eq(buyerId) : null,
 			orderNo != null ? order.orderNo.eq(orderNo) : null

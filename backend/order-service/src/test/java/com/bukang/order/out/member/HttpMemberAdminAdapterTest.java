@@ -66,6 +66,20 @@ class HttpMemberAdminAdapterTest {
 	}
 
 	@Test
+	@DisplayName("회원 없음이 아닌 404(경로가 어긋남)는 관리자 아님으로 보지 않고 503 예외로 알린다")
+	void notFoundWithoutMemberCode() {
+		server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.NOT_FOUND)
+			.contentType(MediaType.APPLICATION_JSON)
+			.body("{ \"timestamp\": \"2026-10-30T10:00:00\", \"status\": 404, \"error\": \"Not Found\" }"));
+		server.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+		assertThatThrownBy(() -> adapter.isAdmin(MEMBER_ID))
+			.isInstanceOf(ExternalServiceUnavailableException.class);
+		assertThatThrownBy(() -> adapter.isAdmin(MEMBER_ID))
+			.isInstanceOf(ExternalServiceUnavailableException.class);
+	}
+
+	@Test
 	@DisplayName("회원 서비스가 5xx·그 밖의 4xx로 답하거나 응답이 늦으면 관리자로 보지 않고 503 예외로 알린다")
 	void unavailable() {
 		server.expect(requestTo(URL)).andRespond(withServerError());
