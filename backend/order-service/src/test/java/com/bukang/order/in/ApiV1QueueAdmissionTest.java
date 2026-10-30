@@ -93,7 +93,7 @@ class ApiV1QueueAdmissionTest {
 			.andReturn().getResponse().getContentAsString();
 		String endsAt = JsonPath.read(first, "$.data.admissionEndsAt");
 		int remaining = JsonPath.read(first, "$.data.remainingSeconds");
-		assertThat(remaining).isBetween(590, 600);
+		assertThat(remaining).isBetween(890, 900);
 
 		admission(memberId).andExpect(jsonPath("$.data.admissionEndsAt").value(endsAt));
 

@@ -30,15 +30,15 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 바로 결제 예매 ([결제하기], 정책 3장·4장). 신청서 진입 때 저장한 입장 끝 시각이 남았는지 확인하고(PRO-191, PRO-249),
- * 상품 서비스(B)에 자리 1석을 확보받아 입장 끝 시각을 결제 기한으로 하는 주문을 만든다 (정책 4장 2-4 "입장 뒤 10분 안에 신청서 + 결제")
+ * 상품 서비스(B)에 자리 1석을 확보받아 입장 끝 시각을 결제 기한으로 하는 주문을 만든다 (예매창 15분, 최종 정책 개요 3-1, 8장 2-1)
  * 확보하면 참가 신청 PENDING → APPLIED, 주문 CREATED. 매진이면 참가 신청 FAILED, 주문 없음 (ERD 추천안 v4 8·9쪽)
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderCreateUseCase {
-	// 정책상 가장 긴 입장 시간 (정책 4장 2-4 "입장 뒤 10분 안에 신청서 + 결제"). 대기열이 더 긴 끝 시각을 줘도 여기까지만 자리를 잡는다
-	static final long MAX_ADMISSION_MINUTES = 10;
+	// 정책상 가장 긴 입장 시간 (예매창 15분, 최종 정책 개요 3-1, 8장 2-1). 대기열이 더 긴 끝 시각을 줘도 여기까지만 자리를 잡는다
+	static final long MAX_ADMISSION_MINUTES = 15;
 
 	// Order·OrderItem의 @UniqueConstraint 이름과 같아야 한다
 	private static final List<String> ORDER_CONSTRAINTS = List.of("uk_order_idempotency",

@@ -9,11 +9,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.bukang.order.out.queue.QueueAdmissionPort;
 
 /**
- * 테스트용 대기열 입장 확인. 기본은 누구든 지금 입장해 10분 뒤에 입장이 끝난다(가짜 어댑터와 같음)
+ * 테스트용 대기열 입장 확인. 기본은 누구든 지금 입장해 15분 뒤에 입장이 끝난다(가짜 어댑터와 같음)
  * 테스트가 종목마다 입장 중이 아님, 입장 끝 시각을 정할 수 있다
  */
 public class StubQueueAdmissionPort implements QueueAdmissionPort {
-	public static final long ADMISSION_MINUTES = 10;
+	public static final long ADMISSION_MINUTES = 15;
 
 	private final Set<Integer> notAdmittedCourses = ConcurrentHashMap.newKeySet();
 	private final Map<Integer, LocalDateTime> admissionEndsAt = new ConcurrentHashMap<>();

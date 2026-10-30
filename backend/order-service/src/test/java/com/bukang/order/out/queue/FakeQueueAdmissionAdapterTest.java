@@ -51,10 +51,12 @@ class FakeQueueAdmissionAdapterTest {
 	}
 
 	@Test
-	@DisplayName("입장 시간 설정은 1~10분만 받는다 (10분보다 길면 결제 기한과 타이머가 어긋난다)")
+	@DisplayName("입장 시간 설정은 1~15분만 받는다 (15분보다 길면 결제 기한과 타이머가 어긋난다)")
 	void rejectsInvalidMinutes() {
 		assertThatThrownBy(() -> new FakeQueueAdmissionAdapter(0)).isInstanceOf(IllegalArgumentException.class);
-		assertThatThrownBy(() -> new FakeQueueAdmissionAdapter(11)).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> new FakeQueueAdmissionAdapter(16)).isInstanceOf(IllegalArgumentException.class);
+		assertThat(new FakeQueueAdmissionAdapter(15).findAdmissionEndsAt(MEMBER_ID, RACE_ID, COURSE_ID, NOW))
+			.contains(NOW.plusMinutes(15));
 	}
 
 	@Test
