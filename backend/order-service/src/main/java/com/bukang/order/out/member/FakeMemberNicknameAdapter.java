@@ -12,10 +12,11 @@ import lombok.extern.slf4j.Slf4j;
  * 가짜 어댑터: 회원 서비스에 닉네임 조회 API가 생기기 전까지 개발용으로 답한다 (BUK-26)
  * 회원 서비스 시작 데이터(MemberDataInit)가 만드는 순서대로 회원 ID를 정해 두었다. 빈 dev DB에서 처음 띄우면 이 ID가 된다
  * 그 밖의 닉네임은 없는 회원으로 답한다. 운영(prod)에서는 쓰지 않는다 (order.clients.nickname.mode=disabled)
+ * mode를 fake라고 적었을 때만 켜진다. 설정이 빠지면 엉뚱한 회원을 찾는 대신 빈이 없어 앱이 뜨지 않는다
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "order.clients.nickname", name = "mode", havingValue = "fake", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "order.clients.nickname", name = "mode", havingValue = "fake")
 public class FakeMemberNicknameAdapter implements MemberNicknamePort {
 	static final Map<String, Integer> SEED_MEMBER_IDS = Map.of(
 		"관리자", 3,
