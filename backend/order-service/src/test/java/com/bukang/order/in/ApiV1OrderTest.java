@@ -116,7 +116,7 @@ class ApiV1OrderTest {
 	}
 
 	@Test
-	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 신청서 진입 때 받은 입장 끝 시각(10분 뒤)이다")
+	@DisplayName("[결제하기]하면 자리를 확보해 참가 신청은 APPLIED, 주문은 CREATED가 되고 결제 기한은 신청서 진입 때 받은 입장 끝 시각(15분 뒤)이다")
 	void create() throws Exception {
 		// DB(H2·MySQL)는 마이크로초까지만 저장한다. Linux의 now()는 나노초까지 나오므로 비교 기준도 맞춰 자른다
 		LocalDateTime before = LocalDateTime.now().truncatedTo(ChronoUnit.MICROS);
@@ -162,9 +162,21 @@ class ApiV1OrderTest {
 	}
 
 	@Test
-	@DisplayName("대기열이 정책(입장 뒤 10분)보다 먼 끝 시각을 주면 결제 기한을 지금부터 10분으로 자른다")
+	@DisplayName("대기열이 정책(예매창 15분)만큼 끝 시각을 주면 자르지 않고 그 끝 시각을 결제 기한으로 쓴다")
+	void createKeepsFifteenMinuteAdmission() throws Exception {
+		LocalDateTime endsAt = LocalDateTime.now().plusMinutes(15).withNano(0);
+		queueAdmissionPort.admitUntil(COURSE_ID, endsAt);
+		int participationId = applyAndGetId(MEMBER_ID);
+
+		create(MEMBER_ID, participationId, newKey()).andExpect(status().isCreated());
+
+		assertThat(orderRepository.findAll().getFirst().getPaymentDueAt()).isEqualTo(endsAt);
+	}
+
+	@Test
+	@DisplayName("대기열이 정책(예매창 15분)보다 먼 끝 시각을 주면 결제 기한을 지금부터 15분으로 자른다")
 	void createCapsAdmissionEndsAt() throws Exception {
-		queueAdmissionPort.admitUntil(COURSE_ID, LocalDateTime.now().plusHours(1));
+		queueAdmissionPort.admitUntil(COURSE_ID, LocalDateTime.now().plusMinutes(16));
 		int participationId = applyAndGetId(MEMBER_ID);
 
 		LocalDateTime before = LocalDateTime.now();
@@ -172,7 +184,7 @@ class ApiV1OrderTest {
 		LocalDateTime after = LocalDateTime.now();
 
 		assertThat(orderRepository.findAll().getFirst().getPaymentDueAt())
-			.isBetween(before.plusMinutes(10), after.plusMinutes(10));
+			.isBetween(before.plusMinutes(15), after.plusMinutes(15));
 	}
 
 	@Test

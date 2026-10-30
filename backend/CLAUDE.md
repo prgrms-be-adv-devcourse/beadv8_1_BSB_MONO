@@ -16,7 +16,7 @@
 | `cash-service` | Spring Boot 앱 | 8081 | 회원 복제본(`CashMember`), 캐시 (뼈대만 있음) |
 | `payout-service` | Spring Boot 앱 | 8082 | 정산 내역(`Payout`), 정산 항목, 지급보류 (엔티티만 있음) |
 | `file-service` | Spring Boot 앱 | 8083 | 대회 이미지 등 파일 저장 (S3, presigned URL) |
-| `order-service` | Spring Boot 앱 | 8084 | 참가 신청, 장바구니, 바로 결제 예매(자리 확보·결제 기한 10분), 주문 |
+| `order-service` | Spring Boot 앱 | 8084 | 참가 신청, 장바구니, 바로 결제 예매(자리 확보·결제 기한 15분), 주문 |
 | `product-service` | Spring Boot 앱 | 8085 | 대회(상품), 종목(참가권), 정원 (뼈대만 있음) |
 | `queue-service` | Spring Boot 앱 | 8086 | 예매 대기열 (뼈대만 있음) |
 

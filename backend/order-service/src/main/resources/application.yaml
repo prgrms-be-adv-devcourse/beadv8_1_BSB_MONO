@@ -81,8 +81,8 @@ order:
       base-url: http://localhost:8086
       # 대기열이 Redis를 2초까지 기다리므로 주문은 그보다 길게 기다린다
       timeout: 3s
-      # 가짜 대기열의 입장 시간(1~10분). 만료를 빨리 확인하려면 줄인다 (정책은 10분). 더미 페이지: http://localhost:8084/dev/queue-dummy
-      fake-admission-minutes: 10
+      # 가짜 대기열의 입장 시간(1~15분). 만료를 빨리 확인하려면 줄인다 (정책은 예매창 15분). 더미 페이지: http://localhost:8084/dev/queue-dummy
+      fake-admission-minutes: 15
     # 판매자 키트 API의 판매자 ID 조회 (PRO-197). 실제 연결 전이라 fake(회원 ID = 판매자 ID)만 있다. 운영은 disabled
     seller:
       mode: fake
