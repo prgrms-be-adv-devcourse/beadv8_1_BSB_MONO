@@ -311,4 +311,27 @@ class PayoutClaimUseCaseTest {
 			.isInstanceOf(PayoutClaimConflictException.class);
 		assertThat(payoutItemRepository.count()).isEqualTo(lines);
 	}
+
+	@Test
+	@DisplayName("TC-WITHDRAW-1-1 갚을 돈 105,500원이 남은 판매자는 갚을 돈이 있다고 답한다")
+	void sellerWithReceivable() {
+		eightRefundsThenFinal();
+		entityManager.flush();
+
+		assertThat(new PayoutReceivableQueryUseCase(payoutItemRepository).findReceivable(SELLER_ID))
+			.extracting(r -> r.isHasReceivable(), r -> r.getRaceIds())
+			.containsExactly(true, List.of(RACE_ID));
+	}
+
+	@Test
+	@DisplayName("TC-WITHDRAW-2-1 회수 확인으로 갚을 돈이 0원이 된 판매자는 갚을 돈이 없다고 답한다")
+	void sellerWithoutReceivable() {
+		eightRefundsThenFinal();
+		run(FINAL_CREATED_DATE);
+		claimUseCase.confirm(claims().getFirst().getId(), ADMIN_ID, LocalDateTime.of(2026, 12, 20, 10, 0));
+		entityManager.flush();
+
+		assertThat(new PayoutReceivableQueryUseCase(payoutItemRepository).findReceivable(SELLER_ID)
+			.isHasReceivable()).isFalse();
+	}
 }
