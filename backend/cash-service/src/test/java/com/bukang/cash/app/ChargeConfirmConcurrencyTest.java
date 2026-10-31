@@ -1,7 +1,7 @@
 package com.bukang.cash.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mockingDetails;
@@ -45,7 +45,7 @@ import com.bukang.cash.out.pg.PaymentClient;
 @SpringBootTest
 @ActiveProfiles("test")
 class ChargeConfirmConcurrencyTest {
-	private static final int CUSTOMER_ID = 3;
+	private static final long CUSTOMER_ID = 3;
 
 	@Autowired
 	private CashFacade cashFacade;
@@ -75,7 +75,7 @@ class ChargeConfirmConcurrencyTest {
 	@DisplayName("같은 orderId로 충전 confirm이 동시에 여러 번 와도 중복 적립 없이 하나의 결과로 수렴한다")
 	void concurrentSameOrderIdChargeConfirm_convergesToSingleResult() throws InterruptedException {
 		createCustomerWallet();
-		given(paymentClient.approve(anyString(), anyString(), anyInt()))
+		given(paymentClient.approve(anyString(), anyString(), anyLong()))
 			.willReturn(new PaymentApprovalResult(10_000, "toss_key_1"));
 
 		List<AttemptResult> results = runConcurrently(10, i ->
@@ -106,7 +106,7 @@ class ChargeConfirmConcurrencyTest {
 		throws InterruptedException {
 		createCustomerWallet();
 		AtomicBoolean alreadyApproved = new AtomicBoolean(false);
-		given(paymentClient.approve(anyString(), anyString(), anyInt())).willAnswer(invocation -> {
+		given(paymentClient.approve(anyString(), anyString(), anyLong())).willAnswer(invocation -> {
 			if (alreadyApproved.compareAndSet(false, true)) {
 				return new PaymentApprovalResult(10_000, "toss_key_1");
 			}
@@ -219,7 +219,7 @@ class ChargeConfirmConcurrencyTest {
 		});
 	}
 
-	private void assertBalance(int holderId, int expected) {
+	private void assertBalance(long holderId, int expected) {
 		assertThat(walletRepository.findById(holderId).orElseThrow().getBalance()).isEqualTo(expected);
 	}
 

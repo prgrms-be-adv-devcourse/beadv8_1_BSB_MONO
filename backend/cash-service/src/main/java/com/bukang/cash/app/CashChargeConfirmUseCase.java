@@ -39,7 +39,7 @@ public class CashChargeConfirmUseCase {
 	private final PaymentClient paymentClient;
 	private final TransactionTemplate transactionTemplate;
 
-	public CashChargeResponseDto confirmWalletCharge(int customerId, String paymentKey, String orderId, int amount) {
+	public CashChargeResponseDto confirmWalletCharge(long customerId, String paymentKey, String orderId, long amount) {
 		if (amount < CashChargePolicy.MINIMUM_AMOUNT) {
 			throw new ChargeAmountTooSmallException("최소 충전 금액은 10,000원입니다.");
 		}
@@ -76,7 +76,7 @@ public class CashChargeConfirmUseCase {
 	}
 
 	//지갑 잠금
-	private ChargeClaim claimChargeLocked(int customerId, String orderId, int amount) {
+	private ChargeClaim claimChargeLocked(long customerId, String orderId, long amount) {
 		Wallet customerWallet = cashSupport.lockWallet(customerId);
 		WalletCharge existing = findMatchingCharge(customerWallet, orderId);
 		if (existing != null && existing.getStatus() == ChargeStatus.COMPLETED) {
@@ -93,7 +93,7 @@ public class CashChargeConfirmUseCase {
 	}
 
 	// IN_PROGRESS일때 Toss호출하지 않고 기다림
-	private CashChargeResponseDto waitForResolution(int customerId, String orderId) {
+	private CashChargeResponseDto waitForResolution(long customerId, String orderId) {
 		for (int attempt = 0; attempt < chargeProperties.maxWaitAttempts(); attempt++) {
 			sleep(chargeProperties.waitIntervalMillis());
 			CashChargeResponseDto resolved = transactionTemplate.execute(
@@ -107,7 +107,7 @@ public class CashChargeConfirmUseCase {
 		throw new ChargeInProgressException("이미 처리 중인 충전 요청입니다. 잠시 후 다시 확인해 주세요.");
 	}
 
-	private CashChargeResponseDto findResolvedLocked(int customerId, String orderId) {
+	private CashChargeResponseDto findResolvedLocked(long customerId, String orderId) {
 		Wallet customerWallet = cashSupport.lockWallet(customerId);
 		WalletCharge existing = findMatchingCharge(customerWallet, orderId);
 		if (existing == null || existing.getStatus() == ChargeStatus.IN_PROGRESS) {
@@ -140,7 +140,7 @@ public class CashChargeConfirmUseCase {
 		return CashChargeResponseDto.completed(customerWallet.getBalance());
 	}
 
-	private CashChargeResponseDto recordFailedLocked(int customerId, String orderId) {
+	private CashChargeResponseDto recordFailedLocked(long customerId, String orderId) {
 		Wallet customerWallet = cashSupport.lockWallet(customerId);
 		WalletCharge existing = findMatchingCharge(customerWallet, orderId);
 		if (existing.getStatus() != ChargeStatus.IN_PROGRESS) {
