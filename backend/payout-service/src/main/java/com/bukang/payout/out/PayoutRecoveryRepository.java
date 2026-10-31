@@ -18,7 +18,7 @@ public interface PayoutRecoveryRepository extends JpaRepository<PayoutRecovery, 
 	boolean existsByRaceIdAndReasonType(long raceId, PayoutRecoveryReason reasonType);
 
 	// 일정 변경 회수: 이 참가권으로 이미 회수를 요청했는지 (참가권마다 1건)
-	boolean existsByOrderItemId(long orderItemId);
+	Optional<PayoutRecovery> findByOrderItemId(long orderItemId);
 
 	// 갚을 돈이 0이 되면 같은 판매자 × 대회의 요청 중인 회수를 함께 완료한다 (PRO-214)
 	List<PayoutRecovery> findBySellerIdAndRaceIdAndStatus(long sellerId, long raceId, PayoutRecoveryStatus status);

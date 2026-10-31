@@ -58,8 +58,11 @@ public class PayoutLedgerUseCase {
 	@Transactional
 	public Optional<PayoutRecovery> recoverScheduleChange(long sellerId, long raceId, long raceCourseId,
 		long orderItemId, long price, LocalDateTime now) {
-		if (payoutRecoveryRepository.existsByOrderItemId(orderItemId)) {
-			throw new PayoutRecoveryConflictException("이미 회수를 요청한 참가권입니다.");
+		// 같은 환불 알림이 다시 와도(Kafka 재전달) 실패로 보지 않고 이미 만든 회수를 돌려준다.
+		// 409로 던지면 소비자가 재시도하다 DLT로 보내 이미 처리한 환불이 실패로 쌓인다 (R1)
+		Optional<PayoutRecovery> existing = payoutRecoveryRepository.findByOrderItemId(orderItemId);
+		if (existing.isPresent()) {
+			return existing;
 		}
 		if (findLive(sellerId, raceId, PayoutStage.FINAL).isPresent()) {
 			// 최종 정산을 만든 뒤의 환불은 번 돈(EARNING)까지 되돌려야 해서 아직 정하지 않았다 (PRO-214 미룸)

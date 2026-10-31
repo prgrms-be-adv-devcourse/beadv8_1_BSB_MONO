@@ -436,14 +436,15 @@ class PayoutLedgerScenarioTest {
 	}
 
 	@Test
-	@DisplayName("같은 참가권으로 회수를 두 번 요청하면 두 번째는 충돌(409)이고, 원장 줄은 한 번만 남는다")
+	@DisplayName("TC-RECOV-2-1 같은 참가권으로 회수를 두 번 요청하면 두 번째도 같은 회수를 돌려주고, 원장 줄은 한 번만 남는다")
 	void duplicateRecoveryRequest() {
 		createFirst();
 		pay(FIRST_PAY_DATE);
-		requestRecovery(108, LocalDateTime.of(2026, 11, 26, 10, 0));
+		PayoutRecovery first = requestRecovery(108, LocalDateTime.of(2026, 11, 26, 10, 0));
 
-		assertThatThrownBy(() -> requestRecovery(108, LocalDateTime.of(2026, 11, 26, 11, 0)))
-			.isInstanceOf(PayoutRecoveryConflictException.class);
+		PayoutRecovery again = requestRecovery(108, LocalDateTime.of(2026, 11, 26, 11, 0));
+
+		assertThat(again.getId()).isEqualTo(first.getId());
 		entityManager.flush();
 		assertThat(payoutItemRepository.findAll())
 			.filteredOn(item -> Long.valueOf(108L).equals(item.getOrderItemId()))
