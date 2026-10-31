@@ -215,7 +215,7 @@ class CashChargeConfirmUseCaseTest {
 			.isInstanceOf(ChargeInProgressException.class);
 
 		assertBalance(CUSTOMER_ID, 0);
-		verify(paymentClient, never()).approve(anyString(), anyString(), anyInt());
+		verify(paymentClient, never()).approve(anyString(), anyString(), anyLong());
 	}
 
 	@Test

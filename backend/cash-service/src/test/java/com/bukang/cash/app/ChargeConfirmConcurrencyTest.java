@@ -146,7 +146,7 @@ class ChargeConfirmConcurrencyTest {
 		+ "Toss는 한 번만 불리고 전부 FAILED로 수렴한다")
 	void concurrentSameOrderIdChargeConfirm_whenTossRejects_convergesToFailedForAll() throws InterruptedException {
 		createCustomerWallet();
-		given(paymentClient.approve(anyString(), anyString(), anyInt())).willAnswer(invocation -> {
+		given(paymentClient.approve(anyString(), anyString(), anyLong())).willAnswer(invocation -> {
 			Thread.sleep(300);
 			throw new PaymentApprovalFailedException("카드 한도를 초과했습니다.", "EXCEED_MAX_DAILY_PAYMENT_COUNT");
 		});

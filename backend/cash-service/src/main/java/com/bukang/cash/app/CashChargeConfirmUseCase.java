@@ -127,7 +127,7 @@ public class CashChargeConfirmUseCase {
 	}
 
 	private CashChargeResponseDto recordCompletedLocked(
-		int customerId, String orderId, PaymentApprovalResult result
+		long customerId, String orderId, PaymentApprovalResult result
 	) {
 		Wallet customerWallet = cashSupport.lockWallet(customerId);
 		WalletCharge existing = findMatchingCharge(customerWallet, orderId);
@@ -161,7 +161,7 @@ public class CashChargeConfirmUseCase {
 		return existing;
 	}
 
-	private CashChargeResponseDto toDto(WalletCharge charge, int balance) {
+	private CashChargeResponseDto toDto(WalletCharge charge, long balance) {
 		return charge.getStatus() == ChargeStatus.COMPLETED
 			? CashChargeResponseDto.completed(balance)
 			: CashChargeResponseDto.failed(balance);

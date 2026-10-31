@@ -1,7 +1,7 @@
 package com.bukang.cash.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -44,7 +44,7 @@ import com.bukang.cash.out.pg.PaymentClient;
 @SpringBootTest
 @ActiveProfiles("test")
 class ChargeConfirmFailedThenCompletedRaceTest {
-	private static final int CUSTOMER_ID = 3;
+	private static final long CUSTOMER_ID = 3;
 
 	@Autowired
 	private CashFacade cashFacade;
@@ -79,7 +79,7 @@ class ChargeConfirmFailedThenCompletedRaceTest {
 		CountDownLatch bSubmitted = new CountDownLatch(1);
 
 		// A: Toss 호출에 들어서면 신호를 보내고, B가 제출될 때까지 기다렸다가 승인을 돌려준다
-		given(paymentClient.approve(eq("pay_a"), eq("order_1"), anyInt())).willAnswer(invocation -> {
+		given(paymentClient.approve(eq("pay_a"), eq("order_1"), anyLong())).willAnswer(invocation -> {
 			aReachedToss.countDown();
 			bSubmitted.await(5, TimeUnit.SECONDS);
 			return new PaymentApprovalResult(10_000, "toss_key_a");
@@ -105,7 +105,7 @@ class ChargeConfirmFailedThenCompletedRaceTest {
 		assertThat(bResponse.outcome())
 			.as("B는 A를 기다렸다가 같은 결과(COMPLETED)를 받아야 한다")
 			.isEqualTo(CashChargeResponseDto.Outcome.COMPLETED);
-		verify(paymentClient, never()).approve(eq("pay_b"), eq("order_1"), anyInt());
+		verify(paymentClient, never()).approve(eq("pay_b"), eq("order_1"), anyLong());
 		assertBalance(CUSTOMER_ID, 10_000);
 		WalletCharge charge = walletChargeRepository.findByIdempotencyKey("order_1").orElseThrow();
 		assertThat(charge.getStatus()).isEqualTo(ChargeStatus.COMPLETED);
@@ -144,7 +144,7 @@ class ChargeConfirmFailedThenCompletedRaceTest {
 		assertThat(response.outcome())
 			.as("기다리던 요청도 선점한 쪽과 같은 결과(FAILED)를 받아야 한다")
 			.isEqualTo(CashChargeResponseDto.Outcome.FAILED);
-		verify(paymentClient, never()).approve(anyString(), anyString(), anyInt());
+		verify(paymentClient, never()).approve(anyString(), anyString(), anyLong());
 		assertBalance(CUSTOMER_ID, 0);
 		WalletCharge persisted = walletChargeRepository.findByIdempotencyKey("order_1").orElseThrow();
 		assertThat(persisted.getStatus()).isEqualTo(ChargeStatus.FAILED);
@@ -159,7 +159,7 @@ class ChargeConfirmFailedThenCompletedRaceTest {
 		});
 	}
 
-	private void assertBalance(int holderId, int expected) {
+	private void assertBalance(long holderId, int expected) {
 		assertThat(walletRepository.findById(holderId).orElseThrow().getBalance()).isEqualTo(expected);
 	}
 }
