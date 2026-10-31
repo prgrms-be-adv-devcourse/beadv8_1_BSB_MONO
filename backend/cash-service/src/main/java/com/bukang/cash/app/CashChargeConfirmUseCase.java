@@ -6,6 +6,8 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.bukang.cash.config.ChargeProperties;
+import com.bukang.cash.domain.charge.CashChargePolicy;
 import com.bukang.cash.domain.charge.ChargeStatus;
 import com.bukang.cash.domain.charge.WalletCharge;
 import com.bukang.cash.domain.exception.ChargeAmountTooSmallException;
@@ -27,13 +29,10 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class CashChargeConfirmUseCase {
-	private static final int MINIMUM_AMOUNT = 10_000;
 	// Toss: "이미 처리가 끝난 결제"
 	private static final String ALREADY_PROCESSED_PAYMENT = "ALREADY_PROCESSED_PAYMENT";
-	// 선점하지 못한 요청이 기다리는 최대 횟수(20번)와 간격(100ms) 최대 2초 이 뒤에도 모름으로 처리되면 스케줄링
-	private static final int MAX_WAIT_ATTEMPTS = 20;
-	private static final long WAIT_INTERVAL_MILLIS = 100;
 
+	private final ChargeProperties chargeProperties;
 	private final CashSupport cashSupport;
 	private final WalletChargeRepository walletChargeRepository;
 	private final WalletLedgerRepository walletLedgerRepository;
@@ -41,7 +40,7 @@ public class CashChargeConfirmUseCase {
 	private final TransactionTemplate transactionTemplate;
 
 	public CashChargeResponseDto confirmWalletCharge(int customerId, String paymentKey, String orderId, int amount) {
-		if (amount < MINIMUM_AMOUNT) {
+		if (amount < CashChargePolicy.MINIMUM_AMOUNT) {
 			throw new ChargeAmountTooSmallException("최소 충전 금액은 10,000원입니다.");
 		}
 
@@ -95,8 +94,8 @@ public class CashChargeConfirmUseCase {
 
 	// IN_PROGRESS일때 Toss호출하지 않고 기다림
 	private CashChargeResponseDto waitForResolution(int customerId, String orderId) {
-		for (int attempt = 0; attempt < MAX_WAIT_ATTEMPTS; attempt++) {
-			sleep(WAIT_INTERVAL_MILLIS);
+		for (int attempt = 0; attempt < chargeProperties.maxWaitAttempts(); attempt++) {
+			sleep(chargeProperties.waitIntervalMillis());
 			CashChargeResponseDto resolved = transactionTemplate.execute(
 				status -> findResolvedLocked(customerId, orderId));
 			if (resolved != null) {
