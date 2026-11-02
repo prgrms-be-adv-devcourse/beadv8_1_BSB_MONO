@@ -18,13 +18,13 @@ import com.bukang.member.domain.TermsType;
 @SpringBootTest
 @ActiveProfiles("test")
 class TermsRepositoryTest {
-	private static final LocalDate TODAY = LocalDate.of(2026, 10, 16);
+	private static final LocalDate TODAY = LocalDate.of(2026, 11, 2);
 	private static final String TEST_VERSION_PREFIX = "t-";
 
 	@Autowired
 	private TermsRepository termsRepository;
 
-	// 앱이 켜질 때 만든 기본 약관(1.0)은 남기고, 이 테스트가 만든 약관만 지운다
+	// 앱이 켜질 때 만든 기본 약관(1.1)은 남기고, 이 테스트가 만든 약관만 지운다
 	@AfterEach
 	void tearDown() {
 		termsRepository.deleteAll(termsRepository.findAll().stream()
@@ -50,7 +50,7 @@ class TermsRepositoryTest {
 
 		Terms service = currentOf(TermsType.SERVICE);
 
-		assertThat(service.getVersion()).isEqualTo("1.0");
+		assertThat(service.getVersion()).isEqualTo("1.1");
 	}
 
 	@Test
