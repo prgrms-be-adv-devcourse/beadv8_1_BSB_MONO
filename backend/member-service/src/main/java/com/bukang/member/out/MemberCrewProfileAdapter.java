@@ -26,4 +26,11 @@ public class MemberCrewProfileAdapter implements CrewMemberProfilePort {
 				: Member.WITHDRAWN_NICKNAME));
 		return nicknames;
 	}
+
+	@Override
+	public boolean lockActiveMember(long memberId) {
+		return memberRepository.findByIdForUpdate(memberId)
+			.filter(member -> !member.isWithdrawn())
+			.isPresent();
+	}
 }

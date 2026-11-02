@@ -14,8 +14,14 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -368,6 +374,65 @@ class ApiV1CrewTest {
 	}
 
 	@Test
+	@DisplayName("다른 크루의 초대 ID로 취소하면 404이고, 운영진은 다른 사람이 보낸 초대를 취소할 수 없다 (403)")
+	void cancelScopedToCrewAndSender() throws Exception {
+		long crewId = createCrew(leaderId, "새벽한강크루");
+		long otherCrewId = createCrew(outsiderId, "판교점심런");
+		createInvite(otherCrewId, outsiderId);
+		long otherCrewInviteId = onlyInviteId();
+
+		mockMvc.perform(delete(INVITE, crewId, otherCrewInviteId).header(MemberIdHeader.NAME, leaderId))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("CREW_INVITE_NOT_FOUND"));
+
+		joinWithNewInvite(crewId, leaderId, otherId);
+		jdbcTemplate.update("update member_crew_member set role = 'MANAGER' where member_id = ?", otherId);
+		createInvite(crewId, leaderId);
+		long leaderInviteId = onlyInviteId();
+		mockMvc.perform(delete(INVITE, crewId, leaderInviteId).header(MemberIdHeader.NAME, otherId))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.code").value("CREW_INVITE_CANCEL_FORBIDDEN"));
+	}
+
+	@Test
+	@DisplayName("서로 다른 두 회원이 같은 링크로 동시에 가입하면 한 명만 201이고 다른 한 명은 410 CREW_INVITE_ALREADY_USED이다")
+	void concurrentJoinBySameLinkAllowsOne() throws Exception {
+		long crewId = createCrew(leaderId, "새벽한강크루");
+		String token = createInvite(crewId, leaderId);
+
+		List<Integer> statuses = joinAtOnce(token, otherId, outsiderId);
+
+		assertThat(statuses).containsExactlyInAnyOrder(201, 410);
+		assertThat(crewMemberRepository.countByCrewId(crewId)).isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("같은 회원이 같은 링크로 두 기기에서 동시에 가입하면 한 번만 201이고 다른 하나는 409 CREW_ALREADY_MEMBER이다")
+	void concurrentJoinBySameMemberAnswersAlreadyMember() throws Exception {
+		long crewId = createCrew(leaderId, "새벽한강크루");
+		String token = createInvite(crewId, leaderId);
+
+		List<Integer> statuses = joinAtOnce(token, otherId, otherId);
+
+		assertThat(statuses).containsExactlyInAnyOrder(201, 409);
+		assertThat(crewMemberRepository.countByCrewId(crewId)).isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("탈퇴한 회원은 가입할 수 없고 401이며, 초대도 쓰이지 않는다")
+	void withdrawnMemberCannotJoin() throws Exception {
+		long crewId = createCrew(leaderId, "새벽한강크루");
+		String token = createInvite(crewId, leaderId);
+		jdbcTemplate.update("update member_member set status = 'WITHDRAWN' where member_id = ?", otherId);
+
+		join(otherId, token)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("LOGIN_REQUIRED"));
+		assertThat(crewMemberRepository.existsByCrewIdAndMemberId(crewId, otherId)).isFalse();
+		join(outsiderId, token).andExpect(status().isCreated());
+	}
+
+	@Test
 	@DisplayName("보낸 초대 목록은 크루장에게는 모든 초대, 운영진에게는 자기가 보낸 초대만 보인다")
 	void inviteListByRole() throws Exception {
 		long crewId = createCrew(leaderId, "새벽한강크루");
@@ -444,6 +509,29 @@ class ApiV1CrewTest {
 
 	private ResultActions join(long memberId, String token) throws Exception {
 		return mockMvc.perform(post(JOIN, token).header(MemberIdHeader.NAME, memberId));
+	}
+
+	// 두 가입 요청을 동시에 출발시키고 각 응답 상태 코드를 돌려준다
+	private List<Integer> joinAtOnce(String token, long firstMemberId, long secondMemberId) throws Exception {
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		CountDownLatch start = new CountDownLatch(1);
+		try {
+			List<Future<Integer>> results = new ArrayList<>();
+			for (long memberId : new long[] {firstMemberId, secondMemberId}) {
+				results.add(executor.submit(() -> {
+					start.await();
+					return join(memberId, token).andReturn().getResponse().getStatus();
+				}));
+			}
+			start.countDown();
+			List<Integer> statuses = new ArrayList<>();
+			for (Future<Integer> result : results) {
+				statuses.add(result.get(10, TimeUnit.SECONDS));
+			}
+			return statuses;
+		} finally {
+			executor.shutdownNow();
+		}
 	}
 
 	private long onlyInviteId() {

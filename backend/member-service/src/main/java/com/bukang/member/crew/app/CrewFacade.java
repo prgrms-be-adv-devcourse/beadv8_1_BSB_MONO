@@ -13,6 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.bukang.common.shared.member.web.LoginRequiredException;
 import com.bukang.member.crew.domain.Crew;
 import com.bukang.member.crew.domain.CrewInvite;
 import com.bukang.member.crew.domain.CrewMember;
@@ -165,6 +166,11 @@ public class CrewFacade {
 
 	@Transactional
 	public CrewJoinedDto join(long memberId, String inviteToken) {
+		// 회원 탈퇴와 겹치면 탈퇴한 회원이 크루에 남을 수 있어 회원 행을 먼저 잠근다.
+		// 탈퇴가 먼저 끝났으면 로그인이 풀린 회원으로 본다 (탈퇴하면 재발급이 막혀 곧 로그아웃된다)
+		if (!profilePort.lockActiveMember(memberId)) {
+			throw new LoginRequiredException();
+		}
 		CrewInvite invite = findInviteByToken(inviteToken);
 		Crew crew = crewRepository.findActiveById(invite.getCrewId())
 			.orElseThrow(CrewInviteNotFoundException::new);
@@ -178,6 +184,11 @@ public class CrewFacade {
 		if (crewInviteRepository.markUsed(invite.getId(), memberId, now) == 0) {
 			CrewInvite current = crewInviteRepository.findByIdForUpdate(invite.getId())
 				.orElseThrow(CrewInviteNotFoundException::new);
+			// 같은 회원이 같은 링크로 두 기기에서 동시에 가입하면 먼저 커밋한 요청이 링크를 쓴다.
+			// 뒤 요청은 「이미 쓰인 링크」가 아니라 「이미 크루원」으로 답한다
+			if (current.getUsedBy() != null && current.getUsedBy() == memberId) {
+				throw new CrewAlreadyMemberException();
+			}
 			throwIfUnusableWhenOpeningLink(current, now);
 			// 쓰임·취소·만료는 되돌릴 수 없으므로 여기에 오지 않는다
 			throw new IllegalStateException("쓸 수 있는 초대인데 가입에 쓰지 못했습니다. inviteId=" + invite.getId());
@@ -187,7 +198,9 @@ public class CrewFacade {
 				CrewMember.invited(crew.getId(), memberId, invite.getId(), now));
 			return new CrewJoinedDto(crew.getId(), crew.getName(), member.getRole(), member.getJoinedAt());
 		} catch (DataIntegrityViolationException exception) {
-			// 같은 회원의 동시 가입은 uk_crew_member가 막는다. 예외가 나가 트랜잭션이 롤백되므로 초대도 쓰이지 않은 채로 남는다
+			// 같은 회원이 서로 다른 링크로 같은 크루에 동시에 가입하면 uk_crew_member가 두 번째 행을 막는다.
+			// 예외가 나가 트랜잭션이 롤백되므로 두 번째 초대도 쓰이지 않은 채로 남는다
+			// (같은 링크로 동시에 가입하는 경우는 위의 회원 행 잠금과 usedBy 확인이 「이미 크루원」으로 답한다)
 			throw new CrewAlreadyMemberException();
 		}
 	}
