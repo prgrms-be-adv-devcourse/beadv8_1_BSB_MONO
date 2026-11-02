@@ -1884,7 +1884,7 @@
                     "value": {
                       "status": 409,
                       "code": "MEMBER_DUPLICATE_PHONE",
-                      "message": "이미 사용 중인 휴대폰 번호입니다.",
+                      "message": "이미 사용 중인 전화번호입니다.",
                       "data": null
                     }
                   },
