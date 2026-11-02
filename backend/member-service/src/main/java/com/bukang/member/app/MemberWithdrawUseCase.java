@@ -1,11 +1,15 @@
 package com.bukang.member.app;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import com.bukang.common.shared.seller.domain.SellerStatus;
+import com.bukang.member.app.SocialAccountsUnlinkedEvent.Target;
 import com.bukang.member.domain.Member;
+import com.bukang.member.domain.SocialAccount;
 import com.bukang.member.domain.exception.MemberNotFoundException;
 import com.bukang.member.domain.exception.WithdrawCashLeftException;
 import com.bukang.member.domain.exception.WithdrawTicketLeftException;
@@ -34,6 +38,7 @@ public class MemberWithdrawUseCase {
 	private final RefreshTokenRepository refreshTokenRepository;
 	private final CashBalancePort cashBalancePort;
 	private final ActiveTicketPort activeTicketPort;
+	private final ApplicationEventPublisher eventPublisher;
 
 	public void withdraw(long memberId) {
 		// 줄을 잠가 같은 회원의 탈퇴가 겹치지 않게 한다. 뒤 요청은 앞 요청이 커밋한 뒤 탈퇴한 회원을 보고 404가 된다
@@ -51,6 +56,8 @@ public class MemberWithdrawUseCase {
 
 		LocalDateTime now = LocalDateTime.now();
 		member.withdraw(now);
+		// 소셜 연결 행도 함께 지운다 (BE-034). 행은 아래 saveAndFlush 때 지워진다(orphanRemoval)
+		List<SocialAccount> unlinked = member.unlinkAllSocial();
 		// CHECK 제약 위반 같은 DB 오류를 이 트랜잭션 안에서 드러내려고 바로 반영한다
 		memberRepository.saveAndFlush(member);
 		// 탈퇴 전에 낸 대기 중 판매자 신청은 반려한다. 남겨 두면 관리자가 승인해 탈퇴한 회원이 판매자가 된다 (PRO-217)
@@ -60,5 +67,11 @@ public class MemberWithdrawUseCase {
 		refreshTokenRepository.deleteAll(memberId);
 		// 커밋된 뒤에만 Kafka로 나간다 (MemberKafkaPublisher, AFTER_COMMIT)
 		member.publishWithdrawnEvent();
+		// 커밋된 뒤 카카오 연결을 끊는다. 실패해도 탈퇴는 그대로다 (BE-034, SocialUnlinkEventListener)
+		if (!unlinked.isEmpty()) {
+			eventPublisher.publishEvent(new SocialAccountsUnlinkedEvent(unlinked.stream()
+				.map(account -> new Target(account.getProvider(), account.getProviderUserId()))
+				.toList()));
+		}
 	}
 }
