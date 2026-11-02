@@ -1,13 +1,16 @@
 package com.bukang.cash.app;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -22,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.bukang.cash.domain.charge.ChargeStatus;
@@ -52,7 +56,7 @@ class ChargeConfirmFailedThenCompletedRaceTest {
 	private CashMemberRepository cashMemberRepository;
 	@Autowired
 	private WalletRepository walletRepository;
-	@Autowired
+	@MockitoSpyBean
 	private WalletChargeRepository walletChargeRepository;
 	@Autowired
 	private WalletLedgerRepository walletLedgerRepository;
@@ -133,8 +137,11 @@ class ChargeConfirmFailedThenCompletedRaceTest {
 		Future<CashChargeResponseDto> waitingFuture = executor.submit(() ->
 			cashFacade.confirmWalletCharge(CUSTOMER_ID, "pay_b", "order_1", 10_000));
 
-		// 기다리는 쪽이 몇 번은 폴링하도록(100ms 간격) 짧게 둔 뒤, 선점한 쪽이 끝난 것처럼 FAILED로 바꾼다
-		Thread.sleep(250);
+		// 정해진 시간만큼 재워 두는 대신, 기다리는 요청이 IN_PROGRESS를 실제로 한 번 확인한 뒤에야
+		// FAILED로 바꾼다. CI가 느려 그 확인이 늦어지면, 재워 둔 시간 안에 못 끝나 FAILED로 바뀐 걸
+		// "기다림"이 아니라 "재선점"으로 받아버려 가끔씩만 깨지는 테스트가 될 수 있다
+		await().atMost(Duration.ofSeconds(5))
+			.untilAsserted(() -> verify(walletChargeRepository, atLeastOnce()).findByIdempotencyKey("order_1"));
 		transactionTemplate.executeWithoutResult(status ->
 			walletChargeRepository.findByIdempotencyKey("order_1").orElseThrow().markFailed());
 
