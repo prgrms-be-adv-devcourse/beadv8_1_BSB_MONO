@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { dateTimeText, formatTimeTyping, padTime, rangeDateText } from './date-time'
 import { DateTimeField } from './DateTimeField'
@@ -56,6 +56,12 @@ describe('DateTimeField', () => {
   })
 
   it('withTime={false}면 시간 칸 없이 날짜만 알린다', async () => {
+    // 값이 없으면 달력이 오늘이 있는 달을 연다. 10월 날짜를 고르도록 오늘을 2026년 10월로 고정한다(날짜만 바꾼다).
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(day(15))
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const onValueChange = vi.fn()
     render(
       <DateTimeField
